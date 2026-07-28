@@ -101,7 +101,9 @@ func TestConvertCDAToFHIR(t *testing.T) {
 		cfg.EXPECT().GetBool("cda_converter.enabled").Return(true).AnyTimes()
 		cfg.EXPECT().GetString("cda_converter.url").Return("").AnyTimes()
 		_, err := convertCDAToFHIR(context.Background(), cfg, cda, "p")
-		require.ErrorContains(t, err, "not configured")
+		require.ErrorContains(t, err, "no converter address is configured")
+		// The flag alone looks configured from the outside; the error must name the missing URL var (#397).
+		require.ErrorContains(t, err, "YOURPHR_CDA_CONVERTER_URL")
 	})
 
 	t.Run("non-200 -> error", func(t *testing.T) {
@@ -199,4 +201,67 @@ func (suite *SourceHandlerTestSuite) TestCreateManualSourceHandler_CCDAConverter
 
 	require.Equal(suite.T(), http.StatusBadRequest, w.Code)
 	require.Contains(suite.T(), w.Body.String(), "not enabled")
+}
+
+// TestCDASetupHintIsActionable pins the content that #397 was missing. A self-hoster tried
+// FASTEN_CDA_CONVERTER_ENABLED and a bare CDA_CONVERTER_ENABLED because the old error named a
+// config KEY and no env var; it also never mentioned that a sidecar has to be running. If these
+// assertions ever fail, the error has gone back to being un-actionable.
+func TestCDASetupHintIsActionable(t *testing.T) {
+	hint := cdaSetupHint("C-CDA import is not enabled on this server.")
+
+	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_ENABLED", "must name the actual env var, not just the config key")
+	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_URL", "the flag alone is not enough — the URL is required too")
+	require.Contains(t, hint, "docker compose --profile cda up -d", "must say the sidecar has to be started")
+	require.Contains(t, hint, "docs/import/c-cda.md")
+}
+
+// TestGetCDAConverterStatus covers the three deployment states the UI branches on (#397).
+// The half-configured case (enabled, no URL) is the one that is hardest to diagnose from the
+// outside, so it must report ready=false rather than looking healthy.
+func TestGetCDAConverterStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name      string
+		enabled   bool
+		url       string
+		wantReady bool
+	}{
+		{"off by default", false, "", false},
+		{"enabled but no url is NOT ready", true, "", false},
+		{"fully configured", true, "http://cda-converter:8080", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			cfg := mock_config.NewMockInterface(ctrl)
+			cfg.EXPECT().GetBool("cda_converter.enabled").Return(tt.enabled).AnyTimes()
+			cfg.EXPECT().GetString("cda_converter.url").Return(tt.url).AnyTimes()
+
+			w := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(w)
+			ctx.Set(pkg.ContextKeyTypeConfig, cfg)
+			ctx.Request, _ = http.NewRequest("GET", "/source/cda-converter/status", nil)
+
+			GetCDAConverterStatus(ctx)
+
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			var resp struct {
+				Data struct {
+					Enabled   bool   `json:"enabled"`
+					Ready     bool   `json:"ready"`
+					SetupHint string `json:"setup_hint"`
+				} `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+			require.Equal(t, tt.enabled, resp.Data.Enabled)
+			require.Equal(t, tt.wantReady, resp.Data.Ready)
+			require.NotEmpty(t, resp.Data.SetupHint)
+			// The hint carries the standard compose service address as an example — that is the
+			// point of it. What must never leak is this deployment's CONFIGURED url.
+			require.NotContains(t, w.Body.String(), `"url"`)
+		})
+	}
 }

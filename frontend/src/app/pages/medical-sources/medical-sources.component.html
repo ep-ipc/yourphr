@@ -156,22 +156,38 @@
   <div class="modal-body">
     <h6>YourPHR does not natively support <a href="https://en.wikipedia.org/wiki/Consolidated_Clinical_Document_Architecture"  externalLink >CCDA</a> Health Records</h6>
 
-    <p>However we can convert it automatically using <a href="https://github.com/metriport/metriport/tree/master/packages/fhir-converter" externalLink>open-source software</a> generously provided by the team at <a href="https://www.metriport.com/"  externalLink>Metriport</a>.<br/><br/>
-      Your data will <strong>NEVER</strong> be shared with any third parties.
-    </p>
+    <!-- Converter unavailable on this server: show the operator what to turn on, instead of a
+         Convert button that fails with a config error after the upload (#397). -->
+    <ng-container *ngIf="cdaConverterStatus && !cdaConverterStatus.ready; else ccdaConvertAvailable">
+      <p>
+        C-CDA conversion is <strong>not turned on for this server</strong>, so this file can't be
+        imported yet. It runs in a separate container that is off by default.
+      </p>
+      <p class="mb-1">If you administer this server, enable it with:</p>
+      <pre class="bg-light border rounded p-2 small mb-2" style="white-space:pre-wrap">{{ cdaConverterStatus.setup_hint }}</pre>
+      <p class="small text-muted mb-0">
+        Your data is converted on this server and will <strong>NEVER</strong> be shared with any third parties.
+      </p>
+    </ng-container>
 
-    <div class="d-flex h-100">
-      <div class="mx-auto my-auto">
-        <a href="https://www.metriport.com/"  externalLink>
-          <img style="height:50px" src="assets/images/metriport-logo.png">
-        </a>
+    <ng-template #ccdaConvertAvailable>
+      <p>However we can convert it automatically using <a href="https://github.com/metriport/metriport/tree/master/packages/fhir-converter" externalLink>open-source software</a> generously provided by the team at <a href="https://www.metriport.com/"  externalLink>Metriport</a>.<br/><br/>
+        Your data will <strong>NEVER</strong> be shared with any third parties.
+      </p>
+
+      <div class="d-flex h-100">
+        <div class="mx-auto my-auto">
+          <a href="https://www.metriport.com/"  externalLink>
+            <img style="height:50px" src="assets/images/metriport-logo.png">
+          </a>
+        </div>
       </div>
-    </div>
+    </ng-template>
 
   </div>
   <div class="modal-footer">
-    <button (click)="modal.close('convert')" type="button" class="btn btn-az-primary">Convert</button>
-    <button (click)="modal.dismiss('cancel')" type="button" class="btn btn-outline-secondary">Cancel</button>
+    <button *ngIf="!cdaConverterStatus || cdaConverterStatus.ready" (click)="modal.close('convert')" type="button" class="btn btn-az-primary">Convert</button>
+    <button (click)="modal.dismiss('cancel')" type="button" class="btn btn-outline-secondary">{{ (cdaConverterStatus && !cdaConverterStatus.ready) ? 'Close' : 'Cancel' }}</button>
   </div>
 
 </ng-template>

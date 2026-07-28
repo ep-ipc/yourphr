@@ -36,6 +36,7 @@ import {SupportRequest} from '../models/fasten/support-request';
 import {SmartConnectRequest} from '../models/fasten/smart-connect-request';
 import {SmartAuthorizeRequest, SmartAuthorizeResponse} from '../models/fasten/smart-authorize';
 import {RelayConfig} from '../models/fasten/relay-config';
+import {CDAConverterStatus} from '../models/fasten/cda-converter-status';
 import {ConnectableProvider, ProviderCatalogEntry, ProviderCatalogEntryRequest} from '../models/fasten/provider-catalog';
 import {
   List
@@ -398,6 +399,13 @@ export class FastenApiService {
           } as SmartAuthorizeResponse
         })
       );
+  }
+
+  // getCDAConverterStatus reports whether this server can actually convert a C-CDA/XML upload, so the
+  // UI can show setup steps instead of a Convert button that is guaranteed to fail (#397).
+  getCDAConverterStatus(): Observable<CDAConverterStatus> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/source/cda-converter/status`)
+      .pipe(map((response: ResponseWrapper) => response.data as CDAConverterStatus));
   }
 
   // getRelayConfig reports the effective OAuth relay callback URL for this deployment — the value the

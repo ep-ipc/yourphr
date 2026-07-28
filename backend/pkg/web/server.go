@@ -208,6 +208,9 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.POST("/source/authorize", handler.AuthorizeSource)
 					secure.POST("/source/connect", handler.ConnectSource)
 					secure.POST("/source/manual", handler.CreateManualSource)
+					// Whether C-CDA/XML upload can actually be converted here, so the UI doesn't
+					// offer a Convert button that is guaranteed to fail (#397).
+					secure.GET("/source/cda-converter/status", handler.GetCDAConverterStatus)
 
 					// Provider catalog (#304): admin curates entries; patients connect by picking one.
 					secure.POST("/provider-catalog", handler.CreateProviderCatalogEntry)

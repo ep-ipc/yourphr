@@ -6,6 +6,7 @@ import {Source} from '../../models/fasten/source';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {ActivatedRoute} from '@angular/router';
 import {environment} from '../../../environments/environment';
+import {CDAConverterStatus} from '../../models/fasten/cda-converter-status';
 import {BehaviorSubject, forkJoin, Observable, of, Subject} from 'rxjs';
 import {
   ConnectGatewaySourceSearch,
@@ -78,6 +79,10 @@ export class MedicalSourcesComponent implements OnInit {
 
   // CCDA-FHIR modal
   @ViewChild('ccdaWarningModalRef') ccdaWarningModalRef : any;
+
+  // Whether this server can convert C-CDA at all (#397). null = not yet checked, or the check
+  // failed — in that case the modal behaves as it always did and lets the upload surface any error.
+  cdaConverterStatus: CDAConverterStatus | null = null;
 
   // gates <app-medical-sources-connected> rendering
   showConnectedList = true
@@ -302,6 +307,13 @@ export class MedicalSourcesComponent implements OnInit {
     // fhir-converter — the raw document is uploaded as-is and never leaves this instance.
     // (Previously the browser shipped the CCDA to a third-party cloud; that path is gone.)
     if(this.isCcdaFile(processingFile)){
+      // Ask the server whether conversion can actually happen BEFORE offering it. Otherwise the
+      // modal promises a conversion that the upload then rejects with a config error (#397).
+      try {
+        this.cdaConverterStatus = await this.fastenApi.getCDAConverterStatus().toPromise()
+      } catch (_) {
+        this.cdaConverterStatus = null // status unknown — fall back to offering it, as before
+      }
       const shouldConvert = await this.showCcdaWarningModal()
       if(!shouldConvert){
         this.uploadedFile = []

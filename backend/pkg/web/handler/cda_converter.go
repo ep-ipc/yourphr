@@ -74,17 +74,50 @@ func cdaPatientID(cdaXML []byte) string {
 	return fmt.Sprintf("cda-%x", sum[:8]) // 16 hex chars — a valid, stable FHIR id
 }
 
+// GetCDAConverterStatus reports whether this server can actually convert a C-CDA upload, so the
+// UI can stop offering a "Convert" button that is guaranteed to fail (#397). Returns only
+// deployment booleans and the operator-facing setup text — no URL, since the sidecar address is
+// internal infrastructure the browser has no business knowing.
+func GetCDAConverterStatus(c *gin.Context) {
+	cfg := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+
+	enabled := cfg.GetBool("cda_converter.enabled")
+	configured := strings.TrimSpace(cfg.GetString("cda_converter.url")) != ""
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"enabled": enabled,
+		// ready means BOTH settings are present. Either one alone still fails the upload, and the
+		// half-configured case is exactly what made #397 hard to diagnose.
+		"ready":      enabled && configured,
+		"setup_hint": cdaSetupHint("C-CDA import is not available on this server."),
+	}})
+}
+
+// cdaSetupHint appends the exact steps needed to turn C-CDA import on. The bare
+// "set cda_converter.enabled" wording sent a user down a dead end (#397): config KEYS are not env
+// VAR names, so they tried FASTEN_CDA_CONVERTER_ENABLED and CDA_CONVERTER_ENABLED (the prefix is
+// YOURPHR_), and nothing told them a separate sidecar container has to be running at all. An error
+// a self-hoster cannot act on is a bug in the error, so name both variables and the command.
+func cdaSetupHint(problem string) string {
+	return problem + " C-CDA import needs the converter sidecar running AND two settings:\n" +
+		"  1. start the sidecar:  docker compose --profile cda up -d\n" +
+		"  2. YOURPHR_CDA_CONVERTER_ENABLED=true\n" +
+		"  3. YOURPHR_CDA_CONVERTER_URL=http://cda-converter:8080\n" +
+		"Set 2 and 3 in your .env (or .env_custom) and restart, then retry the upload. " +
+		"Note the YOURPHR_ prefix — the config keys are cda_converter.enabled / cda_converter.url. " +
+		"See docs/import/c-cda.md."
+}
+
 // convertCDAToFHIR posts a raw C-CDA document to the fhir-converter sidecar and returns the
 // unwrapped FHIR R4 Bundle JSON. The converter wraps its output as {"fhirResource": <Bundle>}
 // (#254 Phase 0). Returns actionable errors when conversion is disabled or the sidecar is
 // unreachable, so the caller can surface them without affecting FHIR/NDJSON import.
 func convertCDAToFHIR(ctx context.Context, cfg config.Interface, cdaXML []byte, patientID string) ([]byte, error) {
 	if !cfg.GetBool("cda_converter.enabled") {
-		return nil, fmt.Errorf("C-CDA import is not enabled on this server (set cda_converter.enabled)")
+		return nil, fmt.Errorf("%s", cdaSetupHint("C-CDA import is not enabled on this server."))
 	}
 	baseURL := cfg.GetString("cda_converter.url")
 	if baseURL == "" {
-		return nil, fmt.Errorf("C-CDA conversion service is not configured (set cda_converter.url)")
+		return nil, fmt.Errorf("%s", cdaSetupHint("C-CDA import is enabled but no converter address is configured."))
 	}
 	timeout := cfg.GetInt("cda_converter.timeout_seconds")
 	if timeout <= 0 {
