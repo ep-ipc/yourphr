@@ -202,6 +202,9 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.GET("/resources/search", handler.SearchResources)
 
 					secure.POST("/source", handler.CreateReconnectSource)
+					// Effective OAuth relay callback URL for this deployment — the value operators
+					// must register with their FHIR vendor (#399). Non-secret; no secret returned.
+					secure.GET("/source/relay-config", handler.GetRelayConfig)
 					secure.POST("/source/authorize", handler.AuthorizeSource)
 					secure.POST("/source/connect", handler.ConnectSource)
 					secure.POST("/source/manual", handler.CreateManualSource)

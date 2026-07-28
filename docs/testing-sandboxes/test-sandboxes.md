@@ -199,7 +199,7 @@ Expect HTTP 200 JSON with `authorization_endpoint`, `token_endpoint`, and `code_
 
 ## Relay & config
 
-All SMART connects route the provider redirect through the **relay** (`https://relay.nerdsbythehour.com/callback`); the redirect URI you register with each provider must match it exactly. Override with `YOURPHR_RELAY_URL` (in-cluster the backend polls `http://yourphr-relay.yourphr.svc.cluster.local:8080`). See [`deployment/README.md`](deployment/README.md) and [`FHIR/fhir-testing.md`](FHIR/fhir-testing.md).
+All SMART connects route the provider redirect through the **relay**; the redirect URI you register with each provider must match the relay callback exactly. Two settings, because the backend and the provider reach the relay differently ([#399](https://github.com/jwilleke/yourphr/issues/399)): `YOURPHR_RELAY_URL` is where the backend polls `/pending` (in-cluster: `http://yourphr-relay.yourphr.svc.cluster.local:8080`), while `YOURPHR_RELAY_PUBLIC_URL` is the public origin the provider redirects the browser to — `<that>/callback` is the value you register. It defaults to `YOURPHR_RELAY_URL` when that is public https, else to `https://relay.nerdsbythehour.com`. Confirm what your instance resolved with `GET /api/secure/source/relay-config`. See [`../../backend/cmd/relay/README.md`](../../backend/cmd/relay/README.md), [`deployment/README.md`](deployment/README.md) and [`FHIR/fhir-testing.md`](FHIR/fhir-testing.md).
 
 ## Automated tests (Playwright)
 

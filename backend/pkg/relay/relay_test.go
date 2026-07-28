@@ -108,3 +108,73 @@ func TestPollUntilTimeout(t *testing.T) {
 		t.Errorf("expected timeout error, got %v", err)
 	}
 }
+
+// fakeGetter is a minimal config.Interface stand-in for the Getter subset this package uses.
+type fakeGetter map[string]string
+
+func (f fakeGetter) GetString(key string) string { return f[key] }
+
+// TestResolvePublicBaseURL covers the split introduced by #399: the URL the backend POLLS can be
+// cluster-internal, while the URL the PROVIDER redirects the browser to must be public.
+func TestResolvePublicBaseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		publicURL string
+		pollURL   string
+		want      string
+	}{
+		{"neither set falls back to the project relay", "", "", DefaultBaseURL},
+		{"public url wins", "https://relay.example.org", "http://yourphr-relay.yourphr.svc.cluster.local:8080", "https://relay.example.org"},
+		{"public url wins over a public poll url too", "https://relay.example.org", "https://other.example.org", "https://relay.example.org"},
+		{"public https poll url is inherited", "", "https://relay.example.org", "https://relay.example.org"},
+		{"internal http poll url is NOT inherited", "", "http://yourphr-relay.yourphr.svc.cluster.local:8080", DefaultBaseURL},
+		{"trailing slash is trimmed", "https://relay.example.org/", "", "https://relay.example.org"},
+		{"whitespace is trimmed", "  https://relay.example.org  ", "", "https://relay.example.org"},
+		{"scheme match is case-insensitive", "", "HTTPS://relay.example.org", "HTTPS://relay.example.org"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResolvePublicBaseURL(tt.publicURL, tt.pollURL); got != tt.want {
+				t.Errorf("ResolvePublicBaseURL(%q, %q) = %q, want %q", tt.publicURL, tt.pollURL, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCallbackURLFromConfig is the #399 regression: a deployment that polls an internal relay must
+// still hand the provider its PUBLIC callback URL.
+func TestCallbackURLFromConfig(t *testing.T) {
+	cfg := fakeGetter{
+		ConfigKeyURL:       "http://yourphr-relay.yourphr.svc.cluster.local:8080",
+		ConfigKeyPublicURL: "https://relay.example.org",
+	}
+	if got, want := CallbackURL(cfg), "https://relay.example.org/callback"; got != want {
+		t.Errorf("CallbackURL = %q, want %q", got, want)
+	}
+}
+
+func TestFromConfig(t *testing.T) {
+	t.Run("requires a secret", func(t *testing.T) {
+		if _, err := FromConfig(fakeGetter{ConfigKeyURL: "https://relay.example.org"}); err == nil {
+			t.Fatal("expected an error when the shared secret is unset")
+		}
+	})
+	t.Run("polls the configured url", func(t *testing.T) {
+		c, err := FromConfig(fakeGetter{ConfigKeyURL: "http://internal:8080", ConfigKeySecret: testSecret})
+		if err != nil {
+			t.Fatalf("FromConfig: %v", err)
+		}
+		if c.BaseURL != "http://internal:8080" || c.Secret != testSecret {
+			t.Errorf("got %+v", c)
+		}
+	})
+	t.Run("defaults the poll url", func(t *testing.T) {
+		c, err := FromConfig(fakeGetter{ConfigKeySecret: testSecret})
+		if err != nil {
+			t.Fatalf("FromConfig: %v", err)
+		}
+		if c.BaseURL != DefaultBaseURL {
+			t.Errorf("BaseURL = %q, want %q", c.BaseURL, DefaultBaseURL)
+		}
+	})
+}

@@ -441,3 +441,97 @@ func (suite *SourceHandlerTestSuite) TestConnectSourceHandler() {
 		return stored == 3
 	}, 10*time.Second, 25*time.Millisecond, "expected 3 stored resources across types")
 }
+
+// TestAuthorizeSourceDerivesRedirectUriFromConfig is the #399 regression: the browser no longer
+// sends redirect_uri, so the backend must derive it from this deployment's relay config — and a
+// self-hosted relay polled over cluster-internal DNS must still advertise its PUBLIC callback URL.
+func TestAuthorizeSourceDerivesRedirectUriFromConfig(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	orig := validatePublicHTTPSURL
+	validatePublicHTTPSURL = func(string) error { return nil }
+	smart.AllowInternalHostsForTest = true
+	defer func() { smart.AllowInternalHostsForTest = false }()
+	defer func() { validatePublicHTTPSURL = orig }()
+
+	var provider *httptest.Server
+	provider = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/smart-configuration" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(fmt.Sprintf(
+				`{"authorization_endpoint":%q,"token_endpoint":%q}`,
+				provider.URL+"/authorize", provider.URL+"/token")))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer provider.Close()
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Set(pkg.ContextKeyTypeLogger, logrus.WithField("test", t.Name()))
+	ctrl := gomock.NewController(t)
+	appConfig := mock_config.NewMockInterface(ctrl)
+	appConfig.EXPECT().GetInt("web.smart_connect.login_wait_seconds").Return(240).AnyTimes()
+	// Poll over internal cluster DNS, redirect the browser to the public origin.
+	appConfig.EXPECT().GetString("relay.public_url").Return("https://relay.example.org").AnyTimes()
+	appConfig.EXPECT().GetString("relay.url").Return("http://yourphr-relay.yourphr.svc.cluster.local:8080").AnyTimes()
+	ctx.Set(pkg.ContextKeyTypeConfig, appConfig)
+
+	// NOTE: no redirect_uri in the request — that is the point of the test.
+	body, _ := json.Marshal(SmartAuthorizeRequest{
+		ApiEndpointBaseUrl: provider.URL,
+		ClientId:           "my-client-id",
+		Scopes:             "patient/*.read",
+	})
+	req, _ := http.NewRequest("POST", "/source/authorize", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+
+	AuthorizeSource(ctx)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var resp struct {
+		AuthorizeURL string `json:"authorize_url"`
+		RedirectUri  string `json:"redirect_uri"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	// Echoed back so the caller round-trips the identical value to /source/connect.
+	require.Equal(t, "https://relay.example.org/callback", resp.RedirectUri)
+
+	authURL, err := url.Parse(resp.AuthorizeURL)
+	require.NoError(t, err)
+	require.Equal(t, "https://relay.example.org/callback", authURL.Query().Get("redirect_uri"))
+}
+
+// TestGetRelayConfig confirms the operator-facing endpoint reports the effective callback URL and
+// never leaks the shared secret.
+func TestGetRelayConfig(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Set(pkg.ContextKeyTypeLogger, logrus.WithField("test", t.Name()))
+	ctrl := gomock.NewController(t)
+	appConfig := mock_config.NewMockInterface(ctrl)
+	appConfig.EXPECT().GetString("relay.public_url").Return("https://relay.example.org").AnyTimes()
+	appConfig.EXPECT().GetString("relay.url").Return("").AnyTimes()
+	appConfig.EXPECT().GetString("relay.secret").Return("super-secret").AnyTimes()
+	ctx.Set(pkg.ContextKeyTypeConfig, appConfig)
+	ctx.Request, _ = http.NewRequest("GET", "/source/relay-config", nil)
+
+	GetRelayConfig(ctx)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp struct {
+		Data struct {
+			CallbackURL string `json:"callback_url"`
+			Configured  bool   `json:"configured"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "https://relay.example.org/callback", resp.Data.CallbackURL)
+	require.True(t, resp.Data.Configured)
+	require.NotContains(t, w.Body.String(), "super-secret")
+}

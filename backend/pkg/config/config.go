@@ -121,6 +121,19 @@ func (c *configuration) Init() error {
 	// tuned via env/config without a frontend rebuild (YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS).
 	c.SetDefault("web.smart_connect.login_wait_seconds", 240)
 
+	// SMART on FHIR OAuth relay (#50). Two distinct URLs, because a self-hosted deployment usually
+	// needs both (#399):
+	//   relay.url        — where the BACKEND polls /pending; may be cluster-internal
+	//                      (http://yourphr-relay.<ns>.svc.cluster.local:8080).
+	//   relay.public_url — the public origin the PROVIDER redirects the user's browser to;
+	//                      relay.public_url + "/callback" is the OAuth redirect_uri registered with
+	//                      the FHIR vendor. Defaults to relay.url when that is public https, else to
+	//                      the project relay.
+	// Empty defaults keep the resolution/"not configured" logic in one place (backend/pkg/relay).
+	c.SetDefault("relay.url", "")
+	c.SetDefault("relay.public_url", "")
+	c.SetDefault("relay.secret", "")
+
 	c.SetDefault("web.src.frontend.path", "/opt/fasten/web")
 	c.SetDefault("database.type", "sqlite")
 	c.SetDefault("database.location", "/opt/fasten/db/fasten.db")

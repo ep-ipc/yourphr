@@ -286,9 +286,10 @@ func AuthorizeSourceFromCatalog(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("invalid request: %s", err)})
 		return
 	}
+	// redirect_uri is a deployment fact (which relay this instance owns), not a browser choice:
+	// derive it server-side so a self-hosted relay works without a frontend rebuild (#399).
 	if strings.TrimSpace(req.RedirectUri) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "redirect_uri is required"})
-		return
+		req.RedirectUri = relay.CallbackURL(appConfig)
 	}
 
 	cfg := smart.Config{
@@ -324,6 +325,9 @@ func AuthorizeSourceFromCatalog(c *gin.Context) {
 		"state":              state,
 		"code_verifier":      verifier,
 		"login_wait_seconds": appConfig.GetInt("web.smart_connect.login_wait_seconds"),
+		// The effective redirect_uri, so the caller round-trips the SAME value to /connect (the
+		// token exchange requires an exact match) without knowing the relay config.
+		"redirect_uri": req.RedirectUri,
 	})
 }
 
@@ -334,6 +338,7 @@ func AuthorizeSourceFromCatalog(c *gin.Context) {
 func ConnectSourceFromCatalog(c *gin.Context) {
 	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
 	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
 
 	entry, err := loadEnabledEntry(c, databaseRepo)
 	if err != nil {
@@ -352,9 +357,14 @@ func ConnectSourceFromCatalog(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "one of code or state is required"})
 		return
 	}
+	// Same server-side default as AuthorizeSourceFromCatalog — the two must produce an identical
+	// redirect_uri or the token exchange fails (#399).
+	if strings.TrimSpace(req.RedirectUri) == "" {
+		req.RedirectUri = relay.CallbackURL(appConfig)
+	}
 
 	if req.Code == "" {
-		relayClient, err := relay.FromEnv()
+		relayClient, err := relay.FromConfig(appConfig)
 		if err != nil {
 			logger.Errorln(err)
 			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": fmt.Sprintf("relay not configured: %s", err)})

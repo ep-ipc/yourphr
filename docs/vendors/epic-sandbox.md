@@ -56,8 +56,10 @@ and rides on the now-complete SMART on FHIR stack ([EPIC #20](https://github.com
   YourPHR never holds a shared credential.
 - After login, Epic redirects the browser to a **public relay** that only
   bounces the short-lived authorization `code` (never tokens). The default is
-  `https://relay.nerdsbythehour.com`; override with `YOURPHR_RELAY_URL` /
-  `YOURPHR_RELAY_SECRET` (read by `backend/pkg/relay/relay.go`).
+  `https://relay.nerdsbythehour.com`; override with `YOURPHR_RELAY_PUBLIC_URL`
+  (the origin the provider redirects to) plus `YOURPHR_RELAY_URL` /
+  `YOURPHR_RELAY_SECRET` (where the backend polls). No frontend rebuild is
+  needed — see [`../../backend/cmd/relay/README.md`](../../backend/cmd/relay/README.md).
 - The redirect URI registered with Epic must **exactly** match the relay
   callback: `https://relay.nerdsbythehour.com/callback` (or your own relay's
   `/callback`).

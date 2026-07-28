@@ -21,6 +21,68 @@ import (
 // DefaultBaseURL is the project's dev/demo relay (overridable via YOURPHR_RELAY_URL).
 const DefaultBaseURL = "https://relay.nerdsbythehour.com"
 
+// CallbackPath is the relay route the provider redirects the browser to with ?code=&state=.
+// PublicBaseURL()+CallbackPath is the OAuth redirect_uri registered with the FHIR vendor.
+const CallbackPath = "/callback"
+
+// Config keys (viper; env is the same key upper-cased with the YOURPHR_ prefix and '.'->'_', so
+// relay.public_url -> YOURPHR_RELAY_PUBLIC_URL). See backend/pkg/config.
+const (
+	ConfigKeyURL       = "relay.url"        // where the backend POLLS /pending — may be cluster-internal
+	ConfigKeyPublicURL = "relay.public_url" // public origin the PROVIDER redirects to — must be reachable from the user's browser
+	ConfigKeySecret    = "relay.secret"     // shared secret gating /pending
+)
+
+// Getter is the subset of config.Interface this package needs. Declared locally so the relay
+// client stays dependency-free (and trivially fakeable in tests).
+type Getter interface {
+	GetString(key string) string
+}
+
+// ResolvePublicBaseURL returns the public origin the OAuth provider redirects to, given the
+// configured public URL and the (possibly internal) poll URL.
+//
+// These are two different things and a self-hosted deployment usually needs both (issue #399):
+// the backend may poll the relay over cluster-internal DNS (http://yourphr-relay.<ns>.svc:8080)
+// while the provider must redirect the user's browser to a public https origin. So publicURL
+// wins; pollURL is only inherited when it is itself public https (the common single-URL setup);
+// otherwise fall back to the project relay.
+func ResolvePublicBaseURL(publicURL, pollURL string) string {
+	if u := strings.TrimRight(strings.TrimSpace(publicURL), "/"); u != "" {
+		return u
+	}
+	if u := strings.TrimRight(strings.TrimSpace(pollURL), "/"); u != "" && strings.HasPrefix(strings.ToLower(u), "https://") {
+		return u
+	}
+	return DefaultBaseURL
+}
+
+// PublicBaseURL resolves the public relay origin from config (relay.public_url, else relay.url).
+func PublicBaseURL(cfg Getter) string {
+	return ResolvePublicBaseURL(cfg.GetString(ConfigKeyPublicURL), cfg.GetString(ConfigKeyURL))
+}
+
+// CallbackURL is the effective OAuth redirect_uri for this deployment — the value the operator
+// must register with each FHIR vendor. Derived server-side; never supplied by the browser.
+func CallbackURL(cfg Getter) string {
+	return PublicBaseURL(cfg) + CallbackPath
+}
+
+// FromConfig builds a polling Client from config, so the relay honors config.yaml / .env /
+// .env_custom / YOURPHR_* env identically to every other setting. It returns an error if the
+// shared secret is unset, so callers can fall back to a directly-supplied code.
+func FromConfig(cfg Getter) (Client, error) {
+	secret := cfg.GetString(ConfigKeySecret)
+	if secret == "" {
+		return Client{}, errors.New("relay: YOURPHR_RELAY_SECRET (relay.secret) is not set")
+	}
+	baseURL := strings.TrimSpace(cfg.GetString(ConfigKeyURL))
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	return Client{BaseURL: baseURL, Secret: secret}, nil
+}
+
 // ErrNotReady means the relay has no code for this state yet (HTTP 404) — poll again.
 var ErrNotReady = errors.New("relay: code not yet available")
 
@@ -36,6 +98,9 @@ type Client struct {
 // FromEnv builds a Client from YOURPHR_RELAY_URL (default DefaultBaseURL) and the required
 // YOURPHR_RELAY_SECRET (the same shared secret configured on the relay). It returns an error
 // if the secret is unset, so callers can fall back to a directly-supplied code.
+//
+// Prefer FromConfig where a config.Interface is available: raw env reads see .env/.env_custom
+// (those are loaded into the process environment at startup) but NOT config.yaml.
 func FromEnv() (Client, error) {
 	secret := os.Getenv("YOURPHR_RELAY_SECRET")
 	if secret == "" {

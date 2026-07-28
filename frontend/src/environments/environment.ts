@@ -25,6 +25,7 @@ export const environment = {
   // if relative, must start with /
   fasten_api_endpoint_base: '/api',
 
-  // self-hosted Go SMART OAuth store-and-poll relay; ${relay_endpoint_base}/callback is the OAuth redirect_uri (EPIC #20, issue #50)
-  relay_endpoint_base: 'https://relay.nerdsbythehour.com',
+  // NOTE: the SMART OAuth relay is deliberately NOT configured here. redirect_uri is derived by the
+  // backend at runtime (relay.public_url / YOURPHR_RELAY_PUBLIC_URL), so a self-hosted relay needs
+  // no frontend rebuild (#399).
 };

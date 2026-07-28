@@ -64,8 +64,6 @@ export class SandboxComponent implements OnInit {
     this.errorMsg = ''
     this.successMsg = ''
 
-    const redirectUri = `${environment.relay_endpoint_base}/callback`
-
     const popup = window.open('', '_blank')
     if (!popup) {
       this.errorMsg = 'Your browser blocked the login popup. Please allow popups for this site, then try again.'
@@ -77,8 +75,10 @@ export class SandboxComponent implements OnInit {
 
     this.connectingProviderId = provider.id
     try {
+      // No redirect_uri is sent: the backend derives it from this deployment's relay config, so a
+      // self-hosted relay works without a frontend rebuild (#399). Echo back what it used.
       const authorize: SmartAuthorizeResponse = await this.fastenApi
-        .authorizeSourceFromCatalog(provider.id, {redirect_uri: redirectUri}).toPromise()
+        .authorizeSourceFromCatalog(provider.id).toPromise()
 
       if (!authorize?.authorize_url || !authorize?.state || !authorize?.code_verifier) {
         popup.close()
@@ -100,7 +100,7 @@ export class SandboxComponent implements OnInit {
           await this.fastenApi.connectSourceFromCatalog(provider.id, {
             state: authorize.state,
             code_verifier: authorize.code_verifier,
-            redirect_uri: redirectUri,
+            redirect_uri: authorize.redirect_uri,
             display: provider.display,
           }).toPromise()
           lastErr = null

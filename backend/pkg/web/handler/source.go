@@ -58,6 +58,7 @@ type SmartConnectRequest struct {
 func ConnectSource(c *gin.Context) {
 	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
 	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
 
 	var req SmartConnectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -78,11 +79,16 @@ func ConnectSource(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "one of code or state is required"})
 		return
 	}
+	// Same server-side default as AuthorizeSource — the two must produce an identical redirect_uri
+	// or the token exchange fails (#399).
+	if strings.TrimSpace(req.RedirectUri) == "" {
+		req.RedirectUri = relay.CallbackURL(appConfig)
+	}
 
 	// When no code is supplied directly, fetch it from the relay (#50) by state. The relay holds
 	// the code for ~60s; poll briefly to absorb the redirect→connect race.
 	if req.Code == "" {
-		relayClient, err := relay.FromEnv()
+		relayClient, err := relay.FromConfig(appConfig)
 		if err != nil {
 			logger.Errorln(err)
 			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": fmt.Sprintf("relay not configured: %s", err)})
@@ -170,6 +176,21 @@ func ConnectSource(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "source": sourceCred, "data": gin.H{"status": "import_started"}})
 }
 
+// GetRelayConfig reports this deployment's effective SMART OAuth relay settings so the Connect UI
+// can show the operator exactly which callback URL to register with their FHIR vendor (#399).
+// It exposes only non-secret, already-public values — the callback URL is handed to every provider
+// anyway. The shared secret is never returned; only whether one is configured.
+func GetRelayConfig(c *gin.Context) {
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"callback_url": relay.CallbackURL(appConfig),
+		// False means a relay-poll connect will fail with "relay not configured" — the UI can warn
+		// before the user starts a login they cannot complete.
+		"configured": appConfig.GetString(relay.ConfigKeySecret) != "",
+	}})
+}
+
 // SmartAuthorizeRequest initiates a SMART on FHIR standalone-launch connection: given the
 // self-describing provider config, the backend discovers the endpoints and builds the PKCE
 // authorization URL. The browser opens that URL; the provider redirects to the relay's
@@ -194,9 +215,15 @@ func AuthorizeSource(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("invalid request: %s", err)})
 		return
 	}
-	if req.ApiEndpointBaseUrl == "" || req.ClientId == "" || req.RedirectUri == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "api_endpoint_base_url, client_id, and redirect_uri are required"})
+	if req.ApiEndpointBaseUrl == "" || req.ClientId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "api_endpoint_base_url and client_id are required"})
 		return
+	}
+	// redirect_uri is a deployment fact (which relay this instance owns), not a browser choice:
+	// derive it server-side so a self-hosted relay works without a frontend rebuild (#399). An
+	// explicit value is still honored for callers that front their own relay per-connection.
+	if strings.TrimSpace(req.RedirectUri) == "" {
+		req.RedirectUri = relay.CallbackURL(appConfig)
 	}
 	// SSRF guard: the backend is about to fetch this user-supplied URL (discovery). Reject
 	// non-public targets (metadata/loopback/LAN) before any server-side request. (#51)
@@ -230,6 +257,9 @@ func AuthorizeSource(c *gin.Context) {
 		"authorize_url": cfg.AuthCodeURL(ep, state, verifier),
 		"state":         state,
 		"code_verifier": verifier,
+		// The effective redirect_uri, so the caller round-trips the SAME value to /source/connect
+		// (the token exchange requires an exact match) without knowing the relay config.
+		"redirect_uri": req.RedirectUri,
 		// How long the client should keep polling for the auth code (operator-tunable backend
 		// config, no frontend rebuild). The frontend falls back to its own default if absent.
 		"login_wait_seconds": appConfig.GetInt("web.smart_connect.login_wait_seconds"),

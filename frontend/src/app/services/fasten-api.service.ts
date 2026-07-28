@@ -35,6 +35,7 @@ import {BackgroundJob, BackgroundJobSyncData} from '../models/fasten/background-
 import {SupportRequest} from '../models/fasten/support-request';
 import {SmartConnectRequest} from '../models/fasten/smart-connect-request';
 import {SmartAuthorizeRequest, SmartAuthorizeResponse} from '../models/fasten/smart-authorize';
+import {RelayConfig} from '../models/fasten/relay-config';
 import {ConnectableProvider, ProviderCatalogEntry, ProviderCatalogEntryRequest} from '../models/fasten/provider-catalog';
 import {
   List
@@ -382,8 +383,9 @@ export class FastenApiService {
   }
 
   // authorizeSourceFromCatalog builds the PKCE authorize URL for a catalog entry. The request carries
-  // ONLY redirect_uri — the backend fills client_id/scopes/FHIR base from the catalog server-side.
-  authorizeSourceFromCatalog(catalogId: string, req: { redirect_uri: string }): Observable<SmartAuthorizeResponse> {
+  // NOTHING — the backend fills client_id/scopes/FHIR base from the catalog and derives redirect_uri
+  // from this deployment's relay config (#399); the effective value comes back in the response.
+  authorizeSourceFromCatalog(catalogId: string, req: { redirect_uri?: string } = {}): Observable<SmartAuthorizeResponse> {
     return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/provider-catalog/${encodeURIComponent(catalogId)}/authorize`, req)
       .pipe(
         map((response: any) => {
@@ -392,14 +394,23 @@ export class FastenApiService {
             state: response.state,
             code_verifier: response.code_verifier,
             login_wait_seconds: response.login_wait_seconds,
+            redirect_uri: response.redirect_uri,
           } as SmartAuthorizeResponse
         })
       );
   }
 
+  // getRelayConfig reports the effective OAuth relay callback URL for this deployment — the value the
+  // operator must register with their FHIR vendor — and whether a relay secret is configured (#399).
+  getRelayConfig(): Observable<RelayConfig> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/source/relay-config`)
+      .pipe(map((response: ResponseWrapper) => response.data as RelayConfig));
+  }
+
   // connectSourceFromCatalog completes the connection for a catalog entry. The request carries NO
   // client_id/client_secret — the backend resolves them from the catalog and does the token exchange.
-  connectSourceFromCatalog(catalogId: string, req: { state: string, code_verifier: string, redirect_uri: string, display?: string }): Observable<any> {
+  // redirect_uri is optional: omit it to use the same server-derived value as the authorize call.
+  connectSourceFromCatalog(catalogId: string, req: { state: string, code_verifier: string, redirect_uri?: string, display?: string }): Observable<any> {
     return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/provider-catalog/${encodeURIComponent(catalogId)}/connect`, req)
       .pipe(
         map((response: ResponseWrapper) => {
