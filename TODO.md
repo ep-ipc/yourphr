@@ -1,13 +1,15 @@
 # TODO
 
-> Generated from live GitHub state — ranked by priority label. The `▶ Resume here` pointer is written by `/wrap`.
+> Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
 
-- No open issue carries `P0`, and there are **0 open code-scanning alerts**.
-- **23 open Dependabot alerts are currently untracked by any issue** (1 critical, 12 high, 10 medium). By decision on 2026-07-28 they were deliberately **not** bridged into tracking issues — the 16 open Dependabot PRs are expected to clear most of them on merge. Re-run `/pstatus` after that sweep and bridge only what survives.
-  - `go.mod` — HIGH `golang.org/x/image` (GHSA-q675-qj96-32m9). Only alert with real runtime exposure; fix is merging [#390](https://github.com/jwilleke/yourphr/pull/390).
-  - `frontend/yarn.lock` (22) — critical `websocket-driver`; high `brace-expansion`, `js-yaml`, `shell-quote`, `fast-uri`, `linkify-it`, `immutable`, `engine.io`; medium `webpack-dev-server`, `tar`, `hono`, `@hono/node-server`, `morgan`. These are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data.
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider, Error: "C-CDA import is not enabled on this server (set cda_converter.enabled)"
+- **24 open Dependabot alerts, untracked by any issue** (1 critical, 13 high, 10 medium) — all in `frontend/yarn.lock`; `go.mod` is now clean. By decision on 2026-07-28 these are being cleared by merging Dependabot PRs rather than bridged into tracking issues. **[#400](https://github.com/jwilleke/yourphr/pull/400) alone addresses ~12 of them**, including the critical `websocket-driver`.
+  - Covered by [#400](https://github.com/jwilleke/yourphr/pull/400): `websocket-driver` (critical), `fast-uri`, `hono`, `immutable`, `linkify-it`, `shell-quote`, `tar`.
+  - Not yet covered: `brace-expansion` (x3), `js-yaml` (x3), `webpack-dev-server` (x2), `engine.io`, `picomatch`, `postcss`, `@hono/node-server`.
+  - These are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data.
+- 0 open code-scanning alerts.
 
 ## 🟠 P1
 
@@ -52,7 +54,7 @@
 
 ## 🔵 In review
 
-- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, shipped in v1.13.1; awaiting reporter confirmation
+- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, shipped in v1.13.1 (image published); awaiting reporter confirmation
 
 ## ⏸ Deferred
 
@@ -66,9 +68,21 @@
 
 ## ❓ Needs triage
 
-4 issues awaiting a placement decision (all labeled `needs-triage` on 2026-07-28):
+3 issues awaiting a placement decision:
 
 - [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
-- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider, Error: Error uploading file: C-CDA import is not enabled on this server (set cda_converter.enabled)
+
+## 🔀 Open PRs
+
+8 open, newest first. All are Dependabot bumps; none declares a closing reference.
+
+- [#400](https://github.com/jwilleke/yourphr/pull/400) — chore(deps): bump the npm_and_yarn group across 1 directory with 7 updates *(blocked — checks running)* — no linked issue; clears ~12 Dependabot alerts incl. the critical `websocket-driver`
+- [#379](https://github.com/jwilleke/yourphr/pull/379) — chore(deps): bump @angular-eslint/builder from 20.7.0 to 21.0.1 *(conflicted, stale — 33 days)* — no linked issue; peer deps identical between 20.7.0 and 21.0.1, safe once rebased
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 *(blocked, stale — 33 days)* — no linked issue; **held deliberately** — `@angular/core@20.3.25` requires `zone.js ~0.15.0`, 0.16.x targets Angular 21
+- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(blocked — checks running, stale 33 days)* — no linked issue
+- [#376](https://github.com/jwilleke/yourphr/pull/376) — chore(deps): bump golang.org/x/mod from 0.36.0 to 0.37.0 *(blocked — checks running, stale 33 days)* — no linked issue
+- [#375](https://github.com/jwilleke/yourphr/pull/375) — chore(deps): bump gorm.io/driver/postgres from 1.5.3 to 1.6.0 *(blocked — checks running, stale 33 days)* — no linked issue
+- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.1 *(blocked — checks running, stale 33 days)* — no linked issue
+- [#373](https://github.com/jwilleke/yourphr/pull/373) — chore(deps): bump github.com/samber/lo from 1.35.0 to 1.53.0 *(blocked — checks running, stale 33 days)* — no linked issue
