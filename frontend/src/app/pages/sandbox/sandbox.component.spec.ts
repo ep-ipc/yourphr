@@ -73,15 +73,22 @@ describe('SandboxComponent', () => {
       authorize_url: 'https://provider.example/authorize?x=1',
       state: 's1',
       code_verifier: 'v1',
+      redirect_uri: 'https://relay.example.org/callback', // server-derived (#399)
     } as any));
     const connectSpy = spyOn(component['fastenApi'], 'connectSourceFromCatalog').and.returnValue(of({} as any));
 
     await component.connectSandboxProvider({ id: 'bb-id', display: 'Blue Button', brand_logo_url: '' });
 
     expect(openSpy).toHaveBeenCalledWith('', '_blank');          // opened blank, synchronously
-    expect(authSpy).toHaveBeenCalledWith('bb-id', jasmine.objectContaining({ redirect_uri: jasmine.any(String) }));
+    // No redirect_uri is sent — the backend derives it from the deployment's relay config (#399).
+    expect(authSpy).toHaveBeenCalledWith('bb-id');
     expect(fakePopup.location.href).toBe('https://provider.example/authorize?x=1'); // navigated after authorize
-    expect(connectSpy).toHaveBeenCalledWith('bb-id', jasmine.objectContaining({ state: 's1', code_verifier: 'v1' }));
+    // ...and the value the backend returned is echoed back verbatim, so the token exchange sees an exact match.
+    expect(connectSpy).toHaveBeenCalledWith('bb-id', jasmine.objectContaining({
+      state: 's1',
+      code_verifier: 'v1',
+      redirect_uri: 'https://relay.example.org/callback',
+    }));
     expect(component.successMsg.toLowerCase()).toContain('connected');
     expect(component.connectingProviderId).toBeNull();
   });
