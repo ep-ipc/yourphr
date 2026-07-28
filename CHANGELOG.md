@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.13.1](https://github.com/jwilleke/yourphr/compare/v1.13.0...v1.13.1) (2026-07-28)
+
+### Bug Fixes
+
+- **relay:** self-hosted OAuth relays now work without rebuilding the frontend — the SMART on FHIR `redirect_uri` was built from a compile-time constant baked into the Angular bundle, so a deployment that set `YOURPHR_RELAY_URL` polled its own relay but still sent the project relay's `/callback` to the provider. `redirect_uri` is now derived by the backend at request time and is no longer sent by the browser ([#399](https://github.com/jwilleke/yourphr/issues/399))
+
+### Features
+
+- **relay:** relay settings are ordinary config keys (`config.yaml` / `.env` / `.env_custom` / env), with the URLs split by who reaches them: `relay.url` (`YOURPHR_RELAY_URL`) is where the **backend** polls `/pending` and may be cluster-internal, while `relay.public_url` (`YOURPHR_RELAY_PUBLIC_URL`) is the public origin the **provider** redirects the browser to — `<that>/callback` is the value registered with the FHIR vendor. `relay.public_url` falls back to `relay.url` when that is public https, else to the project relay, so existing deployments are unchanged ([#399](https://github.com/jwilleke/yourphr/issues/399))
+- **relay:** new `GET /api/secure/source/relay-config` reports the effective callback URL and whether a relay secret is configured (never the secret), so operators can confirm what to register with their vendor ([#399](https://github.com/jwilleke/yourphr/issues/399))
+
 ## [1.13.0](https://github.com/jwilleke/yourphr/compare/v1.12.1...v1.13.0) (2026-07-02)
 
 ### Features
