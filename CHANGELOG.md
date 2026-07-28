@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.13.2](https://github.com/jwilleke/yourphr/compare/v1.13.1...v1.13.2) (2026-07-28)
+
+Dependency and security maintenance. No functional changes.
+
+### Security
+
+- **frontend:** clear 12 Dependabot advisories via a grouped `npm_and_yarn` bump — `websocket-driver` (the only **critical**), `fast-uri`, `hono`, `immutable`, `linkify-it`, `shell-quote`, `tar` ([#400](https://github.com/jwilleke/yourphr/pull/400)). Open alerts drop from 24 to 12.
+- **backend:** `golang.org/x/image` 0.38.0 → 0.41.0 (GHSA-q675-qj96-32m9) — the only advisory affecting a runtime dependency rather than the frontend build chain ([#390](https://github.com/jwilleke/yourphr/pull/390))
+- **frontend:** `morgan` 1.10.0 → 1.11.0 (GHSA-4vj7-5mj6-jm8m) ([#394](https://github.com/jwilleke/yourphr/pull/394))
+
+### Dependencies
+
+- **backend:** `github.com/samber/lo` 1.35.0 → 1.53.0, `golang.org/x/mod` 0.36.0 → 0.38.0, `gorm.io/driver/postgres` 1.5.3 → 1.6.0
+- **frontend:** `@ng-select/ng-select` 15.2.0 → 20.7.0 (realigns with Angular 20 — v15 targeted Angular 15), `@angular-eslint/builder` 20.7.0 → 21.0.1, `@compodoc/compodoc` 1.1.19 → 1.2.1, `@types/jasminewd2` 2.0.10 → 2.0.13
+- **ci:** `actions/cache` 5 → 6, `actions/setup-node` 6 → 7, `actions/setup-go` 6 → 7, `DavidAnson/markdownlint-cli2-action` 23 → 24
+
+### Tests
+
+- fix two stale assertions left by the [#399](https://github.com/jwilleke/yourphr/issues/399) relay change, which had `main` red between v1.13.1 and this release. Application code was unaffected; both were test-only. `sandbox.component.spec.ts` still expected the browser to send `redirect_uri`, and `source_connect_test.go` lacked mock expectations for the new relay config lookups.
+
+### Known issues
+
+- `gorm.io/gorm` and `gormigrate` bumps ([#374](https://github.com/jwilleke/yourphr/pull/374), [#377](https://github.com/jwilleke/yourphr/pull/377)) are **deliberately excluded**: both drag `go-sqlite3` past the version-pinned `replace` that wires in the SQLCipher driver, silently disabling database encryption. Tracked in [#401](https://github.com/jwilleke/yourphr/issues/401).
+- `zone.js` 0.16.x is held — it violates Angular 20's `zone.js ~0.15.0` peer constraint ([#378](https://github.com/jwilleke/yourphr/pull/378)).
+- 12 Dependabot alerts remain, all in `frontend/yarn.lock` build/dev-chain transitives that do not ship in the served image.
+
 ## [1.13.1](https://github.com/jwilleke/yourphr/compare/v1.13.0...v1.13.1) (2026-07-28)
 
 ### Bug Fixes
