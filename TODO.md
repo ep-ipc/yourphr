@@ -1,35 +1,39 @@
 # TODO
 
 <!-- RESUME:START -->
-## ▶ Resume here — 2026-07-15
+## ▶ Resume here — 2026-07-28
 
-- Last worked on: read-only session — confirmed the scheduled OAuth token-refresh worker exists (`backend/pkg/web/token_refresh.go`, landed `94429d17`, [#51](https://github.com/jwilleke/yourphr/issues/51) / PR [#187](https://github.com/jwilleke/yourphr/pull/187), EPIC [#20](https://github.com/jwilleke/yourphr/issues/20) component E); no code changes. The previously-parked `.claude/commands/check-todos-local.md` deletion was committed by Jim today (`e15c9ec1`, pushed) — resolved.
-- Branch / state: `main`, clean, pushed/synced, no stashes.
-- Running / in-flight: none. Latest CI on `main` (Markdown Lint, CodeQL) green. Dev servers stopped (`:9090`/`:4200` free; restart: `make serve-backend` + `make serve-frontend-lan`).
+- Last worked on: [#399](https://github.com/jwilleke/yourphr/issues/399) — external user reported the SMART OAuth `redirect_uri` was hardcoded. Root cause: the Angular frontend built it from a compile-time constant (`environment.relay_endpoint_base`), baked into the bundle at image build; `YOURPHR_RELAY_URL` only fed the backend's `/pending` poll. Fixed in `07a4f7e5` — `redirect_uri` is now derived by the backend at request time, relay settings moved onto viper (`relay.url` / `relay.public_url` / `relay.secret`), and `GET /api/secure/source/relay-config` reports the effective callback URL. Released as **v1.13.1** (`9d63bdb8`).
+- Branch / state: `main`, clean, pushed. Tag `v1.13.1` pushed; GitHub Release published and marked Latest.
+- Running / in-flight: `Docker (YourPHR)` image build for `v1.13.1` — confirm it published `ghcr.io/jwilleke/yourphr:1.13.1`, then that Flux rolled the live instance.
 - Parked / half-done: none.
 - Next steps:
-  - **3 open Dependabot alerts** (surfaced on push 2026-07-15): HIGH golang.org/x/image GHSA-q675-qj96-32m9 (fix = merge [#390](https://github.com/jwilleke/yourphr/pull/390)); medium morgan GHSA-4vj7-5mj6-jm8m (fix = merge [#394](https://github.com/jwilleke/yourphr/pull/394)); medium js-yaml GHSA-h67p-54hq-rp68 (frontend/yarn.lock — verify a PR exists, else bump manually).
-  - **Verify RxTerms live on prod** (yourphr.nerdsbythehour.com → Current Medications; behind Authentik). Nudge: run `flux reconcile kustomization apps --with-source` on the k3s node.
-  - Triage **14** open Dependabot PRs ([#372](https://github.com/jwilleke/yourphr/pull/372)–[#382](https://github.com/jwilleke/yourphr/pull/382) plus [#390](https://github.com/jwilleke/yourphr/pull/390), [#391](https://github.com/jwilleke/yourphr/pull/391), [#394](https://github.com/jwilleke/yourphr/pull/394): frontend npm, Go modules, actions).
-  - Backlog: P1 [#313](https://github.com/jwilleke/yourphr/issues/313) / [#355](https://github.com/jwilleke/yourphr/issues/355); [#369](https://github.com/jwilleke/yourphr/issues/369) grouping endpoint; [#370](https://github.com/jwilleke/yourphr/issues/370) VA; [#385](https://github.com/jwilleke/yourphr/issues/385) test-data corpus.
-- Blockers / significant notes: RxTerms shows the **generic** name (Lipitor→Atorvastatin; accepted — reopen [#387](https://github.com/jwilleke/yourphr/issues/387) for brand names). Enrichment gated by `medications.rxterms_enrich` (on in prod+dev, off by default; offline crosswalk = no external calls).
+  - **Verify [#399](https://github.com/jwilleke/yourphr/issues/399) on the reporter's instance** once v1.13.1 is out; comment the version on the issue and close only after they confirm. Their report spelled the secret `YOURPHR_REALY_SECRET` — if literal, it is silently ignored (the new `relay-config` endpoint reports `configured: false`).
+  - **Dependency security sweep — 23 open Dependabot alerts** (see P0 band). Sequence upgrade-first; most are frontend build-chain transitives, so triaging the 16 open Dependabot PRs likely clears the bulk.
+  - **Triage 5 unlabeled/new issues**: [#389](https://github.com/jwilleke/yourphr/issues/389), [#392](https://github.com/jwilleke/yourphr/issues/392), [#393](https://github.com/jwilleke/yourphr/issues/393) carry only `enhancement` (no priority band); [#397](https://github.com/jwilleke/yourphr/issues/397) has no labels at all.
+  - **[#397](https://github.com/jwilleke/yourphr/issues/397) is a live user hitting a wall** — C-CDA/XML import fails with "C-CDA import is not enabled on this server". Same class of problem as #399: a self-hoster blocked by configuration that isn't discoverable. Worth prioritizing.
+  - Verify RxTerms live on prod (yourphr.nerdsbythehour.com → Current Medications; behind Authentik).
+- Blockers / significant notes: delivery is release-gated — pushes to `main` build no image. The dev server at `192.168.68.111:4200` (`make serve-frontend-lan`) is unrelated to the release path; it proxies `/api` to `localhost:9090`, so a local backend must be running on the same machine.
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label. The `▶ Resume here` pointer is written by `/wrap`.
 
 ## 🔴 P0 — Security & Critical
 
-- None. (0 open Dependabot alerts, 0 open code-scanning alerts.)
+- **23 open Dependabot alerts** — 1 critical, 12 high, 10 medium. 22 of 23 are in `frontend/yarn.lock`, 1 in `go.mod`.
+  - `go.mod`: HIGH `golang.org/x/image` — fix is merging [#390](https://github.com/jwilleke/yourphr/pull/390).
+  - `frontend/yarn.lock`: critical `websocket-driver`; high `brace-expansion`, `js-yaml`, `shell-quote`, `fast-uri`, `linkify-it`, `immutable`, `engine.io`; medium `webpack-dev-server`, `tar`, `hono`, `@hono/node-server`, `morgan`.
+  - Reality check before treating the whole set as urgent: most of these are **build/dev-chain transitives** (webpack-dev-server, hono, engine.io) that never ship in the served image, so the real exposure is a developer's machine, not a patient's data. Confirm which are runtime vs dev before spending a release on them.
+  - Dependabot's grouped frontend security job runs and succeeds repeatedly but opens **no** grouped security PR — worth checking whether it can't find an upgrade path. [#345](https://github.com/jwilleke/yourphr/issues/345) tracks the `http-proxy-middleware` piece (blocked on upstream hpm 3.x).
+- 0 open code-scanning alerts.
 
 ## 🟠 P1
 
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
-- [#387](https://github.com/jwilleke/yourphr/issues/387) — [FEATURE] RxNorm to patient-legible display (RxTerms)
 
 ## 🟡 P2
 
-- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#14](https://github.com/jwilleke/yourphr/issues/14) — [FEATURE] User Profile Update
 - [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 - [#53](https://github.com/jwilleke/yourphr/issues/53) — [SMART] Veradigm/FollowMyHealth registration + end-to-end integration (blocked)
@@ -53,6 +57,7 @@
 - [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (blocked, approval-gated)
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — brand_id / brand_logo_url override
 - [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
+- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
@@ -65,7 +70,7 @@
 
 ## 🔵 In review
 
-- None.
+- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, shipped in v1.13.1; awaiting reporter confirmation
 
 ## ⏸ Deferred
 
@@ -75,7 +80,11 @@
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (only on committing to a hard fork)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date/Condition/Provider/Place/Type
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
+- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 
 ## ❓ Needs triage
 
-- None. (All open issues carry a placement label.)
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider — "C-CDA import is not enabled on this server (set cda_converter.enabled)". **No labels at all.** A real user blocked on undiscoverable configuration; same shape as [#399](https://github.com/jwilleke/yourphr/issues/399).
+- [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider (no priority band)
+- [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout (no priority band)
+- [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework (no priority band)
