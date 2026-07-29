@@ -11,6 +11,20 @@ services:
         - YOURPHR_ENV=prod
 #        - YOURPHR_ENV=sandbox
     hostname: ${HOSTNAME:-fasten}
+    # Pass YOURPHR_* app config from .env / .env_custom INTO the container (#397).
+    #
+    # Compose reads .env only for ${...} substitution in THIS file — it does not forward those
+    # values to the container. Without env_file, a setting like YOURPHR_CDA_CONVERTER_ENABLED=true
+    # in .env is silently ignored: the app never sees it, and nothing warns. (The backend also
+    # loads .env/.env_custom itself, but from its WORKDIR *inside* the container — /opt/fasten —
+    # which is not where the host file lives.)
+    #
+    # .env_custom is for gitignored per-deployment overrides; both are optional.
+    env_file:
+      - path: .env
+        required: false
+      - path: .env_custom
+        required: false
     environment:
       - HOST_IP=${IP}
       - HOST_PORT=${PORT}

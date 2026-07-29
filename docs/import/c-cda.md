@@ -33,6 +33,18 @@ YOURPHR_CDA_CONVERTER_URL=http://cda-converter:8080
 docker compose up -d   # restart so the app picks up the new variables
 ```
 
+> **Using a `docker-compose.yml` from before v1.13.4?** Update it, or these variables will be ignored ([#397](https://github.com/jwilleke/yourphr/issues/397)). Compose reads `.env` only to substitute `${...}` **inside the compose file** — it does not forward those values into the container. Earlier compose files passed through only `HOST_IP`/`HOST_PORT`, so `YOURPHR_*` settings in `.env` silently never reached the app. The current file fixes this with:
+>
+> ```yaml
+>     env_file:
+>       - path: .env
+>         required: false
+>       - path: .env_custom
+>         required: false
+> ```
+>
+> Confirm what Compose will actually pass with `docker compose config | grep YOURPHR_`. If your variables do not appear there, the app will not see them.
+
 Then retry the upload. The Convert dialog only offers a **Convert** button when the server reports the converter is ready.
 
 ### Watch the variable names

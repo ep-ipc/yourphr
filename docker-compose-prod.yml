@@ -3,6 +3,14 @@ services:
   fasten-prod:
     image: ghcr.io/jwilleke/yourphr:main
     hostname: ${HOSTNAME:-fasten}
+    # Pass YOURPHR_* app config from .env / .env_custom INTO the container (#397). Compose reads
+    # .env only for ${...} substitution in THIS file; without env_file those values never reach the
+    # app, and nothing warns. Both files are optional.
+    env_file:
+      - path: .env
+        required: false
+      - path: .env_custom
+        required: false
     environment:
       - HOST_IP=${IP}
       - HOST_PORT=${PORT}
