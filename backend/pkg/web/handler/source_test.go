@@ -528,10 +528,35 @@ func TestGetRelayConfig(t *testing.T) {
 		Data struct {
 			CallbackURL string `json:"callback_url"`
 			Configured  bool   `json:"configured"`
+			Ready       bool   `json:"ready"`
+			PublicURL   struct {
+				Value  string `json:"value"`
+				Source string `json:"source"`
+				EnvVar string `json:"env_var"`
+			} `json:"public_url"`
+			PollURL struct {
+				Value  string `json:"value"`
+				Source string `json:"source"`
+			} `json:"poll_url"`
+			Secret struct {
+				Value  string `json:"value"`
+				Source string `json:"source"`
+			} `json:"secret"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.Equal(t, "https://relay.example.org/callback", resp.Data.CallbackURL)
 	require.True(t, resp.Data.Configured)
+	require.True(t, resp.Data.Ready)
+
+	// Provenance (#402): the operator must be able to tell a configured value from a silent
+	// fallback, and be told which env var to change.
+	require.Equal(t, "configured", resp.Data.PublicURL.Source)
+	require.Equal(t, "YOURPHR_RELAY_PUBLIC_URL", resp.Data.PublicURL.EnvVar)
+	require.Equal(t, "default", resp.Data.PollURL.Source, "relay.url is unset here, so it must report as defaulted")
+
+	// The secret's PRESENCE is reported; its value never is.
+	require.Equal(t, "configured", resp.Data.Secret.Source)
+	require.Empty(t, resp.Data.Secret.Value)
 	require.NotContains(t, w.Body.String(), "super-secret")
 }

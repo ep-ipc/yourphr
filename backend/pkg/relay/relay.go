@@ -68,6 +68,104 @@ func CallbackURL(cfg Getter) string {
 	return PublicBaseURL(cfg) + CallbackPath
 }
 
+// ValueSource says WHY a resolved relay value is what it is (#402).
+//
+// The operator-facing question is rarely "is this URL right" — it is "is my configuration being
+// read at all". A value that silently fell back to a default is indistinguishable from one that was
+// set on purpose, and that ambiguity is what made #399 and #397 hard to diagnose.
+type ValueSource string
+
+const (
+	// SourceConfigured — the key itself carries a value.
+	SourceConfigured ValueSource = "configured"
+	// SourceInherited — public_url was not set, so the (public https) poll URL was reused.
+	SourceInherited ValueSource = "inherited"
+	// SourceDefault — nothing was set; this is the built-in project relay.
+	SourceDefault ValueSource = "default"
+	// SourceUnset — no value and no default (only meaningful for the secret).
+	SourceUnset ValueSource = "unset"
+)
+
+// ResolvedValue is one effective setting plus where it came from.
+//
+// ConfigKey/EnvVar name WHERE the value would be set, not which mechanism supplied it. Viper cannot
+// reliably distinguish config.yaml from an environment variable once a default is registered
+// (IsSet returns true for a defaulted key), so claiming a specific mechanism would be a guess.
+// Naming both forms is honest and is what an operator needs in order to go change it.
+type ResolvedValue struct {
+	Value     string      `json:"value"`
+	Source    ValueSource `json:"source"`
+	ConfigKey string      `json:"config_key,omitempty"`
+	EnvVar    string      `json:"env_var,omitempty"`
+}
+
+// Description is the whole effective relay configuration, for the admin UI (#402).
+// It deliberately carries no secret value — only whether one is present.
+type Description struct {
+	// CallbackURL is the OAuth redirect_uri this deployment sends to providers — the value the
+	// operator must register with each FHIR vendor.
+	CallbackURL string        `json:"callback_url"`
+	PublicURL   ResolvedValue `json:"public_url"`
+	PollURL     ResolvedValue `json:"poll_url"`
+	SecretSet   bool          `json:"secret_set"`
+	SecretHint  ResolvedValue `json:"secret"`
+	// Ready is true when a relay-poll connect can actually complete: a secret is configured.
+	Ready bool `json:"ready"`
+}
+
+// EnvVarFor maps a viper config key to the environment variable that overrides it, mirroring the
+// prefix + separator rules in backend/pkg/config (relay.public_url -> YOURPHR_RELAY_PUBLIC_URL).
+func EnvVarFor(configKey string) string {
+	return "YOURPHR_" + strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(configKey))
+}
+
+// Describe reports the effective relay configuration and the provenance of each value, so an
+// operator can see BEFORE starting a connection whether their settings are actually in effect.
+func Describe(cfg Getter) Description {
+	rawPublic := strings.TrimRight(strings.TrimSpace(cfg.GetString(ConfigKeyPublicURL)), "/")
+	rawPoll := strings.TrimRight(strings.TrimSpace(cfg.GetString(ConfigKeyURL)), "/")
+	secret := cfg.GetString(ConfigKeySecret)
+
+	// Mirror ResolvePublicBaseURL's branches so the reported source can never disagree with the
+	// value actually used. (A test pins them together.)
+	public := ResolvedValue{ConfigKey: ConfigKeyPublicURL, EnvVar: EnvVarFor(ConfigKeyPublicURL)}
+	switch {
+	case rawPublic != "":
+		public.Value, public.Source = rawPublic, SourceConfigured
+	case rawPoll != "" && strings.HasPrefix(strings.ToLower(rawPoll), "https://"):
+		// Inherited from the poll URL — so point the operator at THAT key, not at public_url.
+		public.Value, public.Source = rawPoll, SourceInherited
+		public.ConfigKey, public.EnvVar = ConfigKeyURL, EnvVarFor(ConfigKeyURL)
+	default:
+		public.Value, public.Source = DefaultBaseURL, SourceDefault
+		public.ConfigKey, public.EnvVar = "", ""
+	}
+
+	poll := ResolvedValue{ConfigKey: ConfigKeyURL, EnvVar: EnvVarFor(ConfigKeyURL)}
+	if rawPoll != "" {
+		poll.Value, poll.Source = rawPoll, SourceConfigured
+	} else {
+		poll.Value, poll.Source = DefaultBaseURL, SourceDefault
+		poll.ConfigKey, poll.EnvVar = "", ""
+	}
+
+	secretHint := ResolvedValue{ConfigKey: ConfigKeySecret, EnvVar: EnvVarFor(ConfigKeySecret)}
+	if secret != "" {
+		secretHint.Source = SourceConfigured // NOTE: Value stays empty — never echo the secret.
+	} else {
+		secretHint.Source = SourceUnset
+	}
+
+	return Description{
+		CallbackURL: public.Value + CallbackPath,
+		PublicURL:   public,
+		PollURL:     poll,
+		SecretSet:   secret != "",
+		SecretHint:  secretHint,
+		Ready:       secret != "",
+	}
+}
+
 // FromConfig builds a polling Client from config, so the relay honors config.yaml / .env /
 // .env_custom / YOURPHR_* env identically to every other setting. It returns an error if the
 // shared secret is unset, so callers can fall back to a directly-supplied code.

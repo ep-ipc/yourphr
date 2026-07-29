@@ -1,6 +1,8 @@
-import {Component} from '@angular/core';
+import {Component, OnInit} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {RouterModule} from '@angular/router';
+import {FastenApiService} from '../../services/fasten-api.service';
+import {RelayConfig, RelayResolvedValue} from '../../models/fasten/relay-config';
 
 // Admin Dashboard (#170): the single admin hub — a grid of cards, each linking to a dedicated admin
 // page (Sandbox Testing, Provider Catalog, Server Logs, …). The route is gated by IsAdminAuthGuard and
@@ -13,4 +15,45 @@ import {RouterModule} from '@angular/router';
   templateUrl: './admin-dashboard.component.html',
   styleUrls: ['./admin-dashboard.component.scss'],
 })
-export class AdminDashboardComponent {}
+export class AdminDashboardComponent implements OnInit {
+  // SMART relay configuration (#402). Rendered inline rather than behind another click: the point is
+  // seeing at a glance whether this deployment's relay settings are actually in effect BEFORE
+  // starting a provider connection that would otherwise fail mid-OAuth.
+  relayConfig: RelayConfig | null = null;
+  relayError = '';
+  relayLoading = false;
+
+  constructor(private fastenApi: FastenApiService) {}
+
+  ngOnInit(): void {
+    this.relayLoading = true;
+    this.fastenApi.getRelayConfig().subscribe(
+      (cfg) => { this.relayConfig = cfg },
+      (_err) => { this.relayError = 'Could not load the relay configuration.'; this.relayLoading = false },
+      () => { this.relayLoading = false },
+    );
+  }
+
+  // Plain-language explanation of where a value came from. "default" and "inherited" are the cases
+  // worth surfacing: they mean the operator's own setting is NOT being used, which today looks
+  // identical to a working configuration.
+  sourceLabel(v: RelayResolvedValue | undefined): string {
+    switch (v?.source) {
+      case 'configured': return 'set by you';
+      case 'inherited':  return 'inherited — not set directly';
+      case 'default':    return 'built-in default — your setting is NOT in use';
+      case 'unset':      return 'not set';
+      default:           return 'unknown';
+    }
+  }
+
+  // Badge colour: green only when the value came from explicit configuration.
+  sourceBadgeClass(v: RelayResolvedValue | undefined): string {
+    switch (v?.source) {
+      case 'configured': return 'badge-success';
+      case 'inherited':  return 'badge-info';
+      case 'default':    return 'badge-warning';
+      default:           return 'badge-danger';
+    }
+  }
+}

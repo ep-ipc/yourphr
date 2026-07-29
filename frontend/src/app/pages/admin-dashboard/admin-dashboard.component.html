@@ -56,5 +56,71 @@
         </div>
       </div>
     </div>
+
+    <!-- SMART OAuth Relay card (#402): the EFFECTIVE values and where each came from, so a
+         misconfiguration is visible here rather than surfacing mid-login at the provider. -->
+    <div class="col-lg-8 mg-b-20">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="card-title mg-b-0"><i class="fas fa-exchange-alt"></i>&nbsp; SMART OAuth Relay</h6>
+          <span *ngIf="relayConfig" class="badge" [ngClass]="relayConfig.ready ? 'badge-success' : 'badge-danger'">
+            {{ relayConfig.ready ? 'Ready' : 'Not ready' }}
+          </span>
+        </div>
+        <div class="card-body">
+          <p class="tx-gray-500 mg-b-15">
+            The values this server is <strong>actually using</strong> for SMART on FHIR sign-in, and where each came from.
+            A setting shown as a <em>built-in default</em> means your configuration is not reaching the app.
+          </p>
+
+          <div *ngIf="relayLoading" class="tx-gray-500">Loading…</div>
+          <div *ngIf="relayError" class="alert alert-warning mg-b-0">{{ relayError }}</div>
+
+          <ng-container *ngIf="relayConfig as cfg">
+            <div class="alert" [ngClass]="cfg.ready ? 'alert-info' : 'alert-danger'">
+              <strong>Register this callback URL with each FHIR vendor</strong> — it must match exactly:
+              <div><code>{{ cfg.callback_url }}</code></div>
+              <div *ngIf="!cfg.ready" class="mg-t-5">
+                No relay secret is configured, so a connection cannot complete. Set
+                <code>{{ cfg.secret.env_var }}</code> to the same value as on your relay.
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm mg-b-0">
+                <thead>
+                  <tr>
+                    <th>Setting</th>
+                    <th>Effective value</th>
+                    <th>Where it came from</th>
+                    <th>Set with</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Public origin<br><small class="tx-gray-500">providers redirect the browser here</small></td>
+                    <td><code>{{ cfg.public_url.value }}</code></td>
+                    <td><span class="badge" [ngClass]="sourceBadgeClass(cfg.public_url)">{{ sourceLabel(cfg.public_url) }}</span></td>
+                    <td><code *ngIf="cfg.public_url.env_var">{{ cfg.public_url.env_var }}</code><span *ngIf="!cfg.public_url.env_var" class="tx-gray-500">—</span></td>
+                  </tr>
+                  <tr>
+                    <td>Poll address<br><small class="tx-gray-500">this server polls /pending here; may be internal</small></td>
+                    <td><code>{{ cfg.poll_url.value }}</code></td>
+                    <td><span class="badge" [ngClass]="sourceBadgeClass(cfg.poll_url)">{{ sourceLabel(cfg.poll_url) }}</span></td>
+                    <td><code *ngIf="cfg.poll_url.env_var">{{ cfg.poll_url.env_var }}</code><span *ngIf="!cfg.poll_url.env_var" class="tx-gray-500">—</span></td>
+                  </tr>
+                  <tr>
+                    <td>Shared secret<br><small class="tx-gray-500">gates /pending</small></td>
+                    <td><span class="tx-gray-500">{{ cfg.configured ? 'configured (not shown)' : 'not set' }}</span></td>
+                    <td><span class="badge" [ngClass]="sourceBadgeClass(cfg.secret)">{{ sourceLabel(cfg.secret) }}</span></td>
+                    <td><code>{{ cfg.secret.env_var }}</code></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </ng-container>
+        </div>
+      </div>
+    </div>
   </div>
 </div>

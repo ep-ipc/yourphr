@@ -183,11 +183,20 @@ func ConnectSource(c *gin.Context) {
 func GetRelayConfig(c *gin.Context) {
 	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
 
+	// Describe adds PROVENANCE for each value (#402): whether it was configured, inherited from
+	// relay.url, or silently fell back to the built-in default — and which config key / env var to
+	// change. "My configuration is not being read at all" and "the value is wrong" look identical
+	// otherwise, which is what made #399 and #397 hard to diagnose. The secret is never echoed.
+	desc := relay.Describe(appConfig)
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-		"callback_url": relay.CallbackURL(appConfig),
-		// False means a relay-poll connect will fail with "relay not configured" — the UI can warn
-		// before the user starts a login they cannot complete.
-		"configured": appConfig.GetString(relay.ConfigKeySecret) != "",
+		"callback_url": desc.CallbackURL,
+		// Retained under its original name for compatibility with existing callers (#399).
+		"configured": desc.SecretSet,
+		"ready":      desc.Ready,
+		"public_url": desc.PublicURL,
+		"poll_url":   desc.PollURL,
+		"secret":     desc.SecretHint,
 	}})
 }
 

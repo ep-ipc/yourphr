@@ -178,3 +178,107 @@ func TestFromConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestEnvVarFor pins the config-key -> env-var mapping the admin UI shows operators. If this drifts
+// from backend/pkg/config's prefix/replacer rules, the UI would tell people to set the wrong thing.
+func TestEnvVarFor(t *testing.T) {
+	cases := map[string]string{
+		ConfigKeyURL:       "YOURPHR_RELAY_URL",
+		ConfigKeyPublicURL: "YOURPHR_RELAY_PUBLIC_URL",
+		ConfigKeySecret:    "YOURPHR_RELAY_SECRET",
+	}
+	for key, want := range cases {
+		if got := EnvVarFor(key); got != want {
+			t.Errorf("EnvVarFor(%q) = %q, want %q", key, got, want)
+		}
+	}
+}
+
+// TestDescribe covers the provenance the admin UI reports (#402). The point is distinguishing
+// "configured" from "silently fell back", which is what made #399/#397 hard to diagnose.
+func TestDescribe(t *testing.T) {
+	t.Run("nothing set -> everything is default, not ready", func(t *testing.T) {
+		d := Describe(fakeGetter{})
+		if d.PublicURL.Source != SourceDefault || d.PollURL.Source != SourceDefault {
+			t.Errorf("want both default, got public=%s poll=%s", d.PublicURL.Source, d.PollURL.Source)
+		}
+		if d.CallbackURL != DefaultBaseURL+CallbackPath {
+			t.Errorf("CallbackURL = %q", d.CallbackURL)
+		}
+		if d.Ready || d.SecretSet {
+			t.Error("must not report ready with no secret configured")
+		}
+		// A defaulted value has no key to point at — claiming one would send the operator to the
+		// wrong place.
+		if d.PublicURL.ConfigKey != "" || d.PublicURL.EnvVar != "" {
+			t.Errorf("defaulted value should name no key, got %+v", d.PublicURL)
+		}
+	})
+
+	t.Run("public https poll url is reported as INHERITED, pointing at relay.url", func(t *testing.T) {
+		d := Describe(fakeGetter{ConfigKeyURL: "https://relay.example.org", ConfigKeySecret: "s"})
+		if d.PublicURL.Source != SourceInherited {
+			t.Errorf("public source = %s, want inherited", d.PublicURL.Source)
+		}
+		// Crucially it must blame the key that actually supplied the value.
+		if d.PublicURL.ConfigKey != ConfigKeyURL || d.PublicURL.EnvVar != "YOURPHR_RELAY_URL" {
+			t.Errorf("inherited value must point at relay.url, got %+v", d.PublicURL)
+		}
+	})
+
+	t.Run("split internal poll / public callback", func(t *testing.T) {
+		d := Describe(fakeGetter{
+			ConfigKeyURL:       "http://yourphr-relay.yourphr.svc.cluster.local:8080",
+			ConfigKeyPublicURL: "https://relay.example.org",
+			ConfigKeySecret:    "s",
+		})
+		if d.PublicURL.Source != SourceConfigured || d.PollURL.Source != SourceConfigured {
+			t.Errorf("both should be configured, got public=%s poll=%s", d.PublicURL.Source, d.PollURL.Source)
+		}
+		if d.CallbackURL != "https://relay.example.org/callback" {
+			t.Errorf("CallbackURL = %q", d.CallbackURL)
+		}
+		if !d.Ready {
+			t.Error("want ready with secret configured")
+		}
+	})
+
+	t.Run("internal http poll url does NOT become the public url", func(t *testing.T) {
+		d := Describe(fakeGetter{ConfigKeyURL: "http://internal:8080"})
+		if d.PublicURL.Source != SourceDefault {
+			t.Errorf("non-https poll url must not be inherited, got %s", d.PublicURL.Source)
+		}
+	})
+
+	t.Run("secret is never echoed", func(t *testing.T) {
+		d := Describe(fakeGetter{ConfigKeySecret: "super-secret-value"})
+		if d.SecretHint.Value != "" {
+			t.Errorf("secret value leaked: %q", d.SecretHint.Value)
+		}
+		if !d.SecretSet || d.SecretHint.Source != SourceConfigured {
+			t.Errorf("secret presence not reported: %+v", d.SecretHint)
+		}
+	})
+}
+
+// TestDescribeAgreesWithResolvePublicBaseURL is the guard that matters: the value the admin UI
+// SHOWS must be the value the OAuth flow USES. If these ever diverge the UI becomes actively
+// misleading — worse than showing nothing.
+func TestDescribeAgreesWithResolvePublicBaseURL(t *testing.T) {
+	cases := []fakeGetter{
+		{},
+		{ConfigKeyURL: "https://relay.example.org"},
+		{ConfigKeyURL: "http://internal:8080"},
+		{ConfigKeyPublicURL: "https://public.example.org", ConfigKeyURL: "http://internal:8080"},
+		{ConfigKeyPublicURL: "https://public.example.org/"},
+	}
+	for i, cfg := range cases {
+		want := ResolvePublicBaseURL(cfg[ConfigKeyPublicURL], cfg[ConfigKeyURL]) + CallbackPath
+		if got := Describe(cfg).CallbackURL; got != want {
+			t.Errorf("case %d: Describe CallbackURL = %q, but CallbackURL() resolves %q", i, got, want)
+		}
+		if got, want2 := Describe(cfg).CallbackURL, CallbackURL(cfg); got != want2 {
+			t.Errorf("case %d: Describe = %q, CallbackURL() = %q", i, got, want2)
+		}
+	}
+}
