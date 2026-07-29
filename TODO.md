@@ -1,31 +1,18 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-07-28
-
-- Last worked on: Dependabot sweep (14 of 17 PRs merged, alerts **24 → 12**, critical cleared), released **v1.13.1** ([#399](https://github.com/jwilleke/yourphr/issues/399) relay `redirect_uri`) and **v1.13.2** (security/deps), fixed [#397](https://github.com/jwilleke/yourphr/issues/397) C-CDA discoverability (`b20e6b13`, unreleased), and found [#401](https://github.com/jwilleke/yourphr/issues/401) — a latent regression that would silently disable DB encryption.
-- Branch / state: `main`, clean, pushed, no stashes.
-- Running / in-flight: none. Dev servers stopped (`:9090`/`:4200` free). Last CI on `main` green (`b20e6b13`); `820ada6d` is docs-only. `v1.13.2` image published.
-- Parked / half-done: none. (The local frontend runner is **fixed** — `make test-frontend-coverage` → `TOTAL: 538 SUCCESS`. Cause was a stale `frontend/.angular/cache`, which had grown to **89 GB** and held baked absolute paths to a nested `@babel/runtime` the `resolutions` pin hoists away; it survives `rm -rf node_modules`, which is why reinstalling never helped. Ordered fix recorded in `docs/devserver.md`.)
-- Next steps:
-  - **[#401](https://github.com/jwilleke/yourphr/issues/401) — highest value.** `go.mod:10` pins `replace github.com/mattn/go-sqlite3 v1.14.17 => jgiannuzzi/go-sqlite3` (the SQLCipher fork). ANY bump past 1.14.17 stops the replace matching, so Go silently links upstream mattn with **no SQLCipher** — a PHR writing PHI unencrypted while still reporting encryption on. Cheapest guard: assert the active cipher at startup and refuse to boot when `database.encryption.enabled` is true. [#374](https://github.com/jwilleke/yourphr/pull/374) / [#377](https://github.com/jwilleke/yourphr/pull/377) stay blocked (auto-merge disabled) until this is resolved.
-  - **Cut `v1.13.3`** to ship the [#397](https://github.com/jwilleke/yourphr/issues/397) fix — it is on `main` but unreleased, so the next person to hit it still gets the old dead-end error. (The current reporter is already unblocked by config.)
-  - Await reporter confirmation on [#397](https://github.com/jwilleke/yourphr/issues/397) and [#399](https://github.com/jwilleke/yourphr/issues/399) — both `in-review`, neither self-closed.
-  - Backlog: P1 [#313](https://github.com/jwilleke/yourphr/issues/313) / [#355](https://github.com/jwilleke/yourphr/issues/355); 12 remaining Dependabot alerts (all `frontend/yarn.lock` build-chain).
-- Blockers / significant notes: **Verify with the Makefile targets CI uses** (`make test-backend`, `make test-frontend-coverage`) and report the EXIT CODE — twice this session an empty filtered `go test` output was misread as success, leaving `main` red and v1.13.1 tagged from it (test-only; shipped code unaffected). Also: `gh pr merge --auto` does NOT re-run stale checks — a PR blocked on a failure recorded against a broken `main` needs `@dependabot rebase`. Do not batch-arm auto-merge on dependency PRs without reading each diff — [#374](https://github.com/jwilleke/yourphr/pull/374) was armed with checks pending and would have merged the encryption regression unattended. After Go merges run `go mod vendor`; after frontend merges run `make dep-frontend`; `make test-backend` rewrites `backend/resources/related_versions.json` with a local git-describe — revert, never commit.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
 
-- No open issue carries `P0` other than [#397](https://github.com/jwilleke/yourphr/issues/397), which is in review (see below).
-- **12 open Dependabot alerts** (7 high, 5 medium), down from 24 — all in `frontend/yarn.lock`; `go.mod` is clean. Remaining: `brace-expansion` (x3), `js-yaml` (x3), `webpack-dev-server` (x2), `engine.io`, `picomatch`, `postcss`, `@hono/node-server`. These are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data. Not bridged into tracking issues by decision on 2026-07-28; clear them by merging Dependabot PRs.
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — **fixed and released in v1.13.3**; see In review.
+- **12 open Dependabot alerts, untracked by any issue** (7 high, 5 medium) — all in `frontend/yarn.lock`; `go.mod` is clean. **No Dependabot PR covers any of them**, so the 2026-07-28 decision to "clear these by merging PRs rather than filing issues" has run out of road — the merge queue is drained and these are what remains. Either bridge them into issues or determine why Dependabot will not open PRs (several are deep transitives, and `postcss` is held by a `resolutions` pin in `frontend/package.json`).
+  - `brace-expansion` x3, `js-yaml` x3, `webpack-dev-server` x2, `engine.io`, `picomatch`, `postcss`, `@hono/node-server`
+  - All are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data. Partially tracked by [#345](https://github.com/jwilleke/yourphr/issues/345) (the `webpack-dev-server` / `http-proxy-middleware` tree).
 - 0 open code-scanning alerts.
 
 ## 🟠 P1
 
-- [#401](https://github.com/jwilleke/yourphr/issues/401) — [SECURITY] SQLCipher driver is unwired by any go-sqlite3 bump — version-pinned replace directive silently disables DB encryption
+- [#401](https://github.com/jwilleke/yourphr/issues/401) — [SECURITY] SQLCipher driver is unwired by any go-sqlite3 bump — version-pinned replace directive silently disables DB encryption — blocks [#374](https://github.com/jwilleke/yourphr/pull/374) and [#377](https://github.com/jwilleke/yourphr/pull/377)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 
@@ -70,8 +57,8 @@
 
 ## 🔵 In review
 
-- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — fixed in `b20e6b13`, **not yet released**; reporter can unblock today with config alone (`YOURPHR_CDA_CONVERTER_ENABLED` + `_URL` + `docker compose --profile cda up -d`). Awaiting their confirmation.
-- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, shipped in v1.13.1 (image published). Awaiting reporter confirmation.
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — fixed in `b20e6b13`, **released in v1.13.3**. Reporter can also unblock by config alone on any version. Awaiting their confirmation.
+- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, released in v1.13.1. Awaiting reporter confirmation.
 
 ## ⏸ Deferred
 
@@ -89,8 +76,8 @@ None — every open issue carries a placement label.
 
 ## 🔀 Open PRs
 
-3 open, all Dependabot, all deliberately blocked. None declares a closing reference.
+3 open, all Dependabot, all deliberately blocked with auto-merge disabled. None declares a closing reference. All 34 days old (opened 2026-06-25) — **stale by age, but held on purpose, not neglected.**
 
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(blocked, stale — 33 days)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`, 0.16.x targets Angular 21. Merge when the project moves to Angular 21.
-- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(blocked, stale — 33 days)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**, auto-merge disabled: drags `go-sqlite3` past the pinned replace and silently disables DB encryption.
-- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.1 *(blocked, stale — 33 days)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**, auto-merge disabled: same SQLCipher regression as #377.
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(blocked, stale)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`; 0.16.x targets Angular 21. Merge when the project moves to Angular 21.
+- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(blocked, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**: drags `go-sqlite3` past the pinned replace and silently disables DB encryption.
+- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.2 *(blocked, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**: re-verified after its rebase to 1.31.2 — it still drops `jgiannuzzi/go-sqlite3`, so the regression is unchanged.
