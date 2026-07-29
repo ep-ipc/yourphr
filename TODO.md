@@ -76,8 +76,8 @@ None — every open issue carries a placement label.
 
 ## 🔀 Open PRs
 
-3 open, all Dependabot. Two are now unblocked and rebasing; one remains held. None declares a closing reference. All 34 days old (opened 2026-06-25) — **stale by age, but held on purpose, not neglected.**
+3 open, all Dependabot, all opened 2026-06-25 (**34 days — stale by age**). Two are now merge-ready; one is held and has newly gone red. None declares a closing reference. All 34 days old (opened 2026-06-25) — **stale by age, but held on purpose, not neglected.**
 
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(blocked, stale)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`; 0.16.x targets Angular 21. Merge when the project moves to Angular 21.
-- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(rebasing, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED** by `bd7abb4e` — re-verify its checks, then merge.
-- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.2 *(rebasing, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED** by `bd7abb4e` — the fix was verified against this exact bump. Re-verify its checks, then merge.
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(conflicted/failing, stale)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`; 0.16.x targets Angular 21. It was passing CI when first held and now **fails `Test Backend` + `Test Frontend`** — it needs a rebase onto current `main` before its result means anything. Merge only when the project moves to Angular 21.
+- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(ready, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED and GREEN** (8 pass / 0 fail) after `bd7abb4e`. Merge-ready.
+- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.2 *(ready, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED and GREEN** (8 pass / 0 fail) after `bd7abb4e` — the fix was verified against this exact bump. Merge-ready; merging also exercises the SQLCipher guard on `main`.
