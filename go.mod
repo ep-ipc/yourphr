@@ -7,7 +7,17 @@ replace github.com/fastenhealth/fasten-sources => ./fasten-sources-stub
 
 //replace github.com/fastenhealth/gofhir-models => ../gofhir-models
 
-replace github.com/mattn/go-sqlite3 v1.14.17 => github.com/jgiannuzzi/go-sqlite3 v1.14.17-0.20230719111531-6e53453ccbd3
+// SQLCipher: jgiannuzzi/go-sqlite3 is the fork that understands the `_cipher=sqlcipher` DSN pragmas
+// used in backend/pkg/database/sqlite_repository.go. Database encryption depends entirely on this
+// redirect being in effect.
+//
+// DELIBERATELY UNVERSIONED ON THE LEFT (#401). A `replace X vN => ...` applies ONLY to that exact
+// version, so any dependency bump that moved go-sqlite3 off v1.14.17 (e.g. a gorm.io/driver/sqlite
+// upgrade) silently stopped matching and linked the stock mattn driver — which ignores those
+// pragmas and writes PHI in PLAINTEXT with no error. Leaving the version off makes the redirect
+// apply to every version, so the fork is always used. Do not re-add a version here.
+// A runtime `PRAGMA cipher` assertion backstops this and refuses to start if it ever regresses.
+replace github.com/mattn/go-sqlite3 => github.com/jgiannuzzi/go-sqlite3 v1.14.17-0.20230719111531-6e53453ccbd3
 
 //replace gorm.io/driver/sqlite v1.5.4 => github.com/jgiannuzzi/gorm-sqlite v1.4.4-0.20221215225833-42389ad31305
 

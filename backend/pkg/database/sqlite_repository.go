@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -13,6 +14,37 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+// ErrSqlcipherNotActive means database encryption is enabled in config but the connected driver is
+// not SQLCipher-capable, so data would be written UNENCRYPTED. Callers must treat this as fatal —
+// the whole point is to fail loudly instead of silently storing PHI in plaintext (#401).
+var ErrSqlcipherNotActive = errors.New("database encryption is enabled but SQLCipher is NOT active")
+
+// verifySqlcipherActive confirms the SQLCipher driver is really in effect on an open connection.
+//
+// `PRAGMA cipher` returns "sqlcipher" on the SQLCipher-enabled driver. On the stock mattn driver the
+// pragma is unrecognized and yields an empty string (or errors) — which is exactly the silent-
+// plaintext case this guards. Both outcomes are treated as failure.
+func verifySqlcipherActive(database *gorm.DB) error {
+	var cipher string
+	if resp := database.Raw("PRAGMA cipher;").Scan(&cipher); resp.Error != nil {
+		return fmt.Errorf("%w: could not read `PRAGMA cipher` (the driver likely has no SQLCipher support): %v."+
+			" %s", ErrSqlcipherNotActive, resp.Error, sqlcipherRemediation)
+	}
+	if !strings.EqualFold(strings.TrimSpace(cipher), "sqlcipher") {
+		return fmt.Errorf("%w: `PRAGMA cipher` returned %q, want \"sqlcipher\"."+
+			" Refusing to start rather than write patient data unencrypted. %s",
+			ErrSqlcipherNotActive, cipher, sqlcipherRemediation)
+	}
+	return nil
+}
+
+// sqlcipherRemediation tells the operator what actually causes this, since the symptom (a working
+// database) gives no clue. Almost always a dependency bump moved go-sqlite3 off the version the
+// `replace` directive redirects to the SQLCipher fork.
+const sqlcipherRemediation = "This usually means github.com/mattn/go-sqlite3 was upgraded past the version" +
+	" redirected by the `replace` directive in go.mod, so the build linked the stock driver instead of" +
+	" github.com/jgiannuzzi/go-sqlite3. Check `go list -m github.com/mattn/go-sqlite3` and see issue #401."
 
 // uses github.com/mattn/go-sqlite3 driver (warning, uses CGO)
 func newSqliteRepository(appConfig config.Interface, globalLogger logrus.FieldLogger, eventBus event_bus.Interface, validationMode bool) (DatabaseRepository, error) {
@@ -90,6 +122,24 @@ func newSqliteRepository(appConfig config.Interface, globalLogger logrus.FieldLo
 	if strings.ToUpper(appConfig.GetString("log.level")) == "DEBUG" {
 		database = database.Debug() //set debug globally
 	}
+
+	// FAIL CLOSED: prove encryption is actually active before anything is written (#401).
+	//
+	// The `_cipher=sqlcipher` DSN pragma above is only understood by the SQLCipher-enabled driver
+	// (jgiannuzzi/go-sqlite3, wired in via a `replace` in go.mod). Link the stock mattn driver
+	// instead and those pragmas become UNKNOWN PARAMETERS THAT ARE SILENTLY IGNORED: the database
+	// opens fine, the app runs fine, and PHI is written in plaintext while the config still says
+	// encryption is on. There is no error to notice.
+	//
+	// That is not hypothetical — a routine `gorm.io/driver/sqlite` bump drags go-sqlite3 past the
+	// version pinned in the replace directive, which stops matching, and the stock driver gets
+	// linked. So verify the cipher is really in effect and refuse to start if it is not.
+	if appConfig.GetBool("database.encryption.enabled") {
+		if err := verifySqlcipherActive(database); err != nil {
+			return nil, err
+		}
+	}
+
 	globalLogger.Infof("Successfully connected to fasten sqlite db: %s\n", dsn)
 
 	////verify journal mode
