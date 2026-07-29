@@ -6,7 +6,7 @@ Conversion runs **entirely on your own server**, in a separate container. The ra
 
 ## It works out of the box
 
-Since **v1.14.1** ([#404](https://github.com/jwilleke/yourphr/issues/404)) the shipped compose files start the converter automatically and `config.yaml` points the app at it. A stock install imports an Epic C-CDA export with no extra steps:
+Since **v1.15.0** ([#404](https://github.com/jwilleke/yourphr/issues/404)) the shipped compose files start the converter automatically and `config.yaml` points the app at it. A stock install imports an Epic C-CDA export with no extra steps:
 
 ```bash
 docker compose up -d
@@ -14,7 +14,7 @@ docker compose up -d
 
 Then upload the XML. Nothing to enable, no second command.
 
-Earlier releases required starting a separate profile and setting two variables — see [Upgrading from before v1.14.1](#upgrading-from-before-v1141).
+Earlier releases required starting a separate profile and setting two variables — see [Upgrading from before v1.15.0](#upgrading-from-before-v1150).
 
 ## Turning it OFF
 
@@ -35,7 +35,7 @@ If you deploy the app by hand (a bare k8s Deployment, your own manifests), the s
 
 Uploading XML with no reachable converter fails with an error naming the address it tried and all three ways out. Nothing else is affected.
 
-## Upgrading from before v1.14.1
+## Upgrading from before v1.15.0
 
 If you already set `YOURPHR_CDA_CONVERTER_ENABLED` / `_URL`, they still work and continue to override the defaults — nothing to undo. If you were using `--profile cda`, the profile is gone: the service now starts with a plain `up`.
 
@@ -101,7 +101,7 @@ The sidecar is the open-source [Metriport fhir-converter](https://github.com/met
 
 | Symptom | Cause |
 |---|---|
-| `C-CDA import is not enabled on this server` | it was explicitly disabled — `YOURPHR_CDA_CONVERTER_ENABLED=false`, or an older config. On v1.14.1+ it is on by default |
+| `C-CDA import is not enabled on this server` | it was explicitly disabled — `YOURPHR_CDA_CONVERTER_ENABLED=false`, or an older config. On v1.15.0+ it is on by default |
 | `no converter address is configured` | `YOURPHR_CDA_CONVERTER_URL` unset — the flag alone is not enough |
 | `C-CDA conversion service unreachable at ...` | the sidecar is not running or not reachable at that address. With the shipped compose files it starts automatically (`docker compose up -d`); deploying by hand, see [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml), or set `YOURPHR_CDA_CONVERTER_ENABLED=false` |
 | Conversion times out on a large export | raise `YOURPHR_CDA_CONVERTER_TIMEOUT_SECONDS` |
