@@ -4,6 +4,16 @@ YourPHR is **deployment-agnostic**. It is a single Go binary that serves the com
 
 The published image is **public and multi-arch**: `ghcr.io/jwilleke/yourphr` (tags `:main`, `:main-<run#>`, and release tags like `:v1.2.0`).
 
+**Architectures: `linux/amd64` and `linux/arm64`** — so Apple Silicon Macs, Raspberry Pi 5, and Ampere/Graviton ARM VPS hosts all pull natively, with no `--platform` flag and no emulation. Same for `ghcr.io/jwilleke/yourphr-relay` and `ghcr.io/jwilleke/yourphr-cda-converter`.
+
+> **arm64 arrived with [#405](https://github.com/jwilleke/yourphr/issues/405); releases up to and including `v1.15.1` are amd64-only** and fail to pull on arm64 with `no matching manifest for linux/arm64/v8`. If you are pinned to one of those tags, move to `:latest` — or, to stay put, force emulation with `docker pull --platform linux/amd64 ghcr.io/jwilleke/yourphr:<tag>` (works, but slow).
+
+To see exactly which architectures a given tag ships:
+
+```bash
+docker buildx imagetools inspect ghcr.io/jwilleke/yourphr:latest
+```
+
 > **This page is the lead deployment doc.** Start here for how to run YourPHR and how it is configured; the deeper, topic-specific guides are linked from [Deployment docs](#deployment-docs) below and the [See also](#see-also) at the end.
 
 ## Deployment docs

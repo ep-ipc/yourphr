@@ -1,10 +1,20 @@
 name: Docker (YourPHR)
 # Replaces upstream docker.yaml which depends on depot.dev (paid service).
-# Builds linux/amd64 only — sufficient for deby (x86_64 k3s node).
 # Builds + publishes a DEPLOYABLE image ONLY on a release tag (vX.Y.Z) — tagged :X.Y.Z / :X.Y /
 # :latest. Pushes to main are CI-tested but NOT built/published here: the live instance deploys
 # strictly off semver tags (Flux ImagePolicy in jwilleke/mj-infra-flux/.../yourphr-policy.yaml).
 # So shipping = cutting a release (on any minor/major or on request — see docs/releasing.md).
+#
+# MULTI-ARCH (#405). This was linux/amd64 only, which broke `docker pull` outright on every arm64
+# host (Apple Silicon, Pi 5, Ampere/Graviton VPS) with "no matching manifest for linux/arm64/v8" —
+# a self-hosted PHR that will not run on the most common cheap self-hosting hardware.
+#
+# Built as a NATIVE matrix, not QEMU. The image is expensive to emulate: a full Angular build plus
+# a CGO/SQLCipher static Go link (see go.mod's jgiannuzzi/go-sqlite3 replace, #401). Under QEMU
+# that is tens of minutes and the CGO link is the fragile part. This repo is public, so GitHub's
+# arm64 runners (ubuntu-24.04-arm) are free — each arch builds on its own native runner, pushes
+# BY DIGEST (no tag), and a final `merge` job assembles the tag list into one manifest list.
+# Bonus: the `fasten --help` smoke test in the Dockerfile's final stage runs natively per arch.
 
 on:
   push:
@@ -28,11 +38,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  docker:
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -52,18 +73,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Extract Docker metadata
+      - name: Extract Docker metadata (labels only)
         id: meta
         uses: docker/metadata-action@v6
         with:
-          # The semver + :latest tags only fire on v*.*.* tag pushes (cut by release-please);
-          # the two main/main-<N> tags only fire on pushes to the main branch.
-          tags: |
-            type=raw,value=main,enable=${{ github.ref_name == 'main' }}
-            type=raw,value=main-${{ github.run_number }},enable=${{ github.ref_name == 'main' }}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          # No tags here — the per-arch images are pushed by digest and are never tagged.
+          # The tag list lives in the `merge` job below, which is what users actually pull.
           labels: |
             org.opencontainers.image.title=YourPHR
             org.opencontainers.image.description=YourPHR — your medical records, immediately and in your hands, for free. A self-hosted Personal Health Record (community continuation of Fasten OnPrem).
@@ -71,17 +86,95 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-      - name: Build and push Docker image
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Push an untagged, content-addressed image; the digest is handed to `merge`.
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          # Cache is scoped per arch — a shared scope would thrash between the two runners.
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
           no-cache: ${{ inputs.no_cache || false }}
           build-args: |
             YOURPHR_ENV=prod
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          # Filename is the bare digest hex; the merge job re-prefixes it with sha256:.
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge manifest list
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract Docker metadata (tags)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          # The semver + :latest tags only fire on v*.*.* tag pushes (cut by hand — see
+          # docs/releasing.md, release-please was removed in #241); the two main/main-<N>
+          # tags only fire on a workflow_dispatch from the main branch.
+          tags: |
+            type=raw,value=main,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=main-${{ github.run_number }},enable=${{ github.ref_name == 'main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s " *)
+
+      - name: Verify the pushed manifest is multi-arch
+        run: |
+          # A green build does not prove a usable image (#405) — assert both platforms are
+          # actually present in the manifest list before calling this shipped.
+          TAG="$(jq -cr '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")"
+          docker buildx imagetools inspect "$TAG" --format '{{json .Manifest}}' > manifest.json
+          for want in linux/amd64 linux/arm64; do
+            os="${want%%/*}"; arch="${want##*/}"
+            jq -e --arg os "$os" --arg arch "$arch" \
+              '.manifests | map(select(.platform.os == $os and .platform.architecture == $arch)) | length > 0' \
+              manifest.json > /dev/null || { echo "::error::$TAG is missing $want"; exit 1; }
+          done
+          echo "$TAG is multi-arch: linux/amd64 + linux/arm64"

@@ -1,13 +1,19 @@
 #########################################################################################################
 # Frontend Build
 #########################################################################################################
-# Note, when running on Github, we cannot use standard Github Action runners, as ARM support is only via QEMU emulation
-# (until https://github.com/actions/runner-images/issues/2187)
-# QEMU emulation has a bunch of performance issues, as described in the links below.
-# https://blog.thesparktree.com/docker-multi-arch-github-actions#q-i-enabled-multi-arch-builds-and-my-builds-take-1h-what-gives
-# https://github.com/fastenhealth/fasten-onprem/issues/43
+# MULTI-ARCH BUILD NOTE (#405).
+# Upstream Fasten built arm64 on https://depot.dev/ (paid) because GitHub had no ARM runners and
+# QEMU emulation of this image is punishing — a full Angular build plus a CGO/SQLCipher static Go
+# link. GitHub now offers native arm64 runners, free for public repos, so .github/workflows/
+# docker-jwilleke.yaml builds each arch on its OWN native runner and merges the two digests into
+# one manifest list. No depot.dev, no emulation.
 #
-# instead, we use https://depot.dev/ to do our multi-arch builds on native ARM and AMD nodes.
+# Consequence for anyone editing this file: every stage here is assumed to run NATIVELY for the
+# target arch — that is why the final stage can `RUN` the built binary as a smoke test. Do not add
+# a `--platform=$BUILDPLATFORM` cross-compile shortcut without re-checking the CGO/SQLCipher link
+# (see the go.mod jgiannuzzi/go-sqlite3 replace, #401); Dockerfile.relay cross-compiles only
+# because it is CGO_ENABLED=0 pure Go.
+# Background on the emulation cost: https://github.com/fastenhealth/fasten-onprem/issues/43
 
 FROM node:24 as frontend-build
 ARG YOURPHR_ENV=sandbox

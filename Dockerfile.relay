@@ -2,10 +2,15 @@
 # A tiny static Go service (pure stdlib); see backend/cmd/relay and
 # docs/planning/smart-on-fhir/oauth-gateway.md.
 
-FROM golang:1.26 as build
+# Multi-arch (#405) by CROSS-COMPILING, not emulating: the relay is CGO_ENABLED=0 pure Go, so the
+# build stage always runs natively on the builder ($BUILDPLATFORM) and just retargets GOOS/GOARCH.
+# The final stage is COPY-only (no RUN), so no arch ever needs QEMU. Keep it that way.
+FROM --platform=$BUILDPLATFORM golang:1.26 as build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 COPY . .
-RUN CGO_ENABLED=0 go build -buildvcs=false -o /relay ./backend/cmd/relay
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -buildvcs=false -o /relay ./backend/cmd/relay
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=build /relay /relay
