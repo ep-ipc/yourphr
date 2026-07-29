@@ -1,5 +1,22 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-07-29
+
+- Last worked on: [#405](https://github.com/jwilleke/yourphr/issues/405) — **YourPHR now builds and runs on arm64**, shipped as **v1.16.0**. Both publishing workflows were amd64-only, so `docker pull` hard-failed on Apple Silicon / Pi / ARM VPS. The app image now builds as a native matrix (`ubuntu-latest` + `ubuntu-24.04-arm`, push-by-digest + a `merge` job); the relay cross-compiles on one runner because it is `CGO_ENABLED=0` pure Go. Also filed [#416](https://github.com/jwilleke/yourphr/issues/416) bridging the 12 orphaned Dependabot alerts.
+- Branch / state: `main`, clean, pushed, no stashes. Tag `v1.16.0` pushed, GitHub Release published.
+- Running / in-flight: **the v1.16.0 release image build ([run 30478751796](https://github.com/jwilleke/yourphr/actions/runs/30478751796)) was still running at wrap** — it is the first *release* build of the new multi-arch workflow. CodeQL on `main` also still running. No dev servers, no containers, nothing local running.
+- Parked / half-done: none.
+- Next steps:
+  - **Confirm the release image actually shipped multi-arch**: `docker buildx imagetools inspect ghcr.io/jwilleke/yourphr:1.16.0` must show both `linux/amd64` and `linux/arm64`. The workflow's own `merge` job asserts this and fails if either is missing, so a green run is sufficient — but the whole point of [#405](https://github.com/jwilleke/yourphr/issues/405) is that a green build is not proof, so pull it. Then Flux should roll `yourphr.nerdsbythehour.com` to 1.16.0 on its own.
+  - **[#405](https://github.com/jwilleke/yourphr/issues/405) is fixed but deliberately left open** — close it once the released image is confirmed pullable on arm64.
+  - **[#416](https://github.com/jwilleke/yourphr/issues/416) needs your grading call.** Filed `P1`, not the `P0` the security template stamps, because all 12 alerts are `frontend/yarn.lock` build/dev-chain with no path to patient data and no presence in the shipped image (repo precedent for this class is P2, see [#345](https://github.com/jwilleke/yourphr/issues/345)). Re-label if you disagree.
+  - **⏰ LIVE INSTANCE, carried over from the last session and still not done.** `yourphr.nerdsbythehour.com` has no `cda-converter` sidecar, and C-CDA is enabled by default since v1.15.1 — XML upload there will report "conversion service unreachable". Deploy `deploy/yourphr-cda-converter.example.yaml` or set `YOURPHR_CDA_CONVERTER_ENABLED=false` in `jwilleke/mj-infra-flux`. No data risk.
+  - **UI check still not done, carried over**: log in as `ccdatest` on dev and confirm Eve Betterhalf's 67 C-CDA-derived records actually render. Data in a DB nobody can read is not access.
+  - [#397](https://github.com/jwilleke/yourphr/issues/397) — still awaiting the reporter; do not close on our say-so.
+- Blockers / significant notes: **The "verify by running" rule paid off again.** The arm64 fix was proven by building and running the image natively on this Apple Silicon machine *before* pushing — build, start, and `https://…/web/` returning HTTP 200 with `<title>YourPHR</title>`, which is what confirmed the CGO/SQLCipher static link works on arm64. That was the one genuinely uncertain part ([#401](https://github.com/jwilleke/yourphr/issues/401)). Two workflow gotchas worth remembering: the per-arch layer cache **must** be `scope=`d or the two runners thrash a shared key, and the manifest list contains `unknown/unknown` attestation entries, so any platform assertion has to filter on `os == linux` rather than counting manifests. Also note `/pstatus` wiped this block earlier in the session — exactly the complaint in [#410](https://github.com/jwilleke/yourphr/issues/410), still unfixed.
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
