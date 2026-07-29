@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.15.1](https://github.com/jwilleke/yourphr/compare/v1.15.0...v1.15.1) (2026-07-29)
+
+Follow-ups from end-to-end testing of the v1.15.0 out-of-box C-CDA change ([#404](https://github.com/jwilleke/yourphr/issues/404)). Both were found by actually running the stack; unit tests, CI and `docker compose config` passed cleanly through each.
+
+### Bug Fixes
+
+- **import:** correct the C-CDA setup hint. v1.15.0 still told operators to run `docker compose --profile cda up -d`, but that profile was **removed** in the same release — following the instruction did nothing. The hint now reflects reality: reaching it means either the feature was turned off deliberately (it is on by default) or the app runs from its own manifests rather than the shipped compose files, and it addresses both. Tests now assert the dead instruction is *absent*, since asserting only that text is *present* let the content rot unnoticed.
+- **ci:** build the C-CDA converter image for `linux/arm64` as well. Making the sidecar start by default in v1.15.0 meant an amd64-only image broke `docker compose up` outright on every arm64 host with `no matching manifest for linux/arm64/v8` — including users who only import FHIR JSON and never wanted the converter. The multi-arch image is published, so this needs no upgrade to take effect.
+
+### Known issues
+
+- **YourPHR still cannot run on arm64**: the *app* image is amd64-only, so Apple Silicon, Raspberry Pi and ARM VPS hosts cannot run it at all. The converter fix above was necessary but not sufficient. Tracked in [#405](https://github.com/jwilleke/yourphr/issues/405); workaround is `DOCKER_DEFAULT_PLATFORM=linux/amd64` (emulated, slower).
+- `backend/pkg/web/handler/testdata/ccda_to_fhir_converted_C-CDA_R2-1_CCD.xml.json` no longer matches current converter output (65 vs 67 resources). Harmless — tests mock with it — but it is not trustworthy as ground truth until refreshed.
+- C-CDA conversion is verified as *working*, not as *clinically faithful*: nobody has yet checked that converted resources faithfully represent the source document.
+- `zone.js` 0.16.x remains held on Angular 20's peer constraint ([#378](https://github.com/jwilleke/yourphr/pull/378)); `jgiannuzzi/go-sqlite3` remains a pinned 2023 fork ([#401](https://github.com/jwilleke/yourphr/issues/401)); 12 `frontend/yarn.lock` build-chain Dependabot alerts remain.
+
 ## [1.15.0](https://github.com/jwilleke/yourphr/compare/v1.14.0...v1.15.0) (2026-07-29)
 
 ### ⚠️ Operators — read before upgrading
