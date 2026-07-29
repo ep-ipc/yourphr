@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.14.0](https://github.com/jwilleke/yourphr/compare/v1.13.4...v1.14.0) (2026-07-29)
+
+### Features
+
+- **admin:** the Admin Dashboard now shows the **effective** SMART OAuth relay configuration and, for each value, **where it came from** — configured, inherited from `relay.url`, or fallen back to the built-in default — along with the environment variable to change ([#402](https://github.com/jwilleke/yourphr/issues/402), suggested by @thevoltagesource while verifying [#399](https://github.com/jwilleke/yourphr/issues/399)).
+
+  The problem this solves is not "is this URL correct" but **"is my configuration being read at all"** — two states that were previously indistinguishable. That ambiguity is what made [#399](https://github.com/jwilleke/yourphr/issues/399) and [#397](https://github.com/jwilleke/yourphr/issues/397) expensive to diagnose: in one, `YOURPHR_RELAY_URL` was honoured for polling but silently ignored for the callback; in the other, no `YOURPHR_*` value reached the container at all. The card leads with the callback URL to register with each FHIR vendor, and a value that silently fell back is labelled as such rather than presented as a neutral fact. Collapsed by default; the Ready / Not ready badge stays visible when collapsed. The shared secret is never returned by the API or rendered.
+
+- **api:** `GET /api/secure/source/relay-config` gained `ready`, `public_url`, `poll_url` and `secret`, each carrying `source` plus the `config_key` / `env_var` to change. `callback_url` and `configured` are unchanged, so existing callers keep working ([#402](https://github.com/jwilleke/yourphr/issues/402)).
+
+### Dependencies
+
+- **backend:** `gorm.io/gorm` 1.30.0 → 1.31.2, `gorm.io/driver/sqlite` 1.5.4 → 1.6.0, `gormigrate/v2` 2.1.1 → 2.1.6 ([#374](https://github.com/jwilleke/yourphr/pull/374), [#377](https://github.com/jwilleke/yourphr/pull/377)). These were held for 34 days because they drag `go-sqlite3` past the version pin that wired in SQLCipher; the [#401](https://github.com/jwilleke/yourphr/issues/401) fix in v1.13.4 removed that hazard, and encryption was re-verified on the merged result.
+
+### Known issues
+
+- `zone.js` 0.16.x remains held on Angular 20's `zone.js ~0.15.0` peer constraint ([#378](https://github.com/jwilleke/yourphr/pull/378)).
+- `jgiannuzzi/go-sqlite3` is still a pinned fork of a 2023 commit and will not pick up upstream `mattn/go-sqlite3` security fixes. [#401](https://github.com/jwilleke/yourphr/issues/401) made the arrangement safe, not permanent.
+- 12 Dependabot alerts remain, all `frontend/yarn.lock` build/dev-chain transitives that do not ship in the served image. No Dependabot PR currently covers them.
+
 ## [1.13.4](https://github.com/jwilleke/yourphr/compare/v1.13.3...v1.13.4) (2026-07-29)
 
 ### ⚠️ Behaviour change — read before upgrading
