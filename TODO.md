@@ -1,5 +1,23 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-07-29
+
+- Last worked on: [#404](https://github.com/jwilleke/yourphr/issues/404) C-CDA out-of-box (shipped v1.15.0, closed) and its end-to-end testing, which **caught three defects that had already shipped**. Filed [#405](https://github.com/jwilleke/yourphr/issues/405) (arm64) and ran the [#403](https://github.com/jwilleke/yourphr/issues/403) converter head-to-head. **Nine releases today: v1.13.1 → v1.15.1.**
+- Branch / state: `main`, clean, pushed, no stashes. CI green (one docs-only `Push on main` may still be finishing).
+- Running / in-flight: dev servers **UP** — frontend `:4200`, backend `:9090`. **The `cda-dev` converter container is DEAD** (exited 137 ~46 min ago, likely a Docker restart), and the backend still points at `localhost:18080` — so C-CDA upload on dev will fail with the "unreachable" error until you `docker start cda-dev` or re-run it. Everything else on dev works.
+- Parked / half-done: none uncommitted.
+- Next steps:
+  - **[#405](https://github.com/jwilleke/yourphr/issues/405) (P1) — top recommendation.** The **app** image is amd64-only (`docker-jwilleke.yaml` → `platforms: linux/amd64`), so `docker pull` hard-fails on Apple Silicon / Pi / ARM VPS with an error that never mentions architecture. YourPHR is *uninstallable* for those users — that outranks any feature. Upstream Fasten built multi-arch; this fork narrowed it. Likely blocker: the CGO/SQLCipher link. **Verify by pulling on arm64, not by a green build** — the converter fix today proved a build passing ≠ an image working.
+  - **⏰ LIVE INSTANCE.** `yourphr.nerdsbythehour.com` has no `cda-converter`, and v1.15.1 enables C-CDA by default. Once Flux rolls, XML upload there reports "conversion service unreachable". Deploy the sidecar (`deploy/yourphr-cda-converter.example.yaml`) or set `YOURPHR_CDA_CONVERTER_ENABLED=false` in `jwilleke/mj-infra-flux`. No data risk.
+  - **UI check still not done** — log in as `ccdatest` / `devpassword` on `localhost:4200` and confirm Eve Betterhalf's **67 C-CDA-derived records actually render**. Blocked only because the Chrome extension was not connected. Data in a DB nobody can read is not access.
+  - **12 Dependabot alerts** — no PR, no issue. All `frontend/yarn.lock` build-chain transitives (no path to patient data). Needs a decision, not work.
+  - [#397](https://github.com/jwilleke/yourphr/issues/397) — awaiting the reporter. **Do not close on our say-so; my instructions to them were wrong twice.**
+  - Stale fixture `ccda_to_fhir_converted_C-CDA_R2-1_CCD.xml.json` (65 vs current 67 resources) — refresh or annotate; it is no longer ground truth.
+  - [#403](https://github.com/jwilleke/yourphr/issues/403) — head-to-head done and it **argues against switching**: Metriport 67 resources vs Microsoft 61, with CarePlan absent from Microsoft entirely. Keep open for HL7v2 + MIT only.
+- Blockers / significant notes: **Verify by RUNNING, not by reasoning.** Three defects shipped today and every one was caught by executing something — the arm64 break (`docker pull`), a `setup_hint` pointing at a compose profile the same release deleted (live endpoint call), and a drifted test fixture (real conversion). Unit tests, CI and `docker compose config` passed cleanly through all three. **Three hypotheses also reversed on inspection**: per-document-type templates were not a gap (`ccd.hbs` is a strict superset of all 8 others — do not "fix" this); the Metriport pin was not stale (it *is* current `develop` HEAD); Microsoft does not convert better (it converts less). Corollaries: assert removed strings are **absent** (positive-only assertions let content rot); filter CI waits by **workflow AND commit** (a `--limit 3` window once fired on unrelated runs); `Fixes #NNN` in a commit **auto-closes** the issue, which bypasses the leave-closes-to-Jim convention (#401 and #404 both went that way); `make test-backend` rewrites `backend/resources/related_versions.json` — revert, never commit. Dev accounts (7 + `ccdatest`) share the password in `private/secrets.md`.
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
