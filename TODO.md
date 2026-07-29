@@ -53,7 +53,7 @@
 - [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
-- [#402](https://github.com/jwilleke/yourphr/issues/402) — [FEATURE] Admin: show the effective relay URLs and where each value came from
+- [#402](https://github.com/jwilleke/yourphr/issues/402) — [FEATURE] Admin: show the effective relay URLs and where each value came from — **implemented** (`1fbe66bb`, `404b795a`); collapsible card + provenance. Awaiting the v1.14.0 tag, then close.
 
 ## 🔵 In review
 
@@ -76,8 +76,6 @@ None — every open issue carries a placement label.
 
 ## 🔀 Open PRs
 
-3 open, all Dependabot, all opened 2026-06-25 (**34 days — stale by age**). Two are now merge-ready; one is held and has newly gone red. None declares a closing reference. All 34 days old (opened 2026-06-25) — **stale by age, but held on purpose, not neglected.**
+1 open. [#374](https://github.com/jwilleke/yourphr/pull/374) and [#377](https://github.com/jwilleke/yourphr/pull/377) merged once [#401](https://github.com/jwilleke/yourphr/issues/401) removed the SQLCipher hazard that had held them for 34 days; encryption was re-verified on the merged result.
 
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(conflicted/failing, stale)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`; 0.16.x targets Angular 21. It was passing CI when first held and now **fails `Test Backend` + `Test Frontend`** — it needs a rebase onto current `main` before its result means anything. Merge only when the project moves to Angular 21.
-- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(ready, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED and GREEN** (8 pass / 0 fail) after `bd7abb4e`. Merge-ready.
-- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.2 *(ready, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED and GREEN** (8 pass / 0 fail) after `bd7abb4e` — the fix was verified against this exact bump. Merge-ready; merging also exercises the SQLCipher guard on `main`.
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(failing, stale — 34 days)* — no linked issue; **held deliberately**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`, and 0.16.x targets Angular 21. Its CI is also red against a base that predates today's commits, so it needs a rebase before any result means anything. Merge when the project moves to Angular 21.
