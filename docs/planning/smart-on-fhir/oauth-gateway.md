@@ -2,6 +2,8 @@
 
 Relay-specific deep dive for [EPIC #20](https://github.com/jwilleke/yourphr/issues/20). The overall plan and all decisions live in [`smart-on-fhir.md`](./smart-on-fhir.md); this file covers just the relay (component B — the public `redirect_uri`).
 
+> **As-built:** the live end-to-end map (UI → authorize → relay → connect → sync, timeouts, config, failures) is in [`../../SMART-flow-map.md`](../../SMART-flow-map.md). Prefer that for operators and debugging; this file is design history for the relay itself.
+
 ## Background
 
 Upstream `fasten-sources` used Fasten Lighthouse — a hosted cloud OAuth relay — as the callback endpoint for SMART on FHIR. Lighthouse moved to the commercial Fasten Connect product (`fastenhealth/fasten-onprem#629`), so provider sync is broken in the open-source build, and we will **not** use Fasten's hosted relay.
