@@ -60,7 +60,7 @@ On migration the catalog is seeded with known-good **templates** (`models.Defaul
 - **Medicare — Blue Button 2.0 (Sandbox)** — `https://sandbox.bluebutton.cms.gov/v2/fhir`, the exact sandbox scopes (`openid profile launch/patient patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read` — **no** `offline_access`/wildcard/`fhirUser`). Confidential client → the admin adds a `client_secret`.
 - **Epic (Sandbox)** — `https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4`, `launch/patient patient/*.read openid fhirUser offline_access`. Public/PKCE → no secret.
 
-Both ship with **empty `client_id`/`client_secret` and `Enabled=false`** — **no real credential is ever committed** (CLAUDE.md hard rule). They give the admin the non-secret config pre-filled; the admin adds their bring-your-own `client_id` (and a secret for Blue Button) and flips `Enabled`. Deleting a default does not bring it back; an admin-created entry with the same `Display` is never duplicated.
+Both ship with **empty `client_id`/`client_secret` and `Enabled=false`** — **no real credential is ever committed** (AGENTS.md hard rule). They give the admin the non-secret config pre-filled; the admin adds their bring-your-own `client_id` (and a secret for Blue Button) and flips `Enabled`. Deleting a default does not bring it back; an admin-created entry with the same `Display` is never duplicated.
 
 ## Security
 

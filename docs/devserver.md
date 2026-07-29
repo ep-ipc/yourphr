@@ -100,5 +100,5 @@ go mod vendor
 ## Related
 
 - `Makefile` — the `serve-*` / `build-*` targets.
-- `CLAUDE.md` — the Commands section.
+- `AGENTS.md` — the Commands section.
 - `config.yaml` — the template for `config.dev.yaml`.

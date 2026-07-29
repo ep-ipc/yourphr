@@ -47,7 +47,7 @@ New here and not sure? Open a [blank issue](https://github.com/jwilleke/yourphr/
 
 ### A note on health data (important)
 
-YourPHR handles **Personal Health Information**. **Never** attach real patient data, real exports, secrets, or keys to an issue or PR — use *synthetic* (Synthea-generated) fixtures only. If you found a display bug in your own records, describe the *shape* of the problem and paste a small **synthetic** example, never the real thing. See the data rules in [CLAUDE.md](CLAUDE.md).
+YourPHR handles **Personal Health Information**. **Never** attach real patient data, real exports, secrets, or keys to an issue or PR — use *synthetic* (Synthea-generated) fixtures only. If you found a display bug in your own records, describe the *shape* of the problem and paste a small **synthetic** example, never the real thing. See the data rules in [AGENTS.md](AGENTS.md).
 
 ---
 
@@ -187,7 +187,7 @@ See the [architecture overview](docs/architecture.md) for the high-level map and
         └── server.go
 ```
 
-> **Generated code:** `fhir_*.go` and `frontend/.../models/patient-access-brands/*.ts` are generated. Re-run `make generate-backend` when their inputs (`search-parameters.json`, tygo-exported Go structs) change, and commit the result. Details in [CLAUDE.md](CLAUDE.md).
+> **Generated code:** `fhir_*.go` and `frontend/.../models/patient-access-brands/*.ts` are generated. Re-run `make generate-backend` when their inputs (`search-parameters.json`, tygo-exported Go structs) change, and commit the result. Details in [AGENTS.md](AGENTS.md).
 
 ## FAQ
 

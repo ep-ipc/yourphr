@@ -4,7 +4,7 @@ This is the **published contract** for deploying YourPHR. If you run your own in
 Argo CD, plain Kubernetes, Docker Compose, Watchtower, or anything else — key your automation off the
 rules here and it will behave predictably across upgrades.
 
-See also: [`docs/releasing.md`](../releasing.md) (how releases are cut) and the project `CLAUDE.md`
+See also: [`docs/releasing.md`](../releasing.md) (how releases are cut) and the project `AGENTS.md`
 (deployment overview).
 
 ## What is published, and where

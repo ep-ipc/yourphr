@@ -10,7 +10,7 @@ A **self-hosted personal/family Personal Health Record (PHR) viewer** — a stan
 
 It is a **display-only client**, not an EHR and not a FHIR server: it requests/imports records and presents them legibly. That framing drives the conformance posture (see [US Core support](./us-core/README.md)).
 
-> **Identifier note:** the product is **YourPHR**, but the Go module path stays `github.com/fastenhealth/fasten-onprem`, and upstream-tied technical names (`fasten-sources`, `FastenDisplayModel`, the k8s `fasten` namespace) are kept on purpose. Only user-facing strings are "YourPHR". See EPIC [#2](https://github.com/jwilleke/yourphr/issues/2) and [`../CLAUDE.md`](../CLAUDE.md).
+> **Identifier note:** the product is **YourPHR**, but the Go module path stays `github.com/fastenhealth/fasten-onprem`, and upstream-tied technical names (`fasten-sources`, `FastenDisplayModel`, the k8s `fasten` namespace) are kept on purpose. Only user-facing strings are "YourPHR". See EPIC [#2](https://github.com/jwilleke/yourphr/issues/2) and [`../AGENTS.md`](../AGENTS.md).
 
 ## System context
 
@@ -137,7 +137,7 @@ flowchart LR
 ```
 
 - `make generate-backend` runs both. Re-run after changing `search-parameters.json` or a tygo-exported Go struct, and **commit the regenerated files**.
-- Details and conventions: [`../CLAUDE.md`](../CLAUDE.md) → "Code generation".
+- Details and conventions: [`../AGENTS.md`](../AGENTS.md) → "Code generation".
 
 ## Deployment & delivery
 
@@ -173,7 +173,7 @@ Strengths worth knowing: centralized per-user scoping, DB-backed admin gate (JWT
 | Topic | Doc |
 |---|---|
 | **Roadmap & phasing** | [`Roadmap.md`](./Roadmap.md) |
-| **Repo guide / conventions / commands** | [`../CLAUDE.md`](../CLAUDE.md) · [`../README.md`](../README.md) |
+| **Repo guide / conventions / commands** | [`../AGENTS.md`](../AGENTS.md) · [`../README.md`](../README.md) |
 | **Display: classification & two-layer model** | [`your-phr-dashboard/classification-and-display-architecture.md`](./your-phr-dashboard/classification-and-display-architecture.md) |
 | **Display: patient-legible north star** | [`your-phr-dashboard/patient-legible-display.md`](./your-phr-dashboard/patient-legible-display.md) |
 | **Dashboard design** | [`your-phr-dashboard/README.md`](./your-phr-dashboard/README.md) |

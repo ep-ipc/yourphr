@@ -31,7 +31,7 @@ ONC's **Certified API criterion §170.315(g)(10)** — the "Certified APIs" you 
 ## Why it matters for YourPHR
 
 - US Core profiles define what a **conformant US provider's FHIR API** should return — the **Must-Support** fields. YourPHR's display work to surface exactly those is tracked in the US Core 9.0.0 Must-Support gap issues ([#249](https://github.com/jwilleke/yourphr/issues/249), [#281](https://github.com/jwilleke/yourphr/issues/281)–[#285](https://github.com/jwilleke/yourphr/issues/285)).
-- **But** the near-term real-world target (FollowMyHealth / Veradigm) is **non-US-Core** — it omits Must-Support fields and deviates from the profiles. So YourPHR adds **fallbacks for missing US Core fields** rather than assuming strict conformance (see `CLAUDE.md`). Prefer a fallback (e.g. `class.code` when `type[]` is absent) over assuming the profile holds.
+- **But** the near-term real-world target (FollowMyHealth / Veradigm) is **non-US-Core** — it omits Must-Support fields and deviates from the profiles. So YourPHR adds **fallbacks for missing US Core fields** rather than assuming strict conformance (see `AGENTS.md`). Prefer a fallback (e.g. `class.code` when `type[]` is absent) over assuming the profile holds.
 - The Cures-Act / **Certified** path (Blue Button, athenahealth "Certified APIs") gives **US-Core-shaped R4** data; the messier portal exports do not.
 
 ## One-liner
@@ -42,4 +42,4 @@ USCDI = the government's list of *what* health data must flow; US Core = HL7's F
 
 - [`dstu2-vs-r4.md`](dstu2-vs-r4.md) — the FHIR-version axis (a different distinction)
 - [`../vendors/athenahealth.md`](../vendors/athenahealth.md) — where "Certified APIs (USCDI / US Core)" is selected
-- `CLAUDE.md` — the non-US-Core fallback principle
+- `AGENTS.md` — the non-US-Core fallback principle

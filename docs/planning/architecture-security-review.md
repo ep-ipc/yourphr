@@ -86,7 +86,7 @@ exposed directly to the public internet without the fixes below.
   server on encryption-key setup. Functional, but the standby→active transition is a
   stateful dance worth integration-test coverage.
 - **Generated-model coupling to upstream identifiers.** Intentional (documented in
-  CLAUDE.md), but it means the fork carries upstream's `fasten-*` naming and the private
+  AGENTS.md), but it means the fork carries upstream's `fasten-*` naming and the private
   `fasten-sources` stub indefinitely. Fine as a decision; just a long-term maintenance tax.
 
 ---
@@ -200,7 +200,7 @@ server won't honor.
 - JWT validation pins HS256 and rejects other algorithms (`auth/jwt_utils.go:47`),
   closing the `alg=none`/algorithm-confusion class.
 - bcrypt cost 14 with empty-password rejection (`models/user.go`).
-- Reserved-username blocking (`gorm_common.go`) and strong `.gitignore`/CLAUDE.md rules
+- Reserved-username blocking (`gorm_common.go`) and strong `.gitignore`/AGENTS.md rules
   against committing PHI, DBs, keys, and certs.
 - DB encryption on by default with a standby-mode guard when the key is absent.
 
