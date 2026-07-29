@@ -5,8 +5,14 @@ name: Docker (YourPHR CDA converter)
 # MANUAL trigger only: this repackages a THIRD-PARTY AGPL-3.0 image, so publishing is a deliberate
 # operator action. The corresponding source is Metriport's public repo at the pinned ref (recorded
 # in the image's org.opencontainers.image.source / .revision labels), satisfying AGPL source
-# correspondence. linux/amd64 only (sufficient for the x86_64 k3s node). Deployed via
-# jwilleke/mj-infra-flux; the converter is INTERNAL-ONLY (raw CCD is PHI) — never expose it publicly.
+# correspondence. Deployed via jwilleke/mj-infra-flux; the converter is INTERNAL-ONLY (raw CCD is
+# PHI) — never expose it publicly.
+#
+# MULTI-ARCH (#404). This was linux/amd64 only, which was fine while the sidecar was opt-in and only
+# the x86_64 k3s node ran it. Since #404 the shipped compose files start it BY DEFAULT, so an
+# amd64-only image breaks `docker compose up` outright on every arm64 host (Apple Silicon) with
+# "no matching manifest for linux/arm64/v8" — including users who only import FHIR JSON and never
+# wanted the converter. arm64 is now built too.
 
 on:
   workflow_dispatch:
@@ -69,7 +75,7 @@ jobs:
         with:
           context: metriport/packages/fhir-converter
           file: metriport/packages/fhir-converter/Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
