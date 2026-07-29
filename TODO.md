@@ -1,5 +1,19 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-07-29
+
+- Last worked on: `#411` closed — `AGENTS.md` is the canonical project brief; `CLAUDE.md` is a pointer. SMART flow map + issues `#406`–`#415` earlier; `#413` held for `#407`. Session committed and pushed (`16af8ba6`, `71efb6d4`).
+- Branch / state: `main`, clean, synced with `origin/main` (resume-pointer commit may be unpushed until approved)
+- Running / in-flight: CI on latest docs push (Markdown Lint + Push on main) may still be in progress at wrap; no local dev servers from this agent
+- Parked / half-done: none in working tree
+- Next steps:
+  - Verify `ghcr.io/jwilleke/yourphr:1.16.0` pulls natively on arm64, then close [#405](https://github.com/jwilleke/yourphr/issues/405)
+  - Grade / act on security [#416](https://github.com/jwilleke/yourphr/issues/416) (12 yarn Dependabot alerts)
+  - Decide Path B [#407](https://github.com/jwilleke/yourphr/issues/407) (unblocks [#413](https://github.com/jwilleke/yourphr/issues/413))
+- Blockers / significant notes: [#397](https://github.com/jwilleke/yourphr/issues/397) still in-review (awaiting reporter). Live instance may still lack cda-converter sidecar (from prior log). Open PR [#378](https://github.com/jwilleke/yourphr/pull/378) zone.js held for Angular 21. Start next session with `/context` (not `/pstatus` first) so this block is read before bands regenerate.
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
