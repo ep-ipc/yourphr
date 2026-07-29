@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.13.3](https://github.com/jwilleke/yourphr/compare/v1.13.2...v1.13.3) (2026-07-29)
+
+### Bug Fixes
+
+- **import:** C-CDA / CCD (XML) setup is discoverable instead of a dead end. Uploading the XML files from a provider export (Epic MyChart and similar) failed with `C-CDA import is not enabled on this server (set cda_converter.enabled)` — which named a config *key*, not an environment variable. The prefix is `YOURPHR_`, so `FASTEN_CDA_CONVERTER_ENABLED` and a bare `CDA_CONVERTER_ENABLED` were silently ignored, and even the correct name alone still failed because the converter sidecar must be running and `cda_converter.url` must be set. `.env.example` documented none of it. Every converter error now names all three requirements ([#397](https://github.com/jwilleke/yourphr/issues/397))
+- **import:** the Convert dialog no longer offers a button that cannot work — when the server can't convert, it shows the setup steps instead ([#397](https://github.com/jwilleke/yourphr/issues/397))
+
+### Features
+
+- **import:** new `GET /api/secure/source/cda-converter/status` reports `{enabled, ready, setup_hint}`. `ready` requires *both* the flag and a converter address, so the half-configured state (enabled, no URL) is no longer indistinguishable from a working one. The configured URL is never returned — the sidecar is internal infrastructure ([#397](https://github.com/jwilleke/yourphr/issues/397))
+
+### Documentation
+
+- new [`docs/import/c-cda.md`](docs/import/c-cda.md) — enabling C-CDA import, a config-key → environment-variable table, and troubleshooting
+- `.env.example` gains a C-CDA section (it previously had no CDA entries at all)
+- `docs/devserver.md` gains a troubleshooting section for local-only frontend build failures — clear `.angular/cache` first when a module path contains a nested `node_modules`; the cache stores absolute paths, survives reinstalling `node_modules`, and does not self-prune
+
+### Known issues
+
+- Unchanged from v1.13.2: `gorm` / `gormigrate` bumps ([#374](https://github.com/jwilleke/yourphr/pull/374), [#377](https://github.com/jwilleke/yourphr/pull/377)) remain excluded — both drag `go-sqlite3` past the version-pinned `replace` that wires in the SQLCipher driver, silently disabling database encryption ([#401](https://github.com/jwilleke/yourphr/issues/401)). `zone.js` 0.16.x is held on Angular 20's `zone.js ~0.15.0` peer constraint ([#378](https://github.com/jwilleke/yourphr/pull/378)). 12 Dependabot alerts remain, all `frontend/yarn.lock` build/dev-chain transitives that do not ship in the served image.
+
 ## [1.13.2](https://github.com/jwilleke/yourphr/compare/v1.13.1...v1.13.2) (2026-07-28)
 
 Dependency and security maintenance. No functional changes.
