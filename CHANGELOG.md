@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.13.4](https://github.com/jwilleke/yourphr/compare/v1.13.3...v1.13.4) (2026-07-29)
+
+### ⚠️ Behaviour change — read before upgrading
+
+The app now **refuses to start** if `database.encryption.enabled` is true but SQLCipher is not actually active, instead of starting and writing patient data unencrypted. This is intentional (see below), but it converts a previously silent problem into a visible startup failure. A healthy instance is unaffected.
+
+### Security
+
+- **database:** keep SQLCipher wired, and fail closed if it ever is not ([#401](https://github.com/jwilleke/yourphr/issues/401)). At-rest encryption depended on a `replace` directive in `go.mod` pinned to an exact `go-sqlite3` version. A `replace X vN => Y` matches **only** version `vN`, so any dependency bump that moved `go-sqlite3` off it — a routine `gorm.io/driver/sqlite` upgrade does exactly that — silently stopped matching and linked the stock driver. The stock driver treats the `_cipher=sqlcipher` DSN pragmas as unknown parameters and ignores them: the database opens, the app runs, and PHI is written in **plaintext** while the config still reports encryption as enabled. Nothing errors. Two independent layers now prevent this — the `replace` is unversioned so it applies to every version, and startup asserts `PRAGMA cipher` returns `sqlcipher` or refuses to boot. Verified against the exact upgrade that caused it.
+
+### Bug Fixes
+
+- **docker:** pass `YOURPHR_*` config from `.env` / `.env_custom` into the container ([#397](https://github.com/jwilleke/yourphr/issues/397)). `docker compose` reads `.env` only to substitute `${...}` inside the compose file; it does not forward those values to the container, and the services declared only `HOST_IP`/`HOST_PORT`. Every `YOURPHR_*` setting placed in `.env` was therefore silently ignored — the documented configuration mechanism did not work at all on the primary deployment path, with no warning. Both compose files now declare `env_file` (optional, so a missing file is not an error). **If you use a compose file from an earlier release, update it or your `.env` settings will continue to be ignored**; confirm with `docker compose config | grep YOURPHR_`.
+
+### Build
+
+- **frontend:** `make dep-frontend` clears `frontend/.angular/cache` when `yarn.lock` changes, and a new `make clean-frontend-cache` target clears it on demand. The cache stores absolute module paths, so a dependency change that moves a package between nested and hoisted `node_modules` leaves them dangling — builds then fail locally while CI (which starts with no cache) passes the same commit. It lives outside `node_modules`, so reinstalling never cleared it.
+
+### Documentation
+
+- `docs/devserver.md` — troubleshooting for local-only frontend build failures
+- `docs/import/c-cda.md` and `.env.example` — corrected; they previously described `.env` behaviour that only held for non-Docker installs
+
+### Known issues
+
+- `gorm` / `gormigrate` bumps ([#374](https://github.com/jwilleke/yourphr/pull/374), [#377](https://github.com/jwilleke/yourphr/pull/377)) are **now unblocked** by the [#401](https://github.com/jwilleke/yourphr/issues/401) fix but had not landed when this was cut; they will ship in a later release.
+- `zone.js` 0.16.x remains held on Angular 20's `zone.js ~0.15.0` peer constraint ([#378](https://github.com/jwilleke/yourphr/pull/378)).
+- `jgiannuzzi/go-sqlite3` is still a pinned fork of a 2023 commit and will not pick up upstream `mattn/go-sqlite3` security fixes. [#401](https://github.com/jwilleke/yourphr/issues/401) makes the arrangement safe, not permanent.
+- 12 Dependabot alerts remain, all `frontend/yarn.lock` build/dev-chain transitives that do not ship in the served image.
+
 ## [1.13.3](https://github.com/jwilleke/yourphr/compare/v1.13.2...v1.13.3) (2026-07-29)
 
 ### Bug Fixes
