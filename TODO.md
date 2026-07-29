@@ -1,37 +1,18 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-07-29
-
-- Last worked on: [#404](https://github.com/jwilleke/yourphr/issues/404) — C-CDA import now works **out of the box** (sidecar starts by default in both compose files; `docker-compose-prod.yml` previously defined no converter service *at all*, making import impossible on that path). Verified end-to-end: real 154 KB HL7 C-CDA → **67 FHIR resources** → imported through the app. Closed, released. **Seven releases today: v1.13.1 → v1.15.1**, all images published.
-- Branch / state: `main`, clean, pushed, no stashes. All CI green.
-- Running / in-flight: **dev stack is UP on purpose** — frontend `:4200`, backend `:9090` (converter enabled → `localhost:18080`), and the `cda-dev` Docker container. Left running for the UI check below. Stop with the `/wrap` cleanup or kill the listeners + `docker rm -f cda-dev`.
-- Parked / half-done: none uncommitted.
-- Next steps:
-  - **⏰ LIVE INSTANCE — has a clock on it.** `yourphr.nerdsbythehour.com` has no `cda-converter`, and v1.15.1 enables C-CDA by default. When Flux rolls `:1.15.1`, XML uploads there will report *"conversion service unreachable"*. Either deploy the sidecar (`deploy/yourphr-cda-converter.example.yaml`) into the `yourphr` namespace, or set `YOURPHR_CDA_CONVERTER_ENABLED=false` in `jwilleke/mj-infra-flux`. No data risk either way.
-  - **[#405](https://github.com/jwilleke/yourphr/issues/405) (P1) — YourPHR cannot run on arm64 at all.** The *app* image is amd64-only (`docker-jwilleke.yaml` `platforms: linux/amd64`), so Apple Silicon / Pi / ARM VPS hosts hard-fail on `docker pull`. Upstream Fasten built multi-arch; this fork narrowed it. Likely sticking point is the CGO/SQLCipher link. The converter image was fixed today and is already multi-arch.
-  - **UI check never done** — log in as `ccdatest` / `devpassword` on `localhost:4200` and confirm Eve Betterhalf's 67 C-CDA-derived records actually *render*. Blocked today only because the Chrome extension was not connected. Data in the DB nobody can read is not access.
-  - **12 Dependabot alerts** — still neither a PR nor an issue. All `frontend/yarn.lock` build-chain transitives (no path to patient data). Needs a decision: bridge to issues, investigate why Dependabot opens no PRs, or explicitly accept.
-  - [#397](https://github.com/jwilleke/yourphr/issues/397) — awaiting the reporter. **Do not close on our say-so; my instructions to them were wrong twice.**
-  - Stale fixture: `backend/pkg/web/handler/testdata/ccda_to_fhir_converted_C-CDA_R2-1_CCD.xml.json` no longer matches converter output (65 vs 67 resources). Harmless (tests mock with it) but untrustworthy as ground truth — refresh or annotate.
-  - Backlog: P1 [#313](https://github.com/jwilleke/yourphr/issues/313) / [#355](https://github.com/jwilleke/yourphr/issues/355); [#403](https://github.com/jwilleke/yourphr/issues/403) converter evaluation (deliberate someday).
-- Blockers / significant notes: **Verify by RUNNING, not by reasoning.** Every defect found today came from executing something — a `docker pull`, a live endpoint call, a real conversion. Three of them shipped first: the arm64 break, a `setup_hint` pointing at a compose profile the same release deleted, and the drifted fixture. Unit tests, CI and `docker compose config` passed cleanly through all three. Corollaries: assert removed strings are **absent** (positive-only assertions let content rot); check the *specific* workflow + commit when waiting on CI (a `--limit 3` window once fired on unrelated runs); and `make test-backend` rewrites `backend/resources/related_versions.json` — revert it, never commit. Dev accounts (all 7 + `ccdatest`) share the password now recorded in `private/secrets.md`.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
 
-- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — two fixes released (v1.13.3 discoverability, v1.13.4 the Docker `.env` passthrough that was the actual blocker); see In review.
-- **12 open Dependabot alerts, untracked by any issue** (7 high, 5 medium) — all in `frontend/yarn.lock`; `go.mod` is clean. **No Dependabot PR covers any of them**, so the 2026-07-28 decision to "clear these by merging PRs rather than filing issues" has run out of road — the merge queue is drained and these are what remains. Either bridge them into issues or determine why Dependabot will not open PRs (several are deep transitives, and `postcss` is held by a `resolutions` pin in `frontend/package.json`).
-  - `brace-expansion` x3, `js-yaml` x3, `webpack-dev-server` x2, `engine.io`, `picomatch`, `postcss`, `@hono/node-server`
-  - All are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data. Partially tracked by [#345](https://github.com/jwilleke/yourphr/issues/345) (the `webpack-dev-server` / `http-proxy-middleware` tree).
+- No open issue carries `P0` outside the In review band.
+- **12 open Dependabot alerts** (7 high, 5 medium) — all `frontend/yarn.lock`; `go.mod` clean. **No Dependabot PR covers any of them**, and they have no tracking issue either. Build/dev-chain transitives only: no path to patient data, exposure is a developer machine. Needs a decision — bridge to issues, investigate why Dependabot opens no PRs, or explicitly accept.
 - 0 open code-scanning alerts.
 
 ## 🟠 P1
 
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
+- [#405](https://github.com/jwilleke/yourphr/issues/405) — [BUG] YourPHR cannot run on arm64 — the published image is amd64-only
 
 ## 🟡 P2
 
@@ -43,7 +24,7 @@
 - [#251](https://github.com/jwilleke/yourphr/issues/251) — [FEATURE] Explore Apple Health's supported-institution list as a provider-catalog / FHIR-endpoint source
 - [#252](https://github.com/jwilleke/yourphr/issues/252) — [FEATURE] Harden re-import dedup: guard idempotent upserts against stale (older) overwrites + add coverage
 - [#253](https://github.com/jwilleke/yourphr/issues/253) — [FEATURE] Epic: Support manual data entry and user-created records
-- [#256](https://github.com/jwilleke/yourphr/issues/256) — [FEATURE] Sharing PHR data
+- [#256](https://github.com/jwilleke/yourphr/issues/256) — [FEATURE] Sharing PHR data.
 - [#280](https://github.com/jwilleke/yourphr/issues/280) — [FEATURE] Raw fhir-cards: resolve a referenced resource's display name (e.g. Medication/{id})
 - [#287](https://github.com/jwilleke/yourphr/issues/287) — [FEATURE] Upload/import UI polish — make all supported file types selectable + clearer 'add my data' affordances
 - [#288](https://github.com/jwilleke/yourphr/issues/288) — [ARCH] Decide the future of fasten-sources-stub: fold into the main module vs keep as the owned source layer
@@ -71,12 +52,11 @@
 - [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
-- [#402](https://github.com/jwilleke/yourphr/issues/402) — [FEATURE] Admin: show the effective relay URLs and where each value came from — **implemented** (`1fbe66bb`, `404b795a`); collapsible card + provenance. Awaiting the v1.14.0 tag, then close.
+- [#403](https://github.com/jwilleke/yourphr/issues/403) — [ARCH] Evaluate Microsoft FHIR-Converter 5.x (MIT, Liquid) vs the Metriport fork for C-CDA import
 
 ## 🔵 In review
 
-- [#401](https://github.com/jwilleke/yourphr/issues/401) — [SECURITY] SQLCipher unwired by any go-sqlite3 bump — fixed in `bd7abb4e`, **released in v1.13.4**. Unversioned `replace` + fail-closed startup assertion. ⚠️ Hard failure: an instance already running silently-unencrypted will now refuse to boot. Awaiting confirmation the release is running.
-- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider — TWO bugs: the unactionable error (`b20e6b13`, v1.13.3) and, the actual blocker, Docker Compose never passing `YOURPHR_*` from `.env` into the container (`5f27821b`, v1.13.4). Reporter has an `environment:` workaround for their current build. **Awaiting their confirmation — my first two sets of instructions were wrong, so this is not done until they say so.**
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — **two root causes, both fixed and released**: the unactionable error (v1.13.3) and Docker Compose never passing `YOURPHR_*` into the container (v1.13.4). C-CDA now works out of the box as of v1.15.0. **Awaiting the reporter — my instructions to them were wrong twice, so this does not close on our say-so.**
 
 ## ⏸ Deferred
 
@@ -94,6 +74,6 @@ None — every open issue carries a placement label.
 
 ## 🔀 Open PRs
 
-1 open. [#374](https://github.com/jwilleke/yourphr/pull/374) and [#377](https://github.com/jwilleke/yourphr/pull/377) merged once [#401](https://github.com/jwilleke/yourphr/issues/401) removed the SQLCipher hazard that had held them for 34 days; encryption was re-verified on the merged result.
+1 open, 34 days old — **held deliberately, not neglected**.
 
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(failing, stale — 34 days)* — no linked issue; **held deliberately**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`, and 0.16.x targets Angular 21. Its CI is also red against a base that predates today's commits, so it needs a rebase before any result means anything. Merge when the project moves to Angular 21.
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(conflicted/failing, stale — 34 days)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0` and 0.16.x targets Angular 21. Its CI is red against a base predating today's commits, so it needs a rebase before any result means anything. Merge when the project moves to Angular 21.
