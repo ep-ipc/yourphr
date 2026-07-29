@@ -1,5 +1,23 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-07-29
+
+- Last worked on: [#404](https://github.com/jwilleke/yourphr/issues/404) — C-CDA import now works **out of the box** (sidecar starts by default in both compose files; `docker-compose-prod.yml` previously defined no converter service *at all*, making import impossible on that path). Verified end-to-end: real 154 KB HL7 C-CDA → **67 FHIR resources** → imported through the app. Closed, released. **Seven releases today: v1.13.1 → v1.15.1**, all images published.
+- Branch / state: `main`, clean, pushed, no stashes. All CI green.
+- Running / in-flight: **dev stack is UP on purpose** — frontend `:4200`, backend `:9090` (converter enabled → `localhost:18080`), and the `cda-dev` Docker container. Left running for the UI check below. Stop with the `/wrap` cleanup or kill the listeners + `docker rm -f cda-dev`.
+- Parked / half-done: none uncommitted.
+- Next steps:
+  - **⏰ LIVE INSTANCE — has a clock on it.** `yourphr.nerdsbythehour.com` has no `cda-converter`, and v1.15.1 enables C-CDA by default. When Flux rolls `:1.15.1`, XML uploads there will report *"conversion service unreachable"*. Either deploy the sidecar (`deploy/yourphr-cda-converter.example.yaml`) into the `yourphr` namespace, or set `YOURPHR_CDA_CONVERTER_ENABLED=false` in `jwilleke/mj-infra-flux`. No data risk either way.
+  - **[#405](https://github.com/jwilleke/yourphr/issues/405) (P1) — YourPHR cannot run on arm64 at all.** The *app* image is amd64-only (`docker-jwilleke.yaml` `platforms: linux/amd64`), so Apple Silicon / Pi / ARM VPS hosts hard-fail on `docker pull`. Upstream Fasten built multi-arch; this fork narrowed it. Likely sticking point is the CGO/SQLCipher link. The converter image was fixed today and is already multi-arch.
+  - **UI check never done** — log in as `ccdatest` / `devpassword` on `localhost:4200` and confirm Eve Betterhalf's 67 C-CDA-derived records actually *render*. Blocked today only because the Chrome extension was not connected. Data in the DB nobody can read is not access.
+  - **12 Dependabot alerts** — still neither a PR nor an issue. All `frontend/yarn.lock` build-chain transitives (no path to patient data). Needs a decision: bridge to issues, investigate why Dependabot opens no PRs, or explicitly accept.
+  - [#397](https://github.com/jwilleke/yourphr/issues/397) — awaiting the reporter. **Do not close on our say-so; my instructions to them were wrong twice.**
+  - Stale fixture: `backend/pkg/web/handler/testdata/ccda_to_fhir_converted_C-CDA_R2-1_CCD.xml.json` no longer matches converter output (65 vs 67 resources). Harmless (tests mock with it) but untrustworthy as ground truth — refresh or annotate.
+  - Backlog: P1 [#313](https://github.com/jwilleke/yourphr/issues/313) / [#355](https://github.com/jwilleke/yourphr/issues/355); [#403](https://github.com/jwilleke/yourphr/issues/403) converter evaluation (deliberate someday).
+- Blockers / significant notes: **Verify by RUNNING, not by reasoning.** Every defect found today came from executing something — a `docker pull`, a live endpoint call, a real conversion. Three of them shipped first: the arm64 break, a `setup_hint` pointing at a compose profile the same release deleted, and the drifted fixture. Unit tests, CI and `docker compose config` passed cleanly through all three. Corollaries: assert removed strings are **absent** (positive-only assertions let content rot); check the *specific* workflow + commit when waiting on CI (a `--limit 3` window once fired on unrelated runs); and `make test-backend` rewrites `backend/resources/related_versions.json` — revert it, never commit. Dev accounts (all 7 + `ccdatest`) share the password now recorded in `private/secrets.md`.
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
