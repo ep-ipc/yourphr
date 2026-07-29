@@ -4,34 +4,40 @@ Many patient portals — Epic MyChart in particular — export a **C-CDA** (Cons
 
 Conversion runs **entirely on your own server**, in a separate container. The raw document is PHI and is never sent to a third party.
 
-## Why an upload fails out of the box
+## It works out of the box
 
-The converter is a **separate sidecar container that is off by default**, so a stock install rejects XML uploads with:
-
-```text
-C-CDA import is not enabled on this server.
-```
-
-That is expected on a fresh install — it is configuration, not a bug.
-
-## Enabling it (docker compose)
-
-All three steps are required. Doing only one or two still fails.
+Since **v1.14.1** ([#404](https://github.com/jwilleke/yourphr/issues/404)) the shipped compose files start the converter automatically and `config.yaml` points the app at it. A stock install imports an Epic C-CDA export with no extra steps:
 
 ```bash
-# 1. start the converter sidecar (it is behind a compose profile, so a plain `up` skips it)
-docker compose --profile cda up -d
+docker compose up -d
 ```
 
-```bash
-# 2. + 3. add to your .env (or .env_custom) and restart the app
-YOURPHR_CDA_CONVERTER_ENABLED=true
-YOURPHR_CDA_CONVERTER_URL=http://cda-converter:8080
-```
+Then upload the XML. Nothing to enable, no second command.
+
+Earlier releases required starting a separate profile and setting two variables — see [Upgrading from before v1.14.1](#upgrading-from-before-v1141).
+
+## Turning it OFF
+
+The converter is an extra container. If you only ever import FHIR JSON and would rather not run it:
 
 ```bash
-docker compose up -d   # restart so the app picks up the new variables
+YOURPHR_CDA_CONVERTER_ENABLED=false
 ```
+
+…or `docker compose up -d --scale cda-converter=0`. It is stateless and stores nothing, so removing it loses no data.
+
+## Running without the shipped compose files
+
+If you deploy the app by hand (a bare k8s Deployment, your own manifests), the sidecar will **not** exist just because the app expects it. Either:
+
+- deploy it — see [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml) — and set `YOURPHR_CDA_CONVERTER_URL` to its in-cluster address, or
+- set `YOURPHR_CDA_CONVERTER_ENABLED=false`.
+
+Uploading XML with no reachable converter fails with an error naming the address it tried and all three ways out. Nothing else is affected.
+
+## Upgrading from before v1.14.1
+
+If you already set `YOURPHR_CDA_CONVERTER_ENABLED` / `_URL`, they still work and continue to override the defaults — nothing to undo. If you were using `--profile cda`, the profile is gone: the service now starts with a plain `up`.
 
 > **Using a `docker-compose.yml` from before v1.13.4?** Update it, or these variables will be ignored ([#397](https://github.com/jwilleke/yourphr/issues/397)). Compose reads `.env` only to substitute `${...}` **inside the compose file** — it does not forward those values into the container. Earlier compose files passed through only `HOST_IP`/`HOST_PORT`, so `YOURPHR_*` settings in `.env` silently never reached the app. The current file fixes this with:
 >
@@ -45,7 +51,9 @@ docker compose up -d   # restart so the app picks up the new variables
 >
 > Confirm what Compose will actually pass with `docker compose config | grep YOURPHR_`. If your variables do not appear there, the app will not see them.
 
-Then retry the upload. The Convert dialog only offers a **Convert** button when the server reports the converter is ready.
+## Configuration reference
+
+The Convert dialog only offers a **Convert** button when the server reports the converter is ready, so if it shows setup steps instead, something below is wrong.
 
 ### Watch the variable names
 
@@ -93,7 +101,7 @@ The sidecar is the open-source [Metriport fhir-converter](https://github.com/met
 
 | Symptom | Cause |
 |---|---|
-| `C-CDA import is not enabled on this server` | `YOURPHR_CDA_CONVERTER_ENABLED` unset, misspelled, or wrong prefix |
+| `C-CDA import is not enabled on this server` | it was explicitly disabled — `YOURPHR_CDA_CONVERTER_ENABLED=false`, or an older config. On v1.14.1+ it is on by default |
 | `no converter address is configured` | `YOURPHR_CDA_CONVERTER_URL` unset — the flag alone is not enough |
-| `C-CDA conversion service unavailable` | sidecar not running; start it with `docker compose --profile cda up -d` |
+| `C-CDA conversion service unreachable at ...` | the sidecar is not running or not reachable at that address. With the shipped compose files it starts automatically (`docker compose up -d`); deploying by hand, see [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml), or set `YOURPHR_CDA_CONVERTER_ENABLED=false` |
 | Conversion times out on a large export | raise `YOURPHR_CDA_CONVERTER_TIMEOUT_SECONDS` |

@@ -107,6 +107,17 @@ func cdaSetupHint(problem string) string {
 		"See docs/import/c-cda.md."
 }
 
+// cdaUnreachableHint covers the "enabled but nothing answering" case. Distinct from cdaSetupHint:
+// the settings are already correct here, so telling the operator to set them again would be wrong.
+// What they need is the sidecar actually running, or the feature turned off.
+func cdaUnreachableHint() string {
+	return "C-CDA import is enabled but the converter did not answer. Either start the sidecar" +
+		" (`docker compose up -d cda-converter`; it runs by default in the shipped compose files, and" +
+		" on k8s see deploy/yourphr-cda-converter.example.yaml), point YOURPHR_CDA_CONVERTER_URL at a" +
+		" reachable one, or set YOURPHR_CDA_CONVERTER_ENABLED=false to turn C-CDA import off." +
+		" See docs/import/c-cda.md."
+}
+
 // convertCDAToFHIR posts a raw C-CDA document to the fhir-converter sidecar and returns the
 // unwrapped FHIR R4 Bundle JSON. The converter wraps its output as {"fhirResource": <Bundle>}
 // (#254 Phase 0). Returns actionable errors when conversion is disabled or the sidecar is
@@ -135,7 +146,12 @@ func convertCDAToFHIR(ctx context.Context, cfg config.Interface, cdaXML []byte, 
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("C-CDA conversion service unavailable: %w", err)
+		// Now the LIKELY failure, not an edge case: since #404 the converter is enabled by default,
+		// so anyone running the app without the sidecar (a bare k8s Deployment, or compose with the
+		// service scaled to 0) lands here rather than on the "not enabled" path. Carry the same
+		// actionable text — an operator seeing only "connection refused" has nothing to act on.
+		return nil, fmt.Errorf("C-CDA conversion service unreachable at %s: %w. %s",
+			baseURL, err, cdaUnreachableHint())
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)

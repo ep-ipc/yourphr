@@ -31,3 +31,21 @@ services:
       - ./db:/opt/fasten/db
       - ./cache:/opt/fasten/cache
       - ./certs:/opt/fasten/certs/shared
+
+  # C-CDA/CCD converter sidecar (#254, #404). This file previously defined NO cda-converter service,
+  # so C-CDA import was impossible on the production compose path — the documented
+  # YOURPHR_CDA_CONVERTER_URL had nothing to point at, no matter how it was spelled (#397).
+  #
+  # C-CDA XML is what patient portals actually export, so this runs by default; config.yaml points
+  # the app here out of the box.
+  #
+  # INTERNAL ONLY — `expose`, never `ports`. Raw C-CDA is PHI; it must not be reachable from outside
+  # the compose network. Stateless: holds nothing beyond the in-flight request.
+  #
+  # Don't want it? `docker compose -f docker-compose-prod.yml up --scale cda-converter=0`, or set
+  # YOURPHR_CDA_CONVERTER_ENABLED=false.
+  cda-converter:
+    image: ghcr.io/jwilleke/yourphr-cda-converter:main
+    restart: unless-stopped
+    expose:
+      - "8080"

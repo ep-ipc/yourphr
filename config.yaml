@@ -46,9 +46,19 @@ log:
 # C-CDA / CCD document import (#254). Opt-in: requires the external fhir-converter
 # sidecar (Metriport). Leave disabled for a stock install — FHIR/NDJSON upload is
 # unaffected. When enabled, raw .xml/.ccd uploads are converted to FHIR R4 before import.
+# C-CDA / CCD (XML) import (#254, #404). ON by default: XML is what patient portals actually export
+# (Epic MyChart and friends), so importing your own records should not require extra setup.
+# Conversion runs on a sidecar container that the shipped docker-compose files start automatically.
+#
+# If you run the app WITHOUT that sidecar (e.g. a bare k8s Deployment), either deploy it — see
+# deploy/yourphr-cda-converter.example.yaml — and point `url` at it, or set enabled: false
+# (YOURPHR_CDA_CONVERTER_ENABLED=false). Uploading XML with no reachable converter fails with an
+# error naming exactly what to fix; nothing else is affected.
+#
+# The converter is INTERNAL-ONLY: raw C-CDA is PHI, so never expose it on a public port.
 cda_converter:
-  enabled: false
-  url: '' # e.g. http://localhost:8777 (dev) or http://yourphr-cda-converter:8777 (k8s). Internal-only — raw CCD is PHI.
+  enabled: true
+  url: 'http://cda-converter:8080' # the compose service name; k8s: http://yourphr-cda-converter:8080
   timeout_seconds: 60
 jwt:
   issuer:

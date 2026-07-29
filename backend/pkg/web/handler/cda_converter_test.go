@@ -265,3 +265,44 @@ func TestGetCDAConverterStatus(t *testing.T) {
 		})
 	}
 }
+
+// TestCDAUnreachableHintIsActionable — since #404 the converter is ENABLED BY DEFAULT, so
+// "enabled but nothing answering" became the likely failure rather than an edge case: any
+// deployment without the sidecar (bare k8s Deployment, or compose scaled to 0) lands here. An
+// operator seeing only "connection refused" has nothing to act on, so the hint must offer all
+// three exits — start it, repoint it, or turn the feature off.
+func TestCDAUnreachableHintIsActionable(t *testing.T) {
+	hint := cdaUnreachableHint()
+
+	require.Contains(t, hint, "cda-converter", "must name the sidecar to start")
+	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_URL", "must offer repointing it")
+	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_ENABLED=false", "must offer turning it OFF — the settings are already correct here")
+	require.Contains(t, hint, "docs/import/c-cda.md")
+
+	// It must NOT tell the operator to set the enable flag: it is already set, and repeating the
+	// misconfiguration advice would send them in circles. That is cdaSetupHint's job, not this one.
+	require.NotContains(t, hint, "YOURPHR_CDA_CONVERTER_ENABLED=true")
+}
+
+// TestConvertCDAUnreachableSurfacesTheHint proves the hint actually reaches the caller when the
+// sidecar is down, rather than only existing as a function.
+func TestConvertCDAUnreachableSurfacesTheHint(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// A server that is closed immediately => a guaranteed-dead address.
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	deadURL := srv.URL
+	srv.Close()
+
+	cfg := mock_config.NewMockInterface(ctrl)
+	cfg.EXPECT().GetBool("cda_converter.enabled").Return(true).AnyTimes()
+	cfg.EXPECT().GetString("cda_converter.url").Return(deadURL).AnyTimes()
+	cfg.EXPECT().GetInt("cda_converter.timeout_seconds").Return(5).AnyTimes()
+
+	_, err := convertCDAToFHIR(context.Background(), cfg, []byte(`<ClinicalDocument/>`), "p")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unreachable")
+	require.Contains(t, err.Error(), deadURL, "naming the address it tried is half the diagnosis")
+	require.Contains(t, err.Error(), "YOURPHR_CDA_CONVERTER_ENABLED=false")
+}

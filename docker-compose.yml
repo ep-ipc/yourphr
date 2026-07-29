@@ -35,14 +35,21 @@ services:
       - ./certs:/opt/fasten/certs/shared
 #      - ./config.example.yaml:/opt/fasten/config/config.yaml
 
-  # Optional C-CDA/CCD converter sidecar (#254). Only started with `--profile cda`, so the
-  # default `docker compose up` is unaffected. Uses the image built by
-  # .github/workflows/docker-cda-converter.yaml. INTERNAL ONLY — not published to a host port;
-  # `fasten` reaches it on the compose network at http://cda-converter:8080. Point the app at it
-  # with cda_converter.enabled: true and cda_converter.url: http://cda-converter:8080.
+  # C-CDA/CCD converter sidecar (#254). Started by DEFAULT (#404): C-CDA XML is what patient portals
+  # (Epic MyChart and friends) actually export, so requiring a second container plus two env vars to
+  # import your own records was the largest remaining setup barrier. config.yaml points the app here
+  # out of the box — a stock `docker compose up` imports an Epic export with no further steps.
+  #
+  # Image built by .github/workflows/docker-cda-converter.yaml (repackages Metriport's AGPL-3.0
+  # fhir-converter at a pinned ref; running it as a separate process keeps it an independent work).
+  #
+  # INTERNAL ONLY — `expose`, never `ports`. Raw C-CDA is PHI; this must not be reachable from
+  # outside the compose network. `fasten` reaches it at http://cda-converter:8080.
+  #
+  # Don't want it? `docker compose up --scale cda-converter=0`, or set
+  # YOURPHR_CDA_CONVERTER_ENABLED=false. The service is stateless and stores nothing.
   cda-converter:
     image: ghcr.io/jwilleke/yourphr-cda-converter:main
-    profiles: ["cda"]
     restart: unless-stopped
     expose:
       - "8080"
