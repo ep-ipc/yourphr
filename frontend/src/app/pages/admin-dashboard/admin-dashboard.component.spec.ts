@@ -40,6 +40,15 @@ function setup(relay: any, fail = false): ComponentFixture<AdminDashboardCompone
   return fixture;
 }
 
+// Clicks the relay card header to toggle it. The card is collapsed by default, so any test that
+// asserts on its CONTENT has to open it first.
+function expandRelay(fixture: ComponentFixture<AdminDashboardComponent>): void {
+  const header = fixture.nativeElement.querySelector('[aria-controls="relay-card-body"]');
+  expect(header).withContext('relay card header should be present').not.toBeNull();
+  header.click();
+  fixture.detectChanges();
+}
+
 describe('AdminDashboardComponent', () => {
   it('should create', () => {
     expect(setup(READY_RELAY).componentInstance).toBeTruthy();
@@ -57,34 +66,59 @@ describe('AdminDashboardComponent', () => {
 
   // #402: the callback URL is what the operator must register with each FHIR vendor, so it has to
   // be visible verbatim.
-  it('shows the effective callback URL', () => {
-    const text = setup(READY_RELAY).nativeElement.textContent;
-    expect(text).toContain('https://relay.example.org/callback');
+  it('shows the effective callback URL once expanded', () => {
+    const fixture = setup(READY_RELAY);
+    expandRelay(fixture);
+    expect(fixture.nativeElement.textContent).toContain('https://relay.example.org/callback');
   });
 
   // The whole point of #402: a value that silently fell back must NOT look like a configured one.
   it('flags defaulted values as not using your configuration', () => {
-    const text = setup(DEFAULTED_RELAY).nativeElement.textContent;
+    const fixture = setup(DEFAULTED_RELAY);
+    expandRelay(fixture);
+    const text = fixture.nativeElement.textContent;
     expect(text).toContain('built-in default');
     expect(text).toContain('NOT in use');
   });
 
-  it('warns when no relay secret is configured', () => {
-    const text = setup(DEFAULTED_RELAY).nativeElement.textContent;
-    expect(text).toContain('Not ready');
-    // ...and names the variable to set, rather than just reporting failure.
-    expect(text).toContain('YOURPHR_RELAY_SECRET');
+  // The status badge must be readable WITHOUT expanding — collapsing must never hide the one
+  // signal that tells you something is wrong.
+  it('shows the Not ready badge while still collapsed', () => {
+    const fixture = setup(DEFAULTED_RELAY);
+    expect(fixture.componentInstance.relayExpanded).toBeFalse();
+    expect(fixture.nativeElement.textContent).toContain('Not ready');
+  });
+
+  it('names the variable to set when no relay secret is configured', () => {
+    const fixture = setup(DEFAULTED_RELAY);
+    expandRelay(fixture);
+    expect(fixture.nativeElement.textContent).toContain('YOURPHR_RELAY_SECRET');
+  });
+
+  it('collapses by default and toggles open and shut', () => {
+    const fixture = setup(READY_RELAY);
+    // Collapsed: the detail table is not in the DOM at all.
+    expect(fixture.nativeElement.querySelector('#relay-card-body')).toBeNull();
+
+    expandRelay(fixture);
+    expect(fixture.nativeElement.querySelector('#relay-card-body')).not.toBeNull();
+
+    expandRelay(fixture); // toggle shut again
+    expect(fixture.nativeElement.querySelector('#relay-card-body')).toBeNull();
   });
 
   // The secret must never be rendered, even though the backend reports its presence.
-  it('never renders a secret value', () => {
+  it('never renders a secret value, even when expanded', () => {
     const withSecret = {...READY_RELAY, secret: {...READY_RELAY.secret, value: 'super-secret-value'}};
-    expect(setup(withSecret).nativeElement.textContent).not.toContain('super-secret-value');
+    const fixture = setup(withSecret);
+    expandRelay(fixture);
+    expect(fixture.nativeElement.textContent).not.toContain('super-secret-value');
   });
 
   // A relay-config failure must not take the whole admin dashboard down with it.
   it('still renders the admin cards when the relay lookup fails', () => {
     const fixture = setup(null, true);
+    expandRelay(fixture);
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('Could not load the relay configuration');
     const hrefs = Array.from(fixture.nativeElement.querySelectorAll('a[href]')).map((a: any) => a.getAttribute('href'));

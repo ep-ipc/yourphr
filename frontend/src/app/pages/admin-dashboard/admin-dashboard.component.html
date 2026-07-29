@@ -61,13 +61,26 @@
          misconfiguration is visible here rather than surfacing mid-login at the provider. -->
     <div class="col-lg-8 mg-b-20">
       <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h6 class="card-title mg-b-0"><i class="fas fa-exchange-alt"></i>&nbsp; SMART OAuth Relay</h6>
+        <!-- The whole header toggles. The status badge stays visible when collapsed, so the one
+             thing worth noticing at a glance never gets hidden. -->
+        <div class="card-header d-flex justify-content-between align-items-center"
+             role="button"
+             tabindex="0"
+             [attr.aria-expanded]="relayExpanded"
+             aria-controls="relay-card-body"
+             (click)="toggleRelay()"
+             (keydown.enter)="toggleRelay()"
+             (keydown.space)="toggleRelay()"
+             style="cursor: pointer">
+          <h6 class="card-title mg-b-0">
+            <i class="fas" [ngClass]="relayExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>&nbsp;
+            <i class="fas fa-exchange-alt"></i>&nbsp; SMART OAuth Relay
+          </h6>
           <span *ngIf="relayConfig" class="badge" [ngClass]="relayConfig.ready ? 'badge-success' : 'badge-danger'">
             {{ relayConfig.ready ? 'Ready' : 'Not ready' }}
           </span>
         </div>
-        <div class="card-body">
+        <div class="card-body" id="relay-card-body" *ngIf="relayExpanded">
           <p class="tx-gray-500 mg-b-15">
             The values this server is <strong>actually using</strong> for SMART on FHIR sign-in, and where each came from.
             A setting shown as a <em>built-in default</em> means your configuration is not reaching the app.

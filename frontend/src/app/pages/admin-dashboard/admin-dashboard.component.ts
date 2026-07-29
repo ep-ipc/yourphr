@@ -23,6 +23,15 @@ export class AdminDashboardComponent implements OnInit {
   relayError = '';
   relayLoading = false;
 
+  // Collapsed by default — this is reference detail, not something to read on every visit. The
+  // Ready/Not ready badge stays in the header either way, so the signal that you NEED to look is
+  // never hidden by collapsing.
+  relayExpanded = false;
+
+  toggleRelay(): void {
+    this.relayExpanded = !this.relayExpanded;
+  }
+
   constructor(private fastenApi: FastenApiService) {}
 
   ngOnInit(): void {
