@@ -98,13 +98,15 @@ func GetCDAConverterStatus(c *gin.Context) {
 // YOURPHR_), and nothing told them a separate sidecar container has to be running at all. An error
 // a self-hoster cannot act on is a bug in the error, so name both variables and the command.
 func cdaSetupHint(problem string) string {
-	return problem + " C-CDA import needs the converter sidecar running AND two settings:\n" +
-		"  1. start the sidecar:  docker compose --profile cda up -d\n" +
-		"  2. YOURPHR_CDA_CONVERTER_ENABLED=true\n" +
-		"  3. YOURPHR_CDA_CONVERTER_URL=http://cda-converter:8080\n" +
-		"Set 2 and 3 in your .env (or .env_custom) and restart, then retry the upload. " +
-		"Note the YOURPHR_ prefix — the config keys are cda_converter.enabled / cda_converter.url. " +
-		"See docs/import/c-cda.md."
+	return problem + " Since v1.15.0 C-CDA import is ON by default and the shipped docker-compose" +
+		" files start the converter automatically, so reaching this usually means one of two things:\n" +
+		"  - it was turned OFF deliberately: remove YOURPHR_CDA_CONVERTER_ENABLED=false (or set it" +
+		" to true) and restart, then `docker compose up -d`;\n" +
+		"  - you run your own manifests rather than the shipped compose files: deploy the converter" +
+		" (see deploy/yourphr-cda-converter.example.yaml) and set" +
+		" YOURPHR_CDA_CONVERTER_URL=http://<its-service>:8080.\n" +
+		"Note the YOURPHR_ prefix — the config keys are cda_converter.enabled / cda_converter.url," +
+		" and unprefixed or FASTEN_* names are ignored without warning. See docs/import/c-cda.md."
 }
 
 // cdaUnreachableHint covers the "enabled but nothing answering" case. Distinct from cdaSetupHint:

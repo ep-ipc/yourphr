@@ -211,9 +211,14 @@ func TestCDASetupHintIsActionable(t *testing.T) {
 	hint := cdaSetupHint("C-CDA import is not enabled on this server.")
 
 	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_ENABLED", "must name the actual env var, not just the config key")
-	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_URL", "the flag alone is not enough — the URL is required too")
-	require.Contains(t, hint, "docker compose --profile cda up -d", "must say the sidecar has to be started")
+	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_URL", "must cover the run-your-own-manifests case")
 	require.Contains(t, hint, "docs/import/c-cda.md")
+
+	// STALENESS GUARD. #404 removed the `cda` compose profile, but this hint kept telling operators
+	// to run `docker compose --profile cda up -d` — advice that now does nothing. The old assertions
+	// only checked that certain strings were PRESENT, so they passed happily while the content rotted.
+	// Assert the dead instruction is gone, not merely that some instruction exists.
+	require.NotContains(t, hint, "--profile cda", "the cda compose profile was removed in #404")
 }
 
 // TestGetCDAConverterStatus covers the three deployment states the UI branches on (#397).
@@ -278,6 +283,7 @@ func TestCDAUnreachableHintIsActionable(t *testing.T) {
 	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_URL", "must offer repointing it")
 	require.Contains(t, hint, "YOURPHR_CDA_CONVERTER_ENABLED=false", "must offer turning it OFF — the settings are already correct here")
 	require.Contains(t, hint, "docs/import/c-cda.md")
+	require.NotContains(t, hint, "--profile cda", "the cda compose profile was removed in #404")
 
 	// It must NOT tell the operator to set the enable flag: it is already set, and repeating the
 	// misconfiguration advice would send them in circles. That is cdaSetupHint's job, not this one.
