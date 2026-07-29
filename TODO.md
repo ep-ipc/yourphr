@@ -4,15 +4,13 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider, Error: "C-CDA import is not enabled on this server (set cda_converter.enabled)"
-- **24 open Dependabot alerts, untracked by any issue** (1 critical, 13 high, 10 medium) — all in `frontend/yarn.lock`; `go.mod` is now clean. By decision on 2026-07-28 these are being cleared by merging Dependabot PRs rather than bridged into tracking issues. **[#400](https://github.com/jwilleke/yourphr/pull/400) alone addresses ~12 of them**, including the critical `websocket-driver`.
-  - Covered by [#400](https://github.com/jwilleke/yourphr/pull/400): `websocket-driver` (critical), `fast-uri`, `hono`, `immutable`, `linkify-it`, `shell-quote`, `tar`.
-  - Not yet covered: `brace-expansion` (x3), `js-yaml` (x3), `webpack-dev-server` (x2), `engine.io`, `picomatch`, `postcss`, `@hono/node-server`.
-  - These are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data.
+- No open issue carries `P0` other than [#397](https://github.com/jwilleke/yourphr/issues/397), which is in review (see below).
+- **12 open Dependabot alerts** (7 high, 5 medium), down from 24 — all in `frontend/yarn.lock`; `go.mod` is clean. Remaining: `brace-expansion` (x3), `js-yaml` (x3), `webpack-dev-server` (x2), `engine.io`, `picomatch`, `postcss`, `@hono/node-server`. These are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data. Not bridged into tracking issues by decision on 2026-07-28; clear them by merging Dependabot PRs.
 - 0 open code-scanning alerts.
 
 ## 🟠 P1
 
+- [#401](https://github.com/jwilleke/yourphr/issues/401) — [SECURITY] SQLCipher driver is unwired by any go-sqlite3 bump — version-pinned replace directive silently disables DB encryption
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 
@@ -51,10 +49,14 @@
 - [#369](https://github.com/jwilleke/yourphr/issues/369) — [FEATURE] /medical-history — server-side grouping endpoint (counts + paged detail) for scale
 - [#370](https://github.com/jwilleke/yourphr/issues/370) — [FEATURE] Add VA Clinical Health (FHIR) as a SMART provider
 - [#385](https://github.com/jwilleke/yourphr/issues/385) — [EPIC] Realistic test-data corpus + golden-test harness
+- [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
+- [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
+- [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
 
 ## 🔵 In review
 
-- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, shipped in v1.13.1 (image published); awaiting reporter confirmation
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — fixed in `b20e6b13`, **not yet released**; reporter can unblock today with config alone (`YOURPHR_CDA_CONVERTER_ENABLED` + `_URL` + `docker compose --profile cda up -d`). Awaiting their confirmation.
+- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, shipped in v1.13.1 (image published). Awaiting reporter confirmation.
 
 ## ⏸ Deferred
 
@@ -68,21 +70,12 @@
 
 ## ❓ Needs triage
 
-3 issues awaiting a placement decision:
-
-- [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
-- [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
-- [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
+None — every open issue carries a placement label.
 
 ## 🔀 Open PRs
 
-8 open, newest first. All are Dependabot bumps; none declares a closing reference.
+3 open, all Dependabot, all deliberately blocked. None declares a closing reference.
 
-- [#400](https://github.com/jwilleke/yourphr/pull/400) — chore(deps): bump the npm_and_yarn group across 1 directory with 7 updates *(blocked — checks running)* — no linked issue; clears ~12 Dependabot alerts incl. the critical `websocket-driver`
-- [#379](https://github.com/jwilleke/yourphr/pull/379) — chore(deps): bump @angular-eslint/builder from 20.7.0 to 21.0.1 *(conflicted, stale — 33 days)* — no linked issue; peer deps identical between 20.7.0 and 21.0.1, safe once rebased
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 *(blocked, stale — 33 days)* — no linked issue; **held deliberately** — `@angular/core@20.3.25` requires `zone.js ~0.15.0`, 0.16.x targets Angular 21
-- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(blocked — checks running, stale 33 days)* — no linked issue
-- [#376](https://github.com/jwilleke/yourphr/pull/376) — chore(deps): bump golang.org/x/mod from 0.36.0 to 0.37.0 *(blocked — checks running, stale 33 days)* — no linked issue
-- [#375](https://github.com/jwilleke/yourphr/pull/375) — chore(deps): bump gorm.io/driver/postgres from 1.5.3 to 1.6.0 *(blocked — checks running, stale 33 days)* — no linked issue
-- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.1 *(blocked — checks running, stale 33 days)* — no linked issue
-- [#373](https://github.com/jwilleke/yourphr/pull/373) — chore(deps): bump github.com/samber/lo from 1.35.0 to 1.53.0 *(blocked — checks running, stale 33 days)* — no linked issue
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(blocked, stale — 33 days)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`, 0.16.x targets Angular 21. Merge when the project moves to Angular 21.
+- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(blocked, stale — 33 days)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**, auto-merge disabled: drags `go-sqlite3` past the pinned replace and silently disables DB encryption.
+- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.1 *(blocked, stale — 33 days)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**, auto-merge disabled: same SQLCipher regression as #377.
