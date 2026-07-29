@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.16.0](https://github.com/jwilleke/yourphr/compare/v1.15.1...v1.16.0) (2026-07-29)
+
+**YourPHR now runs on arm64.** This closes the v1.15.1 known issue of the same name — if you are on an Apple Silicon Mac, a Raspberry Pi 5, or an Ampere/Graviton VPS, `docker pull` now resolves natively with no `--platform` flag and no emulation.
+
+### Features
+
+- **docker:** publish `linux/arm64` alongside `linux/amd64` for both the app image (`ghcr.io/jwilleke/yourphr`) and the OAuth relay (`ghcr.io/jwilleke/yourphr-relay`) ([#405](https://github.com/jwilleke/yourphr/issues/405)). Previously the app image was amd64-only, so `docker pull` failed outright on every arm64 host with `no matching manifest for linux/arm64/v8` — a self-hosted PHR that could not run on the cheapest and most common self-hosting hardware, and a documented quick-start that did not work on a large share of developer laptops.
+
+  The two images are built differently, on purpose. The app image needs a full Angular build plus a CGO/SQLCipher static Go link, both of which are slow and fragile under QEMU, so it now builds as a **native matrix** on `ubuntu-latest` and `ubuntu-24.04-arm`: each architecture pushes by digest and a new `merge` job assembles the manifest list. The `fasten --help` smoke test in the final image stage therefore runs natively on each architecture. The relay is `CGO_ENABLED=0` pure Go with a COPY-only final stage, so it simply cross-compiles on one runner.
+
+  Acting on this issue's own warning that a green workflow does not prove a working image, the merge job inspects the pushed manifest and fails the run if either platform is missing. The change was additionally verified by building and running the image natively on arm64 hardware before release: it builds, starts, and serves `/web/`.
+
+### Notes for operators
+
+- Nothing to do on upgrade — same tags, same configuration. Existing amd64 deployments are unaffected.
+- Releases up to and including `v1.15.1` remain amd64-only; they are not retro-published. To check what any tag ships: `docker buildx imagetools inspect ghcr.io/jwilleke/yourphr:<tag>`.
+
+### Known issues
+
+- The 12 `frontend/yarn.lock` build-chain Dependabot alerts remain, now tracked as [#416](https://github.com/jwilleke/yourphr/issues/416). All are build and dev-server tooling — none reach the shipped image or patient data.
+- `backend/pkg/web/handler/testdata/ccda_to_fhir_converted_C-CDA_R2-1_CCD.xml.json` still does not match current converter output (65 vs 67 resources); harmless for tests, untrustworthy as ground truth.
+- `jgiannuzzi/go-sqlite3` remains a pinned 2023 fork ([#401](https://github.com/jwilleke/yourphr/issues/401)); `zone.js` 0.16.x remains held on the Angular 20 peer constraint ([#378](https://github.com/jwilleke/yourphr/pull/378)).
+
 ## [1.15.1](https://github.com/jwilleke/yourphr/compare/v1.15.0...v1.15.1) (2026-07-29)
 
 Follow-ups from end-to-end testing of the v1.15.0 out-of-box C-CDA change ([#404](https://github.com/jwilleke/yourphr/issues/404)). Both were found by actually running the stack; unit tests, CI and `docker compose config` passed cleanly through each.
