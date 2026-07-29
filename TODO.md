@@ -4,7 +4,7 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — **fixed and released in v1.13.3**; see In review.
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — two fixes released (v1.13.3 discoverability, v1.13.4 the Docker `.env` passthrough that was the actual blocker); see In review.
 - **12 open Dependabot alerts, untracked by any issue** (7 high, 5 medium) — all in `frontend/yarn.lock`; `go.mod` is clean. **No Dependabot PR covers any of them**, so the 2026-07-28 decision to "clear these by merging PRs rather than filing issues" has run out of road — the merge queue is drained and these are what remains. Either bridge them into issues or determine why Dependabot will not open PRs (several are deep transitives, and `postcss` is held by a `resolutions` pin in `frontend/package.json`).
   - `brace-expansion` x3, `js-yaml` x3, `webpack-dev-server` x2, `engine.io`, `picomatch`, `postcss`, `@hono/node-server`
   - All are build/dev-chain transitives that do not ship in the served image — exposure is a developer machine, not patient data. Partially tracked by [#345](https://github.com/jwilleke/yourphr/issues/345) (the `webpack-dev-server` / `http-proxy-middleware` tree).
@@ -12,7 +12,6 @@
 
 ## 🟠 P1
 
-- [#401](https://github.com/jwilleke/yourphr/issues/401) — [SECURITY] SQLCipher driver is unwired by any go-sqlite3 bump — version-pinned replace directive silently disables DB encryption — blocks [#374](https://github.com/jwilleke/yourphr/pull/374) and [#377](https://github.com/jwilleke/yourphr/pull/377)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 
@@ -54,11 +53,12 @@
 - [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
+- [#402](https://github.com/jwilleke/yourphr/issues/402) — [FEATURE] Admin: show the effective relay URLs and where each value came from
 
 ## 🔵 In review
 
-- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider (C-CDA import not enabled) — fixed in `b20e6b13`, **released in v1.13.3**. Reporter can also unblock by config alone on any version. Awaiting their confirmation.
-- [#399](https://github.com/jwilleke/yourphr/issues/399) — Relay definition (partially hard coded in current YourPHR build) — fixed in `07a4f7e5`, released in v1.13.1. Awaiting reporter confirmation.
+- [#401](https://github.com/jwilleke/yourphr/issues/401) — [SECURITY] SQLCipher unwired by any go-sqlite3 bump — fixed in `bd7abb4e`, **released in v1.13.4**. Unversioned `replace` + fail-closed startup assertion. ⚠️ Hard failure: an instance already running silently-unencrypted will now refuse to boot. Awaiting confirmation the release is running.
+- [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider — TWO bugs: the unactionable error (`b20e6b13`, v1.13.3) and, the actual blocker, Docker Compose never passing `YOURPHR_*` from `.env` into the container (`5f27821b`, v1.13.4). Reporter has an `environment:` workaround for their current build. **Awaiting their confirmation — my first two sets of instructions were wrong, so this is not done until they say so.**
 
 ## ⏸ Deferred
 
@@ -76,8 +76,8 @@ None — every open issue carries a placement label.
 
 ## 🔀 Open PRs
 
-3 open, all Dependabot, all deliberately blocked with auto-merge disabled. None declares a closing reference. All 34 days old (opened 2026-06-25) — **stale by age, but held on purpose, not neglected.**
+3 open, all Dependabot. Two are now unblocked and rebasing; one remains held. None declares a closing reference. All 34 days old (opened 2026-06-25) — **stale by age, but held on purpose, not neglected.**
 
 - [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(blocked, stale)* — no linked issue; **held**: `@angular/core@20.3.25` requires `zone.js ~0.15.0`; 0.16.x targets Angular 21. Merge when the project moves to Angular 21.
-- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(blocked, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**: drags `go-sqlite3` past the pinned replace and silently disables DB encryption.
-- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.2 *(blocked, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **held**: re-verified after its rebase to 1.31.2 — it still drops `jgiannuzzi/go-sqlite3`, so the regression is unchanged.
+- [#377](https://github.com/jwilleke/yourphr/pull/377) — chore(deps): bump github.com/go-gormigrate/gormigrate/v2 from 2.1.1 to 2.1.6 *(rebasing, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED** by `bd7abb4e` — re-verify its checks, then merge.
+- [#374](https://github.com/jwilleke/yourphr/pull/374) — chore(deps): bump gorm.io/gorm from 1.30.0 to 1.31.2 *(rebasing, stale)* — likely [#401](https://github.com/jwilleke/yourphr/issues/401); **UNBLOCKED** by `bd7abb4e` — the fix was verified against this exact bump. Re-verify its checks, then merge.
