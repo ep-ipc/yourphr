@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.15.0](https://github.com/jwilleke/yourphr/compare/v1.14.0...v1.15.0) (2026-07-29)
+
+### ⚠️ Operators — read before upgrading
+
+The C-CDA converter sidecar is now **enabled by default**, and the image bakes `config.yaml`, so this changes the default for **every Docker deployment**.
+
+- **Using the shipped `docker-compose.yml` or `docker-compose-prod.yml`?** Nothing to do — the sidecar now starts alongside the app.
+- **Running the app without that sidecar** (a hand-rolled k8s Deployment, your own manifests)? Uploading XML will now report *"C-CDA conversion service unreachable"* instead of *"not enabled"*. Either deploy the sidecar — see [`deploy/yourphr-cda-converter.example.yaml`](deploy/yourphr-cda-converter.example.yaml) — or set `YOURPHR_CDA_CONVERTER_ENABLED=false`.
+
+Nothing else is affected, no data is at risk, and existing `YOURPHR_CDA_CONVERTER_*` settings still override the defaults.
+
+### Features
+
+- **import:** C-CDA / CCD (XML) import now works **out of the box** ([#404](https://github.com/jwilleke/yourphr/issues/404)). XML is what patient portals actually export — Epic MyChart and friends hand people XML, not FHIR JSON — yet importing your own records previously required three separate discoveries, all of them plumbing: realise XML was supported, start a second container hidden behind a compose profile, and set two `YOURPHR_*` variables whose prefix silently ignores near-misses. A stock `docker compose up -d` now imports an Epic export with no extra steps.
+
+### Bug Fixes
+
+- **docker:** `docker-compose-prod.yml` defined **no `cda-converter` service at all**, so C-CDA import was impossible on the production compose path regardless of how carefully the documented variables were set — `YOURPHR_CDA_CONVERTER_URL` had nothing to point at. This is the wall the [#397](https://github.com/jwilleke/yourphr/issues/397) reporter hit. The service is now defined in both compose files.
+- **import:** an unreachable converter now reports the address it tried and the three ways out — start the sidecar, repoint the URL, or disable the feature — rather than a bare connection error. It deliberately does *not* repeat the "set these variables" advice, since in that state they are already correct ([#404](https://github.com/jwilleke/yourphr/issues/404)).
+
+### Security / privacy
+
+- The converter remains `expose`-only and is **never** published to a host port: raw C-CDA is PHI and must not be reachable from outside the compose network. Verified against the resolved output of both compose files. Running it by default does not change the AGPL position — it stays a separate process, so no combined-work entanglement.
+
+### Known issues
+
+- `zone.js` 0.16.x remains held on Angular 20's `zone.js ~0.15.0` peer constraint ([#378](https://github.com/jwilleke/yourphr/pull/378)).
+- `jgiannuzzi/go-sqlite3` is still a pinned fork of a 2023 commit and will not pick up upstream `mattn/go-sqlite3` security fixes. [#401](https://github.com/jwilleke/yourphr/issues/401) made the arrangement safe, not permanent.
+- 12 Dependabot alerts remain, all `frontend/yarn.lock` build/dev-chain transitives that do not ship in the served image. No Dependabot PR currently covers them.
+- Which converter to depend on long-term is an open question ([#403](https://github.com/jwilleke/yourphr/issues/403)).
+
 ## [1.14.0](https://github.com/jwilleke/yourphr/compare/v1.13.4...v1.14.0) (2026-07-29)
 
 ### Features
