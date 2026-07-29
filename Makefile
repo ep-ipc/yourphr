@@ -93,9 +93,36 @@ gen-rxterms-crosswalk:
 ########################################################################################################################
 # Frontend
 ########################################################################################################################
+# Angular's build cache stores ABSOLUTE module paths, so it goes stale whenever a dependency change
+# moves a package between nested and hoisted node_modules (e.g. a `resolutions` pin hoisting
+# @babel/runtime out of @angular-devkit/build-angular/node_modules). The build then fails with
+# "Can't resolve .../node_modules/.../node_modules/..." LOCALLY while CI — which starts with no
+# cache — passes on the same commit. It lives outside node_modules, so reinstalling never clears it.
+# See docs/devserver.md.
+FRONTEND_CACHE := frontend/.angular/cache
+FRONTEND_LOCK_STAMP := frontend/.angular/.yarn-lock-hash
+
 .PHONY: dep-frontend
 dep-frontend:
 	cd frontend && yarn install --frozen-lockfile --network-timeout 1000000
+	@mkdir -p frontend/.angular
+	@hash=$$( (shasum -a 256 frontend/yarn.lock 2>/dev/null || sha256sum frontend/yarn.lock) | cut -d' ' -f1 ); \
+	prev=$$(cat $(FRONTEND_LOCK_STAMP) 2>/dev/null || true); \
+	if [ "$$hash" != "$$prev" ]; then \
+		if [ -d $(FRONTEND_CACHE) ]; then \
+			echo "yarn.lock changed -> clearing stale $(FRONTEND_CACHE)"; \
+			rm -rf $(FRONTEND_CACHE); \
+		fi; \
+		echo "$$hash" > $(FRONTEND_LOCK_STAMP); \
+	fi
+
+# Escape hatch: clear the Angular build cache by hand. Safe and regenerable — it is gitignored and
+# rebuilt on the next build. Also worth running periodically; the cache does not self-prune and has
+# reached tens of GB on long-lived checkouts.
+.PHONY: clean-frontend-cache
+clean-frontend-cache:
+	rm -rf $(FRONTEND_CACHE) $(FRONTEND_LOCK_STAMP)
+	@echo "cleared $(FRONTEND_CACHE)"
 
 .PHONY: build-frontend-sandbox
 build-frontend-sandbox: dep-frontend

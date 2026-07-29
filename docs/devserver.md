@@ -66,12 +66,14 @@ If `ng test` / `ng serve` / `make test-frontend-coverage` fails locally but **CI
 Clear the Angular build cache **first**:
 
 ```bash
-rm -rf frontend/.angular/cache
+make clean-frontend-cache
 ```
+
+> `make dep-frontend` now clears this cache automatically whenever `frontend/yarn.lock` changes (it hashes the lockfile into `frontend/.angular/.yarn-lock-hash`), and every `serve-*` / `build-*` / `test-*` target depends on `dep-frontend`. So this failure should no longer occur after a normal `git pull` + build. Reach for the manual command if you hit it anyway, or to reclaim disk.
 
 The cache stores **absolute** resolved paths. When a dependency bump changes how packages nest — e.g. a `resolutions` pin hoisting `@babel/runtime` out of `@angular-devkit/build-angular/node_modules/` — the cached paths point at directories that no longer exist. It lives **outside `node_modules`, so reinstalling never clears it**, and the error reads like a broken install, which sends you down the wrong path. CI never hits this because it starts with no cache.
 
-Also worth checking its size — it is not self-pruning and can reach tens of GB:
+Also worth checking its size — Angular CLI offers no maximum-size setting and never prunes, so on a long-lived checkout it can reach tens of GB (89 GB on this one before it was first cleared):
 
 ```bash
 du -sh frontend/.angular/cache
