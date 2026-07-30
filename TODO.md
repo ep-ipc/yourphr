@@ -19,7 +19,7 @@
 ## 🔴 P0 — Security & Critical
 
 - No open issue carries `P0` outside the In review band.
-- **12 open Dependabot alerts** (all `frontend/yarn.lock`) — tracked by [#416](https://github.com/jwilleke/yourphr/issues/416). 0 open code-scanning alerts.
+- **12 open Dependabot alerts** (all `frontend/yarn.lock` unless noted) — tracked by [#416](https://github.com/jwilleke/yourphr/issues/416). 0 open code-scanning alerts.
 
 ## 🟠 P1
 
@@ -73,9 +73,6 @@
 
 ## 🔵 In review
 
-- [#414](https://github.com/jwilleke/yourphr/issues/414) — [BUG] medical-sources HTML claims BYO SMART form still lives on /sandbox
-- [#412](https://github.com/jwilleke/yourphr/issues/412) — [docs] Refresh docs/Roadmap.md to match shipped SMART and C-CDA state
-- [#410](https://github.com/jwilleke/yourphr/issues/410) — [docs] Restore Resume-here so /pstatus does not wipe session continuity
 - [#406](https://github.com/jwilleke/yourphr/issues/406) — [FEATURE] SMART connect: fix dual-timeout between relay poll and UI login window
 - [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider, Error: Error uploading file: C-CDA import is not enabled on this server (set cda_converter.enabled)
 
@@ -106,4 +103,3 @@ None — every open issue carries a placement label.
 - [#418](https://github.com/jwilleke/yourphr/pull/418) — chore(deps): bump github.com/fastenhealth/gofhir-models from 0.0.7 to 0.0.9 *(ready)* — no linked issue
 - [#417](https://github.com/jwilleke/yourphr/pull/417) — chore(deps): bump golang.org/x/crypto from 0.53.0 to 0.54.0 *(ready)* — no linked issue
 - [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(blocked)* — **stale** (>7 days) — refs [#44446](https://github.com/jwilleke/yourphr/issues/44446); refs [#45273](https://github.com/jwilleke/yourphr/issues/45273); refs [#47603](https://github.com/jwilleke/yourphr/issues/47603); refs [#51328](https://github.com/jwilleke/yourphr/issues/51328); refs [#55590](https://github.com/jwilleke/yourphr/issues/55590); refs [#61717](https://github.com/jwilleke/yourphr/issues/61717); refs [#61755](https://github.com/jwilleke/yourphr/issues/61755); refs [#62135](https://github.com/jwilleke/yourphr/issues/62135); refs [#63072](https://github.com/jwilleke/yourphr/issues/63072); refs [#63077](https://github.com/jwilleke/yourphr/issues/63077); refs [#63511](https://github.com/jwilleke/yourphr/issues/63511); refs [#64042](https://github.com/jwilleke/yourphr/issues/64042); refs [#64497](https://github.com/jwilleke/yourphr/issues/64497); refs [#67057](https://github.com/jwilleke/yourphr/issues/67057); refs [#68395](https://github.com/jwilleke/yourphr/issues/68395)
-

@@ -60,7 +60,7 @@ Regenerate the **priority-band section** of `TODO.md` from open issues/PRs. Do *
 4. **Never** delete or rewrite the resume markers or body. Only `/wrap` updates resume content.
 
 `/wrap` owns the handoff text; `/pstatus` only refreshes ranked work so multi-machine continuity
-survives mid-session status runs. See https://github.com/jwilleke/yourphr/issues/410.
+survives mid-session status runs. See [yourphr#410](https://github.com/jwilleke/yourphr/issues/410).
 
 The bands, in this order:
 
