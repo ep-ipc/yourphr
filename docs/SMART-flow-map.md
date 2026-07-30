@@ -283,9 +283,10 @@ Comments in `ConnectSource` / catalog connect: **browser never handles tokens**;
 | Constant | Location | Value |
 |---|---|---|
 | Relay code TTL | `backend/cmd/relay/main.go` `defaultTTL` | 60s |
-| One connect poll | `PollUntil(..., 1*time.Second, 30*time.Second)` in both connect handlers | 30s |
+| One connect poll | `web.smart_connect.relay_poll_seconds` (default **55**, cap 60) via `relayPollTimeout` | 55s |
 | Default UI login wait | `web.smart_connect.login_wait_seconds` | 240 |
 | UI fallback window | `catalogConnectWindowMs` / `sandboxConnectWindowMs` | 4 min |
+| UI retries | only `error_code=relay_poll_timeout` (see `smart-connect-error.ts`) | across login wait |
 | FHIR HTTP client timeout | `smart.defaultFetchTimeout` | 90s |
 
 ---

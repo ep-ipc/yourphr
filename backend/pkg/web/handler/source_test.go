@@ -148,6 +148,7 @@ func TestAuthorizeSource(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	appConfig := mock_config.NewMockInterface(ctrl)
 	appConfig.EXPECT().GetInt("web.smart_connect.login_wait_seconds").Return(240).AnyTimes()
+	appConfig.EXPECT().GetInt("web.smart_connect.relay_poll_seconds").Return(55).AnyTimes()
 	ctx.Set(pkg.ContextKeyTypeConfig, appConfig)
 
 	body, _ := json.Marshal(SmartAuthorizeRequest{
@@ -170,12 +171,14 @@ func TestAuthorizeSource(t *testing.T) {
 		State            string `json:"state"`
 		CodeVerifier     string `json:"code_verifier"`
 		LoginWaitSeconds int    `json:"login_wait_seconds"`
+		RelayPollSeconds int    `json:"relay_poll_seconds"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.True(t, resp.Success)
 	require.NotEmpty(t, resp.State)
 	require.NotEmpty(t, resp.CodeVerifier)
 	require.Equal(t, 240, resp.LoginWaitSeconds)
+	require.Equal(t, 55, resp.RelayPollSeconds)
 
 	authURL, err := url.Parse(resp.AuthorizeURL)
 	require.NoError(t, err)
@@ -473,6 +476,7 @@ func TestAuthorizeSourceDerivesRedirectUriFromConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	appConfig := mock_config.NewMockInterface(ctrl)
 	appConfig.EXPECT().GetInt("web.smart_connect.login_wait_seconds").Return(240).AnyTimes()
+	appConfig.EXPECT().GetInt("web.smart_connect.relay_poll_seconds").Return(55).AnyTimes()
 	// Poll over internal cluster DNS, redirect the browser to the public origin.
 	appConfig.EXPECT().GetString("relay.public_url").Return("https://relay.example.org").AnyTimes()
 	appConfig.EXPECT().GetString("relay.url").Return("http://yourphr-relay.yourphr.svc.cluster.local:8080").AnyTimes()

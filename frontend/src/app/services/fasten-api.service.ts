@@ -346,6 +346,8 @@ export class FastenApiService {
             state: response.state,
             code_verifier: response.code_verifier,
             login_wait_seconds: response.login_wait_seconds,
+            relay_poll_seconds: response.relay_poll_seconds,
+            redirect_uri: response.redirect_uri,
           } as SmartAuthorizeResponse
         })
       );
@@ -395,6 +397,7 @@ export class FastenApiService {
             state: response.state,
             code_verifier: response.code_verifier,
             login_wait_seconds: response.login_wait_seconds,
+            relay_poll_seconds: response.relay_poll_seconds,
             redirect_uri: response.redirect_uri,
           } as SmartAuthorizeResponse
         })

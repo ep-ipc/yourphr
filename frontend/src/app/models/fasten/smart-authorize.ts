@@ -18,8 +18,11 @@ export interface SmartAuthorizeResponse {
   // The redirect_uri the backend actually used. Round-trip it verbatim to the connect call — the
   // token exchange requires an exact match.
   redirect_uri?: string;
-  // How long (seconds) the client should keep polling for the auth code while the user logs in at
+  // How long (seconds) the client should keep retrying connect while the user logs in at
   // the provider. Operator-tunable backend config (web.smart_connect.login_wait_seconds) so it can
   // change without a frontend rebuild; optional — the client falls back to its own default if absent.
   login_wait_seconds?: number;
+  // How long (seconds) one backend connect request polls the relay. Used to size UI retry
+  // attempts (login_wait / relay_poll). Optional — default 55 matches the backend (#406).
+  relay_poll_seconds?: number;
 }

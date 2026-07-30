@@ -1,14 +1,18 @@
 import {Component, OnInit} from '@angular/core';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {environment} from '../../../environments/environment';
-import {extractErrorFromResponse} from '../../../lib/utils/error_extract';
+import {
+  formatSmartConnectFailure,
+  isRetryableSmartConnectError,
+} from '../../../lib/utils/smart-connect-error';
 import {SmartAuthorizeResponse} from '../../models/fasten/smart-authorize';
 import {ConnectableProvider} from '../../models/fasten/provider-catalog';
 
 // Max time to wait for the admin to finish logging in at the sandbox provider (the relay-poll phase,
 // across retries) before giving up. A first login (consent, pick account, authorize) can be slow,
-// so allow several minutes. This does NOT bound the data download, which runs inline after login.
+// so allow several minutes. Does NOT bound the data download (background after connect).
 export const sandboxConnectWindowMs = 4 * 60 * 1000 // 4 minutes
+const defaultRelayPollSeconds = 55 // matches backend web.smart_connect.relay_poll_seconds (#406)
 
 // Admin-only sandbox-testing page (EPIC #20 / #291). The sandbox providers (Blue Button, Epic, …) are
 // configured server-side: their FHIR base / scopes / client_id / client_secret come from env (a k8s
@@ -87,13 +91,15 @@ export class SandboxComponent implements OnInit {
       }
       popup.location.href = authorize.authorize_url
 
-      // The backend polls the relay ~30s for the auth code then exchanges + syncs inline. A slow login
-      // can outlast one poll, so retry across the login window. Only the relay-poll timeout is retried
-      // (nothing is created yet, so it's safe); any other error is terminal.
+      // Backend polls the relay for relay_poll_seconds (default 55) per attempt (#406). Retry only
+      // true poll timeouts across the login window — not secret/config errors.
       const windowMs = (authorize.login_wait_seconds && authorize.login_wait_seconds > 0)
         ? authorize.login_wait_seconds * 1000
         : sandboxConnectWindowMs
-      const maxAttempts = Math.ceil(windowMs / (30 * 1000))
+      const pollSec = (authorize.relay_poll_seconds && authorize.relay_poll_seconds > 0)
+        ? authorize.relay_poll_seconds
+        : defaultRelayPollSeconds
+      const maxAttempts = Math.max(1, Math.ceil(windowMs / (pollSec * 1000)))
       let lastErr: any = null
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -107,20 +113,19 @@ export class SandboxComponent implements OnInit {
           break
         } catch (err) {
           lastErr = err
-          const msg = extractErrorFromResponse(err) || ''
-          if (!/authorization code from relay|timed out/i.test(msg)) { break } // terminal
+          if (!isRetryableSmartConnectError(err)) { break }
         }
       }
 
       if (lastErr) {
-        this.errorMsg = 'Connection failed: ' + (extractErrorFromResponse(lastErr) || 'Unknown Error') + ' Please complete the sign-in in the popup window and try again.'
+        this.errorMsg = formatSmartConnectFailure(lastErr)
         return
       }
 
       this.successMsg = `Connected to ${provider.display}. Records are being imported.`
       this.refreshConnectedList()
     } catch (err) {
-      this.errorMsg = 'Connection failed: ' + (extractErrorFromResponse(err) || 'Unknown Error')
+      this.errorMsg = formatSmartConnectFailure(err)
     } finally {
       this.connectingProviderId = null
     }

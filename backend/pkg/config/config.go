@@ -120,6 +120,10 @@ func (c *configuration) Init() error {
 	// account, authorize) can be slow — e.g. CMS Blue Button. Served to the frontend so it can be
 	// tuned via env/config without a frontend rebuild (YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS).
 	c.SetDefault("web.smart_connect.login_wait_seconds", 240)
+	// How long one backend connect request polls the relay for the auth code before returning.
+	// The relay holds codes ~60s, so values above 60 are capped. Default 55 leaves headroom under
+	// the TTL. Env: YOURPHR_WEB_SMART_CONNECT_RELAY_POLL_SECONDS. (#406)
+	c.SetDefault("web.smart_connect.relay_poll_seconds", 55)
 
 	// SMART on FHIR OAuth relay (#50). Two distinct URLs, because a self-hosted deployment usually
 	// needs both (#399):

@@ -325,6 +325,7 @@ func AuthorizeSourceFromCatalog(c *gin.Context) {
 		"state":              state,
 		"code_verifier":      verifier,
 		"login_wait_seconds": appConfig.GetInt("web.smart_connect.login_wait_seconds"),
+		"relay_poll_seconds": relayPollSeconds(appConfig),
 		// The effective redirect_uri, so the caller round-trips the SAME value to /connect (the
 		// token exchange requires an exact match) without knowing the relay config.
 		"redirect_uri": req.RedirectUri,
@@ -367,13 +368,13 @@ func ConnectSourceFromCatalog(c *gin.Context) {
 		relayClient, err := relay.FromConfig(appConfig)
 		if err != nil {
 			logger.Errorln(err)
-			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": fmt.Sprintf("relay not configured: %s", err)})
+			respondRelayNotConfigured(c, err)
 			return
 		}
-		code, err := relayClient.PollUntil(c, req.State, time.Second, 30*time.Second)
+		code, err := relayClient.PollUntil(c, req.State, time.Second, relayPollTimeout(appConfig))
 		if err != nil {
 			logger.Errorln(err)
-			c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("could not retrieve authorization code from relay: %s", err)})
+			respondRelayCodeError(c, err)
 			return
 		}
 		req.Code = code

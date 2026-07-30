@@ -86,18 +86,18 @@ func ConnectSource(c *gin.Context) {
 	}
 
 	// When no code is supplied directly, fetch it from the relay (#50) by state. The relay holds
-	// the code for ~60s; poll briefly to absorb the redirect→connect race.
+	// the code for ~60s; poll for relay_poll_seconds (default 55) to absorb the redirect→connect race (#406).
 	if req.Code == "" {
 		relayClient, err := relay.FromConfig(appConfig)
 		if err != nil {
 			logger.Errorln(err)
-			c.JSON(http.StatusServiceUnavailable, gin.H{"success": false, "error": fmt.Sprintf("relay not configured: %s", err)})
+			respondRelayNotConfigured(c, err)
 			return
 		}
-		code, err := relayClient.PollUntil(c, req.State, time.Second, 30*time.Second)
+		code, err := relayClient.PollUntil(c, req.State, time.Second, relayPollTimeout(appConfig))
 		if err != nil {
 			logger.Errorln(err)
-			c.JSON(http.StatusBadGateway, gin.H{"success": false, "error": fmt.Sprintf("could not retrieve authorization code from relay: %s", err)})
+			respondRelayCodeError(c, err)
 			return
 		}
 		req.Code = code
@@ -269,9 +269,10 @@ func AuthorizeSource(c *gin.Context) {
 		// The effective redirect_uri, so the caller round-trips the SAME value to /source/connect
 		// (the token exchange requires an exact match) without knowing the relay config.
 		"redirect_uri": req.RedirectUri,
-		// How long the client should keep polling for the auth code (operator-tunable backend
-		// config, no frontend rebuild). The frontend falls back to its own default if absent.
+		// How long the client should keep retrying connect while the user logs in (operator-tunable).
 		"login_wait_seconds": appConfig.GetInt("web.smart_connect.login_wait_seconds"),
+		// How long one connect request polls the relay (frontend sizes retry attempts from this) (#406).
+		"relay_poll_seconds": relayPollSeconds(appConfig),
 	})
 }
 

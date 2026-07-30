@@ -20,13 +20,19 @@ import * as _ from 'lodash';
 import {PatientAccessBrand} from '../../models/patient-access-brands';
 import {FormRequestHealthSystemComponent} from '../../components/form-request-health-system/form-request-health-system.component';
 import {extractErrorFromResponse} from '../../../lib/utils/error_extract';
+import {
+  formatSmartConnectFailure,
+  isRetryableSmartConnectError,
+} from '../../../lib/utils/smart-connect-error';
 import {ConnectableProvider} from '../../models/fasten/provider-catalog';
 import {SmartAuthorizeResponse} from '../../models/fasten/smart-authorize';
 
 // Max time to wait for the patient to finish logging in at the provider (relay-poll phase, across
 // retries). A first login can be slow (read consent, pick account, authorize) — allow several
-// minutes. Does NOT bound the data download, which runs inline after login (see source.go).
+// minutes. Does NOT bound the data download, which runs in the background after connect returns.
 const catalogConnectWindowMs = 4 * 60 * 1000 // 4 minutes
+// Default single connect poll window when authorize omits relay_poll_seconds (matches backend #406).
+const defaultRelayPollSeconds = 55
 
 export class SourceListItem {
   source?: Source
@@ -152,13 +158,16 @@ export class MedicalSourcesComponent implements OnInit {
       }
       popup.location.href = authorize.authorize_url
 
-      // The backend polls the relay ~30s for the auth code then exchanges + syncs inline. A slow login
-      // can outlast one poll, so retry across the login window. Only the relay-poll timeout is retried
-      // (nothing is created yet, so it's safe); any other error is terminal.
+      // Backend polls the relay for relay_poll_seconds (default 55) per connect attempt, then
+      // exchanges. A slow login can outlast one poll, so retry across the login window. Only true
+      // poll timeouts are retried (#406) — secret/config errors must not spin for minutes.
       const windowMs = (authorize.login_wait_seconds && authorize.login_wait_seconds > 0)
         ? authorize.login_wait_seconds * 1000
         : catalogConnectWindowMs
-      const maxAttempts = Math.ceil(windowMs / (30 * 1000))
+      const pollSec = (authorize.relay_poll_seconds && authorize.relay_poll_seconds > 0)
+        ? authorize.relay_poll_seconds
+        : defaultRelayPollSeconds
+      const maxAttempts = Math.max(1, Math.ceil(windowMs / (pollSec * 1000)))
       let lastErr: any = null
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -172,20 +181,19 @@ export class MedicalSourcesComponent implements OnInit {
           break
         } catch (err) {
           lastErr = err
-          const msg = extractErrorFromResponse(err) || ''
-          if (!/authorization code from relay|timed out/i.test(msg)) { break } // terminal
+          if (!isRetryableSmartConnectError(err)) { break }
         }
       }
 
       if (lastErr) {
-        this.connectErrorMsg = 'Connection failed: ' + (extractErrorFromResponse(lastErr) || 'Unknown Error') + ' Please complete the sign-in in the popup window and try again.'
+        this.connectErrorMsg = formatSmartConnectFailure(lastErr)
         return
       }
 
       this.connectSuccessMsg = `Connected to ${provider.display}. Your records are being imported.`
       this.refreshConnectedList()
     } catch (err) {
-      this.connectErrorMsg = 'Connection failed: ' + (extractErrorFromResponse(err) || 'Unknown Error')
+      this.connectErrorMsg = formatSmartConnectFailure(err)
     } finally {
       this.connectingProviderId = null
     }
