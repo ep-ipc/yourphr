@@ -96,4 +96,3 @@ None — every open issue carries a placement label.
 
 - [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready)* — no linked issue
 - [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready)* — **stale** (>7 days) — likely [#416](https://github.com/jwilleke/yourphr/issues/416)
-
