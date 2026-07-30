@@ -25,7 +25,6 @@
 
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
-- [#405](https://github.com/jwilleke/yourphr/issues/405) — [BUG] YourPHR cannot run on arm64 — the published image is amd64-only
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 
@@ -35,7 +34,6 @@
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
 - [#407](https://github.com/jwilleke/yourphr/issues/407) — [FEATURE] Decide fate of BYO SMART Path B (/source/authorize + /source/connect)
-- [#406](https://github.com/jwilleke/yourphr/issues/406) — [FEATURE] SMART connect: fix dual-timeout between relay poll and UI login window
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
@@ -78,6 +76,7 @@
 - [#414](https://github.com/jwilleke/yourphr/issues/414) — [BUG] medical-sources HTML claims BYO SMART form still lives on /sandbox
 - [#412](https://github.com/jwilleke/yourphr/issues/412) — [docs] Refresh docs/Roadmap.md to match shipped SMART and C-CDA state
 - [#410](https://github.com/jwilleke/yourphr/issues/410) — [docs] Restore Resume-here so /pstatus does not wipe session continuity
+- [#406](https://github.com/jwilleke/yourphr/issues/406) — [FEATURE] SMART connect: fix dual-timeout between relay poll and UI login window
 - [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider, Error: Error uploading file: C-CDA import is not enabled on this server (set cda_converter.enabled)
 
 ## ⏸ Deferred
@@ -106,5 +105,5 @@ None — every open issue carries a placement label.
 - [#419](https://github.com/jwilleke/yourphr/pull/419) — chore(deps): bump golang.org/x/net from 0.56.0 to 0.57.0 *(ready)* — no linked issue
 - [#418](https://github.com/jwilleke/yourphr/pull/418) — chore(deps): bump github.com/fastenhealth/gofhir-models from 0.0.7 to 0.0.9 *(ready)* — no linked issue
 - [#417](https://github.com/jwilleke/yourphr/pull/417) — chore(deps): bump golang.org/x/crypto from 0.53.0 to 0.54.0 *(ready)* — no linked issue
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready)* — **stale** (>7 days) — refs [#44446](https://github.com/jwilleke/yourphr/issues/44446); refs [#45273](https://github.com/jwilleke/yourphr/issues/45273); refs [#47603](https://github.com/jwilleke/yourphr/issues/47603); refs [#51328](https://github.com/jwilleke/yourphr/issues/51328); refs [#55590](https://github.com/jwilleke/yourphr/issues/55590); refs [#61717](https://github.com/jwilleke/yourphr/issues/61717); refs [#61755](https://github.com/jwilleke/yourphr/issues/61755); refs [#62135](https://github.com/jwilleke/yourphr/issues/62135); refs [#63072](https://github.com/jwilleke/yourphr/issues/63072); refs [#63077](https://github.com/jwilleke/yourphr/issues/63077); refs [#63511](https://github.com/jwilleke/yourphr/issues/63511); refs [#64042](https://github.com/jwilleke/yourphr/issues/64042); refs [#64497](https://github.com/jwilleke/yourphr/issues/64497); refs [#67057](https://github.com/jwilleke/yourphr/issues/67057); refs [#68395](https://github.com/jwilleke/yourphr/issues/68395)
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(blocked)* — **stale** (>7 days) — refs [#44446](https://github.com/jwilleke/yourphr/issues/44446); refs [#45273](https://github.com/jwilleke/yourphr/issues/45273); refs [#47603](https://github.com/jwilleke/yourphr/issues/47603); refs [#51328](https://github.com/jwilleke/yourphr/issues/51328); refs [#55590](https://github.com/jwilleke/yourphr/issues/55590); refs [#61717](https://github.com/jwilleke/yourphr/issues/61717); refs [#61755](https://github.com/jwilleke/yourphr/issues/61755); refs [#62135](https://github.com/jwilleke/yourphr/issues/62135); refs [#63072](https://github.com/jwilleke/yourphr/issues/63072); refs [#63077](https://github.com/jwilleke/yourphr/issues/63077); refs [#63511](https://github.com/jwilleke/yourphr/issues/63511); refs [#64042](https://github.com/jwilleke/yourphr/issues/64042); refs [#64497](https://github.com/jwilleke/yourphr/issues/64497); refs [#67057](https://github.com/jwilleke/yourphr/issues/67057); refs [#68395](https://github.com/jwilleke/yourphr/issues/68395)
 
