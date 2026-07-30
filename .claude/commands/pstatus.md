@@ -45,13 +45,22 @@ For each open Dependabot / code-scanning / GitGuardian alert:
 
 ### Step 4: Rank and regenerate `TODO.md`
 
-Overwrite `TODO.md` with the open issues grouped into bands.
+Regenerate the **priority-band section** of `TODO.md` from open issues/PRs. Do **not** wipe session continuity.
 
-**Remove the `▶ Resume here` block, including its `RESUME:START` / `RESUME:END` markers.** The
-pointer is written by `/wrap` at session end and read by `/context` at session open; by the time
-`/pstatus` runs you have already resumed, so it has served its purpose. The output of this step is a
-bands-only `TODO.md` — that is intended, not a loss. `/pstatus` never reads the block and never
-preserves it.
+**Preserve the `▶ Resume here` block** when present:
+
+1. Before writing, if `TODO.md` contains a block between `<!-- RESUME:START -->` and
+   `<!-- RESUME:END -->` (inclusive), capture that exact text.
+2. Write `TODO.md` in this order:
+   - `# TODO`
+   - the preserved resume block (if any), unchanged — do not invent or refresh its content here
+   - a blank line, then `> Generated from live GitHub state — ranked by priority label.`
+   - the regenerated bands below
+3. If there is no resume block, omit it (bands-only is fine until `/wrap` writes one).
+4. **Never** delete or rewrite the resume markers or body. Only `/wrap` updates resume content.
+
+`/wrap` owns the handoff text; `/pstatus` only refreshes ranked work so multi-machine continuity
+survives mid-session status runs. See https://github.com/jwilleke/yourphr/issues/410.
 
 The bands, in this order:
 
