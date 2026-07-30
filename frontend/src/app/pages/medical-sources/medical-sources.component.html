@@ -61,8 +61,9 @@
       <!--
         Patient-facing provider directory (#306 / #291): a picker of providers the admin has
         pre-configured. The patient picks one and logs in with their provider account — they never
-        see a client_id/secret (the backend resolves them). The raw bring-your-own client_id SMART
-        form lives on the admin-only /sandbox page.
+        see a client_id/secret (the backend resolves them via authorizeSourceFromCatalog /
+        connectSourceFromCatalog). Admin sandbox testing is the same catalog path on /sandbox
+        (env-seeded entries); there is no free-form BYO client_id form in the UI (see #407).
       -->
       <div class="az-content-label mg-b-5 mg-t-40">Connect a provider</div>
 
