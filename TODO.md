@@ -32,14 +32,10 @@
 ## 🟡 P2
 
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
-- [#414](https://github.com/jwilleke/yourphr/issues/414) — [BUG] medical-sources HTML claims BYO SMART form still lives on /sandbox
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
-- [#412](https://github.com/jwilleke/yourphr/issues/412) — [docs] Refresh docs/Roadmap.md to match shipped SMART and C-CDA state
-- [#410](https://github.com/jwilleke/yourphr/issues/410) — [docs] Restore Resume-here so /pstatus does not wipe session continuity
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
 - [#407](https://github.com/jwilleke/yourphr/issues/407) — [FEATURE] Decide fate of BYO SMART Path B (/source/authorize + /source/connect)
 - [#406](https://github.com/jwilleke/yourphr/issues/406) — [FEATURE] SMART connect: fix dual-timeout between relay poll and UI login window
-- [#403](https://github.com/jwilleke/yourphr/issues/403) — [ARCH] Evaluate Microsoft FHIR-Converter 5.x (MIT, Liquid) vs the Metriport fork for C-CDA import
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
@@ -79,6 +75,9 @@
 
 ## 🔵 In review
 
+- [#414](https://github.com/jwilleke/yourphr/issues/414) — [BUG] medical-sources HTML claims BYO SMART form still lives on /sandbox
+- [#412](https://github.com/jwilleke/yourphr/issues/412) — [docs] Refresh docs/Roadmap.md to match shipped SMART and C-CDA state
+- [#410](https://github.com/jwilleke/yourphr/issues/410) — [docs] Restore Resume-here so /pstatus does not wipe session continuity
 - [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider, Error: Error uploading file: C-CDA import is not enabled on this server (set cda_converter.enabled)
 
 ## ⏸ Deferred
@@ -97,6 +96,15 @@ None — every open issue carries a placement label.
 
 ## 🔀 Open PRs
 
-1 open.
+9 open.
 
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(blocked)* — refs [#2801](https://github.com/jwilleke/yourphr/issues/2801); refs [#2802](https://github.com/jwilleke/yourphr/issues/2802)
+- [#423](https://github.com/jwilleke/yourphr/pull/423) — chore(deps): bump karma-jasmine-html-reporter from 2.1.0 to 2.2.0 in /frontend *(ready)* — no linked issue
+- [#422](https://github.com/jwilleke/yourphr/pull/422) — chore(deps): bump chromatic from 17.5.0 to 18.1.0 in /frontend *(ready)* — refs [#1378](https://github.com/jwilleke/yourphr/issues/1378); refs [#1388](https://github.com/jwilleke/yourphr/issues/1388); refs [#1389](https://github.com/jwilleke/yourphr/issues/1389); refs [#1390](https://github.com/jwilleke/yourphr/issues/1390); refs [#1392](https://github.com/jwilleke/yourphr/issues/1392); refs [#1393](https://github.com/jwilleke/yourphr/issues/1393); refs [#1395](https://github.com/jwilleke/yourphr/issues/1395); refs [#1396](https://github.com/jwilleke/yourphr/issues/1396); refs [#1397](https://github.com/jwilleke/yourphr/issues/1397); refs [#1398](https://github.com/jwilleke/yourphr/issues/1398); refs [#1402](https://github.com/jwilleke/yourphr/issues/1402); refs [#1404](https://github.com/jwilleke/yourphr/issues/1404); refs [#1409](https://github.com/jwilleke/yourphr/issues/1409); refs [#1410](https://github.com/jwilleke/yourphr/issues/1410); refs [#1411](https://github.com/jwilleke/yourphr/issues/1411); refs [#1412](https://github.com/jwilleke/yourphr/issues/1412); refs [#1413](https://github.com/jwilleke/yourphr/issues/1413); refs [#1415](https://github.com/jwilleke/yourphr/issues/1415); refs [#1417](https://github.com/jwilleke/yourphr/issues/1417); refs [#1418](https://github.com/jwilleke/yourphr/issues/1418); refs [#1419](https://github.com/jwilleke/yourphr/issues/1419)
+- [#421](https://github.com/jwilleke/yourphr/pull/421) — chore(deps): bump @types/jasmine from 3.5.14 to 6.0.0 in /frontend *(ready)* — no linked issue
+- [#420](https://github.com/jwilleke/yourphr/pull/420) — chore(deps): bump github.com/lestrrat-go/jwx/v2 from 2.1.6 to 2.1.7 *(ready)* — refs [#2177](https://github.com/jwilleke/yourphr/issues/2177); refs [#2178](https://github.com/jwilleke/yourphr/issues/2178); refs [#2183](https://github.com/jwilleke/yourphr/issues/2183); refs [#2191](https://github.com/jwilleke/yourphr/issues/2191); refs [#2225](https://github.com/jwilleke/yourphr/issues/2225); refs [#2228](https://github.com/jwilleke/yourphr/issues/2228); refs [#2229](https://github.com/jwilleke/yourphr/issues/2229); refs [#2237](https://github.com/jwilleke/yourphr/issues/2237)
+- [#419](https://github.com/jwilleke/yourphr/pull/419) — chore(deps): bump golang.org/x/net from 0.56.0 to 0.57.0 *(ready)* — no linked issue
+- [#418](https://github.com/jwilleke/yourphr/pull/418) — chore(deps): bump github.com/fastenhealth/gofhir-models from 0.0.7 to 0.0.9 *(ready)* — no linked issue
+- [#417](https://github.com/jwilleke/yourphr/pull/417) — chore(deps): bump golang.org/x/crypto from 0.53.0 to 0.54.0 *(ready)* — no linked issue
 - [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready)* — **stale** (>7 days) — refs [#44446](https://github.com/jwilleke/yourphr/issues/44446); refs [#45273](https://github.com/jwilleke/yourphr/issues/45273); refs [#47603](https://github.com/jwilleke/yourphr/issues/47603); refs [#51328](https://github.com/jwilleke/yourphr/issues/51328); refs [#55590](https://github.com/jwilleke/yourphr/issues/55590); refs [#61717](https://github.com/jwilleke/yourphr/issues/61717); refs [#61755](https://github.com/jwilleke/yourphr/issues/61755); refs [#62135](https://github.com/jwilleke/yourphr/issues/62135); refs [#63072](https://github.com/jwilleke/yourphr/issues/63072); refs [#63077](https://github.com/jwilleke/yourphr/issues/63077); refs [#63511](https://github.com/jwilleke/yourphr/issues/63511); refs [#64042](https://github.com/jwilleke/yourphr/issues/64042); refs [#64497](https://github.com/jwilleke/yourphr/issues/64497); refs [#67057](https://github.com/jwilleke/yourphr/issues/67057); refs [#68395](https://github.com/jwilleke/yourphr/issues/68395)
+
