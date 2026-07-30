@@ -2,86 +2,115 @@
 
 Standalone, community-maintained continuation of [Fasten OnPrem](https://github.com/fastenhealth/fasten-onprem) (GPL v3, attribution retained). Project home: [yourphr.org](https://yourphr.org).
 
+Canonical agent/product brief: [`AGENTS.md`](../AGENTS.md). As-built SMART connect map: [`SMART-flow-map.md`](SMART-flow-map.md). Live priorities: GitHub labels / [`TODO.md`](../TODO.md).
+
 ## Mission and branding
 
-- Baranding Tagline: "Your medical records, immediately and in your hands — for free."
+- Branding tagline: "Your medical records, immediately and in your hands — for free."
 - Branding text: "YourPHR"
 
-**Goal:** a complete self-hosted PHR with working display for non-US-Core FHIR data and live provider sync via a personal OAuth relay.
+**Goal:** a complete self-hosted PHR with working display for non-US-Core FHIR data, reliable import of what portals actually export (FHIR JSON and C-CDA/XML), and live provider sync via a self-hosted OAuth relay.
 
-> ## 🎯 Staying focused
+> ## Staying focused
 >
 > Prioritize work that gets patients **more complete records, faster, in their own hands** — robust patient-portal/FHIR import (incl. non-US-Core), provider sync, and reliable display of real-world data. When weighing a feature, ask: *does this advance immediate patient access (the Cures Act mission)?* If not, defer it. Avoid scope creep and rabbit-holes.
 
 ---
 
-## In progress / recently completed
+## Shipped (foundation)
 
-| Item | Status | Notes |
+These are **done in main / released** — not open planning items. Details in `CHANGELOG.md` and the linked issues.
+
+| Capability | Status | Notes |
 |---|---|---|
-| `sort_title`/`sort_date` generation for all resource types | ✅ Done | Generator fix — Encounter, Condition, Observation, Procedure, DiagnosticReport, DocumentReference, MedicationRequest, Immunization, AllergyIntolerance |
-| Encounter display fallbacks for non-US-Core data (Veradigm/FollowMyHealth) | ✅ Done | `class.code` fallback, `encounter_type` from location when `type[]` absent |
-| `fasten-sources` stub (build fix) | ✅ Done | Private repo replaced with local stub; vendor committed; upstream #629 |
-| GitHub Actions CI (Node.js 24, amd64-only build) | ✅ Done | depot.dev replaced with standard `docker/build-push-action@v6` |
-| Reserved username validation | ✅ Done | Cherry-picked from upstream PR #636 |
-| Security dep bumps | ✅ Done | `x/crypto` → 0.17.0, `x/sys` → 0.15.0 from Dependabot PRs |
+| Non-US-Core display fallbacks (e.g. Encounter) | ✅ Done | Prefer `class.code` / location when `type[]` absent (Veradigm-oriented) |
+| `sort_title` / `sort_date` generation | ✅ Done | Across major clinical resource types |
+| `fasten-sources` local stub | ✅ Done | Replaces private upstream package; vendor committed |
+| Generic SMART R4 client + store-and-poll **Go** OAuth relay | ✅ Done | EPIC [#20](https://github.com/jwilleke/yourphr/issues/20) plumbing: client, `backend/cmd/relay`, `backend/pkg/relay`. **Not** Fasten Lighthouse; **not** a Cloudflare Worker as the primary design. Map: [`SMART-flow-map.md`](SMART-flow-map.md) |
+| Provider catalog connect UI | ✅ Done | Patient picker + admin sandbox; credentials stay server-side |
+| C-CDA / CCD XML import out of the box | ✅ Done | v1.15.0+; converter sidecar default-on in compose; multi-arch converter image v1.15.1 |
+| SQLCipher fail-closed at startup | ✅ Done | v1.13.4 — encryption cannot silently drop on a dep bump |
+| Admin relay config + provenance card | ✅ Done | v1.14.0 — effective callback URL and whether config is actually applied |
+| Multi-arch app + relay images (`linux/amd64` + `linux/arm64`) | ✅ Done | v1.16.0 — [#405](https://github.com/jwilleke/yourphr/issues/405) left open only for operator pull-verify |
+| Angular 20 / Node 24 foundation | ✅ Done | Foundation epic path complete |
+| CI on standard GitHub Actions | ✅ Done | `docker/build-push-action`; release-gated image publish |
+
+**Rejected / superseded design (historical only):** a **Cloudflare Worker + KV** as the project OAuth relay. Decided against for an all-Go, self-hosted relay on existing infra. A Worker remains a possible *future* hosting option for a public product relay, not the current architecture. Design notes: [`planning/smart-on-fhir/oauth-gateway.md`](planning/smart-on-fhir/oauth-gateway.md).
 
 ---
 
-## Planned — Phase 1: Data import quality
+## Near-term focus (mission P1)
 
-| Item | Upstream ref | Notes |
+Aligned with open **P1** labels (GitHub is source of truth; this table is a narrative snapshot).
+
+| Item | Issue | Notes |
 |---|---|---|
-| FHIR-Converter normalization pre-import | — | Use [fastenhealth/FHIR-Converter](https://github.com/fastenhealth/FHIR-Converter) to clean non-US-Core codings before they hit the DB |
-| Edit and delete individual records | [#631](https://github.com/fastenhealth/fasten-onprem/issues/631) | Basic PHR data management |
-| Configurable dashboard units (mmHg, kg vs lbs) | [#399](https://github.com/fastenhealth/fasten-onprem/issues/399) | |
-| PostgreSQL support | [#361](https://github.com/fastenhealth/fasten-onprem/issues/361) | Long-term; SQLite won't scale for lifetime PHR |
+| **Prove one production SMART provider** via catalog | [#408](https://github.com/jwilleke/yourphr/issues/408) | Plumbing works; mission needs a real (non-sandbox-only) end-to-end patient path. Related: Veradigm blocked [#53](https://github.com/jwilleke/yourphr/issues/53); Blue Button docs in-repo |
+| **Patients add their own records** | [#313](https://github.com/jwilleke/yourphr/issues/313) | Manual entry when portals cannot sync; related manual-records chain under P2 |
+| **Dynamic Client Registration (DCR)** | [#355](https://github.com/jwilleke/yourphr/issues/355) | Lower friction registering SMART apps |
+| **yarn.lock build-chain Dependabot** | [#416](https://github.com/jwilleke/yourphr/issues/416) | 12 open alerts tracked; no path to patient data in the served image — still needs a decision |
+
+Close-the-loop ops (not always P1-labeled but blocks “it works for users”):
+
+- Confirm arm64 image pull → close [#405](https://github.com/jwilleke/yourphr/issues/405)
+- Production instance C-CDA sidecar (or disable converter) where compose defaults assume it
+- [#397](https://github.com/jwilleke/yourphr/issues/397) in-review until reporter confirms C-CDA
 
 ---
 
-## Planned — Phase 2: AI & search
+## Open product themes (P2 and related)
 
-Upstream PR [#594](https://github.com/fastenhealth/fasten-onprem/pull/594) (open, ~100 files) introduces Typesense-powered full-text search + RAG chat via Ollama. Review and merge when ready — covers everything in issues #337 and #623.
+Grouped by theme — each row is its own GitHub issue (no multi-step phases inside one issue). Prefer the issue tracker for status.
 
-| Item | Upstream ref | Notes |
-|---|---|---|
-| **Typesense search** | [PR #594](https://github.com/fastenhealth/fasten-onprem/pull/594) | Fast full-text search across all FHIR resources |
-| **RAG chat (Ollama/LLM)** | [PR #594](https://github.com/fastenhealth/fasten-onprem/pull/594) | "Talk to your health records" via local LLM; recommend MedGemma or Llama 3.1 8B |
-| Dynamic frontend config via `/api/env` | [PR #594](https://github.com/fastenhealth/fasten-onprem/pull/594) | Enables optional features without rebuild |
-| Personal journal | [#373](https://github.com/fastenhealth/fasten-onprem/issues/373) | Private notes on health timeline |
+### Import & display
 
----
-
-## Planned — Phase 3: Auth & access
-
-| Item | Upstream ref | Notes |
-|---|---|---|
-| **OIDC / SSO login** | [PR #613](https://github.com/fastenhealth/fasten-onprem/pull/613) | Native OIDC (Google, Auth0, Authentik, Okta) alongside username/password. Could replace reverse-proxy SSO (forward-auth) middleware. ~23 files, 16 commits. |
-| **Delegated access** | [PR #614](https://github.com/fastenhealth/fasten-onprem/pull/614) | Grant editing permissions on specific FHIR resources to other YourPHR users. Settings → Delegated Access. ~29 files, 24 commits. |
-| Multi-user permissions management | [PR #514](https://github.com/fastenhealth/fasten-onprem/pull/514) | |
-
----
-
-## Planned — Phase 4: OCR & document capture
-
-Upstream PR [#609](https://github.com/fastenhealth/fasten-onprem/pull/609) (open, ~41 files) adds webcam capture, PDF/image upload, OCR-to-FHIR pipeline.
-
-| Item | Upstream ref | Notes |
-|---|---|---|
-| **OCR scan → Encounter form** | [PR #609](https://github.com/fastenhealth/fasten-onprem/pull/609) | Capture images from webcam or upload PDF; OCR backend normalises to FHIR R4 Encounter; attaches files. Requires external OCR service. |
-
----
-
-## Planned — Phase 5: Live provider sync (OAuth gateway)
-
-Replace the commercial Fasten Lighthouse with a self-hosted Cloudflare Worker relay. The Worker acts as the public OAuth callback endpoint; it stores the short-lived authorization code in KV (60s TTL) and the local YourPHR instance polls and exchanges directly with the provider.
-
-| Item | Notes |
+| Item | Issue |
 |---|---|
-| **Cloudflare Worker OAuth relay** | Public callback endpoint; stores code in KV (60s TTL); YourPHR polls and exchanges locally. |
-| SMART on FHIR client (Veradigm) | Replace `fasten-sources` stub with real `GetSourceClient` for Veradigm/FollowMyHealth |
-| SMART on FHIR client (Epic MyChart) | Second provider |
-| Background refresh worker | Re-auth via refresh token; periodic `$everything` sync |
+| SMART dual-timeout / login-wait UX | [#406](https://github.com/jwilleke/yourphr/issues/406) |
+| Manual SMART Path B keep-or-drop | [#407](https://github.com/jwilleke/yourphr/issues/407) (holds [#413](https://github.com/jwilleke/yourphr/issues/413)) |
+| C-CDA converter choice (Microsoft 5.x vs Metriport fork) | [#403](https://github.com/jwilleke/yourphr/issues/403) |
+| Harden re-import dedup | [#252](https://github.com/jwilleke/yourphr/issues/252) |
+| Manual records backend / frontend | [#305](https://github.com/jwilleke/yourphr/issues/305), [#307](https://github.com/jwilleke/yourphr/issues/307), epic [#253](https://github.com/jwilleke/yourphr/issues/253) |
+| Patient-legible C4BB / CARIN | [#392](https://github.com/jwilleke/yourphr/issues/392), [#393](https://github.com/jwilleke/yourphr/issues/393) |
+| Per-profile dashboard widgets | [#244](https://github.com/jwilleke/yourphr/issues/244) |
+| Explore export (Save Report / PDF / Email) | [#333](https://github.com/jwilleke/yourphr/issues/333) and children |
+
+### Providers & catalog
+
+| Item | Issue |
+|---|---|
+| Veradigm / FollowMyHealth E2E | [#53](https://github.com/jwilleke/yourphr/issues/53) (blocked on vendor) |
+| VA Clinical Health | [#370](https://github.com/jwilleke/yourphr/issues/370) |
+| athenahealth sandbox onboarding | [#339](https://github.com/jwilleke/yourphr/issues/339) |
+| Provider logos / brand ids | [#340](https://github.com/jwilleke/yourphr/issues/340) |
+| Apple Health institution list as catalog source | [#251](https://github.com/jwilleke/yourphr/issues/251) |
+
+### Platform hygiene
+
+| Item | Issue |
+|---|---|
+| Retire legacy Lighthouse `connect-gateway.service.ts` | [#409](https://github.com/jwilleke/yourphr/issues/409) |
+| Resume-here preserved across `/pstatus` | [#410](https://github.com/jwilleke/yourphr/issues/410) (kit: [mjs-project-template#38](https://github.com/jwilleke/mjs-project-template/issues/38)) |
+| Manual SMART golden-path checklist | [#415](https://github.com/jwilleke/yourphr/issues/415) |
+| `fasten-sources-stub` fold vs keep | [#288](https://github.com/jwilleke/yourphr/issues/288) |
+| Realistic test corpus / golden harness | [#385](https://github.com/jwilleke/yourphr/issues/385) |
+
+Full open list: labels on GitHub or [`TODO.md`](../TODO.md) after `/pstatus`.
+
+---
+
+## Watching — upstream Fasten OnPrem PRs (optional merge)
+
+Large upstream PRs are **candidates**, not committed YourPHR roadmap phases. Mirror insurance and merge approach below.
+
+| Theme | Upstream | Notes |
+|---|---|---|
+| Typesense search + RAG (Ollama) + `/api/env` | [PR #594](https://github.com/fastenhealth/fasten-onprem/pull/594) | Local “talk to your records”; high value, large surface |
+| OIDC / SSO | [PR #613](https://github.com/fastenhealth/fasten-onprem/pull/613) | Native OIDC alongside password; may complement Authentik forward-auth |
+| Delegated access | [PR #614](https://github.com/fastenhealth/fasten-onprem/pull/614) | Share edit rights across YourPHR users |
+| OCR → Encounter | [PR #609](https://github.com/fastenhealth/fasten-onprem/pull/609) | Webcam/PDF capture; external OCR service |
+
+Related older upstream ideas still potentially useful: edit/delete records, dashboard units, PostgreSQL — track via YourPHR issues when prioritized rather than assuming upstream issue numbers.
 
 ---
 
@@ -89,18 +118,29 @@ Replace the commercial Fasten Lighthouse with a self-hosted Cloudflare Worker re
 
 | Item | Notes |
 |---|---|
-| TEFCA / QHIN integrations | [#392](https://github.com/fastenhealth/fasten-onprem/issues/392) — network-level record access; complex, long-term |
-| FHIRcast sync mechanism | [#511](https://github.com/fastenhealth/fasten-onprem/issues/511) — real-time EHR event push |
+| Full Fasten* → YourPHR identifier rename | Deferred epic [#278](https://github.com/jwilleke/yourphr/issues/278) — only on hard-fork commitment |
+| TEFCA / QHIN | Network-level access; long-term |
+| FHIRcast | Real-time EHR event push; long-term |
+| Extract FHIR domain as library | [#388](https://github.com/jwilleke/yourphr/issues/388) |
+| DB encryption UX (enable/migrate/decrypt) | [#363](https://github.com/jwilleke/yourphr/issues/363) |
 
 ---
 
 ## Upstream PR merge strategy
 
-> **Insurance:** an archival mirror of `fastenhealth/fasten-onprem` lives at [`jwilleke/fasten-onprem-mirror`](https://github.com/jwilleke/fasten-onprem-mirror) (private), with the four target PRs pinned as branches **`pr-594` / `pr-613` / `pr-614` / `pr-609`**. So these merges stay possible even if upstream disappears. (A full Fasten→YourPHR rename is parked as deferred epic #278 — only on committing to a hard fork, which would close this merge path.)
+> **Insurance:** an archival mirror of `fastenhealth/fasten-onprem` lives at [`jwilleke/fasten-onprem-mirror`](https://github.com/jwilleke/fasten-onprem-mirror) (private), with the four target PRs pinned as branches **`pr-594` / `pr-613` / `pr-614` / `pr-609`**. So these merges stay possible even if upstream disappears. (A full Fasten→YourPHR rename is parked as deferred epic [#278](https://github.com/jwilleke/yourphr/issues/278) — only on committing to a hard fork, which would close this merge path.)
 
 Large feature PRs (#594, #613, #614, #609) are not merged directly because they would conflict with our `go.mod` replace directive, `vendor/` directory, and generated model changes. Approach:
 
-1. When ready for a phase, create a feature branch from `main`
-2. `git fetch upstream && git merge upstream/pr/<N>` — resolve conflicts
-3. Re-run `go mod vendor` and regenerate models if needed
-4. Merge feature branch to `main` once CI passes
+- When ready for a theme, create a feature branch from `main`
+- `git fetch` the mirror branch / upstream PR — resolve conflicts
+- Re-run `go mod vendor` and regenerate models if needed
+- Merge to `main` once CI passes
+
+---
+
+## Delivery model (unchanged)
+
+- **Images** publish only on semver release tags `vX.Y.Z` (not on every `main` push).
+- Contract: [`deployment/deployment-contract.md`](deployment/deployment-contract.md).
+- Cutting a release: [`releasing.md`](releasing.md).
