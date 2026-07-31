@@ -124,7 +124,9 @@ func TestProviderCatalog_ConnectableIsCredentialFree(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
-	assert.Contains(t, body, "Connect Medicare / Blue Button")
+	// Patient production list forces CMS-compliant label "Medicare" (#429), not admin display text.
+	assert.Contains(t, body, `"display":"Medicare"`)
+	assert.NotContains(t, body, "Blue Button")
 	assert.NotContains(t, body, "leaky-client-id")
 	assert.NotContains(t, body, "leaky-secret")
 	assert.NotContains(t, body, "Epic (Sandbox)", "sandbox providers must never appear in the patient list")

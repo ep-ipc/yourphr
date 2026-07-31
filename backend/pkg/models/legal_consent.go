@@ -20,6 +20,10 @@ type LegalConsentStatus struct {
 	TermsOfServiceURL string `json:"terms_of_service_url"`
 }
 
+// PatientFacingMedicareLabel is the CMS-required name for Blue Button-class sources on patient
+// multi-source pickers (#429). Architecture is still Blue Button / CARIN / FHIR; enrollee list says Medicare.
+const PatientFacingMedicareLabel = "Medicare"
+
 // ProviderRequiresLegalConsent reports whether connecting this catalog/source needs active PP/ToS opt-in
 // (Medicare / CMS Blue Button and similar). Case-insensitive match on display, FHIR base URL, platform.
 func ProviderRequiresLegalConsent(display, apiEndpointBaseURL, platformType string) bool {
@@ -38,4 +42,18 @@ func ProviderRequiresLegalConsent(display, apiEndpointBaseURL, platformType stri
 		}
 	}
 	return false
+}
+
+// PatientFacingSourceDisplay returns the label enrollees see for a catalog entry.
+// Production Blue Button-class sources are forced to "Medicare" (CMS production-access rule).
+// Sandbox / admin paths keep the operator-configured display (e.g. "Medicare — Blue Button 2.0 (Sandbox)").
+func PatientFacingSourceDisplay(environment, display, apiEndpointBaseURL, platformType string) string {
+	if environment == ProviderEnvironmentSandbox {
+		return display
+	}
+	// Empty environment = production (legacy rows).
+	if ProviderRequiresLegalConsent(display, apiEndpointBaseURL, platformType) {
+		return PatientFacingMedicareLabel
+	}
+	return display
 }

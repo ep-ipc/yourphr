@@ -60,10 +60,11 @@ type ConnectableProvider struct {
 }
 
 // Connectable returns the credential-free projection of an entry for the picker.
+// Patient production lists get CMS-compliant display names (#429); sandbox keeps admin-explicit labels.
 func (p *ProviderCatalogEntry) Connectable() ConnectableProvider {
 	return ConnectableProvider{
-		ID:                   p.ID.String(),
-		Display:              p.Display,
+		ID:      p.ID.String(),
+		Display: PatientFacingSourceDisplay(p.Environment, p.Display, p.ApiEndpointBaseUrl, string(p.PlatformType)),
 		BrandLogoUrl:         p.BrandLogoUrl,
 		RequiresLegalConsent: ProviderRequiresLegalConsent(p.Display, p.ApiEndpointBaseUrl, string(p.PlatformType)),
 	}

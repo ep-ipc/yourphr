@@ -42,7 +42,7 @@ Required by [Blue Button API Terms of Service — Attribution](https://bluebutto
 > This product uses the Blue Button APIs but is not endorsed or certified by the Centers for Medicare & Medicaid Services or the U.S. Department of Health and Human Services.
 
 - **Contexts:** `attributions-page`, `medicare-connect`
-- **Patient-facing source label** remains a separate concern ([#429](https://github.com/jwilleke/yourphr/issues/429) — label as **Medicare**, not “Blue Button”).
+- **Patient-facing source label** (separate from this notice): multi-source picker shows **Medicare** for Blue Button-class production sources ([#429](https://github.com/jwilleke/yourphr/issues/429)). Sandbox/admin may still say “Blue Button”. Architecture remains Blue Button / CARIN / FHIR.
 
 ## Adding a new attribution
 

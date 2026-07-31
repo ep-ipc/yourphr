@@ -419,9 +419,16 @@ func ConnectSourceFromCatalog(c *gin.Context) {
 		return
 	}
 
-	display := strings.TrimSpace(req.Display)
-	if display == "" {
-		display = entry.Display
+	// Patient-facing display: force "Medicare" for production Blue Button-class sources (#429).
+	// Prefer catalog-driven label over client-supplied display so a renamed admin entry still complies.
+	display := models.PatientFacingSourceDisplay(
+		entry.Environment, entry.Display, entry.ApiEndpointBaseUrl, string(entry.PlatformType),
+	)
+	if display == entry.Display {
+		// Non-Medicare: allow client override when provided (legacy catalog connect).
+		if d := strings.TrimSpace(req.Display); d != "" {
+			display = d
+		}
 	}
 	sourceCred := models.SourceCredential{
 		PlatformType:       entry.PlatformType,

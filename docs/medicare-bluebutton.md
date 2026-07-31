@@ -2,6 +2,12 @@
 
 How to connect **CMS Blue Button 2.0** (Medicare claims data) to YourPHR as a SMART-on-FHIR source. This page exists so you don't have to reverse-engineer the settings the way we did — it lists the **exact** values that work, plus the errors you'll hit if a value is wrong.
 
+## Patient-facing name: “Medicare” (#429)
+
+Blue Button is the API / architecture (FHIR, OAuth, CARIN). For CMS production-access UI rules, when enrollees pick among several sources the **list label must be “Medicare”** — not “Blue Button”, “CMS Blue Button”, or “Medicare.gov”.
+
+YourPHR enforces that on the **production** connectable list and when storing the connected source display. **Sandbox / admin** may keep explicit names (e.g. `Medicare — Blue Button 2.0 (Sandbox)`). Attributions still say “Blue Button APIs” where required ([#428](https://github.com/jwilleke/yourphr/issues/428)).
+
 > **✅ Verified working** against the Blue Button **sandbox** on 2026-06-14 — a real end-to-end connect (login → token exchange → sync) succeeded with exactly the settings below.
 >
 > **Heads-up — this is the manual / admin path.** Today you enter the OAuth settings by hand in the "Connect a SMART source" form. The patient-friendly "pick Medicare from a list, log in, never see a client id/secret" experience is the **Source Catalog** ([#291](https://github.com/jwilleke/yourphr/issues/291)) — until that lands, use the values below.
