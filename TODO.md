@@ -19,10 +19,19 @@
 ## 🔴 P0 — Security & Critical
 
 - No open issue carries `P0` outside the In review band.
-- **12 open Dependabot alerts** (all `frontend/yarn.lock` unless noted) — tracked by [#416](https://github.com/jwilleke/yourphr/issues/416). 0 open code-scanning alerts.
+- **12 open Dependabot alerts** (frontend/yarn.lock) — tracked by [#416](https://github.com/jwilleke/yourphr/issues/416). 0 open code-scanning alerts.
 
 ## 🟠 P1
 
+- [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
+- [#432](https://github.com/jwilleke/yourphr/issues/432) — [FEATURE] Blue Button prod: production catalog entry and operator docs
+- [#431](https://github.com/jwilleke/yourphr/issues/431) — [FEATURE] Blue Button prod: enrollee data controls (revoke, delete, discoverable)
+- [#430](https://github.com/jwilleke/yourphr/issues/430) — [FEATURE] Blue Button prod: pre-connect informed messaging
+- [#429](https://github.com/jwilleke/yourphr/issues/429) — [FEATURE] Blue Button prod: label connect as Medicare (not Blue Button)
+- [#428](https://github.com/jwilleke/yourphr/issues/428) — [FEATURE] Blue Button prod: CMS attribution notice in UI
+- [#427](https://github.com/jwilleke/yourphr/issues/427) — [FEATURE] Blue Button prod: in-app PP/ToS access and active opt-in
+- [#426](https://github.com/jwilleke/yourphr/issues/426) — [FEATURE] Blue Button prod: public Terms of Service
+- [#425](https://github.com/jwilleke/yourphr/issues/425) — [FEATURE] Blue Button prod: public Privacy Policy (CMS checklist)
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
@@ -95,4 +104,4 @@ None — every open issue carries a placement label.
 2 open.
 
 - [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready)* — no linked issue
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready)* — **stale** (>7 days) — likely [#416](https://github.com/jwilleke/yourphr/issues/416)
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready)* — **stale** (>7 days) — no linked issue
