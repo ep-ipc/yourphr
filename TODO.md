@@ -23,6 +23,9 @@
 ## 🟠 P1
 
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
+- [#437](https://github.com/jwilleke/yourphr/issues/437) — [FEATURE] Split source Disconnect vs Remove data into separate actions
+- [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
+- [#435](https://github.com/jwilleke/yourphr/issues/435) — [BUG] Log level set to error. New lines at this level appear as the server logs activity.
 - [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
@@ -73,16 +76,12 @@
 
 ## 🔵 In review
 
-- [#434](https://github.com/jwilleke/yourphr/issues/434) — Scheduled backups fail silently forever when destination falls outside allowed roots — no operator-visible alerting
 - [#432](https://github.com/jwilleke/yourphr/issues/432) — [FEATURE] Blue Button prod: production catalog entry and operator docs
-- [#431](https://github.com/jwilleke/yourphr/issues/431) — [FEATURE] Blue Button prod: enrollee data controls (revoke, delete, discoverable)
-- [#430](https://github.com/jwilleke/yourphr/issues/430) — [FEATURE] Blue Button prod: pre-connect informed messaging
-- [#429](https://github.com/jwilleke/yourphr/issues/429) — [FEATURE] Blue Button prod: label connect as Medicare (not Blue Button)
-- [#428](https://github.com/jwilleke/yourphr/issues/428) — [FEATURE] Blue Button prod: CMS attribution notice in UI
-- [#427](https://github.com/jwilleke/yourphr/issues/427) — [FEATURE] Blue Button prod: in-app PP/ToS access and active opt-in
 
 ## ⏸ Deferred
 
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(PR · ready · deferred/blocked — Angular 21)_ — no linked issue
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · stale · deferred/blocked — Angular 20 peer)_ — no linked issue
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
@@ -94,9 +93,3 @@
 ## ❓ Needs triage
 
 - None.
-
-## 🔀 Open PRs
-
-- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready)* — no linked issue
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready, stale 36d)* — no linked issue
-

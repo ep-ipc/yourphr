@@ -52,7 +52,7 @@ openid profile launch/patient patient/Patient.read patient/Coverage.read patient
    |---|---|
    | **OAuth Client Type** | **`confidential`** |
    | **OAuth Grant Type** | **`authorization-code`** |
-   | **Callback URL / Redirect URI** | **Exactly** this instance’s relay callback (see [Relay callback](#relay-callback-uri) below) |
+   | **Callback URL / Redirect URI** | **Exactly** this instance’s relay callback (see [Relay callback](#b-relay-callback-uri) below) |
    | **Collect beneficiary demographic data** | **Yes** |
 
 3. Use the **Sandbox** `client_id` / `client_secret` (not Production).
@@ -86,7 +86,7 @@ CMS portal may show `client_id/client_secret` as one string. Put **only** the id
 | `invalid_client` / Application does not exist | Wrong id, Production id on sandbox, or id+secret jammed into Client ID | Sandbox id only in Client ID; secret separate |
 | `invalid_scope` | Wildcard / `fhirUser` / `offline_access` | Use exact scopes above |
 | Relay timeout + popup “Connected” | Login longer than connect wait | Raise `YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS` (default 240); or pre-login at CMS |
-| Relay timeout, no “Connected” | Redirect URI mismatch or incomplete login | Callback must match [Relay callback](#relay-callback-uri) exactly |
+| Relay timeout, no “Connected” | Redirect URI mismatch or incomplete login | Callback must match [Relay callback](#b-relay-callback-uri) exactly |
 
 ---
 
@@ -99,7 +99,7 @@ CMS portal may show `client_id/client_secret` as one string. Put **only** the id
 1. Complete CMS [production access](https://bluebutton.cms.gov/production-access/) process (privacy, terms, demo — [#433](https://github.com/jwilleke/yourphr/issues/433)).
 2. Register **production** app with:
    - Confidential client, authorization-code
-   - **Callback URL** = this instance’s relay callback ([below](#relay-callback-uri)) — **exact match**
+   - **Callback URL** = this instance’s relay callback ([below](#b-relay-callback-uri)) — **exact match**
    - Demographic collection as required by your CMS registration
 3. Receive **Production** `client_id` and `client_secret` only via CMS (not the sandbox pair).
 
@@ -123,7 +123,7 @@ YourPHR ships a **credential-free production template** (migration):
 | Enabled | `false` until you add creds |
 | Patient button label | **Medicare** (enforced) |
 
-**Option 1 — Admin UI (any host)**
+#### Option 1 — Admin UI (any host)
 
 1. Admin → **Provider Catalog**
 2. Open entry **Medicare** (or create with the values above if missing)
@@ -131,7 +131,7 @@ YourPHR ships a **credential-free production template** (migration):
 4. Set **Enabled** = true
 5. Save
 
-**Option 2 — Env seed (GitOps / k8s Secret)**
+#### Option 2 — Env seed (GitOps / k8s Secret)
 
 ```bash
 YOURPHR_PROD_BLUEBUTTON_CLIENT_ID=…
