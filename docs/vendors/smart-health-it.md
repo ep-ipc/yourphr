@@ -27,12 +27,18 @@ The **public reference SMART on FHIR sandbox** — fake patients, **zero registr
 
 There is no real account. After **Connect**, the launcher shows a **patient picker** — choose any synthetic patient, approve, and records import. You can tune the simulation (which patient/provider/encounter, auth errors, delays) from the launcher UI at <https://launch.smarthealthit.org>, which regenerates the base64 sim segment.
 
-## Status
+## Status (dated)
 
-- ✅ Discovery pre-flight verified (2026-06-15, no relay needed): **200**, PKCE `S256`, capabilities include `launch-standalone` + `client-public` + `context-standalone-patient`, scopes include `patient/*.*`.
-- Nothing to register — just connect.
+| Date | Host | Result |
+|---|---|---|
+| **2026-06-15** | discovery only (no relay) | ✅ `.well-known/smart-configuration` **200**, PKCE `S256`, capabilities include `launch-standalone` + `client-public` + `context-standalone-patient`, scopes include `patient/*.*` |
+| **2026-06-18** | vendor matrix | ✅ open launcher — connects without approval (matrix row) |
+| **2026-07-31** | **demo.yourphr.org** (`demo-relay.yourphr.org`) | ✅ **full E2E** — account login → Sandbox/Sources connect → launcher patient pick → callback success → import (~**455 KB** export). Preferred smoke test while CMS Blue Button sandbox login is broken ([`medicare.md`](./medicare.md)). |
+
+Nothing to register — just connect. Prefer this sandbox over Blue Button for “does YourPHR’s SMART path still work?” checks until CMS restores synthetic beneficiary login.
 
 ## See also
 
 - Index + status: [`../testing-sandboxes/test-sandboxes.md`](../testing-sandboxes/test-sandboxes.md)
+- Vendor matrix: [`README.md`](./README.md)
 - Step-by-step (Option A): [`../FHIR/fhir-testing.md`](../FHIR/fhir-testing.md)
