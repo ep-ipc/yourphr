@@ -36,6 +36,13 @@ database:
 # Admin Database card and persisted in the data dir, not here.
 backup:
   label: '' # e.g. 'prod' / 'sandbox'; blank = no label segment
+# Instance operator contact (shown to users of this deployment; editable on Admin Dashboard).
+# Env: YOURPHR_OPERATOR_NAME, YOURPHR_OPERATOR_CONTACT_EMAIL, YOURPHR_OPERATOR_CONTACT_URL.
+# Values saved in the Admin UI win over these defaults (persisted next to the DB).
+operator:
+  name: ''           # e.g. 'Nerds by the Hour'
+  contact_email: ''  # support address for wipe / privacy questions about this instance
+  contact_url: ''    # optional https help or privacy page
 log:
   # Logs always go to STDOUT/STDERR; when this is set they are ALSO tee'd to this file so the
   # Admin Dashboard "Server Logs" card can read them back. Defaults to the persistent DB volume

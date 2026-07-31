@@ -1,16 +1,20 @@
 import {Component, OnInit} from '@angular/core';
 import {CommonModule} from '@angular/common';
+import {FormsModule} from '@angular/forms';
 import {RouterModule} from '@angular/router';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {RelayConfig, RelayResolvedValue} from '../../models/fasten/relay-config';
+import {InstanceSettings} from '../../models/fasten/instance-settings';
 
 // Admin Dashboard (#170): the single admin hub — a grid of cards, each linking to a dedicated admin
 // page (Sandbox Testing, Provider Catalog, Server Logs, …). The route is gated by IsAdminAuthGuard and
 // each target page + backend endpoint also self-gates on the admin role. Every linked page carries a
 // shared <app-admin-back-link> back to here.
+//
+// Instance / operator contact is an *inline* card (like SMART relay): a few fields, no subpage.
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   selector: 'app-admin-dashboard',
   templateUrl: './admin-dashboard.component.html',
   styleUrls: ['./admin-dashboard.component.scss'],
@@ -28,6 +32,13 @@ export class AdminDashboardComponent implements OnInit {
   // never hidden by collapsing.
   relayExpanded = false;
 
+  // Instance operator contact — who runs this deployment (privacy / wipe / help).
+  instance: InstanceSettings = {name: '', contact_email: '', contact_url: ''};
+  instanceLoading = false;
+  instanceSaving = false;
+  instanceError = '';
+  instanceSaved = false;
+
   toggleRelay(): void {
     this.relayExpanded = !this.relayExpanded;
   }
@@ -40,6 +51,49 @@ export class AdminDashboardComponent implements OnInit {
       (cfg) => { this.relayConfig = cfg },
       (_err) => { this.relayError = 'Could not load the relay configuration.'; this.relayLoading = false },
       () => { this.relayLoading = false },
+    );
+
+    this.instanceLoading = true;
+    this.fastenApi.getInstanceSettings().subscribe(
+      (s) => {
+        this.instance = {
+          name: s?.name || '',
+          contact_email: s?.contact_email || '',
+          contact_url: s?.contact_url || '',
+        };
+      },
+      (_err) => {
+        this.instanceError = 'Could not load instance settings.';
+        this.instanceLoading = false;
+      },
+      () => { this.instanceLoading = false },
+    );
+  }
+
+  saveInstance(): void {
+    this.instanceError = '';
+    this.instanceSaved = false;
+    this.instanceSaving = true;
+    const payload: InstanceSettings = {
+      name: (this.instance.name || '').trim(),
+      contact_email: (this.instance.contact_email || '').trim(),
+      contact_url: (this.instance.contact_url || '').trim(),
+    };
+    this.fastenApi.setInstanceSettings(payload).subscribe(
+      (s) => {
+        this.instance = {
+          name: s?.name || '',
+          contact_email: s?.contact_email || '',
+          contact_url: s?.contact_url || '',
+        };
+        this.instanceSaved = true;
+        this.instanceSaving = false;
+      },
+      (err) => {
+        const msg = err?.error?.error || err?.message || 'Save failed.';
+        this.instanceError = typeof msg === 'string' ? msg : 'Save failed.';
+        this.instanceSaving = false;
+      },
     );
   }
 

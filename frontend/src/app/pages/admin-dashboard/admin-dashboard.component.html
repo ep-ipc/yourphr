@@ -57,6 +57,52 @@
       </div>
     </div>
 
+    <!-- Instance / operator contact (inline form — no subpage). -->
+    <div class="col-lg-4 mg-b-20">
+      <div class="card">
+        <div class="card-header">
+          <h6 class="card-title mg-b-0"><i class="fas fa-user-shield"></i>&nbsp; Instance</h6>
+        </div>
+        <div class="card-body">
+          <p class="tx-gray-500 mg-b-15">
+            Who runs <em>this</em> deployment — the contact users should use for privacy, wipe, or support questions about data on this server.
+            Not the open-source project. Optional; leave blank if you only self-host for yourself.
+          </p>
+
+          <div *ngIf="instanceLoading" class="tx-gray-500">Loading…</div>
+
+          <ng-container *ngIf="!instanceLoading">
+            <div class="form-group">
+              <label class="tx-12 tx-uppercase tx-gray-500" for="operatorName">Operator name</label>
+              <input id="operatorName" type="text" class="form-control" [(ngModel)]="instance.name"
+                     name="operatorName" placeholder="e.g. Nerds by the Hour" autocomplete="organization">
+            </div>
+            <div class="form-group">
+              <label class="tx-12 tx-uppercase tx-gray-500" for="operatorEmail">Contact email</label>
+              <input id="operatorEmail" type="email" class="form-control" [(ngModel)]="instance.contact_email"
+                     name="operatorEmail" placeholder="support@example.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label class="tx-12 tx-uppercase tx-gray-500" for="operatorUrl">Help / privacy URL</label>
+              <input id="operatorUrl" type="url" class="form-control" [(ngModel)]="instance.contact_url"
+                     name="operatorUrl" placeholder="https://…">
+            </div>
+
+            <button type="button" class="btn btn-az-primary" (click)="saveInstance()" [disabled]="instanceSaving">
+              <i class="fas fa-save mg-r-5"></i>{{ instanceSaving ? 'Saving…' : 'Save' }}
+            </button>
+            <div *ngIf="instanceSaved" class="alert alert-success tx-13 mg-t-10 mg-b-0">
+              <i class="fas fa-check mg-r-5"></i>Saved. Applies immediately (no restart).
+            </div>
+            <div *ngIf="instanceError" class="text-danger tx-13 mg-t-10">{{ instanceError }}</div>
+            <p class="tx-gray-500 tx-12 mg-t-10 mg-b-0">
+              Also settable via <code>YOURPHR_OPERATOR_*</code> env / <code>operator.*</code> in config until you save here (saved values win).
+            </p>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+
     <!-- SMART OAuth Relay card (#402): the EFFECTIVE values and where each came from, so a
          misconfiguration is visible here rather than surfacing mid-login at the provider. -->
     <div class="col-lg-8 mg-b-20">

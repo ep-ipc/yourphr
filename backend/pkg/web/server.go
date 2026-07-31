@@ -261,6 +261,9 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.POST("/admin/database/schedule", handler.SetBackupSchedule)             // settable auto-backup schedule
 					secure.GET("/admin/database/browse", handler.BrowseDirectories)                // server-folder browser (pick destination)
 					secure.POST("/admin/database/restore", handler.RestoreDatabase)                // stage a restore (applied on restart) — #362
+					//admin Instance card — operator contact for this deployment (no hardcoding)
+					secure.GET("/admin/instance", handler.GetInstanceSettings)
+					secure.PUT("/admin/instance", handler.SetInstanceSettings)
 
 					secure.POST("/practitioners", handler.CreatePractitioner)
 					secure.PUT("/practitioners/:practitionerId", handler.UpdatePractitioner)

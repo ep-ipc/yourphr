@@ -36,6 +36,7 @@ import {SupportRequest} from '../models/fasten/support-request';
 import {SmartConnectRequest} from '../models/fasten/smart-connect-request';
 import {SmartAuthorizeRequest, SmartAuthorizeResponse} from '../models/fasten/smart-authorize';
 import {RelayConfig} from '../models/fasten/relay-config';
+import {InstanceSettings} from '../models/fasten/instance-settings';
 import {CDAConverterStatus} from '../models/fasten/cda-converter-status';
 import {ConnectableProvider, ProviderCatalogEntry, ProviderCatalogEntryRequest} from '../models/fasten/provider-catalog';
 import {
@@ -416,6 +417,17 @@ export class FastenApiService {
   getRelayConfig(): Observable<RelayConfig> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/source/relay-config`)
       .pipe(map((response: ResponseWrapper) => response.data as RelayConfig));
+  }
+
+  // Admin Instance card — operator contact for this deployment (persisted next to the DB).
+  getInstanceSettings(): Observable<InstanceSettings> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/instance`)
+      .pipe(map((response: ResponseWrapper) => response.data as InstanceSettings));
+  }
+
+  setInstanceSettings(settings: InstanceSettings): Observable<InstanceSettings> {
+    return this._httpClient.put<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/instance`, settings)
+      .pipe(map((response: ResponseWrapper) => response.data as InstanceSettings));
   }
 
   // connectSourceFromCatalog completes the connection for a catalog entry. The request carries NO

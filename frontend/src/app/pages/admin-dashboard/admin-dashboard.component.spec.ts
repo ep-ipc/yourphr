@@ -5,6 +5,7 @@ import {of, throwError} from 'rxjs';
 import {AdminDashboardComponent} from './admin-dashboard.component';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {RelayConfig} from '../../models/fasten/relay-config';
+import {InstanceSettings} from '../../models/fasten/instance-settings';
 
 // A fully-configured relay: both URLs set explicitly, secret present.
 const READY_RELAY: RelayConfig = {
@@ -26,16 +27,33 @@ const DEFAULTED_RELAY: RelayConfig = {
   secret: {value: '', source: 'unset', config_key: 'relay.secret', env_var: 'YOURPHR_RELAY_SECRET'},
 };
 
-function setup(relay: any, fail = false): ComponentFixture<AdminDashboardComponent> {
+const EMPTY_INSTANCE: InstanceSettings = {name: '', contact_email: '', contact_url: ''};
+const SAMPLE_INSTANCE: InstanceSettings = {
+  name: 'Hosted Ops',
+  contact_email: 'ops@example.org',
+  contact_url: 'https://example.org/help',
+};
+
+function setup(
+  relay: any,
+  opts: {relayFail?: boolean; instance?: InstanceSettings; instanceFail?: boolean} = {},
+): ComponentFixture<AdminDashboardComponent> {
   TestBed.resetTestingModule();
+  const instance = opts.instance ?? EMPTY_INSTANCE;
   TestBed.configureTestingModule({
     imports: [AdminDashboardComponent, RouterTestingModule],
     providers: [{
       provide: FastenApiService,
-      useValue: {getRelayConfig: () => fail ? throwError(() => new Error('boom')) : of(relay)},
+      useValue: {
+        getRelayConfig: () => opts.relayFail ? throwError(() => new Error('boom')) : of(relay),
+        getInstanceSettings: () => opts.instanceFail ? throwError(() => new Error('boom')) : of(instance),
+        setInstanceSettings: (s: InstanceSettings) => of(s),
+      },
     }],
   });
   const fixture = TestBed.createComponent(AdminDashboardComponent);
+  fixture.detectChanges();
+  // Second pass so *ngIf cards (Instance form after load) bind ngModel values into inputs.
   fixture.detectChanges();
   return fixture;
 }
@@ -62,6 +80,34 @@ describe('AdminDashboardComponent', () => {
     expect(hrefs).toContain('/sandbox');
     expect(hrefs).toContain('/admin/provider-catalog');
     expect(hrefs).toContain('/admin/logs');
+  });
+
+  it('shows the Instance card with loaded operator contact', () => {
+    const fixture = setup(READY_RELAY, {instance: SAMPLE_INSTANCE});
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('Instance');
+    expect(text).toContain('Operator name');
+    expect(fixture.componentInstance.instance.name).toBe('Hosted Ops');
+    expect(fixture.componentInstance.instance.contact_email).toBe('ops@example.org');
+    expect(fixture.nativeElement.querySelector('#operatorEmail')).withContext('email input').not.toBeNull();
+  });
+
+  it('saves instance settings from the card', () => {
+    const fixture = setup(READY_RELAY, {instance: SAMPLE_INSTANCE});
+    const api = TestBed.inject(FastenApiService) as any;
+    spyOn(api, 'setInstanceSettings').and.returnValue(of({
+      name: 'New Name',
+      contact_email: 'new@example.org',
+      contact_url: '',
+    }));
+    fixture.componentInstance.instance.name = 'New Name';
+    fixture.componentInstance.instance.contact_email = 'new@example.org';
+    fixture.componentInstance.instance.contact_url = '';
+    fixture.componentInstance.saveInstance();
+    fixture.detectChanges();
+    expect(api.setInstanceSettings).toHaveBeenCalled();
+    expect(fixture.componentInstance.instanceSaved).toBeTrue();
+    expect(fixture.componentInstance.instance.name).toBe('New Name');
   });
 
   // #402: the callback URL is what the operator must register with each FHIR vendor, so it has to
@@ -117,7 +163,7 @@ describe('AdminDashboardComponent', () => {
 
   // A relay-config failure must not take the whole admin dashboard down with it.
   it('still renders the admin cards when the relay lookup fails', () => {
-    const fixture = setup(null, true);
+    const fixture = setup(null, {relayFail: true});
     expandRelay(fixture);
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('Could not load the relay configuration');

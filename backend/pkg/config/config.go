@@ -156,6 +156,13 @@ func (c *configuration) Init() error {
 	c.SetDefault("cda_converter.url", "")
 	c.SetDefault("cda_converter.timeout_seconds", 60)
 
+	// Instance operator contact (Admin Dashboard card). Empty defaults; set via config/env
+	// (YOURPHR_OPERATOR_NAME, YOURPHR_OPERATOR_CONTACT_EMAIL, YOURPHR_OPERATOR_CONTACT_URL)
+	// or persist from the UI into the data dir (.operator_settings.json).
+	c.SetDefault("operator.name", "")
+	c.SetDefault("operator.contact_email", "")
+	c.SetDefault("operator.contact_url", "")
+
 	//set the default system config file search path.
 	//if you want to load a non-standard location system config file (~/capsule.yml), use ReadConfig
 	//if you want to load a repo specific config file, use ReadConfig
