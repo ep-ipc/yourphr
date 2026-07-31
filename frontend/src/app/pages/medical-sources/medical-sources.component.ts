@@ -1,4 +1,4 @@
-import {Component, EventEmitter, OnInit, Optional, Output, ViewChild} from '@angular/core';
+import {Component, EventEmitter, OnInit, Optional, Output, TemplateRef, ViewChild} from '@angular/core';
 import {ConnectGatewayService} from '../../services/connect-gateway.service';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {ConnectGatewaySourceMetadata} from '../../models/connect-gateway/connect-gateway-source-metadata';
@@ -28,6 +28,7 @@ import {ConnectableProvider} from '../../models/fasten/provider-catalog';
 import {SmartAuthorizeResponse} from '../../models/fasten/smart-authorize';
 import {LegalConsentStatus} from '../../models/fasten/legal-consent';
 import {AttributionNotice, attributionsForContext} from '../../models/fasten/attributions';
+import {MEDICARE_PRE_CONNECT} from '../../models/fasten/medicare-connect-copy';
 
 // Max time to wait for the patient to finish logging in at the provider (relay-poll phase, across
 // retries). A first login can be slow (read consent, pick account, authorize) — allow several
@@ -87,6 +88,8 @@ export class MedicalSourcesComponent implements OnInit {
 
   // CCDA-FHIR modal
   @ViewChild('ccdaWarningModalRef') ccdaWarningModalRef : any;
+  // Pre-connect informed messaging for Medicare (#430) — only after PP/ToS consent (#427)
+  @ViewChild('medicarePreConnectModalRef') medicarePreConnectModalRef: TemplateRef<any>;
 
   // Whether this server can convert C-CDA at all (#397). null = not yet checked, or the check
   // failed — in that case the modal behaves as it always did and lets the upload surface any error.
@@ -107,6 +110,9 @@ export class MedicalSourcesComponent implements OnInit {
   legalConsentLoading = false
   // CMS / partner attribution for Medicare-class connect (#428)
   medicareAttributions: AttributionNotice[] = attributionsForContext('medicare-connect')
+  // Modal copy + pending provider while pre-connect dialog is open (#430)
+  medicarePreConnect = MEDICARE_PRE_CONNECT
+  pendingMedicareProvider: ConnectableProvider | null = null
 
   constructor(
     private connectGatewayApi: ConnectGatewayService,
@@ -160,19 +166,54 @@ export class MedicalSourcesComponent implements OnInit {
   }
 
   // Connects an admin-configured provider by id. The patient never sees or sends a client_id/secret:
-  // the backend fills them from the catalog. Mirrors the BYO flow (popup → authorize → poll/exchange)
-  // but with the catalog endpoints. The popup must open synchronously in the click handler or the
-  // browser blocks it.
+  // the backend fills them from the catalog.
+  //
+  // Order for Medicare-class providers (#427 / #430):
+  //   1) PP/ToS must already be granted (button disabled otherwise; hard-check here).
+  //   2) Pre-connect informed modal — Cancel aborts; Continue (same click) starts OAuth.
+  //   3) OAuth popup opens in the Continue click handler (user gesture — avoids popup blockers).
   public async connectCatalogProvider(provider: ConnectableProvider): Promise<void> {
     if (this.connectingProviderId) { return } // guard against double-submit
     this.connectErrorMsg = ""
     this.connectSuccessMsg = ""
 
+    // #427: never open OAuth (or pre-connect modal) without active PP/ToS consent.
     if (this.needsLegalConsent(provider)) {
       this.connectErrorMsg = 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting Medicare.'
       return
     }
 
+    // #430: informed message before authorize (Medicare-class only). Non-Medicare goes straight to OAuth.
+    if (provider.requires_legal_consent) {
+      this.pendingMedicareProvider = provider
+      try {
+        await this.modalService.open(this.medicarePreConnectModalRef, {
+          ariaLabelledBy: 'medicare-preconnect-title',
+          backdrop: 'static',
+        }).result
+        // Continue starts OAuth in confirmMedicarePreConnect (same click as window.open).
+        // Cancel/dismiss rejects — nothing more to do.
+      } catch {
+        this.pendingMedicareProvider = null
+      }
+      return
+    }
+
+    await this.runCatalogOAuthConnect(provider)
+  }
+
+  // Continue on the pre-connect modal: close + start OAuth in this click (popup-blocker safe).
+  confirmMedicarePreConnect(modal: {close: (r: string) => void}): void {
+    const provider = this.pendingMedicareProvider
+    modal.close('continue')
+    this.pendingMedicareProvider = null
+    if (provider) {
+      void this.runCatalogOAuthConnect(provider)
+    }
+  }
+
+  // Popup must open in the same user-gesture stack as the Continue/click that starts OAuth.
+  private async runCatalogOAuthConnect(provider: ConnectableProvider): Promise<void> {
     const popup = window.open('', '_blank')
     if (!popup) {
       this.connectErrorMsg = 'Your browser blocked the login popup. Please allow popups for this site, then try again.'

@@ -217,6 +217,38 @@
     <button *ngIf="!cdaConverterStatus || cdaConverterStatus.ready" (click)="modal.close('convert')" type="button" class="btn btn-az-primary">Convert</button>
     <button (click)="modal.dismiss('cancel')" type="button" class="btn btn-outline-secondary">{{ (cdaConverterStatus && !cdaConverterStatus.ready) ? 'Close' : 'Cancel' }}</button>
   </div>
+</ng-template>
+
+<!-- Medicare pre-connect informed messaging (#430). Only reached after PP/ToS consent (#427). -->
+<ng-template #medicarePreConnectModalRef let-modal>
+  <div class="modal-header">
+    <h5 class="modal-title" id="medicare-preconnect-title">{{ medicarePreConnect.title }}</h5>
+    <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss('cancel')"></button>
+  </div>
+  <div class="modal-body">
+    <p class="mg-b-15">{{ medicarePreConnect.intro }}</p>
+    <ul class="mg-b-15">
+      <li *ngFor="let line of medicarePreConnect.bullets">{{ line }}</li>
+    </ul>
+    <p class="tx-gray-500 tx-12 mg-b-10" *ngIf="medicareAttributions.length">
+      <span *ngFor="let notice of medicareAttributions">{{ notice.body }}</span>
+    </p>
+    <p class="tx-12 mg-b-0">
+      <a href="https://yourphr.org/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+      ·
+      <a href="https://yourphr.org/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+      ·
+      <a routerLink="/attributions" (click)="modal.dismiss('cancel')">Attributions</a>
+    </p>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-secondary" (click)="modal.dismiss('cancel')">
+      {{ medicarePreConnect.cancelLabel }}
+    </button>
+    <button type="button" class="btn btn-az-primary" (click)="confirmMedicarePreConnect(modal)">
+      {{ medicarePreConnect.continueLabel }}
+    </button>
+  </div>
 
 </ng-template>
 
