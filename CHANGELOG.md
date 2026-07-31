@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.17.0](https://github.com/jwilleke/yourphr/compare/v1.16.0...v1.17.0) (2026-07-31)
+
+CMS Blue Button production-access UX and catalog path: legal consent, attributions, Medicare labeling, pre-connect messaging, enrollee data controls, and a production Medicare catalog template — plus modular connection policy for all medical sources.
+
+### Features
+
+- **account:** PP/ToS active opt-in on Account Profile; gate medical-source connects until granted; revoke removes Medicare-class sources ([#427](https://github.com/jwilleke/yourphr/issues/427))
+- **ui:** third-party attributions registry, `/attributions` page, CMS Blue Button non-endorsement notice on Medicare path ([#428](https://github.com/jwilleke/yourphr/issues/428))
+- **catalog:** patient-facing production label forced to **Medicare** for Blue Button-class sources ([#429](https://github.com/jwilleke/yourphr/issues/429))
+- **sources:** pre-connect informed modal (Cancel / Continue) before OAuth; modular generic vs Medicare copy ([#430](https://github.com/jwilleke/yourphr/issues/430))
+- **connect:** modular connection policy for all catalog medical sources (`consent_policy`, `pre_connect_profile`); defaults require consent + pre-connect ([docs/connection-policy.md](docs/connection-policy.md))
+- **sources / account:** enrollee data controls — Disconnect & remove data, Account Profile data-controls card pointing at `/sources`, PP source aligned with delete-source behavior ([#431](https://github.com/jwilleke/yourphr/issues/431))
+- **catalog:** production Medicare template (no secrets) + `YOURPHR_PROD_BLUEBUTTON_*` env seed; full operator docs in `docs/medicare-bluebutton.md` and provider-catalog README ([#432](https://github.com/jwilleke/yourphr/issues/432))
+- **admin:** Instance card for operator name / contact email / help URL (deploy-local, not hardcoded)
+- **legal:** slim public Privacy Policy + Terms of Service sources (`docs/legal/`)
+
+### Bug Fixes
+
+- **smart:** distinct relay connect errors and safer poll timeout ([#406](https://github.com/jwilleke/yourphr/issues/406))
+- **docs:** markdownlint / TODO double-blank fixes for CI
+
+### Notes for operators
+
+- Production Medicare on `/sources`: enable the seeded **Medicare** catalog entry (or set `YOURPHR_PROD_BLUEBUTTON_CLIENT_ID` / `_SECRET`) after CMS production credentials; register the relay `callback_url` with CMS. See [docs/medicare-bluebutton.md](docs/medicare-bluebutton.md).
+- Disconnect removes the source **and** imported records for that source on this instance (matches updated Privacy Policy source text).
+- Live `yourphr.org` privacy.html may need a gh-pages republish if you want public PP to match `docs/legal/privacy-policy.md`.
+
+### Known issues
+
+- CMS production credentials / application demo still block live end-to-end production proof ([#433](https://github.com/jwilleke/yourphr/issues/433), [#408](https://github.com/jwilleke/yourphr/issues/408)).
+- 12 `frontend/yarn.lock` Dependabot alerts remain ([#416](https://github.com/jwilleke/yourphr/issues/416)).
+- `zone.js` 0.16.x held for Angular 20 peers; angular-eslint 21 held.
+
 ## [1.16.0](https://github.com/jwilleke/yourphr/compare/v1.15.1...v1.16.0) (2026-07-29)
 
 **YourPHR now runs on arm64.** This closes the v1.15.1 known issue of the same name — if you are on an Apple Silicon Mac, a Raspberry Pi 5, or an Ampere/Graviton VPS, `docker pull` now resolves natively with no `--platform` flag and no emulation.
