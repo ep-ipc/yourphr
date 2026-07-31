@@ -27,7 +27,6 @@
 - [#432](https://github.com/jwilleke/yourphr/issues/432) — [FEATURE] Blue Button prod: production catalog entry and operator docs
 - [#431](https://github.com/jwilleke/yourphr/issues/431) — [FEATURE] Blue Button prod: enrollee data controls (revoke, delete, discoverable)
 - [#430](https://github.com/jwilleke/yourphr/issues/430) — [FEATURE] Blue Button prod: pre-connect informed messaging
-- [#429](https://github.com/jwilleke/yourphr/issues/429) — [FEATURE] Blue Button prod: label connect as Medicare (not Blue Button)
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
@@ -78,6 +77,7 @@
 
 ## 🔵 In review
 
+- [#429](https://github.com/jwilleke/yourphr/issues/429) — [FEATURE] Blue Button prod: label connect as Medicare (not Blue Button)
 - [#428](https://github.com/jwilleke/yourphr/issues/428) — [FEATURE] Blue Button prod: CMS attribution notice in UI
 - [#427](https://github.com/jwilleke/yourphr/issues/427) — [FEATURE] Blue Button prod: in-app PP/ToS access and active opt-in
 
@@ -93,7 +93,7 @@
 
 ## ❓ Needs triage
 
-- None.
+- [#434](https://github.com/jwilleke/yourphr/issues/434) — Scheduled backups fail silently forever when destination falls outside allowed roots — no operator-visible alerting
 
 ## 🔀 Open PRs
 
