@@ -27,6 +27,7 @@ import {
 import {ConnectableProvider} from '../../models/fasten/provider-catalog';
 import {SmartAuthorizeResponse} from '../../models/fasten/smart-authorize';
 import {LegalConsentStatus} from '../../models/fasten/legal-consent';
+import {AttributionNotice, attributionsForContext} from '../../models/fasten/attributions';
 
 // Max time to wait for the patient to finish logging in at the provider (relay-poll phase, across
 // retries). A first login can be slow (read consent, pick account, authorize) — allow several
@@ -104,6 +105,8 @@ export class MedicalSourcesComponent implements OnInit {
   // Legal consent for Medicare-class providers (#427)
   legalConsent: LegalConsentStatus | null = null
   legalConsentLoading = false
+  // CMS / partner attribution for Medicare-class connect (#428)
+  medicareAttributions: AttributionNotice[] = attributionsForContext('medicare-connect')
 
   constructor(
     private connectGatewayApi: ConnectGatewayService,
@@ -148,6 +151,12 @@ export class MedicalSourcesComponent implements OnInit {
   get showMedicareConsentBanner(): boolean {
     if (this.legalConsent?.accepted) { return false }
     return this.connectableProviders.some((p) => !!p.requires_legal_consent)
+  }
+
+  /** CMS attribution when any Medicare-class provider is on the picker (#428). */
+  get showMedicareAttribution(): boolean {
+    return this.connectableProviders.some((p) => !!p.requires_legal_consent)
+      && this.medicareAttributions.length > 0
   }
 
   // Connects an admin-configured provider by id. The patient never sees or sends a client_id/secret:

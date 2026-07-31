@@ -19,6 +19,7 @@ import { AllergiesComponent } from './pages/allergies/allergies.component';
 import { ImmunizationsComponent } from './pages/immunizations/immunizations.component';
 import { MedicalConcernsComponent } from './pages/medical-concerns/medical-concerns.component';
 import { AccountProfileComponent } from './pages/account-profile/account-profile.component';
+import { AttributionsComponent } from './pages/attributions/attributions.component';
 import { ProceduresComponent } from './pages/procedures/procedures.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { AdminDatabaseComponent } from './pages/admin-database/admin-database.component';
@@ -72,6 +73,8 @@ const routes: Routes = [
   { path: 'patient-profile', component: PatientProfileComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'medical-history', component: MedicalHistoryComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'account-profile', component: AccountProfileComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
+  // Third-party API/product notices (CMS Blue Button first) — docs/Attributions.md (#428)
+  { path: 'attributions', component: AttributionsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'medications', component: CurrentMedicationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'allergies', component: AllergiesComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'immunizations', component: ImmunizationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },

@@ -84,6 +84,20 @@
           first.
           <a routerLink="/account-profile">Open Account Profile</a> to grant consent (unchecked by default — active opt-in).
         </div>
+        <!-- CMS Blue Button attribution when Medicare-class providers are listed — #428 -->
+        <ng-container *ngIf="showMedicareAttribution">
+          <div *ngFor="let notice of medicareAttributions"
+               class="alert alert-secondary mg-b-15" role="note">
+            <strong>{{ notice.title }}</strong>
+            <p class="mg-b-5 mg-t-5">{{ notice.body }}</p>
+            <p class="mg-b-0 tx-12">
+              <a routerLink="/attributions">All attributions</a>
+              <span *ngIf="notice.sourceUrl">
+                · <a [href]="notice.sourceUrl" target="_blank" rel="noopener noreferrer">Source terms</a>
+              </span>
+            </p>
+          </div>
+        </ng-container>
         <div class="row">
           <div class="col-md-6 col-lg-4 mg-b-15" *ngFor="let provider of connectableProviders">
             <button type="button" class="btn btn-outline-az-primary btn-block d-flex align-items-center justify-content-center"
