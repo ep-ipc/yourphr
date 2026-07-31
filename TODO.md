@@ -14,7 +14,6 @@
 - Blockers / significant notes: [#397](https://github.com/jwilleke/yourphr/issues/397) still in-review (awaiting reporter). Live instance may still lack cda-converter sidecar (from prior log). Open PR [#378](https://github.com/jwilleke/yourphr/pull/378) zone.js held for Angular 21. Start next session with `/context` (not `/pstatus` first) so this block is read before bands regenerate.
 <!-- RESUME:END -->
 
-
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
