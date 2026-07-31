@@ -31,7 +31,6 @@
 - [#429](https://github.com/jwilleke/yourphr/issues/429) — [FEATURE] Blue Button prod: label connect as Medicare (not Blue Button)
 - [#428](https://github.com/jwilleke/yourphr/issues/428) — [FEATURE] Blue Button prod: CMS attribution notice in UI
 - [#427](https://github.com/jwilleke/yourphr/issues/427) — [FEATURE] Blue Button prod: in-app PP/ToS access and active opt-in
-- [#426](https://github.com/jwilleke/yourphr/issues/426) — [FEATURE] Blue Button prod: public Terms of Service
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
@@ -82,6 +81,7 @@
 
 ## 🔵 In review
 
+- [#426](https://github.com/jwilleke/yourphr/issues/426) — [FEATURE] Blue Button prod: public Terms of Service
 - [#406](https://github.com/jwilleke/yourphr/issues/406) — [FEATURE] SMART connect: fix dual-timeout between relay poll and UI login window
 - [#397](https://github.com/jwilleke/yourphr/issues/397) — [ISSUE] Unable to Import XML Files From Provider, Error: Error uploading file: C-CDA import is not enabled on this server (set cda_converter.enabled)
 
