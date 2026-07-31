@@ -18,18 +18,19 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#434](https://github.com/jwilleke/yourphr/issues/434) — Scheduled backups fail silently forever when destination falls outside allowed roots — no operator-visible alerting
+- None.
 
 ## 🟠 P1
 
-- [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
+- [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 
 ## 🟡 P2
 
+- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
@@ -46,7 +47,6 @@
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
-- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
 - [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
@@ -73,6 +73,7 @@
 
 ## 🔵 In review
 
+- [#434](https://github.com/jwilleke/yourphr/issues/434) — Scheduled backups fail silently forever when destination falls outside allowed roots — no operator-visible alerting
 - [#432](https://github.com/jwilleke/yourphr/issues/432) — [FEATURE] Blue Button prod: production catalog entry and operator docs
 - [#431](https://github.com/jwilleke/yourphr/issues/431) — [FEATURE] Blue Button prod: enrollee data controls (revoke, delete, discoverable)
 - [#430](https://github.com/jwilleke/yourphr/issues/430) — [FEATURE] Blue Button prod: pre-connect informed messaging
@@ -82,8 +83,8 @@
 
 ## ⏸ Deferred
 
-- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
+- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
@@ -96,5 +97,6 @@
 
 ## 🔀 Open PRs
 
-- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready)* — refs [#2801](https://github.com/jwilleke/yourphr/issues/2801); refs [#2802](https://github.com/jwilleke/yourphr/issues/2802)
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready, stale 36d)* — refs [#68395](https://github.com/jwilleke/yourphr/issues/68395); refs [#45273](https://github.com/jwilleke/yourphr/issues/45273); refs [#44446](https://github.com/jwilleke/yourphr/issues/44446); refs [#55590](https://github.com/jwilleke/yourphr/issues/55590); refs [#51328](https://github.com/jwilleke/yourphr/issues/51328); refs [#67057](https://github.com/jwilleke/yourphr/issues/67057); refs [#61755](https://github.com/jwilleke/yourphr/issues/61755); refs [#61717](https://github.com/jwilleke/yourphr/issues/61717); refs [#62135](https://github.com/jwilleke/yourphr/issues/62135); refs [#64497](https://github.com/jwilleke/yourphr/issues/64497); refs [#47603](https://github.com/jwilleke/yourphr/issues/47603); refs [#63511](https://github.com/jwilleke/yourphr/issues/63511); refs [#63077](https://github.com/jwilleke/yourphr/issues/63077); refs [#63072](https://github.com/jwilleke/yourphr/issues/63072); refs [#64042](https://github.com/jwilleke/yourphr/issues/64042)
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready)* — no linked issue
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready, stale 36d)* — no linked issue
+
