@@ -189,19 +189,39 @@ func CurrentBackupDestination(appConfig config.Interface) string {
 	return ResolveDestination(appConfig, LoadBackupSettings(appConfig))
 }
 
-// AllowedBackupRoots is the allowlist of base directories a backup destination may live under: the data
-// volume (covers DefaultBackupDir), the configured backup.destination (covers the prod NAS mount), and
-// any operator-configured backup.allowed-roots. A chosen destination must equal or sit under one of
-// these — this confines the admin-provided destination so a full-PHI backup can't be written to an
-// arbitrary path (path-injection, #383).
+// AllowedBackupRoots is the allowlist of base directories a backup destination may live under:
+//   - the data volume (covers DefaultBackupDir)
+//   - static backup.destination (viper / config.yaml)
+//   - static backup.allowed-roots
+//   - destination already stored in .backup_settings.json (Admin UI) — so UI-only NAS paths
+//     keep working after #383 and aren't "invisible" to the allowlist (#434)
+//
+// Confinement still applies: new paths must equal or sit under one of these roots.
+// Prefer also listing external mounts in backup.allowed-roots in config for clarity.
 func AllowedBackupRoots(appConfig config.Interface) []string {
-	roots := []string{filepath.Clean(dbDirFromConfig(appConfig))}
-	if d := strings.TrimSpace(appConfig.GetString("backup.destination")); d != "" {
-		roots = append(roots, filepath.Clean(d))
+	seen := map[string]struct{}{}
+	var roots []string
+	add := func(p string) {
+		p = filepath.Clean(strings.TrimSpace(p))
+		if p == "" || p == "." {
+			return
+		}
+		if _, ok := seen[p]; ok {
+			return
+		}
+		seen[p] = struct{}{}
+		roots = append(roots, p)
 	}
+	add(dbDirFromConfig(appConfig))
+	add(appConfig.GetString("backup.destination"))
 	for _, r := range appConfig.GetStringSlice("backup.allowed-roots") {
-		if r = strings.TrimSpace(r); r != "" {
-			roots = append(roots, filepath.Clean(r))
+		add(r)
+	}
+	// Persisted Admin UI destination (read file directly — do not call LoadBackupSettings here).
+	if b, err := os.ReadFile(backupSettingsPath(appConfig)); err == nil {
+		var s BackupSettings
+		if json.Unmarshal(b, &s) == nil {
+			add(s.Destination)
 		}
 	}
 	return roots
@@ -271,6 +291,8 @@ func (gr *GormRepository) PerformBackup(appConfig config.Interface, destOverride
 	if err := gr.BackupToFile(full); err != nil {
 		return BackupFile{}, "", err
 	}
+	// Manual + scheduled paths both call PerformBackup — record health for Admin UI (#434).
+	RecordBackupSuccess(appConfig, full)
 
 	// If the caller explicitly chose a destination, remember it (persists until changed).
 	if strings.TrimSpace(destOverride) != "" {

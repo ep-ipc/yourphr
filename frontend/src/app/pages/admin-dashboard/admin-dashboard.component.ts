@@ -5,6 +5,7 @@ import {RouterModule} from '@angular/router';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {RelayConfig, RelayResolvedValue} from '../../models/fasten/relay-config';
 import {InstanceSettings} from '../../models/fasten/instance-settings';
+import {BackupHealth} from '../../models/fasten/database-info';
 
 // Admin Dashboard (#170): the single admin hub — a grid of cards, each linking to a dedicated admin
 // page (Sandbox Testing, Provider Catalog, Server Logs, …). The route is gated by IsAdminAuthGuard and
@@ -39,6 +40,10 @@ export class AdminDashboardComponent implements OnInit {
   instanceError = '';
   instanceSaved = false;
 
+  // Backup health badge on Database card (#434) — operators see failing scheduled backups at a glance.
+  backupHealth: BackupHealth | null = null;
+  dbLoading = false;
+
   toggleRelay(): void {
     this.relayExpanded = !this.relayExpanded;
   }
@@ -67,6 +72,13 @@ export class AdminDashboardComponent implements OnInit {
         this.instanceLoading = false;
       },
       () => { this.instanceLoading = false },
+    );
+
+    this.dbLoading = true;
+    this.fastenApi.getDatabaseInfo().subscribe(
+      (info) => { this.backupHealth = info?.backup_health || null; },
+      (_err) => { this.backupHealth = null; this.dbLoading = false; },
+      () => { this.dbLoading = false },
     );
   }
 

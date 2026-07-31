@@ -48,9 +48,16 @@ func (ae *AppEngine) startBackupWorker() {
 
 		_, full, err := gr.PerformBackup(ae.Config, "")
 		if err != nil {
-			ae.Logger.Errorf("scheduled backup failed: %s", err)
+			n := database.RecordBackupFailure(ae.Config, err.Error())
+			// Rate-limit: first failure, then every 15th, so multi-week outages don't fill logs (#434).
+			if n == 1 || n%15 == 0 {
+				ae.Logger.Errorf("scheduled backup failed (attempt %d): %s", n, err)
+			} else {
+				ae.Logger.Debugf("scheduled backup still failing (attempt %d): %s", n, err)
+			}
 			continue
 		}
+		// Success health is recorded inside PerformBackup (#434).
 		ae.Logger.Infof("scheduled backup written: %s", full)
 		if removed, err := database.PruneBackups(dest, s.MaxBackups); err == nil && removed > 0 {
 			ae.Logger.Infof("pruned %d old backup(s) in %s", removed, dest)

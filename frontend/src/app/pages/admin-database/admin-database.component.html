@@ -37,6 +37,24 @@
             A backup is the <strong>entire database</strong> — <strong>every user's</strong> complete medical records (PHI). Keep the destination secure.
           </div>
 
+          <!-- Health from durable .backup_health.json (#434) — visible without tailing logs -->
+          <div *ngIf="info.backup_health as health"
+               class="alert tx-13"
+               [ngClass]="health.ok ? 'alert-success' : 'alert-danger'">
+            <i class="fas mg-r-5" [ngClass]="health.ok ? 'fa-circle-check' : 'fa-triangle-exclamation'"></i>
+            <strong>{{ health.summary }}</strong>
+            <span *ngIf="health.last_success_at" class="d-block mg-t-5 tx-12">
+              Last success: {{ health.last_success_at | date:'medium' }}
+              <span *ngIf="health.days_since_success != null"> ({{ health.days_since_success }} day(s) ago)</span>
+            </span>
+            <span *ngIf="health.last_error" class="d-block mg-t-5 tx-12">
+              Last error ({{ health.consecutive_failures }} consecutive): {{ health.last_error }}
+            </span>
+            <span *ngIf="!health.ok && health.schedule_enabled" class="d-block mg-t-5 tx-12">
+              Check destination path, disk space, and <code>backup.allowed-roots</code> in config if the path is outside the data volume.
+            </span>
+          </div>
+
           <!-- On-demand: download (the browser Save dialog chooses where it lands) -->
           <button type="button" class="btn btn-az-primary mg-b-5" (click)="downloadBackup()" [disabled]="downloading">
             <span *ngIf="downloading" class="spinner-border spinner-border-sm mg-r-5"></span>
@@ -82,6 +100,10 @@
             <input type="text" class="form-control mg-r-10" [(ngModel)]="schedule.destination" placeholder="default: {{ info.backup_destination }}">
             <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" (click)="openBrowser()"><i class="fas fa-folder-open mg-r-5"></i>Browse</button>
           </div>
+          <p *ngIf="info.allowed_backup_roots?.length" class="tx-gray-500 tx-12 mg-t-5 mg-b-0">
+            Allowed roots: <code *ngFor="let r of info.allowed_backup_roots; let last = last">{{ r }}<span *ngIf="!last">; </span></code>
+            — new paths outside the data volume need <code>backup.allowed-roots</code> (or <code>backup.destination</code>) in config.
+          </p>
           <div *ngIf="browsing" class="card mg-t-10">
             <div class="card-body pd-15">
               <div class="d-flex justify-content-between align-items-center mg-b-10">

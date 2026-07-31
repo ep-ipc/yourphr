@@ -53,14 +53,91 @@ func TestValidateBackupDestination(t *testing.T) {
 	}
 
 	for _, d := range []string{
-		"",                                        // empty
-		"relative/path",                           // not absolute
-		"/etc",                                    // outside the allowlist
+		"",              // empty
+		"relative/path", // not absolute
+		"/etc",          // outside the allowlist
 		filepath.Join(dataDir, "..", "elsewhere"), // ".." escapes the data root
 	} {
 		if _, err := ValidateBackupDestination(appConfig, d); err == nil {
 			t.Errorf("expected %q rejected, got nil error", d)
 		}
+	}
+}
+
+// #434: destination already saved via Admin UI (.backup_settings.json) is an allowlist root,
+// so scheduled backups keep working after #383 without requiring a config.yaml edit.
+func TestValidateBackupDestination_PersistedUIDestination(t *testing.T) {
+	dataDir := t.TempDir()
+	uiDest := t.TempDir() // not in backup.destination / allowed-roots
+	appConfig, err := config.Create()
+	if err != nil {
+		t.Fatal(err)
+	}
+	appConfig.Set("database.location", filepath.Join(dataDir, "fasten.db"))
+
+	// Without persistence: rejected.
+	if _, err := ValidateBackupDestination(appConfig, uiDest); err == nil {
+		t.Fatalf("expected %q rejected before UI settings exist", uiDest)
+	}
+
+	// Persist as Admin UI would.
+	if err := SaveBackupSettings(appConfig, BackupSettings{
+		Enabled: true, Time: "02:00", Days: "daily", Destination: uiDest, MaxBackups: 7,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ValidateBackupDestination(appConfig, uiDest)
+	if err != nil {
+		t.Fatalf("expected persisted UI dest allowed, got: %v", err)
+	}
+	if got != filepath.Clean(uiDest) {
+		t.Errorf("got %q, want %q", got, filepath.Clean(uiDest))
+	}
+}
+
+func TestBackupHealth_RecordAndLoad(t *testing.T) {
+	dataDir := t.TempDir()
+	appConfig, err := config.Create()
+	if err != nil {
+		t.Fatal(err)
+	}
+	appConfig.Set("database.location", filepath.Join(dataDir, "fasten.db"))
+	_ = SaveBackupSettings(appConfig, BackupSettings{
+		Enabled: true, Time: "02:00", Days: "daily", Destination: filepath.Join(dataDir, "backups"), MaxBackups: 7,
+	})
+
+	// No history yet, schedule on → not OK.
+	st := LoadBackupHealthStatus(appConfig)
+	if st.OK {
+		t.Errorf("expected not OK before any success, summary=%q", st.HealthySummary)
+	}
+
+	n := RecordBackupFailure(appConfig, "destination outside allowed roots")
+	if n != 1 {
+		t.Errorf("consecutive fails = %d, want 1", n)
+	}
+	n = RecordBackupFailure(appConfig, "still broken")
+	if n != 2 {
+		t.Errorf("consecutive fails = %d, want 2", n)
+	}
+	st = LoadBackupHealthStatus(appConfig)
+	if st.OK || st.ConsecutiveFails != 2 || st.LastError != "still broken" {
+		t.Errorf("failure state: ok=%v fails=%d err=%q", st.OK, st.ConsecutiveFails, st.LastError)
+	}
+	if st.HealthySummary != "Scheduled backup failing" {
+		t.Errorf("summary = %q", st.HealthySummary)
+	}
+
+	RecordBackupSuccess(appConfig, filepath.Join(dataDir, "backups", "good.db.gz"))
+	st = LoadBackupHealthStatus(appConfig)
+	if !st.OK || st.ConsecutiveFails != 0 || st.LastError != "" {
+		t.Errorf("after success: ok=%v fails=%d err=%q", st.OK, st.ConsecutiveFails, st.LastError)
+	}
+	if st.HealthySummary != "Backup healthy" {
+		t.Errorf("summary = %q, want Backup healthy", st.HealthySummary)
+	}
+	if st.LastSuccessPath == "" {
+		t.Error("expected last_success_path set")
 	}
 }
 
@@ -79,13 +156,13 @@ func TestBackupFileName(t *testing.T) {
 
 func TestIsBackupFile(t *testing.T) {
 	cases := map[string]bool{
-		"2026-06-21T14-09-57Z-yourphr-1.9.0-backup.db.gz": true, // current version-stamped name
-		"2026-06-21T12-10-03Z-yourphr-backup.db.gz":       true,
-		"2026-06-21T12-10-03Z-yourphr-backup.db":          true,
-		"yourphr-backup-20260101.db":                      true, // legacy name still recognized
-		"random.db":                                       false,
-		"yourphr-backup.txt":                              false,
-		"notes.md":                                        false,
+		"2026-06-21T14-09-57Z-yourphr-1.9.0-backup.db.gz":  true, // current version-stamped name
+		"2026-06-21T12-10-03Z-yourphr-backup.db.gz":        true,
+		"2026-06-21T12-10-03Z-yourphr-backup.db":           true,
+		"yourphr-backup-20260101.db":                       true, // legacy name still recognized
+		"random.db":                                        false,
+		"yourphr-backup.txt":                               false,
+		"notes.md":                                         false,
 		"2026-06-21T12-10-03Z-yourphr-old-backup-notes.db": false, // foreign file, not a real backup (#368 #3)
 		"company-backup.db":                                false, // no yourphr marker
 	}

@@ -5,6 +5,21 @@ export interface BackupFile {
   modified: string; // RFC3339 UTC
 }
 
+// Mirrors database.BackupHealthStatus — durable last backup outcome for Admin UI (#434).
+export interface BackupHealth {
+  ok: boolean;
+  schedule_enabled: boolean;
+  destination?: string;
+  last_success_at?: string;
+  last_success_path?: string;
+  last_attempt_at?: string;
+  last_error?: string;
+  consecutive_failures: number;
+  days_since_success?: number | null;
+  failing_stale: boolean;
+  summary: string;
+}
+
 export interface DatabaseInfo {
   location: string;
   encryption_enabled: boolean;
@@ -15,6 +30,8 @@ export interface DatabaseInfo {
   backup_destination: string;     // resolved folder backups are written to
   backups: BackupFile[];          // backups present there, newest first
   schedule: BackupSettings;       // settable auto-backup settings
+  backup_health?: BackupHealth;   // last scheduled/manual outcome (#434)
+  allowed_backup_roots?: string[]; // operator-visible allowlist
 }
 
 // Mirrors handler.DirListing — server-folder browser (GET /admin/database/browse).

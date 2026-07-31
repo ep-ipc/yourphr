@@ -34,8 +34,21 @@ database:
 # it per instance to tell backups apart (config.dev.yaml uses "dev"; on the deploy set
 # YOURPHR_BACKUP_LABEL=prod). The schedule (enable/time/days/destination/retention) is managed from the
 # Admin Database card and persisted in the data dir, not here.
+#
+# Destination allowlist (#383 / #434): backups may only be written under:
+#   - the data volume (database.location's parent) — always allowed
+#   - backup.destination (if set here)
+#   - each path in backup.allowed-roots
+#   - a destination already saved via the Admin UI (.backup_settings.json)
+# For a NAS/external mount first time, list it in allowed-roots (or set destination) in config —
+# otherwise ValidateBackupDestination rejects the path and the scheduler fails silently until
+# health status is checked on Admin → Database. Health is also on the Admin Dashboard badge.
 backup:
   label: '' # e.g. 'prod' / 'sandbox'; blank = no label segment
+  # destination: '/mnt/nas/yourphr-backups'   # optional static default; also becomes an allowlist root
+  # allowed-roots:                            # extra bases for Admin UI / schedule destinations
+  #   - '/mnt/nas'
+  #   - '/var/backups/yourphr'
 # Instance operator contact (shown to users of this deployment; editable on Admin Dashboard).
 # Env: YOURPHR_OPERATOR_NAME, YOURPHR_OPERATOR_CONTACT_EMAIL, YOURPHR_OPERATOR_CONTACT_URL.
 # Values saved in the Admin UI win over these defaults (persisted next to the DB).

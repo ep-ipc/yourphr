@@ -36,10 +36,23 @@ const SAMPLE_INSTANCE: InstanceSettings = {
 
 function setup(
   relay: any,
-  opts: {relayFail?: boolean; instance?: InstanceSettings; instanceFail?: boolean} = {},
+  opts: {
+    relayFail?: boolean;
+    instance?: InstanceSettings;
+    instanceFail?: boolean;
+    backupHealth?: {ok: boolean; summary: string; last_error?: string; schedule_enabled?: boolean; consecutive_failures?: number; failing_stale?: boolean};
+    dbFail?: boolean;
+  } = {},
 ): ComponentFixture<AdminDashboardComponent> {
   TestBed.resetTestingModule();
   const instance = opts.instance ?? EMPTY_INSTANCE;
+  const health = opts.backupHealth ?? {
+    ok: true,
+    schedule_enabled: false,
+    consecutive_failures: 0,
+    failing_stale: false,
+    summary: 'Scheduled backups disabled',
+  };
   TestBed.configureTestingModule({
     imports: [AdminDashboardComponent, RouterTestingModule],
     providers: [{
@@ -48,6 +61,9 @@ function setup(
         getRelayConfig: () => opts.relayFail ? throwError(() => new Error('boom')) : of(relay),
         getInstanceSettings: () => opts.instanceFail ? throwError(() => new Error('boom')) : of(instance),
         setInstanceSettings: (s: InstanceSettings) => of(s),
+        getDatabaseInfo: () => opts.dbFail
+          ? throwError(() => new Error('boom'))
+          : of({backup_health: health}),
       },
     }],
   });
@@ -80,6 +96,23 @@ describe('AdminDashboardComponent', () => {
     expect(hrefs).toContain('/sandbox');
     expect(hrefs).toContain('/admin/provider-catalog');
     expect(hrefs).toContain('/admin/logs');
+    expect(hrefs).toContain('/admin/database');
+  });
+
+  it('shows backup health badge on the Database card', () => {
+    const fixture = setup(READY_RELAY, {
+      backupHealth: {
+        ok: false,
+        schedule_enabled: true,
+        consecutive_failures: 3,
+        failing_stale: true,
+        summary: 'Scheduled backup failing',
+        last_error: 'destination outside allowed roots',
+      },
+    });
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('Scheduled backup failing');
+    expect(fixture.componentInstance.backupHealth?.ok).toBeFalse();
   });
 
   it('shows the Instance card with loaded operator contact', () => {

@@ -13,6 +13,8 @@ describe('AdminDatabaseComponent', () => {
     mockApi = jasmine.createSpyObj('FastenApiService', ['getDatabaseInfo', 'backupDatabase']);
     mockApi.getDatabaseInfo.and.returnValue(of({
       location: '/opt/fasten/db/fasten.db', encryption_enabled: false, size_bytes: 1048576, users: 2, sources: 4, integrity_ok: true, backup_destination: '/opt/fasten/db/backups', backups: [], schedule: {enabled:false, time:'02:00', days:'daily', destination:'', max_backups:7},
+      backup_health: {ok: true, schedule_enabled: false, consecutive_failures: 0, failing_stale: false, summary: 'Scheduled backups disabled'},
+      allowed_backup_roots: ['/opt/fasten/db'],
     }));
     await TestBed.configureTestingModule({
       imports: [AdminDatabaseComponent, RouterTestingModule],
@@ -32,5 +34,10 @@ describe('AdminDatabaseComponent', () => {
   it('formats sizes human-readably', () => {
     expect(component.humanSize(0)).toBe('0 B');
     expect(component.humanSize(1048576)).toBe('1.0 MB');
+  });
+
+  it('surfaces backup health from the API', () => {
+    expect(component.info?.backup_health?.summary).toBe('Scheduled backups disabled');
+    expect(component.info?.backup_health?.ok).toBeTrue();
   });
 });

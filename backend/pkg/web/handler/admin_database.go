@@ -23,15 +23,17 @@ import (
 
 // DatabaseInfoResponse is the payload for GET /api/secure/admin/database.
 type DatabaseInfoResponse struct {
-	Location            string                `json:"location"`
-	EncryptionEnabled   bool                  `json:"encryption_enabled"`
-	SizeBytes           int64                 `json:"size_bytes"`
-	Users               int64                 `json:"users"`
-	Sources             int64                 `json:"sources"`
-	IntegrityOk         bool                  `json:"integrity_ok"`
-	BackupDestination string                  `json:"backup_destination"` // resolved destination folder
-	Backups           []database.BackupFile   `json:"backups"`            // backups present there, newest first
-	Schedule          database.BackupSettings `json:"schedule"`           // settable auto-backup settings
+	Location          string                      `json:"location"`
+	EncryptionEnabled bool                        `json:"encryption_enabled"`
+	SizeBytes         int64                       `json:"size_bytes"`
+	Users             int64                       `json:"users"`
+	Sources           int64                       `json:"sources"`
+	IntegrityOk       bool                        `json:"integrity_ok"`
+	BackupDestination string                      `json:"backup_destination"`   // resolved destination folder
+	Backups           []database.BackupFile       `json:"backups"`              // backups present there, newest first
+	Schedule          database.BackupSettings     `json:"schedule"`             // settable auto-backup settings
+	BackupHealth      database.BackupHealthStatus `json:"backup_health"`        // last scheduled/manual outcome (#434)
+	AllowedRoots      []string                    `json:"allowed_backup_roots"` // so operators see the allowlist
 }
 
 func gormRepoFromContext(c *gin.Context) (*database.GormRepository, bool) {
@@ -63,6 +65,8 @@ func GetDatabaseInfo(c *gin.Context) {
 		BackupDestination: dest,
 		Backups:           database.ListBackups(dest),
 		Schedule:          settings,
+		BackupHealth:      database.LoadBackupHealthStatus(appConfig),
+		AllowedRoots:      database.AllowedBackupRoots(appConfig),
 	}
 	if fi, err := os.Stat(location); err == nil {
 		resp.SizeBytes = fi.Size()
