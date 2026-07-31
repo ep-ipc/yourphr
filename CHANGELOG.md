@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.18.0](https://github.com/jwilleke/yourphr/compare/v1.17.0...v1.18.0) (2026-07-31)
+
+Operator-visible scheduled backup health so failures no longer stay silent for weeks when a destination falls outside the allowlist.
+
+### Features
+
+- **admin / backup:** durable `.backup_health.json` (last success/attempt, consecutive failures, summary); Admin Database health banner; Admin Dashboard Database card badge ([#434](https://github.com/jwilleke/yourphr/issues/434))
+- **admin / backup:** `GET /api/secure/admin/database` returns `backup_health` and `allowed_backup_roots` for operators
+
+### Bug Fixes
+
+- **backup:** allowlist includes destination already saved via Admin UI (`.backup_settings.json`), so UI-only NAS paths keep working after path confinement ([#434](https://github.com/jwilleke/yourphr/issues/434), relates to [#383](https://github.com/jwilleke/yourphr/issues/383))
+- **backup:** scheduled worker rate-limits Error logs (1st + every 15th failure; Debug in between)
+
+### Notes for operators
+
+- Open **Admin → Dashboard** (Database badge) or **Admin → Database** to see backup health without tailing logs.
+- First-time external/NAS destinations still need `backup.allowed-roots` or `backup.destination` in config; paths already saved in the Admin UI are allowlisted automatically. See comments on `backup:` in `config.yaml`.
+- Health file lives next to the DB as `.backup_health.json` (data volume; not in git).
+
+### Known issues
+
+- Browser / push notifications for backup failures are not in this release (Phase 1 is durable status + UI only).
+- CMS production credentials / application demo still block live end-to-end production proof ([#433](https://github.com/jwilleke/yourphr/issues/433), [#408](https://github.com/jwilleke/yourphr/issues/408)).
+- 12 `frontend/yarn.lock` Dependabot alerts remain ([#416](https://github.com/jwilleke/yourphr/issues/416)).
+
 ## [1.17.0](https://github.com/jwilleke/yourphr/compare/v1.16.0...v1.17.0) (2026-07-31)
 
 CMS Blue Button production-access UX and catalog path: legal consent, attributions, Medicare labeling, pre-connect messaging, enrollee data controls, and a production Medicare catalog template — plus modular connection policy for all medical sources.
