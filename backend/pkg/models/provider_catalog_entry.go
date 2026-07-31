@@ -54,14 +54,18 @@ type ConnectableProvider struct {
 	ID           string `json:"id"`
 	Display      string `json:"display"`
 	BrandLogoUrl string `json:"brand_logo_url"`
+	// RequiresLegalConsent is true for Medicare / CMS Blue Button-style providers: the UI must
+	// require active PP/ToS opt-in before connect (#427).
+	RequiresLegalConsent bool `json:"requires_legal_consent"`
 }
 
 // Connectable returns the credential-free projection of an entry for the picker.
 func (p *ProviderCatalogEntry) Connectable() ConnectableProvider {
 	return ConnectableProvider{
-		ID:           p.ID.String(),
-		Display:      p.Display,
-		BrandLogoUrl: p.BrandLogoUrl,
+		ID:                   p.ID.String(),
+		Display:              p.Display,
+		BrandLogoUrl:         p.BrandLogoUrl,
+		RequiresLegalConsent: ProviderRequiresLegalConsent(p.Display, p.ApiEndpointBaseUrl, string(p.PlatformType)),
 	}
 }
 

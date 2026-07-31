@@ -14,10 +14,30 @@ describe('AccountProfileComponent', () => {
   let api: jasmine.SpyObj<FastenApiService>;
 
   beforeEach(async () => {
-    api = jasmine.createSpyObj('FastenApiService', ['getCurrentUser', 'deleteAccount', 'getSummary', 'getResources', 'changePassword']);
+    api = jasmine.createSpyObj('FastenApiService', [
+      'getCurrentUser', 'deleteAccount', 'getSummary', 'getResources', 'changePassword',
+      'getLegalConsent', 'grantLegalConsent', 'revokeLegalConsent',
+    ]);
     api.getCurrentUser.and.returnValue(of({username: 'jim', full_name: 'Jim Willeke', email: 'jim@example.com', role: 'admin'}));
     api.deleteAccount.and.returnValue(of(true));
     api.changePassword.and.returnValue(of(true));
+    api.getLegalConsent.and.returnValue(of({
+      accepted: false,
+      privacy_policy_url: 'https://yourphr.org/privacy.html',
+      terms_of_service_url: 'https://yourphr.org/terms.html',
+    }));
+    api.grantLegalConsent.and.returnValue(of({
+      accepted: true,
+      accepted_at: '2026-07-31T12:00:00Z',
+      privacy_policy_url: 'https://yourphr.org/privacy.html',
+      terms_of_service_url: 'https://yourphr.org/terms.html',
+    }));
+    api.revokeLegalConsent.and.returnValue(of({
+      accepted: false,
+      privacy_policy_url: 'https://yourphr.org/privacy.html',
+      terms_of_service_url: 'https://yourphr.org/terms.html',
+      medicare_sources_disconnected: 0,
+    }));
     // ReportHeaderComponent (rendered via <report-header>) calls these on init.
     api.getSummary.and.returnValue(of({sources: []} as any));
     api.getResources.and.returnValue(of([]));
@@ -52,6 +72,31 @@ describe('AccountProfileComponent', () => {
   it('delegates account deletion to the API', () => {
     component.deleteAccount();
     expect(api.deleteAccount).toHaveBeenCalled();
+  });
+
+  it('loads legal consent status', () => {
+    expect(api.getLegalConsent).toHaveBeenCalled();
+    expect(component.legalConsent?.accepted).toBeFalse();
+  });
+
+  it('refuses grant without the opt-in checkbox', () => {
+    component.legalOptInChecked = false;
+    component.grantLegalConsent();
+    expect(api.grantLegalConsent).not.toHaveBeenCalled();
+  });
+
+  it('grants consent when the opt-in checkbox is checked', () => {
+    component.legalOptInChecked = true;
+    component.grantLegalConsent();
+    expect(api.grantLegalConsent).toHaveBeenCalled();
+    expect(component.legalConsent?.accepted).toBeTrue();
+  });
+
+  it('revokes consent via the API', () => {
+    component.legalConsent = {accepted: true, accepted_at: '2026-07-31T12:00:00Z', privacy_policy_url: 'https://yourphr.org/privacy.html', terms_of_service_url: 'https://yourphr.org/terms.html'};
+    component.revokeLegalConsent();
+    expect(api.revokeLegalConsent).toHaveBeenCalled();
+    expect(component.legalConsent?.accepted).toBeFalse();
   });
 
   it('rejects a password change when the new passwords do not match (no API call)', () => {

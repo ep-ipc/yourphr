@@ -274,6 +274,11 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.DELETE("/user/favorites", handler.RemovePractitionerFromFavorites)
 					secure.GET("/user/favorites", handler.GetUserFavoritePractitioners)
 
+					// Per-user Privacy Policy + Terms opt-in (#427) — Account Profile grant/revoke
+					secure.GET("/account/legal-consent", handler.GetLegalConsent)
+					secure.POST("/account/legal-consent/grant", handler.GrantLegalConsent)
+					secure.POST("/account/legal-consent/revoke", handler.RevokeLegalConsent)
+
 					// Access token management
 					secure.GET("/access/token", handler.GetAccessTokens)
 					secure.POST("/access/token", handler.CreateAccessToken)

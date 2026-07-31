@@ -281,6 +281,9 @@ func AuthorizeSourceFromCatalog(c *gin.Context) {
 	if err != nil {
 		return // loadEnabledEntry already wrote the response
 	}
+	if requireLegalConsentForCatalogEntry(c, databaseRepo, entry) {
+		return
+	}
 	var req catalogConnectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("invalid request: %s", err)})
@@ -343,6 +346,9 @@ func ConnectSourceFromCatalog(c *gin.Context) {
 
 	entry, err := loadEnabledEntry(c, databaseRepo)
 	if err != nil {
+		return
+	}
+	if requireLegalConsentForCatalogEntry(c, databaseRepo, entry) {
 		return
 	}
 	var req catalogConnectRequest

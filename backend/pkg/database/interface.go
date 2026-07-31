@@ -84,6 +84,9 @@ type DatabaseRepository interface {
 	LoadUserSettings(ctx context.Context) (*models.UserSettings, error)
 	SaveUserSettings(context.Context, *models.UserSettings) error
 	PopulateDefaultUserSettings(ctx context.Context, userId uuid.UUID) error
+	// Legal consent (PP/ToS) — per-user; empty acceptedAt = not accepted (#427)
+	GetLegalConsentAcceptedAt(ctx context.Context) (string, error)
+	SetLegalConsentAcceptedAt(ctx context.Context, acceptedAt string) error
 
 	//used by fasten-sources Clients
 	BackgroundJobCheckpoint(ctx context.Context, checkpointData map[string]interface{}, errorData map[string]interface{})

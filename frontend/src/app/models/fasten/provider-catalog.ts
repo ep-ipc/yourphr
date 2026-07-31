@@ -6,6 +6,8 @@ export interface ConnectableProvider {
   id: string;
   display: string;
   brand_logo_url?: string;
+  /** True for Medicare / CMS Blue Button — requires PP/ToS opt-in before connect (#427). */
+  requires_legal_consent?: boolean;
 }
 
 // ProviderCatalogEntry is the admin view of a catalog entry. The client_secret is NEVER returned by

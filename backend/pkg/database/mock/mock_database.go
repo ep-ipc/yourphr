@@ -854,6 +854,36 @@ func (mr *MockDatabaseRepositoryMockRecorder) SaveUserSettings(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveUserSettings", reflect.TypeOf((*MockDatabaseRepository)(nil).SaveUserSettings), arg0, arg1)
 }
 
+// GetLegalConsentAcceptedAt mocks base method.
+func (m *MockDatabaseRepository) GetLegalConsentAcceptedAt(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLegalConsentAcceptedAt", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLegalConsentAcceptedAt indicates an expected call of GetLegalConsentAcceptedAt.
+func (mr *MockDatabaseRepositoryMockRecorder) GetLegalConsentAcceptedAt(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLegalConsentAcceptedAt", reflect.TypeOf((*MockDatabaseRepository)(nil).GetLegalConsentAcceptedAt), ctx)
+}
+
+// SetLegalConsentAcceptedAt mocks base method.
+func (m *MockDatabaseRepository) SetLegalConsentAcceptedAt(ctx context.Context, acceptedAt string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetLegalConsentAcceptedAt", ctx, acceptedAt)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetLegalConsentAcceptedAt indicates an expected call of SetLegalConsentAcceptedAt.
+func (mr *MockDatabaseRepositoryMockRecorder) SetLegalConsentAcceptedAt(ctx, acceptedAt interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLegalConsentAcceptedAt", reflect.TypeOf((*MockDatabaseRepository)(nil).SetLegalConsentAcceptedAt), ctx, acceptedAt)
+}
+
+
 // UnlinkResourceWithSharedNeighbors mocks base method.
 func (m *MockDatabaseRepository) UnlinkResourceWithSharedNeighbors(ctx context.Context, resourceType, resourceId, relatedResourceType, relatedResourceId string) (int64, error) {
 	m.ctrl.T.Helper()

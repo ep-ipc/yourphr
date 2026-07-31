@@ -26,6 +26,7 @@ import {
 } from '../../../lib/utils/smart-connect-error';
 import {ConnectableProvider} from '../../models/fasten/provider-catalog';
 import {SmartAuthorizeResponse} from '../../models/fasten/smart-authorize';
+import {LegalConsentStatus} from '../../models/fasten/legal-consent';
 
 // Max time to wait for the patient to finish logging in at the provider (relay-poll phase, across
 // retries). A first login can be slow (read consent, pick account, authorize) — allow several
@@ -100,6 +101,9 @@ export class MedicalSourcesComponent implements OnInit {
   connectingProviderId: string | null = null   // the catalog id currently mid-connect (disables its button)
   connectErrorMsg = ""
   connectSuccessMsg = ""
+  // Legal consent for Medicare-class providers (#427)
+  legalConsent: LegalConsentStatus | null = null
+  legalConsentLoading = false
 
   constructor(
     private connectGatewayApi: ConnectGatewayService,
@@ -113,6 +117,7 @@ export class MedicalSourcesComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadConnectableProviders()
+    this.loadLegalConsent()
   }
 
   // Loads the patient-facing provider picker (enabled catalog entries; credential-free). A failure
@@ -126,6 +131,25 @@ export class MedicalSourcesComponent implements OnInit {
     )
   }
 
+  private loadLegalConsent(): void {
+    this.legalConsentLoading = true
+    this.fastenApi.getLegalConsent().subscribe(
+      (s) => { this.legalConsent = s; this.legalConsentLoading = false },
+      (_err) => { this.legalConsentLoading = false },
+    )
+  }
+
+  /** True when this provider needs PP/ToS and the user has not accepted yet. */
+  needsLegalConsent(provider: ConnectableProvider): boolean {
+    if (!provider?.requires_legal_consent) { return false }
+    return !this.legalConsent?.accepted
+  }
+
+  get showMedicareConsentBanner(): boolean {
+    if (this.legalConsent?.accepted) { return false }
+    return this.connectableProviders.some((p) => !!p.requires_legal_consent)
+  }
+
   // Connects an admin-configured provider by id. The patient never sees or sends a client_id/secret:
   // the backend fills them from the catalog. Mirrors the BYO flow (popup → authorize → poll/exchange)
   // but with the catalog endpoints. The popup must open synchronously in the click handler or the
@@ -134,6 +158,11 @@ export class MedicalSourcesComponent implements OnInit {
     if (this.connectingProviderId) { return } // guard against double-submit
     this.connectErrorMsg = ""
     this.connectSuccessMsg = ""
+
+    if (this.needsLegalConsent(provider)) {
+      this.connectErrorMsg = 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting Medicare.'
+      return
+    }
 
     const popup = window.open('', '_blank')
     if (!popup) {

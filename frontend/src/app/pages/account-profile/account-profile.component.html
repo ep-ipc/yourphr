@@ -2,81 +2,171 @@
   <div class="container">
     <div class="az-content-body">
 
-      <report-header [reportHeaderTitle]="'Account Profile'"></report-header>
+      <div class="mg-b-20">
+        <h4 class="mg-b-5"><i class="fas fa-user-circle"></i>&nbsp; Account Profile</h4>
+        <p class="tx-gray-500 mg-b-0">
+          Your YourPHR login and account settings — this is your account on this system, not your medical record.
+          Health information lives under
+          <a [routerLink]="'/patient-profile'">Patient Profile</a>.
+        </p>
+      </div>
 
-      <div *ngIf="!loading.page; else isLoadingTemplate" class="ps-3 pe-3">
-        <p class="tx-gray-500 mt-4 mb-3">Your YourPHR login and account settings — this is your account on this system, not your medical record. Your health information lives under <a [routerLink]="'/patient-profile'">Patient Profile</a>.</p>
-
-        <!-- Account identity -->
+      <div *ngIf="!loading.page; else isLoadingTemplate">
         <div class="row">
-          <div class="col-md-8">
-            <h2 class="tx-indigo">Account</h2>
-            <div class="d-flex align-items-center mb-4">
-              <div class="az-img-user mg-r-15"><span class="az-img-initials">{{ initials }}</span></div>
-              <div>
-                <h5 class="mg-b-0">{{ user.full_name || user.username || '—' }}</h5>
-                <span class="tx-gray-500">{{ (user.role || '') | titlecase }}</span>
+
+          <!-- Account identity -->
+          <div class="col-lg-4 mg-b-20">
+            <div class="card h-100">
+              <div class="card-header">
+                <h6 class="card-title mg-b-0"><i class="fas fa-id-card"></i>&nbsp; Account</h6>
+              </div>
+              <div class="card-body">
+                <div class="d-flex align-items-center mg-b-15">
+                  <div class="az-img-user mg-r-15"><span class="az-img-initials">{{ initials }}</span></div>
+                  <div>
+                    <h5 class="mg-b-0">{{ user.full_name || user.username || '—' }}</h5>
+                    <span class="tx-gray-500">{{ (user.role || '') | titlecase }}</span>
+                  </div>
+                </div>
+                <table class="table table-sm table-borderless mg-b-0">
+                  <tbody>
+                    <tr>
+                      <th class="tx-gray-500 tx-medium" scope="row">Username</th>
+                      <td>{{ user.username || '—' }}</td>
+                    </tr>
+                    <tr>
+                      <th class="tx-gray-500 tx-medium" scope="row">Full name</th>
+                      <td>{{ user.full_name || '—' }}</td>
+                    </tr>
+                    <tr>
+                      <th class="tx-gray-500 tx-medium" scope="row">Email</th>
+                      <td>{{ user.email || '—' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div class="row">
-              <div class="col-4"><strong class="tx-indigo">Username:</strong></div>
-              <div class="col-8">{{ user.username || '—' }}</div>
+          </div>
 
-              <div class="col-4"><strong class="tx-indigo">Full name:</strong></div>
-              <div class="col-8">{{ user.full_name || '—' }}</div>
+          <!-- Privacy & terms consent (#427) -->
+          <div class="col-lg-4 mg-b-20">
+            <div class="card h-100">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mg-b-0"><i class="fas fa-file-contract"></i>&nbsp; Privacy &amp; terms</h6>
+                <span *ngIf="legalConsent?.accepted" class="badge badge-success">Accepted</span>
+                <span *ngIf="legalConsent && !legalConsent.accepted" class="badge badge-secondary">Not accepted</span>
+              </div>
+              <div class="card-body">
+                <p class="tx-gray-500 mg-b-10">
+                  Required before connecting Medicare (and similar sources). Active opt-in is saved to your account.
+                </p>
+                <p class="mg-b-15">
+                  <a [href]="legalConsent?.privacy_policy_url || 'https://yourphr.org/privacy.html'" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                  &nbsp;·&nbsp;
+                  <a [href]="legalConsent?.terms_of_service_url || 'https://yourphr.org/terms.html'" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+                </p>
 
-              <div class="col-4"><strong class="tx-indigo">Email:</strong></div>
-              <div class="col-8">{{ user.email || '—' }}</div>
+                <div *ngIf="legalConsentLoading" class="tx-gray-500">Loading…</div>
+                <div *ngIf="legalConsentError" class="alert alert-danger tx-13 mg-b-10">{{ legalConsentError }}</div>
+                <div *ngIf="legalConsentMsg" class="alert alert-success tx-13 mg-b-10">{{ legalConsentMsg }}</div>
+
+                <ng-container *ngIf="!legalConsentLoading && legalConsent">
+                  <p *ngIf="legalConsent.accepted && legalConsent.accepted_at" class="tx-gray-500 tx-12 mg-b-10">
+                    Accepted {{ legalConsent.accepted_at }}
+                  </p>
+                  <p *ngIf="!legalConsent.accepted" class="tx-gray-500 tx-12 mg-b-10">
+                    Medicare connect is blocked until you agree.
+                  </p>
+
+                  <div *ngIf="!legalConsent.accepted" class="form-check mg-b-15">
+                    <input class="form-check-input" type="checkbox" id="legalOptIn" [(ngModel)]="legalOptInChecked" name="legalOptIn">
+                    <label class="form-check-label" for="legalOptIn">
+                      I have read and agree to the Privacy Policy and Terms of Service.
+                    </label>
+                  </div>
+
+                  <button *ngIf="!legalConsent.accepted" type="button" class="btn btn-az-primary"
+                          (click)="grantLegalConsent()" [disabled]="legalConsentBusy || !legalOptInChecked">
+                    <i class="fas fa-check mg-r-5"></i>{{ legalConsentBusy ? 'Saving…' : 'Grant consent' }}
+                  </button>
+                  <button *ngIf="legalConsent.accepted" type="button" class="btn btn-outline-danger"
+                          (click)="revokeLegalConsent()" [disabled]="legalConsentBusy">
+                    <i class="fas fa-ban mg-r-5"></i>{{ legalConsentBusy ? 'Revoking…' : 'Revoke consent' }}
+                  </button>
+                  <p *ngIf="legalConsent.accepted" class="tx-gray-500 tx-12 mg-t-10 mg-b-0">
+                    Revoking blocks new Medicare connections and disconnects Medicare sources. Imported records stay until you delete them.
+                  </p>
+                </ng-container>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Change password -->
-        <div class="row mt-5">
-          <div class="col-md-6">
-            <h2 class="tx-indigo">Change password</h2>
-            <div *ngIf="pwSuccess" class="alert alert-success">Your password has been changed.</div>
-            <div *ngIf="pwError" class="alert alert-danger">{{ pwError }}</div>
-            <form (ngSubmit)="changePassword()" #pwForm="ngForm" autocomplete="off">
-              <div class="form-group mb-3">
-                <label for="pw-current">Current password</label>
-                <input id="pw-current" name="pw-current" type="password" class="form-control" [(ngModel)]="pw.current" autocomplete="current-password" required>
+          <!-- Change password -->
+          <div class="col-lg-4 mg-b-20">
+            <div class="card h-100">
+              <div class="card-header">
+                <h6 class="card-title mg-b-0"><i class="fas fa-key"></i>&nbsp; Change password</h6>
               </div>
-              <div class="form-group mb-3">
-                <label for="pw-next">New password</label>
-                <input id="pw-next" name="pw-next" type="password" class="form-control" [(ngModel)]="pw.next" autocomplete="new-password" required>
+              <div class="card-body">
+                <p class="tx-gray-500 mg-b-15">Update the password for this YourPHR account.</p>
+                <div *ngIf="pwSuccess" class="alert alert-success tx-13">Your password has been changed.</div>
+                <div *ngIf="pwError" class="alert alert-danger tx-13">{{ pwError }}</div>
+                <form (ngSubmit)="changePassword()" #pwForm="ngForm" autocomplete="off">
+                  <div class="form-group">
+                    <label class="tx-12 tx-uppercase tx-gray-500" for="pw-current">Current password</label>
+                    <input id="pw-current" name="pw-current" type="password" class="form-control" [(ngModel)]="pw.current" autocomplete="current-password" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="tx-12 tx-uppercase tx-gray-500" for="pw-next">New password</label>
+                    <input id="pw-next" name="pw-next" type="password" class="form-control" [(ngModel)]="pw.next" autocomplete="new-password" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="tx-12 tx-uppercase tx-gray-500" for="pw-confirm">Confirm new password</label>
+                    <input id="pw-confirm" name="pw-confirm" type="password" class="form-control" [(ngModel)]="pw.confirm" autocomplete="new-password" required>
+                  </div>
+                  <button type="submit" class="btn btn-az-primary" [disabled]="pwSubmitting">
+                    <span *ngIf="pwSubmitting" class="spinner-border spinner-border-sm mg-r-5" role="status" aria-hidden="true"></span>
+                    <i *ngIf="!pwSubmitting" class="fas fa-save mg-r-5"></i>
+                    Change password
+                  </button>
+                </form>
               </div>
-              <div class="form-group mb-3">
-                <label for="pw-confirm">Confirm new password</label>
-                <input id="pw-confirm" name="pw-confirm" type="password" class="form-control" [(ngModel)]="pw.confirm" autocomplete="new-password" required>
+            </div>
+          </div>
+
+          <!-- Connected devices -->
+          <div class="col-lg-4 mg-b-20">
+            <div class="card h-100">
+              <div class="card-header">
+                <h6 class="card-title mg-b-0"><i class="fas fa-mobile-alt"></i>&nbsp; Connected devices</h6>
               </div>
-              <button type="submit" class="btn btn-az-primary btn-sm" [disabled]="pwSubmitting">
-                <span *ngIf="pwSubmitting" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                Change password
-              </button>
-            </form>
+              <div class="card-body">
+                <p class="tx-gray-500 mg-b-15">Pair companion apps and manage the access tokens devices use to reach your records.</p>
+                <a [routerLink]="'/settings'" class="btn btn-az-primary">
+                  <i class="fas fa-mobile-alt mg-r-5"></i> Manage connected devices
+                </a>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Connected devices (the existing /settings page — preserved, not orphaned) -->
-        <div class="row mt-5">
-          <div class="col-md-8">
-            <h2 class="tx-indigo">Connected devices</h2>
-            <p class="tx-gray-500">Pair companion apps and manage the access tokens devices use to reach your records.</p>
-            <a [routerLink]="'/settings'" class="btn btn-outline-primary btn-sm">Manage connected devices</a>
+          <!-- Delete account (danger) -->
+          <div class="col-lg-4 mg-b-20">
+            <div class="card h-100 border-danger">
+              <div class="card-header">
+                <h6 class="card-title mg-b-0 tx-danger"><i class="fas fa-exclamation-triangle"></i>&nbsp; Delete account</h6>
+              </div>
+              <div class="card-body">
+                <p class="tx-gray-500 mg-b-15">
+                  Permanently delete your YourPHR account and all personal and medical data on this instance. This cannot be undone.
+                </p>
+                <button (click)="openDeleteModal(deleteModalRef)" type="button" class="btn btn-outline-danger">
+                  <i class="fas fa-trash mg-r-5"></i> Delete Account
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Danger zone — Delete Account (moved here from Patient Profile) -->
-        <hr class="mt-5"/>
-        <div class="row" style="padding-bottom:20px">
-          <div class="col-md-8">
-            <h2 class="tx-danger">Delete account</h2>
-            <p class="tx-gray-500">Permanently delete your YourPHR account and all personal and medical data on this device. This cannot be undone.</p>
-            <button (click)="openDeleteModal(deleteModalRef)" type="button" class="btn btn-outline-danger">Delete Account</button>
-          </div>
         </div>
-
       </div>
 
       <ng-template #isLoadingTemplate>

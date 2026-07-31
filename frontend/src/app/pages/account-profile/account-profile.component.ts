@@ -2,11 +2,10 @@ import {Component, OnInit, TemplateRef} from '@angular/core';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {AccountUser} from '../../models/fasten/account-user';
+import {LegalConsentStatus} from '../../models/fasten/legal-consent';
 
 // Account Profile — the system *user account* (login/identity/lifecycle), distinct from the medical
-// "Patient Profile" (the FHIR Patient record). Phase 1: identity (read-only), a link to Connected
-// Devices, and Delete Account (moved here off Patient Profile). Change-password (#274 Phase 2) and
-// photo/profile-edit (Phase 3) follow once their backend endpoints exist.
+// "Patient Profile" (the FHIR Patient record). Includes PP/ToS consent grant/revoke (#427).
 @Component({
   selector: 'app-account-profile',
   templateUrl: './account-profile.component.html',
@@ -23,6 +22,15 @@ export class AccountProfileComponent implements OnInit {
   pwSuccess = false;
   pwSubmitting = false;
 
+  // Legal consent (#427)
+  legalConsent: LegalConsentStatus | null = null;
+  legalConsentLoading = false;
+  legalConsentError = '';
+  legalConsentMsg = '';
+  legalConsentBusy = false;
+  /** Active opt-in must be unchecked by default before grant. */
+  legalOptInChecked = false;
+
   constructor(
     private fastenApi: FastenApiService,
     private modalService: NgbModal,
@@ -37,6 +45,71 @@ export class AccountProfileComponent implements OnInit {
       },
       error: () => {
         this.loading.page = false;
+      },
+    });
+    this.loadLegalConsent();
+  }
+
+  loadLegalConsent(): void {
+    this.legalConsentLoading = true;
+    this.legalConsentError = '';
+    this.fastenApi.getLegalConsent().subscribe({
+      next: (s) => {
+        this.legalConsent = s;
+        this.legalOptInChecked = false;
+        this.legalConsentLoading = false;
+      },
+      error: () => {
+        this.legalConsentError = 'Could not load privacy consent status.';
+        this.legalConsentLoading = false;
+      },
+    });
+  }
+
+  grantLegalConsent(): void {
+    this.legalConsentError = '';
+    this.legalConsentMsg = '';
+    if (!this.legalOptInChecked) {
+      this.legalConsentError = 'Check the box to confirm you have read and agree before continuing.';
+      return;
+    }
+    this.legalConsentBusy = true;
+    this.fastenApi.grantLegalConsent().subscribe({
+      next: (s) => {
+        this.legalConsent = s;
+        this.legalOptInChecked = false;
+        this.legalConsentMsg = 'Consent saved. You can connect Medicare when a provider is available.';
+        this.legalConsentBusy = false;
+      },
+      error: (err) => {
+        this.legalConsentError = err?.error?.error || 'Could not save consent.';
+        this.legalConsentBusy = false;
+      },
+    });
+  }
+
+  revokeLegalConsent(): void {
+    this.legalConsentError = '';
+    this.legalConsentMsg = '';
+    this.legalConsentBusy = true;
+    this.fastenApi.revokeLegalConsent().subscribe({
+      next: (s) => {
+        this.legalConsent = {
+          accepted: false,
+          accepted_at: '',
+          privacy_policy_url: s.privacy_policy_url || this.legalConsent?.privacy_policy_url || 'https://yourphr.org/privacy.html',
+          terms_of_service_url: s.terms_of_service_url || this.legalConsent?.terms_of_service_url || 'https://yourphr.org/terms.html',
+        };
+        const n = s.medicare_sources_disconnected ?? 0;
+        this.legalConsentMsg = n > 0
+          ? `Consent revoked. Disconnected ${n} Medicare source(s). Imported records remain until you delete them.`
+          : 'Consent revoked. New Medicare connections are blocked until you agree again.';
+        this.legalOptInChecked = false;
+        this.legalConsentBusy = false;
+      },
+      error: (err) => {
+        this.legalConsentError = err?.error?.error || 'Could not revoke consent.';
+        this.legalConsentBusy = false;
       },
     });
   }

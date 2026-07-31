@@ -76,15 +76,28 @@
 
       <ng-container *ngIf="connectableProviders.length; else noProviders">
         <p class="mg-b-15 tx-gray-600">Pick your provider and sign in with your provider account — you'll never be asked for a client ID or secret.</p>
+        <div *ngIf="showMedicareConsentBanner" class="alert alert-info mg-b-15" role="alert">
+          Medicare and similar sources require you to accept the
+          <a href="https://yourphr.org/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          and
+          <a href="https://yourphr.org/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+          first.
+          <a routerLink="/account-profile">Open Account Profile</a> to grant consent (unchecked by default — active opt-in).
+        </div>
         <div class="row">
           <div class="col-md-6 col-lg-4 mg-b-15" *ngFor="let provider of connectableProviders">
             <button type="button" class="btn btn-outline-az-primary btn-block d-flex align-items-center justify-content-center"
-                    [disabled]="connectingProviderId"
-                    (click)="connectCatalogProvider(provider)">
+                    [disabled]="connectingProviderId || needsLegalConsent(provider)"
+                    (click)="connectCatalogProvider(provider)"
+                    [title]="needsLegalConsent(provider) ? 'Accept Privacy Policy and Terms on Account Profile first' : ''">
               <img *ngIf="provider.brand_logo_url" [src]="provider.brand_logo_url" alt="" height="20" class="mg-r-10" />
               <span *ngIf="connectingProviderId === provider.id"><i class="fas fa-spinner fa-spin mg-r-5"></i> Connecting…</span>
               <span *ngIf="connectingProviderId !== provider.id"><i class="fas fa-plug mg-r-5"></i> {{provider.display}}</span>
             </button>
+            <p *ngIf="needsLegalConsent(provider)" class="tx-gray-500 tx-12 mg-t-5 mg-b-0">
+              Requires consent —
+              <a routerLink="/account-profile">Account Profile</a>
+            </p>
           </div>
         </div>
       </ng-container>

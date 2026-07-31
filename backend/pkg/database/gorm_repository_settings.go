@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/google/uuid"
 )
@@ -158,7 +159,64 @@ func (gr *GormRepository) PopulateDefaultUserSettings(ctx context.Context, userI
 		SettingDataType:       "array",
 		SettingValueArray:     []string{},
 	})
+	settingsEntries = append(settingsEntries, models.UserSettingEntry{
+		UserID:                userId,
+		SettingKeyName:        models.LegalConsentSettingKey,
+		SettingKeyDescription: models.LegalConsentSettingDescription,
+		SettingDataType:       "string",
+		SettingValueString:    "",
+	})
 
 	return gr.GormClient.WithContext(ctx).Create(settingsEntries).Error
 
+}
+
+// GetLegalConsentAcceptedAt returns the stored RFC3339 acceptance timestamp, or "" if never accepted / revoked.
+func (gr *GormRepository) GetLegalConsentAcceptedAt(ctx context.Context) (string, error) {
+	currentUser, err := gr.GetCurrentUser(ctx)
+	if err != nil {
+		return "", err
+	}
+	var entry models.UserSettingEntry
+	tx := gr.GormClient.WithContext(ctx).
+		Where("user_id = ? AND setting_key_name = ?", currentUser.ID, models.LegalConsentSettingKey).
+		Limit(1).
+		Find(&entry)
+	if tx.Error != nil {
+		return "", fmt.Errorf("could not load legal consent: %v", tx.Error)
+	}
+	if tx.RowsAffected == 0 {
+		return "", nil
+	}
+	return entry.SettingValueString, nil
+}
+
+// SetLegalConsentAcceptedAt upserts the legal-consent timestamp ("" clears / revokes).
+func (gr *GormRepository) SetLegalConsentAcceptedAt(ctx context.Context, acceptedAt string) error {
+	currentUser, err := gr.GetCurrentUser(ctx)
+	if err != nil {
+		return err
+	}
+	var entry models.UserSettingEntry
+	tx := gr.GormClient.WithContext(ctx).
+		Where("user_id = ? AND setting_key_name = ?", currentUser.ID, models.LegalConsentSettingKey).
+		Limit(1).
+		Find(&entry)
+	if tx.Error != nil {
+		return fmt.Errorf("could not load legal consent: %v", tx.Error)
+	}
+	if tx.RowsAffected == 0 {
+		entry = models.UserSettingEntry{
+			UserID:                currentUser.ID,
+			SettingKeyName:        models.LegalConsentSettingKey,
+			SettingKeyDescription: models.LegalConsentSettingDescription,
+			SettingDataType:       "string",
+			SettingValueString:    acceptedAt,
+		}
+		return gr.GormClient.WithContext(ctx).Create(&entry).Error
+	}
+	return gr.GormClient.WithContext(ctx).
+		Model(&models.UserSettingEntry{}).
+		Where("id = ?", entry.ID).
+		Update("setting_value_string", acceptedAt).Error
 }
