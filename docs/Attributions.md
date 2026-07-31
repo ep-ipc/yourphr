@@ -10,6 +10,8 @@ YourPHR will integrate multiple third-party APIs and data sources (CMS Blue Butt
 
 We use **one attributions catalog** for all partners, not a one-off hardcode per vendor forever.
 
+**Related:** connection-level PP/ToS + pre-connect messaging for *all* medical sources is modular — see [`connection-policy.md`](connection-policy.md).
+
 | Layer | Purpose |
 |---|---|
 | **Canonical registry** | Structured list of notices (`id`, title, full text, optional URL, `contexts` when to show) |

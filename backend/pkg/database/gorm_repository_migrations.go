@@ -380,6 +380,18 @@ func (gr *GormRepository) Migrate() error {
 				return nil
 			},
 		},
+		{
+			ID: "20260731000000", // modular connect policy: consent_policy + pre_connect_profile (all medical sources)
+			Migrate: func(tx *gorm.DB) error {
+				if err := tx.AutoMigrate(&models.ProviderCatalogEntry{}); err != nil {
+					return err
+				}
+				// Existing rows: empty strings mean "required" / "auto" at resolve time.
+				return tx.Model(&models.ProviderCatalogEntry{}).
+					Where("consent_policy = '' OR consent_policy IS NULL").
+					Update("consent_policy", models.ConsentPolicyRequired).Error
+			},
+		},
 	})
 
 	// run when database is empty

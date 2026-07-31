@@ -78,7 +78,7 @@ export class AccountProfileComponent implements OnInit {
       next: (s) => {
         this.legalConsent = s;
         this.legalOptInChecked = false;
-        this.legalConsentMsg = 'Consent saved. You can connect Medicare when a provider is available.';
+        this.legalConsentMsg = 'Consent saved. You can connect medical sources when a provider is available.';
         this.legalConsentBusy = false;
       },
       error: (err) => {
@@ -102,7 +102,7 @@ export class AccountProfileComponent implements OnInit {
         };
         const n = s.medicare_sources_disconnected ?? 0;
         this.legalConsentMsg = n > 0
-          ? `Consent revoked. Disconnected ${n} Medicare source(s). Imported records remain until you delete them.`
+          ? `Consent revoked. Removed ${n} Medicare source(s) and their imported records from this instance. New Medicare connections are blocked until you agree again.`
           : 'Consent revoked. New Medicare connections are blocked until you agree again.';
         this.legalOptInChecked = false;
         this.legalConsentBusy = false;

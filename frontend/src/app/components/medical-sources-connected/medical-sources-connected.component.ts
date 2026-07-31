@@ -516,7 +516,7 @@ export class MedicalSourcesConnectedComponent implements OnInit {
 
         const toastNotification = new ToastNotification()
         toastNotification.type = ToastType.Success
-        toastNotification.message = `Successfully deleted source: ${sourceDisplayName}, ${respData} row(s) effected`
+        toastNotification.message = `Disconnected ${sourceDisplayName} and removed its imported records from this instance (${respData} row(s)).`
         this.toastService.show(toastNotification)
 
       },
@@ -526,7 +526,7 @@ export class MedicalSourcesConnectedComponent implements OnInit {
 
         const toastNotification = new ToastNotification()
         toastNotification.type = ToastType.Error
-        toastNotification.message = `An error occurred while deleting source (${sourceDisplayName}): ${extractErrorFromResponse(err)}`
+        toastNotification.message = `Could not disconnect ${sourceDisplayName}: ${extractErrorFromResponse(err)}`
         this.toastService.show(toastNotification)
         console.log(err)
       })

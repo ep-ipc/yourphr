@@ -1,4 +1,9 @@
 <h2 class="az-content-title">Connected Sources</h2>
+<p class="tx-gray-500 mg-b-15">
+  Click a source to sync, download, or <strong>disconnect &amp; remove data</strong>.
+  Account-wide options (Privacy &amp; Terms, delete account) are on
+  <a routerLink="/account-profile">Account Profile</a>.
+</p>
 
 <div *ngIf="!loading else isLoadingTemplate" class="row">
   <app-medical-sources-card class="col-sm-3 mg-b-20 px-3"
@@ -17,14 +22,18 @@
   </div>
 
   <div *ngIf="modalSelectedSourceListItem?.source?.platform_type != 'fasten'; else fastenSourceDescription" class="modal-body">
-    <h6>Manage Source</h6>
-    <p>Existing connections can be "Synced", "Reconnected" or "Deleted"</p>
+    <h6>Manage source</h6>
+    <p class="tx-gray-500">You control this connection and the records imported from it on this YourPHR instance.</p>
     <ul>
-      <li><p><strong>Sync</strong> - Download all resources from this healthcare provider, storing them securely in YourPHR</p></li>
-      <li><p><strong>Download</strong> - Export every record retrieved from this provider as a FHIR Bundle (.json) — your records, in your hands</p></li>
-      <li><p><strong>Reconnect</strong> - If your healthcare connection has expired, you can use this button to reconnect</p></li>
-      <li><p><strong>Delete</strong> - Delete all resources for this healthcare provider. This will ONLY effect data stored in YourPHR</p></li>
+      <li><p><strong>Sync</strong> — Download updated records from this provider into YourPHR</p></li>
+      <li><p><strong>Download</strong> — Export every record retrieved from this provider as a FHIR Bundle (.json)</p></li>
+      <li><p><strong>Reconnect</strong> — If the connection expired, sign in again at the provider</p></li>
+      <li><p><strong>Disconnect &amp; remove data</strong> — Remove stored credentials for this source <em>and</em> delete all records imported from it on this instance. Does not change data held by Medicare/CMS or your provider. Does not delete your whole YourPHR account.</p></li>
     </ul>
+    <p class="tx-12 tx-gray-500 mg-b-0">
+      Account-wide controls (Privacy &amp; Terms revoke, delete account):
+      <a routerLink="/account-profile">Account Profile</a>.
+    </p>
   </div>
   <ng-template #fastenSourceDescription>
     <div class="modal-body">
@@ -54,7 +63,7 @@
         <button *ngIf="modalSelectedSourceListItem?.source?.platform_type != 'manual'" ngbDropdownItem (click)="sourceSyncHandler(modalSelectedSourceListItem?.source)" type="button" class="btn btn-az-primary">Sync</button>
         <button ngbDropdownItem (click)="sourceExportHandler(modalSelectedSourceListItem?.source)" type="button" class="btn btn-az-primary">Download</button>
         <button *ngIf="modalSelectedSourceListItem?.source?.platform_type != 'manual'" ngbDropdownItem (click)="sourceReconnectHandler(modalSelectedSourceListItem)" type="button" class="btn btn-danger">Reconnect</button>
-        <button  ngbDropdownItem (click)="sourceDeleteHandler()" type="button" class="btn btn-danger">Delete</button>
+        <button ngbDropdownItem (click)="sourceDeleteHandler()" type="button" class="btn btn-danger">Disconnect &amp; remove data</button>
       </div>
     </div>
     <button (click)="modal.dismiss('Close click')" type="button" class="btn btn-outline-secondary">Close</button>

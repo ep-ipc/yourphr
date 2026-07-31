@@ -45,7 +45,7 @@ When you connect Medicare (or another provider):
 
 **Shared with CMS:** only what OAuth/API requires. **Shared with the YourPHR project:** nothing about your Medicare or clinical data.
 
-**How long:** the instance may re-sync while the connection is authorized. Disconnect removes stored credentials for that source. **Data already imported stays until you or the operator delete it.**
+**How long:** the instance may re-sync while the connection is authorized. **Disconnect / remove source** in the app removes that source’s stored OAuth credentials **and** the health records imported from it on this instance. **Delete account** removes your whole account and all of your data on this instance. Operator backups may still hold copies until the operator prunes them.
 
 ---
 
@@ -73,10 +73,12 @@ The stock software is **not** designed to sell data, use it for advertising/mark
 ## Your control
 
 - Do not connect Medicare (or any source) if you do not want that import  
-- Disconnect a source (removes stored OAuth credentials)  
-- Delete records or your account where the product allows, or ask the operator to wipe the deployment  
+- **Disconnect / remove a source** (Sources → connected source → Actions): stops that connection and deletes records imported from that source on this instance  
+- **Revoke Privacy & Terms** (Account Profile): blocks new Medicare connects and removes Medicare-class sources the same way as disconnect  
+- **Delete account** (Account Profile): permanently deletes your account and all of your data on this instance  
+- Ask the operator about backups or a full deployment wipe if needed  
 
-**Dormant/closed accounts:** data remains on the operator’s storage until removed. The project holds no enrollee databases.
+**Dormant/closed accounts:** data remains on the operator’s storage until removed (including any backups). The project holds no enrollee databases.
 
 ---
 

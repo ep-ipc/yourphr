@@ -91,10 +91,15 @@ func RevokeLegalConsent(c *gin.Context) {
 	})
 }
 
-// requireLegalConsentForCatalogEntry aborts with 403 if the entry needs consent and the user has not accepted.
-// Returns true if the handler should stop.
+// requireLegalConsentForCatalogEntry aborts with 403 if the entry needs product PP/ToS consent
+// and the user has not accepted. Default is required for all medical sources; catalog
+// consent_policy=skip is the modular opt-out.
 func requireLegalConsentForCatalogEntry(c *gin.Context, databaseRepo database.DatabaseRepository, entry *models.ProviderCatalogEntry) bool {
-	if entry == nil || !models.ProviderRequiresLegalConsent(entry.Display, entry.ApiEndpointBaseUrl, string(entry.PlatformType)) {
+	if entry == nil {
+		return false
+	}
+	policy := models.ResolveConnectionPolicy(entry)
+	if !policy.RequiresUserConsent {
 		return false
 	}
 	at, err := databaseRepo.GetLegalConsentAcceptedAt(c)
@@ -106,10 +111,10 @@ func requireLegalConsentForCatalogEntry(c *gin.Context, databaseRepo database.Da
 		return false
 	}
 	c.JSON(http.StatusForbidden, gin.H{
-		"success":    false,
-		"error":      "Accept the Privacy Policy and Terms of Service before connecting Medicare. Open Account Profile to grant consent.",
-		"error_code": "legal_consent_required",
-		"privacy_policy_url":  models.LegalPrivacyPolicyURL,
+		"success":              false,
+		"error":                "Accept the Privacy Policy and Terms of Service on Account Profile before connecting a medical source.",
+		"error_code":           "legal_consent_required",
+		"privacy_policy_url":   models.LegalPrivacyPolicyURL,
 		"terms_of_service_url": models.LegalTermsOfServiceURL,
 	})
 	return true

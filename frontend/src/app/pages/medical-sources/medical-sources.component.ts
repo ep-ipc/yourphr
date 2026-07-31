@@ -28,7 +28,7 @@ import {ConnectableProvider} from '../../models/fasten/provider-catalog';
 import {SmartAuthorizeResponse} from '../../models/fasten/smart-authorize';
 import {LegalConsentStatus} from '../../models/fasten/legal-consent';
 import {AttributionNotice, attributionsForContext} from '../../models/fasten/attributions';
-import {MEDICARE_PRE_CONNECT} from '../../models/fasten/medicare-connect-copy';
+import {PreConnectCopy, preConnectCopyForProfile} from '../../models/fasten/pre-connect-copy';
 
 // Max time to wait for the patient to finish logging in at the provider (relay-poll phase, across
 // retries). A first login can be slow (read consent, pick account, authorize) — allow several
@@ -88,8 +88,8 @@ export class MedicalSourcesComponent implements OnInit {
 
   // CCDA-FHIR modal
   @ViewChild('ccdaWarningModalRef') ccdaWarningModalRef : any;
-  // Pre-connect informed messaging for Medicare (#430) — only after PP/ToS consent (#427)
-  @ViewChild('medicarePreConnectModalRef') medicarePreConnectModalRef: TemplateRef<any>;
+  // Pre-connect informed messaging (#430) — after PP/ToS consent; profile from connection policy
+  @ViewChild('preConnectModalRef') preConnectModalRef: TemplateRef<any>;
 
   // Whether this server can convert C-CDA at all (#397). null = not yet checked, or the check
   // failed — in that case the modal behaves as it always did and lets the upload surface any error.
@@ -110,9 +110,9 @@ export class MedicalSourcesComponent implements OnInit {
   legalConsentLoading = false
   // CMS / partner attribution for Medicare-class connect (#428)
   medicareAttributions: AttributionNotice[] = attributionsForContext('medicare-connect')
-  // Modal copy + pending provider while pre-connect dialog is open (#430)
-  medicarePreConnect = MEDICARE_PRE_CONNECT
-  pendingMedicareProvider: ConnectableProvider | null = null
+  // Modal copy + pending provider while pre-connect dialog is open
+  preConnectCopy: PreConnectCopy | null = null
+  pendingConnectProvider: ConnectableProvider | null = null
 
   constructor(
     private connectGatewayApi: ConnectGatewayService,
@@ -148,53 +148,62 @@ export class MedicalSourcesComponent implements OnInit {
     )
   }
 
+  /** Whether this provider requires product PP/ToS (default yes; catalog may skip). */
+  providerRequiresConsent(provider: ConnectableProvider): boolean {
+    if (provider?.requires_user_consent === false) { return false }
+    if (provider?.requires_user_consent === true) { return true }
+    // Back-compat: older API only sent requires_legal_consent for Medicare.
+    if (provider?.requires_legal_consent === false) { return false }
+    if (provider?.requires_legal_consent === true) { return true }
+    return true // product default: all medical connections
+  }
+
   /** True when this provider needs PP/ToS and the user has not accepted yet. */
   needsLegalConsent(provider: ConnectableProvider): boolean {
-    if (!provider?.requires_legal_consent) { return false }
+    if (!this.providerRequiresConsent(provider)) { return false }
     return !this.legalConsent?.accepted
   }
 
-  get showMedicareConsentBanner(): boolean {
+  get showConsentBanner(): boolean {
     if (this.legalConsent?.accepted) { return false }
-    return this.connectableProviders.some((p) => !!p.requires_legal_consent)
+    return this.connectableProviders.some((p) => this.providerRequiresConsent(p))
   }
 
   /** CMS attribution when any Medicare-class provider is on the picker (#428). */
   get showMedicareAttribution(): boolean {
-    return this.connectableProviders.some((p) => !!p.requires_legal_consent)
+    return this.connectableProviders.some((p) => !!p.medicare_class || p.pre_connect_profile === 'medicare')
       && this.medicareAttributions.length > 0
   }
 
-  // Connects an admin-configured provider by id. The patient never sees or sends a client_id/secret:
-  // the backend fills them from the catalog.
+  // Connects an admin-configured provider by id. The patient never sees or sends a client_id/secret.
   //
-  // Order for Medicare-class providers (#427 / #430):
-  //   1) PP/ToS must already be granted (button disabled otherwise; hard-check here).
-  //   2) Pre-connect informed modal — Cancel aborts; Continue (same click) starts OAuth.
-  //   3) OAuth popup opens in the Continue click handler (user gesture — avoids popup blockers).
+  // Default for all medical sources:
+  //   1) PP/ToS granted (unless consent_policy=skip)
+  //   2) Pre-connect modal (unless pre_connect_profile=none)
+  //   3) OAuth popup on Continue / direct click
   public async connectCatalogProvider(provider: ConnectableProvider): Promise<void> {
     if (this.connectingProviderId) { return } // guard against double-submit
     this.connectErrorMsg = ""
     this.connectSuccessMsg = ""
 
-    // #427: never open OAuth (or pre-connect modal) without active PP/ToS consent.
     if (this.needsLegalConsent(provider)) {
-      this.connectErrorMsg = 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting Medicare.'
+      this.connectErrorMsg = 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting a medical source.'
       return
     }
 
-    // #430: informed message before authorize (Medicare-class only). Non-Medicare goes straight to OAuth.
-    if (provider.requires_legal_consent) {
-      this.pendingMedicareProvider = provider
+    const profile = provider.pre_connect_profile || (provider.medicare_class ? 'medicare' : 'generic')
+    const copy = preConnectCopyForProfile(profile)
+    if (copy) {
+      this.preConnectCopy = copy
+      this.pendingConnectProvider = provider
       try {
-        await this.modalService.open(this.medicarePreConnectModalRef, {
-          ariaLabelledBy: 'medicare-preconnect-title',
+        await this.modalService.open(this.preConnectModalRef, {
+          ariaLabelledBy: 'preconnect-title',
           backdrop: 'static',
         }).result
-        // Continue starts OAuth in confirmMedicarePreConnect (same click as window.open).
-        // Cancel/dismiss rejects — nothing more to do.
       } catch {
-        this.pendingMedicareProvider = null
+        this.pendingConnectProvider = null
+        this.preConnectCopy = null
       }
       return
     }
@@ -203,10 +212,11 @@ export class MedicalSourcesComponent implements OnInit {
   }
 
   // Continue on the pre-connect modal: close + start OAuth in this click (popup-blocker safe).
-  confirmMedicarePreConnect(modal: {close: (r: string) => void}): void {
-    const provider = this.pendingMedicareProvider
+  confirmPreConnect(modal: {close: (r: string) => void}): void {
+    const provider = this.pendingConnectProvider
     modal.close('continue')
-    this.pendingMedicareProvider = null
+    this.pendingConnectProvider = null
+    this.preConnectCopy = null
     if (provider) {
       void this.runCatalogOAuthConnect(provider)
     }
@@ -269,7 +279,7 @@ export class MedicalSourcesComponent implements OnInit {
         return
       }
 
-      this.connectSuccessMsg = `Connected to ${provider.display}. Your records are being imported.`
+      this.connectSuccessMsg = `Connected to ${provider.display}. Your records are being imported. You can disconnect anytime from Connected Sources above (removes this connection and its imported records).`
       this.refreshConnectedList()
     } catch (err) {
       this.connectErrorMsg = formatSmartConnectFailure(err)

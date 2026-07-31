@@ -36,6 +36,9 @@ type providerCatalogRequest struct {
 	BrandLogoUrl         string `json:"brand_logo_url"`
 	Enabled              bool   `json:"enabled"`
 	AuthorizeUrlOverride string `json:"authorize_url_override"`
+	// Modular connect policy (defaults: required / auto).
+	ConsentPolicy     string `json:"consent_policy"`
+	PreConnectProfile string `json:"pre_connect_profile"`
 }
 
 // environmentOrDefault normalizes the environment field; anything other than "sandbox" is production
@@ -99,6 +102,8 @@ func CreateProviderCatalogEntry(c *gin.Context) {
 		BrandLogoUrl:         strings.TrimSpace(req.BrandLogoUrl),
 		Enabled:              req.Enabled,
 		AuthorizeUrlOverride: strings.TrimSpace(req.AuthorizeUrlOverride),
+		ConsentPolicy:        normalizeConsentPolicy(req.ConsentPolicy),
+		PreConnectProfile:    normalizePreConnectProfile(req.PreConnectProfile),
 	}
 	if err := databaseRepo.CreateProviderCatalogEntry(c, &entry); err != nil {
 		logger.Errorf("error creating provider catalog entry: %v", err)
@@ -182,6 +187,12 @@ func UpdateProviderCatalogEntry(c *gin.Context) {
 	existing.BrandLogoUrl = strings.TrimSpace(req.BrandLogoUrl)
 	existing.Enabled = req.Enabled
 	existing.AuthorizeUrlOverride = strings.TrimSpace(req.AuthorizeUrlOverride)
+	if strings.TrimSpace(req.ConsentPolicy) != "" {
+		existing.ConsentPolicy = normalizeConsentPolicy(req.ConsentPolicy)
+	}
+	if strings.TrimSpace(req.PreConnectProfile) != "" {
+		existing.PreConnectProfile = normalizePreConnectProfile(req.PreConnectProfile)
+	}
 	// Only overwrite the secret when a new one is supplied; empty input preserves the stored secret.
 	if req.ClientSecret != "" {
 		existing.ClientSecret = req.ClientSecret
@@ -478,6 +489,24 @@ func loadEnabledEntry(c *gin.Context, databaseRepo database.DatabaseRepository) 
 		return nil, fmt.Errorf("provider %s is not enabled", entry.ID)
 	}
 	return entry, nil
+}
+
+func normalizeConsentPolicy(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case models.ConsentPolicySkip:
+		return models.ConsentPolicySkip
+	default:
+		return models.ConsentPolicyRequired
+	}
+}
+
+func normalizePreConnectProfile(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case models.PreConnectNone, models.PreConnectGeneric, models.PreConnectMedicare, models.PreConnectAuto:
+		return strings.ToLower(strings.TrimSpace(v))
+	default:
+		return models.PreConnectAuto
+	}
 }
 
 func platformTypeOrDefault(pt string) sourcePkg.PlatformType {

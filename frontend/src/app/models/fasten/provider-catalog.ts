@@ -6,7 +6,13 @@ export interface ConnectableProvider {
   id: string;
   display: string;
   brand_logo_url?: string;
-  /** True for Medicare / CMS Blue Button — requires PP/ToS opt-in before connect (#427). */
+  /** PP/ToS opt-in required before connect (default true for all medical sources). */
+  requires_user_consent?: boolean;
+  /** Resolved pre-connect profile: none | generic | medicare. */
+  pre_connect_profile?: string;
+  /** CMS Blue Button-class (attribution + forced Medicare label on production). */
+  medicare_class?: boolean;
+  /** @deprecated use requires_user_consent */
   requires_legal_consent?: boolean;
 }
 
@@ -28,6 +34,10 @@ export interface ProviderCatalogEntry {
   // Optional: pins the authorize endpoint when the server's discovery can't advertise the one our app
   // must use (e.g. Cerner's patient-persona authorize is undiscoverable). Usually empty. #338
   authorize_url_override?: string;
+  /** required (default) | skip */
+  consent_policy?: string;
+  /** auto (default) | generic | medicare | none */
+  pre_connect_profile?: string;
 }
 
 // ProviderCatalogEntryRequest is the admin create/update payload. client_secret is write-only: send it
@@ -43,4 +53,6 @@ export interface ProviderCatalogEntryRequest {
   brand_logo_url?: string;
   enabled: boolean;
   authorize_url_override?: string;
+  consent_policy?: string;
+  pre_connect_profile?: string;
 }

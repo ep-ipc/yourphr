@@ -47,6 +47,14 @@ type ProviderCatalogEntry struct {
 	// so the patient-persona one is undiscoverable (#338). The token endpoint still comes from
 	// discovery. Not a secret (it's a public URL); shown to admins.
 	AuthorizeUrlOverride string `json:"authorize_url_override"`
+
+	// ConsentPolicy: "required" (default) or "skip". Modular opt-out when a provider cannot use
+	// product PP/ToS gating. Empty is treated as required.
+	ConsentPolicy string `json:"consent_policy" gorm:"default:required"`
+
+	// PreConnectProfile: "auto" (default), "generic", "medicare", or "none". Modular pre-connect
+	// informed messaging; "auto" picks medicare vs generic from provider signals.
+	PreConnectProfile string `json:"pre_connect_profile" gorm:"default:auto"`
 }
 
 // ConnectableProvider is the user-facing projection: enough to render a picker, with no credentials.
@@ -54,19 +62,28 @@ type ConnectableProvider struct {
 	ID           string `json:"id"`
 	Display      string `json:"display"`
 	BrandLogoUrl string `json:"brand_logo_url"`
-	// RequiresLegalConsent is true for Medicare / CMS Blue Button-style providers: the UI must
-	// require active PP/ToS opt-in before connect (#427).
+	// RequiresUserConsent — PP/ToS opt-in required before connect (default true for all medical sources).
+	RequiresUserConsent bool `json:"requires_user_consent"`
+	// PreConnectProfile — resolved: "none" | "generic" | "medicare".
+	PreConnectProfile string `json:"pre_connect_profile"`
+	// MedicareClass — CMS Blue Button-class (attribution, forced "Medicare" label on production).
+	MedicareClass bool `json:"medicare_class"`
+	// RequiresLegalConsent is deprecated alias of RequiresUserConsent (older frontends).
 	RequiresLegalConsent bool `json:"requires_legal_consent"`
 }
 
 // Connectable returns the credential-free projection of an entry for the picker.
 // Patient production lists get CMS-compliant display names (#429); sandbox keeps admin-explicit labels.
 func (p *ProviderCatalogEntry) Connectable() ConnectableProvider {
+	policy := ResolveConnectionPolicy(p)
 	return ConnectableProvider{
-		ID:      p.ID.String(),
-		Display: PatientFacingSourceDisplay(p.Environment, p.Display, p.ApiEndpointBaseUrl, string(p.PlatformType)),
+		ID:                   p.ID.String(),
+		Display:              PatientFacingSourceDisplay(p.Environment, p.Display, p.ApiEndpointBaseUrl, string(p.PlatformType)),
 		BrandLogoUrl:         p.BrandLogoUrl,
-		RequiresLegalConsent: ProviderRequiresLegalConsent(p.Display, p.ApiEndpointBaseUrl, string(p.PlatformType)),
+		RequiresUserConsent:  policy.RequiresUserConsent,
+		PreConnectProfile:    policy.PreConnectProfile,
+		MedicareClass:        policy.MedicareClass,
+		RequiresLegalConsent: policy.RequiresUserConsent, // back-compat
 	}
 }
 

@@ -58,7 +58,7 @@
               </div>
               <div class="card-body">
                 <p class="tx-gray-500 mg-b-10">
-                  Required before connecting Medicare (and similar sources). Active opt-in is saved to your account.
+                  Required before connecting medical records (catalog providers). Active opt-in is saved to your account. Rare providers may be configured to skip this.
                 </p>
                 <p class="mg-b-15">
                   <a [href]="legalConsent?.privacy_policy_url || 'https://yourphr.org/privacy.html'" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
@@ -75,7 +75,7 @@
                     Accepted {{ legalConsent.accepted_at }}
                   </p>
                   <p *ngIf="!legalConsent.accepted" class="tx-gray-500 tx-12 mg-b-10">
-                    Medicare connect is blocked until you agree.
+                    Medical source connects are blocked until you agree.
                   </p>
 
                   <div *ngIf="!legalConsent.accepted" class="form-check mg-b-15">
@@ -94,7 +94,7 @@
                     <i class="fas fa-ban mg-r-5"></i>{{ legalConsentBusy ? 'Revoking…' : 'Revoke consent' }}
                   </button>
                   <p *ngIf="legalConsent.accepted" class="tx-gray-500 tx-12 mg-t-10 mg-b-0">
-                    Revoking blocks new Medicare connections and disconnects Medicare sources. Imported records stay until you delete them.
+                    Revoking blocks new Medicare connections and removes Medicare sources <strong>and</strong> records imported from them on this instance.
                   </p>
                 </ng-container>
               </div>
@@ -130,6 +130,40 @@
                     Change password
                   </button>
                 </form>
+              </div>
+            </div>
+          </div>
+
+          <!-- Enrollee data controls (#431). Connections live on /sources — not as cards here. -->
+          <div class="col-lg-4 mg-b-20">
+            <div class="card h-100">
+              <div class="card-header">
+                <h6 class="card-title mg-b-0"><i class="fas fa-user-shield"></i>&nbsp; Your data controls</h6>
+              </div>
+              <div class="card-body">
+                <p class="tx-gray-500 mg-b-10">
+                  <strong>Connected medical sources</strong> (add, sync, disconnect) live on
+                  <a routerLink="/sources">Sources</a> — not as separate cards on this page.
+                </p>
+                <ul class="tx-13 mg-b-15 ps-3">
+                  <li class="mg-b-5">
+                    <strong>Sources</strong> — connect a provider; manage connected cards; Actions →
+                    <em>Disconnect &amp; remove data</em> (credentials + imported records for that source).
+                  </li>
+                  <li class="mg-b-5">
+                    <strong>Revoke Privacy &amp; Terms</strong> (card above) — blocks new medical-source connects
+                    and removes Medicare-class sources the same way as disconnect.
+                  </li>
+                  <li>
+                    <strong>Delete account</strong> (below) — permanently deletes your account and all of your data on this instance.
+                  </li>
+                </ul>
+                <a routerLink="/sources" class="btn btn-az-primary mg-r-10">
+                  <i class="fas fa-plug mg-r-5"></i> Go to Sources
+                </a>
+                <a href="https://yourphr.org/privacy.html" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">
+                  Privacy Policy
+                </a>
               </div>
             </div>
           </div>

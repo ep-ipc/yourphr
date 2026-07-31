@@ -2,8 +2,13 @@
   <div class="container">
     <div class="az-content-body d-flex flex-column">
       <div class="az-content-breadcrumb">
-        <span>Medical Sources</span>
+        <span>Sources</span>
       </div>
+      <p class="tx-gray-500 mg-b-15">
+        Connect healthcare providers and manage <strong>Connected Sources</strong> here
+        (sync, download, disconnect). Account-wide settings (Privacy &amp; Terms, delete account) are on
+        <a routerLink="/account-profile">Account Profile</a>.
+      </p>
 
       <div class="alert alert-info" role="alert">
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -76,8 +81,8 @@
 
       <ng-container *ngIf="connectableProviders.length; else noProviders">
         <p class="mg-b-15 tx-gray-600">Pick your provider and sign in with your provider account — you'll never be asked for a client ID or secret.</p>
-        <div *ngIf="showMedicareConsentBanner" class="alert alert-info mg-b-15" role="alert">
-          Medicare and similar sources require you to accept the
+        <div *ngIf="showConsentBanner" class="alert alert-info mg-b-15" role="alert">
+          Connecting medical records requires you to accept the
           <a href="https://yourphr.org/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
           and
           <a href="https://yourphr.org/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a>
@@ -219,18 +224,18 @@
   </div>
 </ng-template>
 
-<!-- Medicare pre-connect informed messaging (#430). Only reached after PP/ToS consent (#427). -->
-<ng-template #medicarePreConnectModalRef let-modal>
-  <div class="modal-header">
-    <h5 class="modal-title" id="medicare-preconnect-title">{{ medicarePreConnect.title }}</h5>
+<!-- Pre-connect informed messaging — all medical sources by default; copy by profile. -->
+<ng-template #preConnectModalRef let-modal>
+  <div class="modal-header" *ngIf="preConnectCopy as copy">
+    <h5 class="modal-title" id="preconnect-title">{{ copy.title }}</h5>
     <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss('cancel')"></button>
   </div>
-  <div class="modal-body">
-    <p class="mg-b-15">{{ medicarePreConnect.intro }}</p>
+  <div class="modal-body" *ngIf="preConnectCopy as copy">
+    <p class="mg-b-15">{{ copy.intro }}</p>
     <ul class="mg-b-15">
-      <li *ngFor="let line of medicarePreConnect.bullets">{{ line }}</li>
+      <li *ngFor="let line of copy.bullets">{{ line }}</li>
     </ul>
-    <p class="tx-gray-500 tx-12 mg-b-10" *ngIf="medicareAttributions.length">
+    <p class="tx-gray-500 tx-12 mg-b-10" *ngIf="copy.showMedicareAttribution && medicareAttributions.length">
       <span *ngFor="let notice of medicareAttributions">{{ notice.body }}</span>
     </p>
     <p class="tx-12 mg-b-0">
@@ -241,15 +246,14 @@
       <a routerLink="/attributions" (click)="modal.dismiss('cancel')">Attributions</a>
     </p>
   </div>
-  <div class="modal-footer">
+  <div class="modal-footer" *ngIf="preConnectCopy as copy">
     <button type="button" class="btn btn-outline-secondary" (click)="modal.dismiss('cancel')">
-      {{ medicarePreConnect.cancelLabel }}
+      {{ copy.cancelLabel }}
     </button>
-    <button type="button" class="btn btn-az-primary" (click)="confirmMedicarePreConnect(modal)">
-      {{ medicarePreConnect.continueLabel }}
+    <button type="button" class="btn btn-az-primary" (click)="confirmPreConnect(modal)">
+      {{ copy.continueLabel }}
     </button>
   </div>
-
 </ng-template>
 
 
