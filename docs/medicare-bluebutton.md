@@ -1,6 +1,8 @@
 # Connect Medicare — CMS Blue Button 2.0
 
-How to connect **CMS Blue Button 2.0** (Medicare claims data) to YourPHR as a SMART-on-FHIR source. This page exists so you don't have to reverse-engineer the settings the way we did — it lists the **exact** values that work, plus the errors you'll hit if a value is wrong.
+How to connect **CMS Blue Button 2.0** (Medicare claims data) to YourPHR as a SMART-on-FHIR source — **sandbox** (verified) and **production** (after CMS credentials).
+
+**Related:** [provider catalog](provider-catalog/README.md) · [connection policy](connection-policy.md) · [attributions](Attributions.md) · [#432](https://github.com/jwilleke/yourphr/issues/432) · [#408](https://github.com/jwilleke/yourphr/issues/408)
 
 ## Patient-facing name: “Medicare” (#429)
 
@@ -8,80 +10,166 @@ Blue Button is the API / architecture (FHIR, OAuth, CARIN). For CMS production-a
 
 YourPHR enforces that on the **production** connectable list and when storing the connected source display. **Sandbox / admin** may keep explicit names (e.g. `Medicare — Blue Button 2.0 (Sandbox)`). Attributions still say “Blue Button APIs” where required ([#428](https://github.com/jwilleke/yourphr/issues/428)).
 
-> **✅ Verified working** against the Blue Button **sandbox** on 2026-06-14 — a real end-to-end connect (login → token exchange → sync) succeeded with exactly the settings below.
->
-> **Heads-up — this is the manual / admin path.** Today you enter the OAuth settings by hand in the "Connect a SMART source" form. The patient-friendly "pick Medicare from a list, log in, never see a client id/secret" experience is the **Source Catalog** ([#291](https://github.com/jwilleke/yourphr/issues/291)) — until that lands, use the values below.
-
 ## What Blue Button 2.0 gives you
 
-A national, standardized **FHIR R4** API for Medicare beneficiaries. It returns **claims/insurance** data — **`ExplanationOfBenefit`** (the main one), **`Coverage`**, and **`Patient`**. It is *complementary* to clinical records (labs, notes, meds), **not** a replacement. The **sandbox** is self-serve, instant, and serves **synthetic** beneficiary data (no real PHI); **production** is a documented CMS review (no cost).
+A national **FHIR R4** API for Medicare beneficiaries. Claims/insurance data: **`ExplanationOfBenefit`**, **`Coverage`**, **`Patient`**. Complementary to clinical EHR records, not a replacement.
 
-## Step 1 — Register a sandbox app
+| | Sandbox | Production |
+|---|---|---|
+| FHIR base | `https://sandbox.bluebutton.cms.gov/v2/fhir` | `https://api.bluebutton.cms.gov/v2/fhir` |
+| Data | Synthetic beneficiaries | Real enrollee claims (with consent) |
+| Credentials | Self-serve developer portal | CMS production-access review ([#433](https://github.com/jwilleke/yourphr/issues/433)) |
+| YourPHR path | Admin `/sandbox` (env-seeded) | Patient `/sources` (catalog `environment=production`) |
 
-1. Go to the CMS Blue Button developer portal: `https://bluebutton.cms.gov/developers/` → **Sandbox**.
-2. Create a developer account and **register an application** with these settings:
+> **✅ Sandbox verified** end-to-end 2026-06-14 (login → token → sync).
 
-   | App setting | Value |
-   |---|---|
-   | **OAuth Client Type** | **`confidential`** (you get a `client_id` **and** a `client_secret`) |
-   | **OAuth Grant Type** | **`authorization-code`** |
-   | **Callback URL / Redirect URI** | your instance's relay callback — **`https://relay.nerdsbythehour.com/callback`** (default), or `${YOURPHR_RELAY_URL}/callback` if you run your own relay. **Must match exactly.** |
-   | **Collect beneficiary demographic data** | **Yes** (needed to read Patient demographics) |
+---
 
-3. CMS gives you a **Sandbox `client_id`** and **Sandbox `client_secret`**. Use the **Sandbox** pair (not Production).
+## Scopes (sandbox and production)
 
-## Step 2 — The exact connect settings
-
-In YourPHR: **Sources → Connect a SMART source**, fill in **exactly**:
-
-| Field | Value |
-|---|---|
-| **FHIR base URL** | `https://sandbox.bluebutton.cms.gov/v2/fhir` |
-| **Client ID** | your sandbox `client_id` — **just the id** (see the `/` gotcha below) |
-| **Client Secret** | your sandbox `client_secret` — Blue Button is a **confidential** client, so this is **required** |
-| **Scopes** | `openid profile launch/patient patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read` |
-| **Display name** | e.g. `Medicare (Blue Button)` |
-
-Then **Connect** → a popup opens to the CMS login → log in as a **synthetic sandbox beneficiary** → **Authorize** → the popup redirects to the relay, YourPHR completes the token exchange and syncs.
-
-## Scopes — use these, not the form default
-
-The form's default scopes are Epic-shaped and **Blue Button rejects them** (`invalid_scope`). Blue Button supports a **specific** set — use exactly:
+Use **exactly** (also `models.BlueButtonSMARTScopes`):
 
 ```
 openid profile launch/patient patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read
 ```
 
-Blue Button does **NOT** support these (they cause `invalid_scope`) — leave them out:
+**Do not** request (Blue Button returns `invalid_scope`):
 
-- `patient/*.read` — **no wildcard**; only the three specific resources above
+- `patient/*.read` (no wildcard)
 - `fhirUser`
-- `offline_access` — **confirmed rejected** by the sandbox authorize endpoint (it's not in Blue Button's published `scopes_supported`), even though Blue Button advertises an offline *capability*. Including it gives `invalid_scope`. **Omit it.** The trade-off: no refresh token, so the access token lasts only ~1h and a later re-sync needs a fresh login. (True offline/refresh on Blue Button may require a registration setting or production access — out of scope here.)
+- `offline_access` (sandbox rejects it; no refresh token → re-login for later re-sync)
 
-## Troubleshooting — the exact errors and their fixes
+---
 
-| Error you see | Cause | Fix |
+## Sandbox (operators / developers)
+
+### 1. Register a sandbox app
+
+1. [CMS Blue Button developers](https://bluebutton.cms.gov/developers/) → **Sandbox**.
+2. Register an application:
+
+   | App setting | Value |
+   |---|---|
+   | **OAuth Client Type** | **`confidential`** |
+   | **OAuth Grant Type** | **`authorization-code`** |
+   | **Callback URL / Redirect URI** | **Exactly** this instance’s relay callback (see [Relay callback](#relay-callback-uri) below) |
+   | **Collect beneficiary demographic data** | **Yes** |
+
+3. Use the **Sandbox** `client_id` / `client_secret` (not Production).
+
+### 2. Wire YourPHR (preferred: env seed)
+
+Set on the app deployment (never commit secrets):
+
+```bash
+YOURPHR_SANDBOX_BLUEBUTTON_CLIENT_ID=…
+YOURPHR_SANDBOX_BLUEBUTTON_CLIENT_SECRET=…
+# Plus relay — see Relay callback
+YOURPHR_RELAY_PUBLIC_URL=https://your-public-relay.example
+YOURPHR_RELAY_SECRET=…   # same secret as the relay process
+```
+
+On startup, YourPHR upserts **Medicare — Blue Button 2.0 (Sandbox)** as `environment=sandbox`, enabled. Test from Admin → **Sandbox**, not patient Sources.
+
+### 3. Alternate: Admin catalog
+
+Admin → Provider Catalog: create/edit the sandbox Blue Button row (or env-seeded row), confidential secret, enabled. Connect from `/sandbox`.
+
+### 4. Client id `/` gotcha
+
+CMS portal may show `client_id/client_secret` as one string. Put **only** the id in Client ID and the secret in Client Secret — never paste both into Client ID.
+
+### Sandbox troubleshooting
+
+| Error | Cause | Fix |
 |---|---|---|
-| `invalid api_endpoint_base_url: URL must use https (got "")` | **FHIR base URL is empty** (the field shows the grey `https://fhir.example.com/r4` *placeholder*, which counts as blank). | Type `https://sandbox.bluebutton.cms.gov/v2/fhir` into the field. |
-| `invalid_client : Application does not exist (client_id)` | The `client_id` CMS received isn't a registered sandbox app — usually **id+secret jammed into the Client ID field** (separated by `/`), a **wrong/Production** id, or a typo/space. | Put **only** the `client_id` in Client ID (the part **before** any `/`), and the secret in the **Client Secret** field. Use the **Sandbox** id. |
-| `invalid_scope` | Requested scopes Blue Button doesn't support — the wildcard `patient/*.read`, `fhirUser`, **or `offline_access`** (the sandbox rejects all three). | Replace Scopes with the exact list above — none of those three. |
-| `could not retrieve authorization code from relay: timed out` **and the popup said "Connected"** | The login took **longer than YourPHR's connect-wait window**. The popup "Connected" means the relay *did* get the code — but the backend had already stopped polling. Not a config error. | The window now defaults to **4 minutes** and is **operator-tunable** via `web.smart_connect.login_wait_seconds` (env `YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS`) — no frontend rebuild. If your login is even slower, raise it and restart. Quick workaround: pre-log-in at `bluebutton.cms.gov` in another tab first, then Connect so the popup skips straight to Authorize. |
-| `could not retrieve authorization code from relay: timed out` **and no "Connected" popup** | The auth code never reached the relay — usually a **redirect-URI mismatch** (the app's registered Callback URL ≠ the relay callback) or the **login wasn't completed**. | Make the app's redirect URI **exactly** `https://relay.nerdsbythehour.com/callback`; complete the CMS login + Authorize with a **synthetic** beneficiary. |
+| `invalid_client` / Application does not exist | Wrong id, Production id on sandbox, or id+secret jammed into Client ID | Sandbox id only in Client ID; secret separate |
+| `invalid_scope` | Wildcard / `fhirUser` / `offline_access` | Use exact scopes above |
+| Relay timeout + popup “Connected” | Login longer than connect wait | Raise `YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS` (default 240); or pre-login at CMS |
+| Relay timeout, no “Connected” | Redirect URI mismatch or incomplete login | Callback must match [Relay callback](#relay-callback-uri) exactly |
 
-**The `client_id` / `client_secret` "`/`" gotcha:** the connect form has **separate** Client ID and Client Secret fields. Do **not** paste `client_id/client_secret` into Client ID — CMS reads the whole blob as one id and returns `Application does not exist`. Split them.
+---
 
-## Production access
+## Production (#432) — operator checklist
 
-Sandbox is enough to build and prove the connection. For **real** Medicare data, request **production** credentials via CMS's documented app-review process (no cost); the base URL becomes `https://api.bluebutton.cms.gov/v2/fhir` and you use the **Production** `client_id`/`client_secret`.
+**Goal:** After CMS issues production credentials, enable patient **Medicare** on `/sources` with **no code change** and **no secrets in git**.
+
+### A. CMS production app
+
+1. Complete CMS [production access](https://bluebutton.cms.gov/production-access/) process (privacy, terms, demo — [#433](https://github.com/jwilleke/yourphr/issues/433)).
+2. Register **production** app with:
+   - Confidential client, authorization-code
+   - **Callback URL** = this instance’s relay callback ([below](#relay-callback-uri)) — **exact match**
+   - Demographic collection as required by your CMS registration
+3. Receive **Production** `client_id` and `client_secret` only via CMS (not the sandbox pair).
+
+### B. Relay callback URI
+
+1. As admin, open **Admin Dashboard → SMART OAuth Relay** (or `GET /api/secure/source/relay-config`).
+2. Copy **`callback_url`** (public origin + `/callback`).
+3. Register that **exact** string with CMS (sandbox app and/or production app).
+4. Ensure `YOURPHR_RELAY_PUBLIC_URL` (and `YOURPHR_RELAY_URL` / `YOURPHR_RELAY_SECRET` as needed) match how you deploy the relay. See [`deployment/README.md`](deployment/README.md) and [`SMART-flow-map.md`](SMART-flow-map.md).
+
+### C. Production catalog entry (no code change)
+
+YourPHR ships a **credential-free production template** (migration):
+
+| Field | Value |
+|---|---|
+| Display (admin) | `Medicare` |
+| Environment | `production` |
+| FHIR base | `https://api.bluebutton.cms.gov/v2/fhir` |
+| Scopes | Blue Button SMART scopes above |
+| Enabled | `false` until you add creds |
+| Patient button label | **Medicare** (enforced) |
+
+**Option 1 — Admin UI (any host)**
+
+1. Admin → **Provider Catalog**
+2. Open entry **Medicare** (or create with the values above if missing)
+3. Set **Client ID** / **Client Secret** (production pair)
+4. Set **Enabled** = true
+5. Save
+
+**Option 2 — Env seed (GitOps / k8s Secret)**
+
+```bash
+YOURPHR_PROD_BLUEBUTTON_CLIENT_ID=…
+YOURPHR_PROD_BLUEBUTTON_CLIENT_SECRET=…
+```
+
+On startup, YourPHR upserts the production **Medicare** entry with those credentials and **enables** it. Restart the app after setting env.
+
+Never commit these values. Prefer a sealed Secret / external secret store.
+
+### D. Enrollee path (verify)
+
+1. User grants PP/ToS on **Account Profile**
+2. **Sources** → **Medicare** (not “Blue Button”)
+3. Pre-connect informed modal → Continue
+4. CMS login → Authorize → import on Connected Sources
+5. Disconnect & remove data works from Connected Sources
+
+### E. Operator contact (optional but useful for demos)
+
+Admin → **Instance** card: operator name / contact email / help URL for this deployment (not the OSS project). Enrollee-facing display of that contact may still be expanded later.
+
+---
 
 ## How this maps to YourPHR internals
 
-- **Discovery + PKCE** work out of the box — Blue Button serves `/.well-known/smart-configuration`, so the generic SMART client handles the auth flow.
-- **Confidential client** (the `client_secret`) — [#286](https://github.com/jwilleke/yourphr/issues/286).
-- **No `$everything`** — Blue Button exposes only Patient/Coverage/ExplanationOfBenefit and no operations, so YourPHR fetches per-resource via the CapabilityStatement-driven path — [#250](https://github.com/jwilleke/yourphr/issues/250).
-- **Connect-form Client Secret field** — [#279](https://github.com/jwilleke/yourphr/issues/279).
-- **OAuth relay** — the redirect callback; default `relay.nerdsbythehour.com`, overridable via `YOURPHR_RELAY_URL` (see [`deployment/README.md`](deployment/README.md)).
+- **Catalog path** — patient and sandbox UIs use provider-catalog authorize/connect (not BYO form for normal use).
+- **Discovery + PKCE** — `/.well-known/smart-configuration`; generic SMART client.
+- **Confidential client** — [#286](https://github.com/jwilleke/yourphr/issues/286).
+- **No `$everything`** — per-resource fetch ([#250](https://github.com/jwilleke/yourphr/issues/250)).
+- **Patient id** — may come from Coverage/EOB when token omits `patient` ([#293](https://github.com/jwilleke/yourphr/issues/293)).
+- **Connection policy** — PP/ToS + pre-connect modal ([connection-policy.md](connection-policy.md)).
 
-## Future — no more of this (the Source Catalog)
+## Related code / constants
 
-Everything above is the manual path. The **Source Catalog** ([#291](https://github.com/jwilleke/yourphr/issues/291)) will hold these per-provider settings (base URL, scopes, the admin's credentials) so a patient just clicks **"Connect Medicare"** and logs in — never seeing a base URL, scope list, client id, or secret. This doc is the interim reference and the source of truth for the Blue Button catalog entry.
+| Item | Location |
+|---|---|
+| Sandbox seeds | `models.SandboxProviderSeeds()` + `YOURPHR_SANDBOX_BLUEBUTTON_*` |
+| Production template | `models.ProductionMedicareCatalogTemplate()` |
+| Production env seed | `database.SeedProductionMedicareProvider` + `YOURPHR_PROD_BLUEBUTTON_*` |
+| Scopes constant | `models.BlueButtonSMARTScopes` |

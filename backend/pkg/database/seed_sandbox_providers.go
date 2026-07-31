@@ -54,3 +54,32 @@ func SeedSandboxProviders(ctx context.Context, repo DatabaseRepository, logger *
 		}
 	}
 }
+
+// SeedProductionMedicareProvider upserts the production Medicare (CMS Blue Button) catalog entry
+// when YOURPHR_PROD_BLUEBUTTON_CLIENT_ID is set (#432). Secret from YOURPHR_PROD_BLUEBUTTON_CLIENT_SECRET.
+// Enables the entry so patients see "Medicare" on /sources without a code change. No-op when client id
+// is empty — operators can instead fill the disabled template via Admin Provider Catalog.
+//
+// Env names:
+//   YOURPHR_PROD_BLUEBUTTON_CLIENT_ID
+//   YOURPHR_PROD_BLUEBUTTON_CLIENT_SECRET
+func SeedProductionMedicareProvider(ctx context.Context, repo DatabaseRepository, logger *logrus.Entry, getenv func(string) string) {
+	clientID := strings.TrimSpace(getenv("YOURPHR_PROD_BLUEBUTTON_CLIENT_ID"))
+	if clientID == "" {
+		return
+	}
+	secret := strings.TrimSpace(getenv("YOURPHR_PROD_BLUEBUTTON_CLIENT_SECRET"))
+	tmpl := models.ProductionMedicareCatalogTemplate()
+	tmpl.ClientId = clientID
+	tmpl.ClientSecret = secret
+	tmpl.Enabled = true
+	if err := repo.UpsertProviderCatalogEntryByDisplay(ctx, &tmpl); err != nil {
+		if logger != nil {
+			logger.Errorf("production Medicare seed: could not upsert: %v", err)
+		}
+		return
+	}
+	if logger != nil {
+		logger.Infof("production Medicare catalog entry configured from env (display %q, patient label Medicare)", tmpl.Display)
+	}
+}

@@ -392,6 +392,21 @@ func (gr *GormRepository) Migrate() error {
 					Update("consent_policy", models.ConsentPolicyRequired).Error
 			},
 		},
+		{
+			ID: "20260731000001", // production Medicare catalog template (no secrets) for #432
+			Migrate: func(tx *gorm.DB) error {
+				tmpl := models.ProductionMedicareCatalogTemplate()
+				var count int64
+				if err := tx.Model(&models.ProviderCatalogEntry{}).
+					Where("display = ?", tmpl.Display).Count(&count).Error; err != nil {
+					return err
+				}
+				if count > 0 {
+					return nil // already present (admin or env seed)
+				}
+				return tx.Create(&tmpl).Error
+			},
+		},
 	})
 
 	// run when database is empty

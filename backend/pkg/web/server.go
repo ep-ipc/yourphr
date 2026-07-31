@@ -585,6 +585,7 @@ func (ae *AppEngine) initializeDatabase() error {
 	// connect with zero typing and the client_secret never reaches the browser (#291). Sandboxes with
 	// no client_id configured in this deployment are skipped.
 	database.SeedSandboxProviders(context.Background(), dbRepo, ae.Logger, os.Getenv)
+	database.SeedProductionMedicareProvider(context.Background(), dbRepo, ae.Logger, os.Getenv)
 
 	return nil
 }

@@ -1,74 +1,153 @@
 # Provider catalog (admin-configured sources)
 
-Status: in progress — backend [#304](https://github.com/jwilleke/yourphr/issues/304) (frontend picker [#306](https://github.com/jwilleke/yourphr/issues/306), umbrella [#291](https://github.com/jwilleke/yourphr/issues/291)).
+**Status:** live for patient connect and admin management (foundation [#304](https://github.com/jwilleke/yourphr/issues/304) / picker [#306](https://github.com/jwilleke/yourphr/issues/306) / sandbox env split [#291](https://github.com/jwilleke/yourphr/issues/291)).
+
+**Related:** as-built SMART map [`docs/SMART-flow-map.md`](../SMART-flow-map.md) · connection policy [`docs/connection-policy.md`](../connection-policy.md) · Medicare / Blue Button [`docs/medicare-bluebutton.md`](../medicare-bluebutton.md) · production catalog path [#432](https://github.com/jwilleke/yourphr/issues/432)
 
 ## Why this exists
 
-A patient should connect a data source by **picking it from a list** ("Connect Medicare / Blue Button", "Connect Epic", …) and logging in with **their** provider account — and should **never** see or handle a `client_id` or `client_secret`. Today the only connect path is **bring-your-own-`client_id` (BYO)**: every user registers their own developer app at the provider and pastes the credentials into the connect modal. That is developer work, wrong for a consumer/family PHR — it's the friction that made the live Blue Button bring-up ([#293](https://github.com/jwilleke/yourphr/issues/293)) painful.
+A patient should connect a data source by **picking it from a list** and logging in with **their** provider account — and should **never** see or handle a `client_id` or `client_secret`.
 
-The BYO model exists only because this fork **lost upstream Fasten's hosted provider catalog** — the pre-registered provider list + the **Lighthouse** OAuth relay that centrally held app credentials so users never saw them. That moved into the commercial Fasten Connect. This catalog is the **self-hosted replacement**: the admin of a YourPHR instance registers provider apps once, centrally; patients (the family on that instance) just pick and log in.
+That used to require **bring-your-own credentials (BYO)** for every user (register a developer app, paste secrets into the connect form). That is wrong for a family PHR. It only existed because this fork **lost upstream Fasten's hosted catalog + Lighthouse** (which held app credentials centrally). Lighthouse moved into commercial Fasten Connect.
 
-This is a load-bearing step toward replacing the upstream hosted catalog (EPIC [#20](https://github.com/jwilleke/yourphr/issues/20) live provider sync; the `fasten-sources-stub` decision is [#288](https://github.com/jwilleke/yourphr/issues/288)): it removes the dependence on the upstream `fasten-sources` definitions catalog (`sourceDefinitions.GetSourceDefinition`, used by `CreateReconnectSource`) by giving the instance its own owned catalog. Nothing here calls Lighthouse; the existing self-hosted relay ([#50](https://github.com/jwilleke/yourphr/issues/50)) keeps tokens off the browser. (The broader standalone rebrand/detach was EPIC [#2](https://github.com/jwilleke/yourphr/issues/2), now closed — repo/naming, not this runtime sync layer.)
+This catalog is the **self-hosted replacement**: the **instance admin** registers provider apps once; users of that instance pick and log in. Nothing here calls Lighthouse. The self-hosted OAuth **relay** ([#50](https://github.com/jwilleke/yourphr/issues/50)) keeps tokens off the browser. EPIC [#20](https://github.com/jwilleke/yourphr/issues/20) is the live-sync umbrella; `fasten-sources-stub` is [#288](https://github.com/jwilleke/yourphr/issues/288).
 
-## Roles
+## Roles and UI
 
-- **Admin** (`UserRole == "admin"`) configures catalog entries: display name, FHIR base URL, scopes, `client_id`, optional `client_secret`, brand logo, enabled flag. The admin is the one person who *does* handle credentials — once, centrally.
-- **Patient** (any authenticated user) sees only **enabled** entries, as **display + id + logo** — never `client_id`/`client_secret` — and connects by id.
+| Role | UI | Sees credentials? |
+|---|---|---|
+| **Admin** | `/admin/provider-catalog`, `/sandbox` | Yes (once, centrally) — create/edit entries, sandbox test connects |
+| **Patient** (any authenticated user) | `/sources` (often `/web/sources`) | **No** — enabled **production** entries only; connect by catalog id |
 
-On a single-user self-hosted instance the admin and patient may be the same person; the separation still matters so credentials never reach the browser during a normal connect.
+On a single-user self-hosted instance admin and patient may be the same person; credentials still must not appear in the normal connect flow.
+
+**Connected sources** (sync, download, disconnect) also live on **`/sources`**. Account-wide controls (PP/ToS, delete account) live on **`/account-profile`**. See [`connection-policy.md`](../connection-policy.md).
+
+## Environments: production vs sandbox
+
+| `environment` | Shown on | Purpose |
+|---|---|---|
+| `production` (default) | Patient `/sources` connectable list | Real enrollee path |
+| `sandbox` | Admin `/sandbox` only | Test sandboxes; **never** listed to patients |
+
+Empty/legacy rows are treated as production for back-compat.
 
 ## Data model
 
-`ProviderCatalogEntry` (GORM, encrypted-at-rest with the DB like `SourceCredential`):
+`ProviderCatalogEntry` (GORM; secrets encrypted at rest with the DB like `SourceCredential`):
 
 | Field | JSON | Notes |
 |---|---|---|
 | `ID` | `id` | uuid (ModelBase) |
-| `Display` | `display` | unique; the button label, e.g. "Connect Medicare / Blue Button" |
-| `ApiEndpointBaseUrl` | `api_endpoint_base_url` | FHIR base; validated by the SSRF guard before any server-side fetch |
+| `Display` | `display` | unique; admin/operator label |
+| `Environment` | `environment` | `production` or `sandbox` |
+| `ApiEndpointBaseUrl` | `api_endpoint_base_url` | FHIR base; SSRF-checked before server fetch |
 | `Scopes` | `scopes` | space-delimited SMART scopes |
-| `ClientId` | `client_id` | **admin/CRUD responses only; redacted in the patient list** |
-| `ClientSecret` | `-` | **never serialized** (`json:"-"`); DB-encrypted; confidential-client support is [#286](https://github.com/jwilleke/yourphr/issues/286) |
+| `ClientId` | `client_id` | admin/CRUD only; **not** on patient connectable |
+| `ClientSecret` | — | **never serialized** (`json:"-"`); DB-encrypted ([#286](https://github.com/jwilleke/yourphr/issues/286)) |
 | `PlatformType` | `platform_type` | e.g. `ehr` |
-| `BrandLogoUrl` | `brand_logo_url` | optional, for the picker |
-| `Enabled` | `enabled` | patients only see enabled entries |
+| `BrandLogoUrl` | `brand_logo_url` | optional picker logo |
+| `Enabled` | `enabled` | patients only see enabled production entries |
+| `AuthorizeUrlOverride` | `authorize_url_override` | optional; pin authorize URL when discovery is wrong ([#338](https://github.com/jwilleke/yourphr/issues/338)) |
+| `ConsentPolicy` | `consent_policy` | `required` (default) or `skip` — modular PP/ToS gate |
+| `PreConnectProfile` | `pre_connect_profile` | `auto` (default), `generic`, `medicare`, `none` |
 
-Responses expose `has_client_secret` (a bool derived from whether the secret is set) so the admin UI can show "confidential" without the value ever leaving the backend.
+Admin responses include `has_client_secret` (bool), never the secret value.
+
+### Patient projection (`ConnectableProvider`)
+
+`GET …/connectable` returns credential-free fields plus **resolved** connection policy:
+
+| Field | Meaning |
+|---|---|
+| `id`, `display`, `brand_logo_url` | Picker |
+| `requires_user_consent` | PP/ToS required before connect (default true) |
+| `pre_connect_profile` | Resolved: `none` \| `generic` \| `medicare` |
+| `medicare_class` | CMS Blue Button-class (attribution; production label **Medicare**) |
+| `requires_legal_consent` | Deprecated alias of `requires_user_consent` |
+
+**Patient-facing display:** production Blue Button-class sources are forced to the label **`Medicare`** ([#429](https://github.com/jwilleke/yourphr/issues/429)), even if the admin stored a longer name. Sandbox keeps operator-explicit names (e.g. `Medicare — Blue Button 2.0 (Sandbox)`).
+
+Policy resolution and overrides: [`docs/connection-policy.md`](../connection-policy.md).
 
 ## Endpoints
 
-Admin (gated by `UserRole == admin`):
+Admin (`UserRole == admin`):
 
-- `POST   /api/secure/provider-catalog` — create an entry
-- `GET    /api/secure/provider-catalog` — list all entries (client_id shown, secret redacted to `has_client_secret`)
+- `POST   /api/secure/provider-catalog` — create
+- `GET    /api/secure/provider-catalog` — list all (`client_id` shown; secret → `has_client_secret`)
 - `GET    /api/secure/provider-catalog/:id` — get one
-- `PUT    /api/secure/provider-catalog/:id` — update (omitting `client_secret` leaves the stored one untouched)
+- `PUT    /api/secure/provider-catalog/:id` — update (omit `client_secret` to keep stored secret)
 - `DELETE /api/secure/provider-catalog/:id` — delete
+- `GET    /api/secure/provider-catalog/sandbox` — enabled **sandbox** entries as connectable projection (admin test page)
 
 Patient (any authenticated user):
 
-- `GET  /api/secure/provider-catalog/connectable` — enabled entries as `{id, display, brand_logo_url}` only (no credentials)
-- `POST /api/secure/provider-catalog/:id/authorize` — backend loads the entry, fills `client_id`/scopes/base URL **server-side**, runs SMART discovery + PKCE, returns `{authorize_url, state, code_verifier, login_wait_seconds}`. The request body carries only `redirect_uri` (the relay callback — not a secret).
-- `POST /api/secure/provider-catalog/:id/connect` — backend loads the entry, fills `client_id`/**`client_secret`**/base URL server-side, polls the relay for the code by `state`, exchanges (confidential or PKCE), resolves the patient id, stores the `SourceCredential`, starts the background sync. The request body carries only `{state, code_verifier, redirect_uri}` — **zero `client_id`/`client_secret`**.
+- `GET  /api/secure/provider-catalog/connectable` — enabled **production** entries only; no credentials
+- `POST /api/secure/provider-catalog/:id/authorize` — server loads entry, fills `client_id`/scopes/base URL, SMART discovery + PKCE; returns `authorize_url`, `state`, `code_verifier`, `login_wait_seconds`, `relay_poll_seconds`, `redirect_uri` (server-derived from relay config when omitted)
+- `POST /api/secure/provider-catalog/:id/connect` — server fills credentials, polls relay for code by `state`, token exchange, patient id, `CreateSource`, background sync. Body: `{state, code_verifier, redirect_uri?, display?}` — **no** client credentials. Requires product PP/ToS consent unless `consent_policy=skip`.
 
-This mirrors the existing BYO `/source/authorize` + `/source/connect` ([#51](https://github.com/jwilleke/yourphr/issues/51)) but resolves the provider config from the catalog instead of the request, so credentials stay backend-only. The BYO path stays for advanced/dev use.
+BYO `/source/authorize` + `/source/connect` ([#51](https://github.com/jwilleke/yourphr/issues/51)) remains for advanced/dev use; the **UI path is catalog**.
 
-## Default entries (seeded)
+## Seeding
 
-On migration the catalog is seeded with known-good **templates** (`models.DefaultProviderCatalogEntries`), idempotently by `Display`:
+### Historical migration templates
 
-- **Medicare — Blue Button 2.0 (Sandbox)** — `https://sandbox.bluebutton.cms.gov/v2/fhir`, the exact sandbox scopes (`openid profile launch/patient patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read` — **no** `offline_access`/wildcard/`fhirUser`). Confidential client → the admin adds a `client_secret`.
-- **Epic (Sandbox)** — `https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4`, `launch/patient patient/*.read openid fhirUser offline_access`. Public/PKCE → no secret.
+`DefaultProviderCatalogEntries()` still supports early migrations: sandbox templates, empty credentials, disabled, idempotent by `Display`. **No real credential is committed** (AGENTS.md hard rule).
 
-Both ship with **empty `client_id`/`client_secret` and `Enabled=false`** — **no real credential is ever committed** (AGENTS.md hard rule). They give the admin the non-secret config pre-filled; the admin adds their bring-your-own `client_id` (and a secret for Blue Button) and flips `Enabled`. Deleting a default does not bring it back; an admin-created entry with the same `Display` is never duplicated.
+### Live sandbox credentials (env)
+
+At startup, `SeedSandboxProviders` upserts entries from `SandboxProviderSeeds()` when the corresponding env client id is set (or a literal open client id for SMART Health IT):
+
+| Display (admin/sandbox) | Env (examples) |
+|---|---|
+| Medicare — Blue Button 2.0 (Sandbox) | `YOURPHR_SANDBOX_BLUEBUTTON_CLIENT_ID` / `_SECRET` |
+| Epic (Sandbox) | `YOURPHR_SANDBOX_EPIC_CLIENT_ID` |
+| Oracle Health / Cerner (Sandbox) | `YOURPHR_SANDBOX_ORACLE_CLIENT_ID` (+ authorize override) |
+| athenahealth (Sandbox) | `YOURPHR_SANDBOX_ATHENA_CLIENT_ID` / `_SECRET` |
+| SMART Health IT (Sandbox) | always seeded (literal public client id) |
+
+All of these use `environment=sandbox` so they appear only on **`/sandbox`**, never on patient **`/sources`**.
+
+### Production Medicare ([#432](https://github.com/jwilleke/yourphr/issues/432))
+
+**Template (no secrets):** migration seeds a disabled production row:
+
+| Field | Value |
+|---|---|
+| Display | `Medicare` |
+| Environment | `production` |
+| FHIR base | `https://api.bluebutton.cms.gov/v2/fhir` |
+| Scopes | `models.BlueButtonSMARTScopes` |
+| Enabled | `false` until credentials are set |
+
+**Enable without code change:**
+
+1. **Admin UI** — Provider Catalog → edit **Medicare** → paste production `client_id` / `client_secret` → enable, or  
+2. **Env** — `YOURPHR_PROD_BLUEBUTTON_CLIENT_ID` + `YOURPHR_PROD_BLUEBUTTON_CLIENT_SECRET` (startup upserts and enables)
+
+Register the instance **relay callback** (`Admin → SMART OAuth Relay` or `GET /api/secure/source/relay-config` → `callback_url`) with the CMS production app.
+
+Patient button label is **Medicare**. Full checklist: [`docs/medicare-bluebutton.md`](../medicare-bluebutton.md) (Production section).
+
+## Patient connect UX (catalog path)
+
+Default for medical sources (modular; see connection policy):
+
+1. Account Profile: grant PP/ToS if required  
+2. `/sources`: pick provider (Medicare-class shows CMS attribution when listed)  
+3. Pre-connect informed modal (Cancel / Continue) unless `pre_connect_profile=none`  
+4. OAuth popup → relay → connect → Connected Sources on the same page  
+5. Disconnect & remove data from Connected Sources (credentials **and** imported records for that source)
 
 ## Security
 
-- `client_secret` is sensitive credential material: `json:"-"` (never serialized to the browser), DB-encrypted at rest, never logged. Token exchange is entirely server-side via the relay; the secret never reaches the browser.
-- The patient connect request contains **no** `client_id`/`client_secret` — only the catalog id, the relay `redirect_uri`, and the round-tripped `state`/`code_verifier`.
-- The SSRF guard on the FHIR base URL still applies before any server-side fetch (`validatePublicHTTPSURL` at the handler, plus the `smart` client guard, [#302](https://github.com/jwilleke/yourphr/issues/302)).
-- Admin-only mutation is enforced in-handler against `currentUser.Role`.
+- `client_secret`: `json:"-"`, DB-encrypted, never logged; exchange is server-side via relay.  
+- Patient connect request never carries client credentials.  
+- FHIR base URL SSRF-checked ([#302](https://github.com/jwilleke/yourphr/issues/302)).  
+- Admin mutations gated on `currentUser.Role`.  
+- Production vs sandbox split prevents test sandboxes from appearing as patient sources ([#291](https://github.com/jwilleke/yourphr/issues/291)).
 
 ## Relationship to the upstream catalog
 
-`CreateReconnectSource` still calls `sourceDefinitions.GetSourceDefinition` (the upstream `fasten-sources` definitions). The provider catalog is the **owned** replacement for that. Migrating the reconnect path onto the catalog — and retiring the `fasten-sources` definitions dependency — is follow-on work under EPIC [#20](https://github.com/jwilleke/yourphr/issues/20) (live provider sync) / [#288](https://github.com/jwilleke/yourphr/issues/288) (`fasten-sources-stub` future); this issue establishes the catalog + the new connect path.
+`CreateReconnectSource` may still call `sourceDefinitions.GetSourceDefinition` (stubbed `fasten-sources` definitions). The provider catalog is the **owned** path for new connect. Migrating reconnect fully onto the catalog is follow-on under EPIC [#20](https://github.com/jwilleke/yourphr/issues/20) / [#288](https://github.com/jwilleke/yourphr/issues/288).

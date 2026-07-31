@@ -166,6 +166,33 @@ func SandboxProviderSeeds() []SandboxProviderSeed {
 	}
 }
 
+// BlueButtonSMARTScopes are the verified CMS Blue Button 2.0 SMART scopes (sandbox + production).
+// No offline_access, wildcards, or fhirUser — Blue Button returns invalid_scope for those.
+const BlueButtonSMARTScopes = "openid profile launch/patient patient/Patient.read patient/Coverage.read patient/ExplanationOfBenefit.read"
+
+// ProductionMedicareDisplay is the admin catalog display for the production Medicare entry.
+// Patient-facing connectable label is still forced to "Medicare" (#429) via PatientFacingSourceDisplay.
+const ProductionMedicareDisplay = "Medicare"
+
+// ProductionMedicareFHIRBase is the CMS Blue Button 2.0 production FHIR base URL.
+const ProductionMedicareFHIRBase = "https://api.bluebutton.cms.gov/v2/fhir"
+
+// ProductionMedicareCatalogTemplate is a credential-free production catalog row for CMS Blue Button.
+// Operators add production client_id/secret (Admin UI or YOURPHR_PROD_BLUEBUTTON_* env) and enable —
+// no code change required (#432). Never ships secrets.
+func ProductionMedicareCatalogTemplate() ProviderCatalogEntry {
+	return ProviderCatalogEntry{
+		Display:            ProductionMedicareDisplay,
+		Environment:        ProviderEnvironmentProduction,
+		ApiEndpointBaseUrl: ProductionMedicareFHIRBase,
+		Scopes:             BlueButtonSMARTScopes,
+		PlatformType:       sourcesPkg.PlatformTypeEhr,
+		Enabled:            false,
+		ConsentPolicy:      ConsentPolicyRequired,
+		PreConnectProfile:  PreConnectAuto, // resolves to medicare
+	}
+}
+
 // DefaultProviderCatalogEntries are the no-credential sandbox templates seeded by an early migration.
 // Kept for that migration's historical behavior; the live credentials now come from the env-based
 // sandbox seeding (SandboxProviderSeeds), which upserts these by Display and fills the creds. Marked

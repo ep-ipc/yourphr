@@ -91,3 +91,42 @@ func TestSeedSandboxProviders_AthenaConfidential(t *testing.T) {
 	assert.Equal(t, "athena-client", a.ClientId)
 	assert.Equal(t, "athena-secret", a.ClientSecret)
 }
+
+func TestSeedProductionMedicareProvider_NoOpWithoutEnv(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+	// No Upsert expected when client id unset.
+	SeedProductionMedicareProvider(context.Background(), mockDB, logrus.WithField("test", "prod"), func(string) string { return "" })
+}
+
+func TestSeedProductionMedicareProvider_UpsertsWhenConfigured(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+	got := captureUpserts(mockDB)
+
+	env := map[string]string{
+		"YOURPHR_PROD_BLUEBUTTON_CLIENT_ID":     "prod-client",
+		"YOURPHR_PROD_BLUEBUTTON_CLIENT_SECRET": "prod-secret",
+	}
+	SeedProductionMedicareProvider(context.Background(), mockDB, logrus.WithField("test", "prod"), func(k string) string { return env[k] })
+
+	m, ok := got[models.ProductionMedicareDisplay]
+	assert.True(t, ok, "production Medicare should be seeded")
+	assert.Equal(t, models.ProviderEnvironmentProduction, m.Environment)
+	assert.Equal(t, models.ProductionMedicareFHIRBase, m.ApiEndpointBaseUrl)
+	assert.Equal(t, models.BlueButtonSMARTScopes, m.Scopes)
+	assert.Equal(t, "prod-client", m.ClientId)
+	assert.Equal(t, "prod-secret", m.ClientSecret)
+	assert.True(t, m.Enabled)
+}
+
+func TestProductionMedicareCatalogTemplate_NoSecrets(t *testing.T) {
+	tmpl := models.ProductionMedicareCatalogTemplate()
+	assert.Equal(t, models.ProductionMedicareDisplay, tmpl.Display)
+	assert.Equal(t, models.ProviderEnvironmentProduction, tmpl.Environment)
+	assert.Empty(t, tmpl.ClientId)
+	assert.Empty(t, tmpl.ClientSecret)
+	assert.False(t, tmpl.Enabled)
+}
