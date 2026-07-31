@@ -14,12 +14,13 @@
 - Blockers / significant notes: [#397](https://github.com/jwilleke/yourphr/issues/397) still in-review (awaiting reporter). Live instance may still lack cda-converter sidecar (from prior log). Open PR [#378](https://github.com/jwilleke/yourphr/pull/378) zone.js held for Angular 21. Start next session with `/context` (not `/pstatus` first) so this block is read before bands regenerate.
 <!-- RESUME:END -->
 
+
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
 
 - No open issue carries `P0` outside the In review band.
-- **12 open Dependabot alerts** (frontend/yarn.lock) — tracked by [#416](https://github.com/jwilleke/yourphr/issues/416). 0 open code-scanning alerts.
+- **Dependabot:** see [#416](https://github.com/jwilleke/yourphr/issues/416) for frontend/yarn.lock alerts.
 
 ## 🟠 P1
 
@@ -31,7 +32,6 @@
 - [#428](https://github.com/jwilleke/yourphr/issues/428) — [FEATURE] Blue Button prod: CMS attribution notice in UI
 - [#427](https://github.com/jwilleke/yourphr/issues/427) — [FEATURE] Blue Button prod: in-app PP/ToS access and active opt-in
 - [#426](https://github.com/jwilleke/yourphr/issues/426) — [FEATURE] Blue Button prod: public Terms of Service
-- [#425](https://github.com/jwilleke/yourphr/issues/425) — [FEATURE] Blue Button prod: public Privacy Policy (CMS checklist)
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
@@ -97,11 +97,9 @@
 
 ## ❓ Needs triage
 
-None — every open issue carries a placement label.
+- None.
 
 ## 🔀 Open PRs
 
-2 open.
-
-- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready)* — no linked issue
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready)* — **stale** (>7 days) — no linked issue
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready)* — refs [#2801](https://github.com/jwilleke/yourphr/issues/2801); refs [#2802](https://github.com/jwilleke/yourphr/issues/2802)
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready, stale 36d)* — refs [#68395](https://github.com/jwilleke/yourphr/issues/68395); refs [#45273](https://github.com/jwilleke/yourphr/issues/45273); refs [#44446](https://github.com/jwilleke/yourphr/issues/44446); refs [#55590](https://github.com/jwilleke/yourphr/issues/55590); refs [#51328](https://github.com/jwilleke/yourphr/issues/51328); refs [#67057](https://github.com/jwilleke/yourphr/issues/67057); refs [#61755](https://github.com/jwilleke/yourphr/issues/61755); refs [#61717](https://github.com/jwilleke/yourphr/issues/61717); refs [#62135](https://github.com/jwilleke/yourphr/issues/62135); refs [#64497](https://github.com/jwilleke/yourphr/issues/64497); refs [#47603](https://github.com/jwilleke/yourphr/issues/47603); refs [#63511](https://github.com/jwilleke/yourphr/issues/63511); refs [#63077](https://github.com/jwilleke/yourphr/issues/63077); refs [#63072](https://github.com/jwilleke/yourphr/issues/63072); refs [#64042](https://github.com/jwilleke/yourphr/issues/64042)
