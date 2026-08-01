@@ -19,6 +19,7 @@ import {BinaryComponent} from '../resources/binary/binary.component';
 import {FhirCardComponentInterface, FhirCardEditableComponentInterface} from './fhir-card-component-interface';
 import {ImmunizationComponent} from '../resources/immunization/immunization.component';
 import {AllergyIntoleranceComponent} from '../resources/allergy-intolerance/allergy-intolerance.component';
+import {AdverseEventComponent} from '../resources/adverse-event/adverse-event.component';
 import {MedicationComponent} from '../resources/medication/medication.component';
 import {MedicationDispenseComponent} from '../resources/medication-dispense/medication-dispense.component';
 import {MedicationRequestComponent} from '../resources/medication-request/medication-request.component';
@@ -116,9 +117,9 @@ export class FhirCardComponent implements OnInit, OnChanges {
       case "AllergyIntolerance": {
         return AllergyIntoleranceComponent;
       }
-      // case "AdverseEvent": {
-      //   return ListAdverseEventComponent;
-      // }
+      case "AdverseEvent": {
+        return AdverseEventComponent;
+      }
       case "Binary": {
         return BinaryComponent;
       }
