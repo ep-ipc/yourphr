@@ -3,16 +3,16 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-01
 
-- Last worked on: Released **v1.20.3** (sliding sessions #445, disconnect/remove #437, log filter #435, sync progress #337, CMS prod runbook #433, patient vitals slice #313). Demo UX clarified: dashboard greets FHIR Patient (Christopher Abshire from SMART Health IT on **Sandbox**); `/sources` only shows production tiles (empty YourPHR + odd **fh** label).
-- Branch / state: `main`, clean, synced with `origin/main` (HEAD `4f1d1932` = release commit)
-- Running / in-flight: **local dev servers** may still be up — backend `:9090`, frontend `localhost:4200` (npx ng). Docker image build for v1.20.3 **succeeded**; CI Markdown Lint **failed** on `TODO.md` MD049 (fixed in this wrap if present).
-- Parked / half-done: none in working tree
+- Last worked on: **v1.20.3** shipped (sessions #445, disconnect/remove #437, logs #435, SSE #337, CMS runbook #433, PGHD vitals slice #313). Demo: greeting = FHIR Patient (Christopher Abshire from SMART Health IT on **Sandbox**); `/sources` is production-only (empty YourPHR + short **fh** label). Email: Cloudflare Email Routing MX/SPF on for yourphr.org; **help@yourphr.org** returns SMTP 550 address does not exist until a CF route is added.
+- Branch / state: `main`, clean except possible unpushed wrap commits; HEAD after wrap includes resume refresh
+- Running / in-flight: **none** — local dev servers stopped at wrap (`:9090` / `:4200`). Docker image for v1.20.3 built successfully earlier.
+- Parked / half-done: none
 - Next steps:
-  - Fix/verify CI green after TODO.md emphasis fix; confirm Flux/demo pulled `1.20.3`
-  - Operator: verify in-review (#445, #437, #435, #337); dry-run CMS Zoom (#433 runbook); optional CMS application email
-  - Inspect demo production source labeled **fh** (bad display string)
-  - Mission: #408 production SMART proof; #438 demo epic remainder; #313 further PGHD slices
-- Blockers / significant notes: CMS Blue Button **sandbox login** still broken vendor-side (Medicare E2E on demo). #413 blocked on Path B #407. Dependabot open alerts: 0.
+  - Push any unpushed wrap commits; confirm CI green (TODO.md MD049 fixed)
+  - Cloudflare: create `help@yourphr.org` (or catch-all) Email Routing destination, then test
+  - Operator verify in-review (#445 #437 #435 #337); Flux/demo on `1.20.3`
+  - CMS application email when ready (#433); mission #408 / #438 remainder; more #313 PGHD
+- Blockers / significant notes: CMS Blue Button sandbox login still broken vendor-side. #413 blocked on #407. No DMARC on yourphr.org yet. Dependabot open: 0.
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
