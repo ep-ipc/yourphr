@@ -19,6 +19,7 @@ import {DatatableGenericResourceComponent} from './datatable-generic-resource/da
 import {DatatableGoalComponent} from './datatable-generic-resource/datatable-goal.component';
 import {DatatableImmunizationComponent} from './datatable-generic-resource/datatable-immunization.component';
 import {DatatableLocationComponent} from './datatable-generic-resource/datatable-location.component';
+import {DatatableMediaComponent} from './datatable-generic-resource/datatable-media.component';
 import {DatatableMedicationAdministrationComponent} from './datatable-generic-resource/datatable-medication-administration.component';
 import {DatatableMedicationComponent} from './datatable-generic-resource/datatable-medication.component';
 import {DatatableMedicationDispenseComponent} from './datatable-generic-resource/datatable-medication-dispense.component';
@@ -60,6 +61,7 @@ import {NgxDatatableModule} from '@swimlane/ngx-datatable';
     DatatableGoalComponent,
     DatatableImmunizationComponent,
     DatatableLocationComponent,
+    DatatableMediaComponent,
     DatatableMedicationAdministrationComponent,
     DatatableMedicationComponent,
     DatatableMedicationDispenseComponent,
@@ -95,6 +97,7 @@ import {NgxDatatableModule} from '@swimlane/ngx-datatable';
     DatatableGoalComponent,
     DatatableImmunizationComponent,
     DatatableLocationComponent,
+    DatatableMediaComponent,
     DatatableMedicationAdministrationComponent,
     DatatableMedicationComponent,
     DatatableMedicationDispenseComponent,

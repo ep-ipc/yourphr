@@ -21,6 +21,7 @@ import {DatatableGenericResourceComponent, ResourceListComponentInterface} from 
 import {DatatableGoalComponent} from '../datatable-generic-resource/datatable-goal.component';
 import {DatatableImmunizationComponent} from '../datatable-generic-resource/datatable-immunization.component';
 import {DatatableLocationComponent} from '../datatable-generic-resource/datatable-location.component';
+import {DatatableMediaComponent} from '../datatable-generic-resource/datatable-media.component';
 import {DatatableMedicationAdministrationComponent} from '../datatable-generic-resource/datatable-medication-administration.component';
 import {DatatableMedicationComponent} from '../datatable-generic-resource/datatable-medication.component';
 import {DatatableMedicationDispenseComponent} from '../datatable-generic-resource/datatable-medication-dispense.component';
@@ -146,6 +147,9 @@ export class FhirDatatableComponent implements OnInit, OnChanges {
       }
       case "Location": {
         return DatatableLocationComponent;
+      }
+      case "Media": {
+        return DatatableMediaComponent;
       }
       case "Medication": {
         return DatatableMedicationComponent;
