@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.20.2](https://github.com/jwilleke/yourphr/compare/v1.20.1...v1.20.2) (2026-08-01)
+
+### Bug Fixes
+
+- **adverse-event:** Explore table Date/Event/Outcome/Seriousness/Actuality with SMART-style fallbacks (`meta.lastUpdated`, `suspectEntity`); detail card wired ([#449](https://github.com/jwilleke/yourphr/issues/449))
+
+### Notes for operators
+
+- After Flux picks `1.20.2`, re-check demo Explore **AdverseEvent** (12 rows) for non-empty Date/Event/Outcome/Actuality.
+
 ## [1.20.1](https://github.com/jwilleke/yourphr/compare/v1.20.0...v1.20.1) (2026-08-01)
 
 Explore list/detail polish and CI markdown fixes.
