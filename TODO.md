@@ -23,6 +23,8 @@
 ## 🟠 P1
 
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
+- [#440](https://github.com/jwilleke/yourphr/issues/440) — [FEATURE] Display FHIR Consent resources (explore falls back to raw-only warning)
+- [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#437](https://github.com/jwilleke/yourphr/issues/437) — [FEATURE] Split source Disconnect vs Remove data into separate actions
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
 - [#435](https://github.com/jwilleke/yourphr/issues/435) — [BUG] Log level set to error. New lines at this level appear as the server logs activity.
@@ -76,12 +78,13 @@
 
 ## 🔵 In review
 
-- [#432](https://github.com/jwilleke/yourphr/issues/432) — [FEATURE] Blue Button prod: production catalog entry and operator docs
+- [#441](https://github.com/jwilleke/yourphr/issues/441) — [FEATURE] Structured sync metrics on background jobs
+- [#439](https://github.com/jwilleke/yourphr/issues/439) — [BUG] Oracle/Cerner SMART sync aborts at 1000-page cap; Patient never stored; UI shows Failed
 
 ## ⏸ Deferred
 
-- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(PR · ready · deferred/blocked — Angular 21)_ — no linked issue
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · stale · deferred/blocked — Angular 20 peer)_ — no linked issue
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(PR · ready · deferred/blocked)_ — no linked issue
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · deferred/blocked · stale 37d)_ — no linked issue
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
