@@ -53,6 +53,9 @@ For each related open issue:
 - If the work fully resolves it, say so but do **not** close it — let the operator decide
   (consider adding `in-review`).
 - Use `gh issue comment <number> --body "<comment>"`.
+- **When closing an issue (operator request or explicit close):** always
+  `gh issue edit <N> --remove-label in-review` **before or when closing**. Never leave
+  `in-review` on a closed issue.
 
 ### Step 6: Push
 
