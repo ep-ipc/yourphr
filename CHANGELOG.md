@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.19.0](https://github.com/jwilleke/yourphr/compare/v1.18.2...v1.19.0) (2026-08-01)
+
+Runtime deployment labels and frontend build-chain security pins.
+
+### Features
+
+- **web:** `web.environment_name` / `YOURPHR_WEB_ENVIRONMENT_NAME` — footer shows `demo-1.19.0` / `prod-1.19.0` / `dev-…` from runtime config so one release image can label instances differently; `GET /api/version` returns `{ version, environment_name }` ([#438](https://github.com/jwilleke/yourphr/issues/438))
+
+### Security
+
+- **frontend:** yarn resolutions for Dependabot build-chain alerts — postcss 8.5.18, webpack-dev-server 5.2.6, brace-expansion 2.1.2, js-yaml 4.3.1, engine.io 6.6.9, @hono/node-server 2.0.12, picomatch 4.0.4 ([#416](https://github.com/jwilleke/yourphr/issues/416))
+
+### Notes for operators
+
+- Set the footer label per instance (no rebuild):
+  - demo: `YOURPHR_WEB_ENVIRONMENT_NAME=demo`
+  - production: `YOURPHR_WEB_ENVIRONMENT_NAME=prod`
+  - local: `YOURPHR_WEB_ENVIRONMENT_NAME=dev` (or leave unset for build-time default)
+- Empty `web.environment_name` keeps the previous Angular build-time name (release images still default to `prod` until the env is set).
+
 ## [1.18.2](https://github.com/jwilleke/yourphr/compare/v1.18.1...v1.18.2) (2026-08-01)
 
 Oracle SMART import usability, structured sync metrics, and Admin Metrics card.
