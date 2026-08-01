@@ -30,6 +30,7 @@ import { SandboxComponent } from './pages/sandbox/sandbox.component';
 import { PatientProfileComponent } from './pages/patient-profile/patient-profile.component';
 import { ReportLabsComponent } from './pages/report-labs/report-labs.component';
 import { ResourceCreatorComponent } from './pages/resource-creator/resource-creator.component';
+import { PatientEntryComponent } from './pages/patient-entry/patient-entry.component';
 import { ResourceDetailComponent } from './pages/resource-detail/resource-detail.component';
 import { SourceDetailComponent } from './pages/source-detail/source-detail.component';
 import { UserCreateComponent } from './pages/user-create/user-create.component';
@@ -66,6 +67,8 @@ const routes: Routes = [
   { path: 'sources', component: MedicalSourcesComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'sources/callback/:state', component: MedicalSourcesComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'resource/create', component: ResourceCreatorComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
+  // Patient-generated data (#313) — home vitals first; visit wizard at resource/create
+  { path: 'resource/add', component: PatientEntryComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
 
   { path: 'desktop/callback/:state', component: DesktopCallbackComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
 

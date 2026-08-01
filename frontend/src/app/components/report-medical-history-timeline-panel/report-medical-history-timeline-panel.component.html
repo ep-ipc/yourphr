@@ -142,8 +142,8 @@
 
         <ng-container *ngIf="!displayModel?.related_resources?.Condition">
           <a class="dropdown-item" ngbDropdownItem [disabled]="true">-----</a>
-          <a class="dropdown-item" ngbDropdownItem>
-            <i class="fas fa-folder-plus"></i> Add Condition
+          <a class="dropdown-item" ngbDropdownItem routerLink="/resource/add">
+            <i class="fas fa-folder-plus"></i> Add record
           </a>
         </ng-container>
 

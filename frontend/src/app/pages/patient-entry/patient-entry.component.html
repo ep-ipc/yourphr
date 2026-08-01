@@ -1,0 +1,83 @@
+<div class="az-content-body">
+  <div class="d-flex justify-content-between align-items-start flex-wrap mg-b-20">
+    <div>
+      <h4 class="mg-b-5"><i class="fas fa-heart-pulse"></i>&nbsp; Add a home vital</h4>
+      <p class="tx-gray-500 mg-b-0">
+        Record measurements you take at home (patient-generated data). They are stored as FHIR Observations
+        on this instance, marked <strong>patient-reported</strong>, and show up with your other records.
+      </p>
+    </div>
+    <a routerLink="/resource/create" class="btn btn-outline-secondary mg-t-5">
+      Full visit wizard (encounter, meds, labs)…
+    </a>
+  </div>
+
+  <div *ngIf="error" class="alert alert-danger">{{ error }}</div>
+  <div *ngIf="successMsg" class="alert alert-success">
+    {{ successMsg }}
+    <button *ngIf="lastResourceId" type="button" class="btn btn-sm btn-outline-success mg-l-10" (click)="viewInExplore()">
+      View in Explore
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form (ngSubmit)="submit()" class="row row-sm">
+        <div class="col-md-4 mg-b-15">
+          <label class="form-label" for="vital-type">Vital</label>
+          <select id="vital-type" class="form-control" [(ngModel)]="vital" name="vital" required>
+            <option value="body_weight">Body weight</option>
+            <option value="heart_rate">Heart rate</option>
+            <option value="body_temperature">Body temperature</option>
+            <option value="oxygen_saturation">Oxygen saturation (SpO2)</option>
+            <option value="blood_pressure">Blood pressure</option>
+          </select>
+        </div>
+
+        <div class="col-md-3 mg-b-15" *ngIf="needsSingleValue">
+          <label class="form-label" for="vital-value">Value</label>
+          <input id="vital-value" type="number" step="any" class="form-control" [(ngModel)]="value" name="value" required />
+        </div>
+
+        <ng-container *ngIf="!needsSingleValue">
+          <div class="col-md-2 mg-b-15">
+            <label class="form-label" for="vital-sys">Systolic</label>
+            <input id="vital-sys" type="number" step="any" class="form-control" [(ngModel)]="systolic" name="systolic" required />
+          </div>
+          <div class="col-md-2 mg-b-15">
+            <label class="form-label" for="vital-dia">Diastolic</label>
+            <input id="vital-dia" type="number" step="any" class="form-control" [(ngModel)]="diastolic" name="diastolic" required />
+          </div>
+        </ng-container>
+
+        <div class="col-md-2 mg-b-15" *ngIf="needsSingleValue">
+          <label class="form-label" for="vital-unit">Unit <span class="tx-gray-500 tx-11">(optional)</span></label>
+          <input id="vital-unit" type="text" class="form-control" [(ngModel)]="unit" name="unit" [placeholder]="defaultUnitHint" />
+        </div>
+
+        <div class="col-md-3 mg-b-15">
+          <label class="form-label" for="vital-date">Date</label>
+          <input id="vital-date" type="date" class="form-control" [(ngModel)]="effectiveDate" name="effectiveDate" />
+        </div>
+
+        <div class="col-12 mg-t-10">
+          <button type="submit" class="btn btn-az-primary" [disabled]="saving">
+            {{ saving ? 'Saving…' : 'Save vital' }}
+          </button>
+          <a routerLink="/medical-history" class="btn btn-outline-secondary mg-l-10">Cancel</a>
+          <p class="tx-12 tx-gray-500 mg-t-15 mg-b-0">
+            Default units: {{ defaultUnitHint }}. This does not send data to your providers — only this YourPHR instance.
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="mg-t-25">
+    <h6 class="tx-gray-600">More ways to add data</h6>
+    <ul class="tx-13">
+      <li><a routerLink="/sources">Connect a provider</a> or upload a FHIR / C-CDA file</li>
+      <li><a routerLink="/resource/create">Visit / encounter wizard</a> — meds, procedures, lab panels tied to a visit</li>
+    </ul>
+  </div>
+</div>

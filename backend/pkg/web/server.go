@@ -247,6 +247,8 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 
 					secure.POST("/resource/composition", handler.CreateResourceComposition)
 					secure.POST("/resource/related", handler.CreateRelatedResources)
+					// Patient-generated data (#313) — first slice: home vitals on the fasten source.
+					secure.POST("/resource/patient-entry", handler.CreatePatientEntry)
 					secure.DELETE("/encounter/:encounterId/related/:resourceType/:resourceId", handler.EncounterUnlinkResource)
 
 					secure.GET("/dashboards", handler.GetDashboard)
