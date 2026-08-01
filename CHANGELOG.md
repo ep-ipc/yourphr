@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.18.2](https://github.com/jwilleke/yourphr/compare/v1.18.1...v1.18.2) (2026-08-01)
+
+Oracle SMART import usability, structured sync metrics, and Admin Metrics card.
+
+### Bug Fixes
+
+- **smart:** Patient is always fetched first; fat resource types soft-truncate at 250 pages/type; global 5000-page budget soft-stops remaining types instead of hard-failing the plan ([#439](https://github.com/jwilleke/yourphr/issues/439))
+
+### Features
+
+- **sync:** durable job `data.summary` (outcome, duration_ms, total_resources, by_type, platform/environment) and `sync_complete` log line ([#441](https://github.com/jwilleke/yourphr/issues/441))
+- **metrics:** opt-in Prometheus scrape (`metrics.enabled` / `YOURPHR_METRICS_*`, default off; internal only) for sync job counters and duration histogram ([#441](https://github.com/jwilleke/yourphr/issues/441))
+- **admin:** Metrics card on Admin Dashboard — scrape status, process counters, recent sync summaries; `GET /api/secure/admin/metrics` ([#441](https://github.com/jwilleke/yourphr/issues/441))
+
+### Notes for operators
+
+- Re-sync existing Oracle/Cerner sources after deploy so a missing Patient row is repaired (#439).
+- Enable scrape only on a cluster-internal port: `metrics.enabled: true` (or `YOURPHR_METRICS_ENABLED=true`); do not put it on public Ingress.
+- Job summaries appear on new syncs only; open Admin → Metrics or `GET /api/secure/jobs`.
+
+### Known issues
+
+- FHIR Consent still has no card ([#440](https://github.com/jwilleke/yourphr/issues/440))
+- Large Cerner imports can still be slow (request count); first-import vs incremental remains future work
+- yarn Dependabot build-chain alerts ([#416](https://github.com/jwilleke/yourphr/issues/416))
+
 ## [1.18.1](https://github.com/jwilleke/yourphr/compare/v1.18.0...v1.18.1) (2026-08-01)
 
 Explore sandbox filter for admins, vendor status dated from live retests, and markdownlint CI cleanups.
