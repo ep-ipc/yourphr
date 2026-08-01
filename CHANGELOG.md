@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.20.1](https://github.com/jwilleke/yourphr/compare/v1.20.0...v1.20.1) (2026-08-01)
+
+Explore list/detail polish and CI markdown fixes.
+
+### Bug Fixes
+
+- **explore:** resource-detail breadcrumb trail — source/patient › Explore › type › FHIR title (e.g. Death Certification (308646001)); remove hardcoded `unknown` ([#448](https://github.com/jwilleke/yourphr/issues/448))
+- **media:** Explore Media datatable (status, modality, title, content type, created, operator, subject) ([#446](https://github.com/jwilleke/yourphr/issues/446))
+- **medication-request:** Explore columns status/intent/medication/authored/requester first ([#447](https://github.com/jwilleke/yourphr/issues/447))
+- **docs:** markdownlint MD034/MD049 so Markdown Lint CI is green
+
+### Notes for operators
+
+- After Flux picks `1.20.1`, re-check demo Explore: Media, MedicationRequest, and resource-detail breadcrumbs.
+
 ## [1.20.0](https://github.com/jwilleke/yourphr/compare/v1.19.1...v1.20.0) (2026-08-01)
 
 Explore display improvements from demo SMART Health IT acceptance.
