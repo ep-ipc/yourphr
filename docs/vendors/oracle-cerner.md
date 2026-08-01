@@ -115,13 +115,14 @@ YourPHR's SMART client is built to survive this ([#341](https://github.com/jwill
 - **Two-pass fetch** — try each resource once, then retry the transiently-failed ones in a single deferred pass at the end, so a slow resource never blocks the others.
 - **Incremental upsert** — each page is stored as it arrives; a later failure keeps everything already imported.
 - **Graceful skip** — a persistent failure (504, or a 403 for an unrequested scope) skips that resource, never the whole import.
-- **Per-resource logging** — every resource emits a `smart sync:` line (`fetched N page(s)` / `deferred for retry (…)` / `skipped (…)`), so an import is fully explainable from the logs.
+- **Per-resource logging** — every resource emits a `smart sync:` line (`fetched N page(s)` / `deferred for retry (…)` / `skipped (…)` / `truncated after N page(s)`), so an import is fully explainable from the logs.
+- **Patient first + per-type page caps ([#439](https://github.com/jwilleke/yourphr/issues/439))** — `Patient/{id}` is always fetched before other types; a fat type (e.g. DocumentReference) soft-truncates at **250 pages** and the plan continues; a global **5000-page** budget only stops remaining types (soft), never fails the job solely for page limits.
 
-### Live failure — global 1000-page cap aborts remaining types (**2026-07-31**)
+### Live failure — global 1000-page cap aborts remaining types (**2026-07-31**; fixed in client)
 
 Tracked: **[#439](https://github.com/jwilleke/yourphr/issues/439)**.
 
-On production (`yourphr.nerdsbythehour.com`), sandbox patient connect ran **~1 h 48 min** (13:56:33–15:44:11 UTC), imported large **Condition** + **DocumentReference** sets (DocRef alone **967 pages**), then hit the SMART client's **global** `maxFetchPages = 1000` mid-**Encounter**:
+On production (`yourphr.nerdsbythehour.com`), sandbox patient connect ran **~1 h 48 min** (13:56:33–15:44:11 UTC), imported large **Condition** + **DocumentReference** sets (DocRef alone **967 pages**), then hit the SMART client's **then-global** `maxFetchPages = 1000` mid-**Encounter**:
 
 ```text
 smart sync: DocumentReference fetched 967 page(s)
@@ -129,15 +130,16 @@ smart sync: Encounter skipped (aborting capability fetch: exceeded 1000 pages)
 fetching 9697 document attachment(s) as Binary resources  →  nearly all 403 insufficient_scope
 ```
 
-**Effect:** types after the abort (alphabetically including **Patient**) never ran. No `Patient/{oauth-patient-id}` was stored. Next day the UI requested that Patient for the source card and got **500 / no resource found** — reads as **Oracle Failed** even though thousands of clinical resources were already in the DB.
+**Effect (pre-fix):** types after the abort (including **Patient** when capability order put it late) never ran. No `Patient/{oauth-patient-id}` was stored → UI **500 / no resource found** → “Oracle Failed” despite thousands of clinical rows already imported.
 
 | Date | Host | Result |
 |---|---|---|
 | **2026-06-18** (matrix) | production | ✅ works — imports records (pinned authorize + enumerated v2 `.rs` + Offline) |
-| **2026-07-31** | production sandbox | ⛔ long import then **page-cap abort**; missing Patient → UI Failed ([#439](https://github.com/jwilleke/yourphr/issues/439)) |
-| **2026-08-01** | production UI recheck | still 500 on Oracle Patient `12724066` for source `4d96252b-…` |
+| **2026-07-31** | production sandbox | ⛔ long import then **page-cap abort**; missing Patient → UI Failed |
+| **2026-08-01** | production UI recheck | still 500 on Oracle Patient for the broken source (until re-sync on fixed client) |
+| **Fix (#439 quick hit)** | SMART client | ✅ Patient always first; per-type truncate (250) + soft global budget (5000); page limits no longer abort the plan as a hard error |
 
-**Workaround until #439 ships:** reconnect after a fix, or treat partial Cerner imports as data-only (browse by resource type); do not rely on the source Patient header. Prefer smaller smoke patients if available. **Fix direction:** fetch Patient first; make page limits **per-type** so one huge DocumentReference/Encounter walk cannot drop the rest of the plan.
+**Operator note:** Existing broken Oracle sources need a **re-sync / reconnect** after deploy so Patient is fetched. Huge DocumentReference sets may still take a long wall clock but should leave the source usable; docs may be partial when truncated.
 
 ## Data shape — what you actually get back
 

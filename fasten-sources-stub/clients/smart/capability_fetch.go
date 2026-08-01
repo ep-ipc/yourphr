@@ -17,9 +17,17 @@ import (
 // those, we read the server's CapabilityStatement and fetch each patient-compartment resource by
 // search instead. Servers that do advertise $everything keep using it (one efficient call).
 
-// maxFetchPages bounds total pagination across a per-resource import so a runaway "next" chain can't
-// loop forever.
-const maxFetchPages = 1000
+// Page budgets (#439). Cerner/Oracle sandboxes can return thousands of DocumentReference pages; a
+// single global cap used to abort the rest of the plan (including Patient when capability order
+// put it late) and left the source unusable in the UI.
+//
+//   - maxPagesPerType: stop THIS type and continue the plan (soft truncate).
+//   - maxFetchPagesTotal: runaway safety across the whole import; stop remaining types but still
+//     return success so already-imported data (including Patient-first) is kept.
+const (
+	maxPagesPerType    = 250
+	maxFetchPagesTotal = 5000
+)
 
 type capNamed struct {
 	Name string `json:"name"`
@@ -277,7 +285,7 @@ var defaultPatientCompartment = []resourceSearch{
 
 // searchesFromCapability builds the per-resource search plan from a CapabilityStatement: Patient is
 // read by id; every other advertised type is searched by its patient-linking param when the server
-// advertises one (else skipped — never guessed).
+// advertises one (else skipped — never guessed). Patient is always first (#439).
 func searchesFromCapability(cs capabilityStatement) []resourceSearch {
 	var out []resourceSearch
 	for _, rest := range cs.Rest {
@@ -291,6 +299,32 @@ func searchesFromCapability(cs capabilityStatement) []resourceSearch {
 			}
 		}
 	}
+	return ensurePatientFirst(out)
+}
+
+// ensurePatientFirst puts a Patient read-by-id first so the source is always usable even when a later
+// type hits a page budget or the CapabilityStatement lists Patient late (#439). If Patient is absent
+// from the plan, it is injected (GET /Patient/{id} is in scope for every normal SMART patient launch).
+func ensurePatientFirst(searches []resourceSearch) []resourceSearch {
+	var patient *resourceSearch
+	rest := make([]resourceSearch, 0, len(searches))
+	for i := range searches {
+		if searches[i].Type == "Patient" && searches[i].Param == "" {
+			if patient == nil {
+				p := searches[i]
+				patient = &p
+			}
+			continue
+		}
+		rest = append(rest, searches[i])
+	}
+	out := make([]resourceSearch, 0, len(rest)+1)
+	if patient != nil {
+		out = append(out, *patient)
+	} else {
+		out = append(out, resourceSearch{Type: "Patient"})
+	}
+	out = append(out, rest...)
 	return out
 }
 
@@ -304,11 +338,14 @@ func isUnauthorized(err error) bool {
 // id, every other type is searched by its patient param, following Bundle "next" pagination. A type
 // the server advertises but then refuses (400/403/404/422/…) is SKIPPED so one inaccessible type never
 // fails the whole import; only 401 (auth broken) and non-HTTP errors are fatal (#250 / #341).
+// Page budgets soft-truncate a type (or stop remaining types at the global budget) without failing
+// the import (#439).
 func (c Config) fetchSearches(ctx context.Context, ep Endpoints, tok *oauth2.Token, patientID string, searches []resourceSearch, onPage PageFunc) (refreshed *oauth2.Token, err error) {
 	base, err := c.safeBaseURL()
 	if err != nil {
 		return nil, err
 	}
+	searches = ensurePatientFirst(searches)
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, c.httpClient())
 	ts := c.oauth2Config(ep).TokenSource(ctx, tok)
 	// Surface a refreshed token on EVERY exit (incl. errors) so an aborted-partway import still persists
@@ -326,6 +363,10 @@ func (c Config) fetchSearches(ctx context.Context, ep Endpoints, tok *oauth2.Tok
 	// retried inline (which serialized ~3 min of 504s before the next resource even started). #341.
 	var deferred []resourceSearch
 	for _, s := range searches {
+		if total >= maxFetchPagesTotal {
+			c.logf("smart sync: stopping remaining types after global page budget (%d pages)", maxFetchPagesTotal)
+			break
+		}
 		gerr := c.fetchOneResource(ctx, httpClient, base, patientID, s, onPage, &total)
 		if gerr == nil {
 			continue
@@ -339,14 +380,15 @@ func (c Config) fetchSearches(ctx context.Context, ep Endpoints, tok *oauth2.Tok
 		default:
 			c.logf("smart sync: %s skipped (%v)", s.Type, gerr) // 4xx etc. — won't change on retry
 		}
-		if total >= maxFetchPages {
-			return refreshed, fmt.Errorf("aborting capability fetch: exceeded %d pages", maxFetchPages)
-		}
 	}
 
 	// Retry pass: a single final attempt at the deferred (transiently-failed) resources, now that the
 	// rest are imported and the slow ones have had time to settle.
 	for _, s := range deferred {
+		if total >= maxFetchPagesTotal {
+			c.logf("smart sync: skipping deferred retries after global page budget (%d pages)", maxFetchPagesTotal)
+			break
+		}
 		gerr := c.fetchOneResource(ctx, httpClient, base, patientID, s, onPage, &total)
 		if gerr == nil {
 			continue
@@ -362,7 +404,8 @@ func (c Config) fetchSearches(ctx context.Context, ep Endpoints, tok *oauth2.Tok
 
 // fetchOneResource fetches all pages of a single resource (Patient by id, else searched by its patient
 // param), streaming each page to onPage. It does NOT retry — the caller's two-pass loop owns retries.
-// Returns the first failing page's error (the caller classifies it skip/defer/fatal).
+// Returns the first failing page's error (the caller classifies it skip/defer/fatal). Hitting the
+// per-type page budget soft-truncates (logs, returns nil) so later types still run (#439).
 func (c Config) fetchOneResource(ctx context.Context, httpClient *http.Client, base, patientID string, s resourceSearch, onPage PageFunc, total *int) error {
 	var next string
 	if s.Param == "" {
@@ -382,8 +425,13 @@ func (c Config) fetchOneResource(ctx context.Context, httpClient *http.Client, b
 		pages++
 		*total++
 		next = link
-		if *total >= maxFetchPages {
-			return fmt.Errorf("aborting capability fetch: exceeded %d pages", maxFetchPages)
+		if pages >= maxPagesPerType {
+			c.logf("smart sync: %s truncated after %d page(s) (per-type page limit %d)", s.Type, pages, maxPagesPerType)
+			return nil
+		}
+		if *total >= maxFetchPagesTotal {
+			c.logf("smart sync: %s stopped after %d page(s) (global page budget %d)", s.Type, pages, maxFetchPagesTotal)
+			return nil
 		}
 	}
 	if pages > 0 {

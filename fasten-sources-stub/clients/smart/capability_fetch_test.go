@@ -350,6 +350,108 @@ func TestFetchPatientData_DefersRetryToEnd(t *testing.T) {
 	}
 }
 
+// #439: CapabilityStatement may list types in any order; Patient is always fetched first so a later
+// page budget cannot leave the source without a Patient row.
+func TestFetchPatientData_PatientFetchedBeforeOtherTypes(t *testing.T) {
+	var order []string
+	const meta = `{"resourceType":"CapabilityStatement","rest":[{"resource":[
+		{"type":"Condition","interaction":[{"code":"search-type"}],"searchParam":[{"name":"patient"}]},
+		{"type":"DocumentReference","interaction":[{"code":"search-type"}],"searchParam":[{"name":"patient"}]},
+		{"type":"Patient","interaction":[{"code":"read"}],"searchParam":[{"name":"_id"}]}
+	]}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/fhir+json")
+		switch r.URL.Path {
+		case "/metadata":
+			fmt.Fprint(w, meta)
+		case "/Patient/p1":
+			order = append(order, "Patient")
+			fmt.Fprint(w, `{"resourceType":"Patient","id":"p1"}`)
+		case "/Condition":
+			order = append(order, "Condition")
+			fmt.Fprint(w, `{"resourceType":"Bundle","entry":[{"resource":{"resourceType":"Condition","id":"c1"}}]}`)
+		case "/DocumentReference":
+			order = append(order, "DocumentReference")
+			fmt.Fprint(w, `{"resourceType":"Bundle","entry":[]}`)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := Config{FHIRBaseURL: srv.URL, AllowInternalHosts: true, ClientID: "c", HTTPClient: srv.Client()}
+	if _, _, err := collectPages(cfg, Endpoints{Token: srv.URL + "/token"}, "p1"); err != nil {
+		t.Fatalf("FetchPatientData: %v", err)
+	}
+	if len(order) < 1 || order[0] != "Patient" {
+		t.Fatalf("fetch order = %v, want Patient first (#439)", order)
+	}
+}
+
+// #439: per-type page budget soft-truncates a fat type; later types still run (no whole-plan abort).
+func TestFetchPatientData_PerTypePageCapContinuesPlan(t *testing.T) {
+	var srv *httptest.Server
+	docPages := 0
+	var sawPatient, sawAllergy bool
+	const meta = `{"resourceType":"CapabilityStatement","rest":[{"resource":[
+		{"type":"DocumentReference","interaction":[{"code":"search-type"}],"searchParam":[{"name":"patient"}]},
+		{"type":"AllergyIntolerance","interaction":[{"code":"search-type"}],"searchParam":[{"name":"patient"}]},
+		{"type":"Patient","interaction":[{"code":"read"}],"searchParam":[{"name":"_id"}]}
+	]}]}`
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/fhir+json")
+		switch r.URL.Path {
+		case "/metadata":
+			fmt.Fprint(w, meta)
+		case "/Patient/p1":
+			sawPatient = true
+			fmt.Fprint(w, `{"resourceType":"Patient","id":"p1"}`)
+		case "/DocumentReference":
+			docPages++
+			// Always offer a next link so the client would loop forever without a per-type cap.
+			fmt.Fprintf(w, `{"resourceType":"Bundle","link":[{"relation":"next","url":"%s/DocumentReference?patient=p1&p=%d"}],"entry":[{"resource":{"resourceType":"DocumentReference","id":"d%d"}}]}`, srv.URL, docPages, docPages)
+		case "/AllergyIntolerance":
+			sawAllergy = true
+			fmt.Fprint(w, `{"resourceType":"Bundle","entry":[{"resource":{"resourceType":"AllergyIntolerance","id":"a1"}}]}`)
+		default:
+			// pagination uses query-only next URLs that still hit /DocumentReference
+			if strings.HasPrefix(r.URL.Path, "/DocumentReference") {
+				docPages++
+				fmt.Fprintf(w, `{"resourceType":"Bundle","link":[{"relation":"next","url":"%s/DocumentReference?patient=p1&p=%d"}],"entry":[{"resource":{"resourceType":"DocumentReference","id":"d%d"}}]}`, srv.URL, docPages, docPages)
+				return
+			}
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := Config{FHIRBaseURL: srv.URL, AllowInternalHosts: true, ClientID: "c", HTTPClient: srv.Client()}
+	pages, _, err := collectPages(cfg, Endpoints{Token: srv.URL + "/token"}, "p1")
+	if err != nil {
+		t.Fatalf("FetchPatientData must not fail on per-type truncate: %v", err)
+	}
+	if !sawPatient {
+		t.Fatal("expected Patient to be fetched")
+	}
+	if !sawAllergy {
+		t.Fatal("expected AllergyIntolerance after DocumentReference was truncated (#439)")
+	}
+	// Patient + maxPagesPerType DocRef pages + Allergy
+	if docPages != maxPagesPerType {
+		t.Fatalf("DocumentReference pages fetched = %d, want per-type cap %d", docPages, maxPagesPerType)
+	}
+	if len(pages) < 2 {
+		t.Fatalf("expected multiple streamed pages, got %d", len(pages))
+	}
+}
+
+func TestEnsurePatientFirst_InjectsWhenMissing(t *testing.T) {
+	got := ensurePatientFirst([]resourceSearch{{Type: "Condition", Param: "patient"}})
+	if len(got) != 2 || got[0].Type != "Patient" || got[0].Param != "" || got[1].Type != "Condition" {
+		t.Fatalf("ensurePatientFirst = %#v", got)
+	}
+}
+
 // Pages stream as they arrive, so a later FATAL error (401) keeps everything already delivered — the
 // import is incremental, not all-or-nothing (#341).
 func TestFetchPatientData_StreamsPagesBeforeFatalError(t *testing.T) {
