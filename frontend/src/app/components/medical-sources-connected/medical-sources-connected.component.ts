@@ -1,9 +1,9 @@
-import {Component, Input, OnInit} from '@angular/core';
+import {Component, Input, OnDestroy, OnInit} from '@angular/core';
 import {Source} from '../../models/fasten/source';
 import {SourceListItem} from '../../pages/medical-sources/medical-sources.component';
 import {ModalDismissReasons, NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {FastenApiService} from '../../services/fasten-api.service';
-import {forkJoin, of} from 'rxjs';
+import {forkJoin, of, Subscription} from 'rxjs';
 import {ConnectGatewayService} from '../../services/connect-gateway.service';
 import {ConnectGatewaySourceMetadata} from '../../models/connect-gateway/connect-gateway-source-metadata';
 import {ToastNotification, ToastType} from '../../models/fasten/toast';
@@ -23,7 +23,7 @@ import {extractErrorFromResponse, replaceErrors} from '../../../lib/utils/error_
     styleUrls: ['./medical-sources-connected.component.scss'],
     standalone: false
 })
-export class MedicalSourcesConnectedComponent implements OnInit {
+export class MedicalSourcesConnectedComponent implements OnInit, OnDestroy {
   // environment, when set, limits the connected sources shown to that environment ("sandbox" on the
   // /sandbox page, "production" on /sources) so the two surfaces don't show the same tiles (#332).
   // Unset = show everything. A source with no environment counts as production.
@@ -36,6 +36,11 @@ export class MedicalSourcesConnectedComponent implements OnInit {
   modalCloseResult = '';
 
   connectedSourceList: SourceListItem[] = [] //source's are populated for this list
+
+  // #337: reconcile progress when SSE is missing ("Room not found") or complete events are dropped.
+  private eventSubs: Subscription[] = []
+  private jobPollId: ReturnType<typeof setInterval> | null = null
+  private readonly jobPollMs = 5000
 
   constructor(
     private connectGatewayApi: ConnectGatewayService,
@@ -91,6 +96,8 @@ export class MedicalSourcesConnectedComponent implements OnInit {
               this.status[connectedSources[ndx].brand_id] = "failed"
             }
           }
+          // After hydrating LOCKED jobs from the server, start reconciliation poll (#337).
+          this.ensureJobPoll()
         })
 
     })
@@ -102,6 +109,7 @@ export class MedicalSourcesConnectedComponent implements OnInit {
 
       console.log("handle callback redirect from source", callbackState, sourceInfo)
       this.status[sourceInfo.brand_id] = "token"
+      this.ensureJobPoll()
 
       //the structure of "availableSourceList" vs "connectedSourceList" sources is slightly different,
       //connectedSourceList contains a "source" field. The this.fastenApi.createSource() call in the callback function will set it.
@@ -113,10 +121,101 @@ export class MedicalSourcesConnectedComponent implements OnInit {
         .then(console.log)
     }
 
-    this.eventBusService.SourceSyncMessages.subscribe((event) => {
+    // Progress events keep the spinner while a sync is running.
+    this.eventSubs.push(this.eventBusService.SourceSyncMessages.subscribe((event) => {
       this.status[event.source_id] = "token"
-    })
+      this.ensureJobPoll()
+    }))
+    // Completion must clear the spinner — this was never wired (#337), so even successful SSE
+    // left status["token"] stuck after source_complete.
+    this.eventSubs.push(this.eventBusService.SourceCompleteMessages.subscribe((event) => {
+      this.clearSourceStatus(event.source_id)
+      this.stopJobPollIfIdle()
+    }))
 
+    // If anything is mid-sync (e.g. STATUS_LOCKED after reload), poll job state until done.
+    this.ensureJobPoll()
+  }
+
+  ngOnDestroy(): void {
+    this.eventSubs.forEach((s) => s.unsubscribe())
+    this.eventSubs = []
+    this.stopJobPoll()
+  }
+
+  /** Clear in-progress / failed indicators for a source id and matching brand_id. */
+  private clearSourceStatus(sourceId: string): void {
+    if (!sourceId) { return }
+    delete this.status[sourceId]
+    const item = this.connectedSourceList.find((s) => s.source?.id === sourceId)
+    if (item?.source?.brand_id) {
+      delete this.status[item.source.brand_id]
+    }
+    if (item?.brand?.id) {
+      delete this.status[item.brand.id]
+    }
+  }
+
+  private hasInProgressStatus(): boolean {
+    return Object.values(this.status).some((s) => s === 'token' || s === 'authorize')
+  }
+
+  private ensureJobPoll(): void {
+    if (this.jobPollId || !this.hasInProgressStatus()) { return }
+    this.jobPollId = setInterval(() => this.reconcileJobStatus(), this.jobPollMs)
+  }
+
+  private stopJobPoll(): void {
+    if (this.jobPollId) {
+      clearInterval(this.jobPollId)
+      this.jobPollId = null
+    }
+  }
+
+  private stopJobPollIfIdle(): void {
+    if (!this.hasInProgressStatus()) {
+      this.stopJobPoll()
+    }
+  }
+
+  /**
+   * Server-authoritative progress recovery (#337): when SSE never reached this tab, re-fetch
+   * sources and clear or mark failed based on latest_background_job.job_status.
+   */
+  private reconcileJobStatus(): void {
+    if (!this.hasInProgressStatus()) {
+      this.stopJobPoll()
+      return
+    }
+    this.fastenApi.getSources().subscribe({
+      next: (results) => {
+        const sources = results as Source[]
+        for (const source of sources) {
+          const jobStatus = source.latest_background_job?.job_status
+          const inProgress = this.status[source.id] === 'token' || this.status[source.id] === 'authorize'
+            || (source.brand_id && (this.status[source.brand_id] === 'token' || this.status[source.brand_id] === 'authorize'))
+          if (!inProgress) { continue }
+
+          // Refresh tile metadata (job fields) on the list item if present.
+          const listItem = this.connectedSourceList.find((i) => i.source?.id === source.id)
+          if (listItem?.source) {
+            listItem.source.latest_background_job = source.latest_background_job
+          }
+
+          if (jobStatus === 'STATUS_FAILED') {
+            this.status[source.id] = 'failed'
+            if (source.brand_id) { this.status[source.brand_id] = 'failed' }
+          } else if (jobStatus === 'STATUS_DONE' || jobStatus === 'STATUS_READY' || !jobStatus) {
+            // Done / idle / no job — clear spinner.
+            this.clearSourceStatus(source.id)
+            if (source.brand_id) { delete this.status[source.brand_id] }
+          }
+          // STATUS_LOCKED → keep showing progress
+        }
+        this.stopJobPollIfIdle()
+      },
+      error: () => { /* keep polling; transient */ },
+    })
   }
 
   /**

@@ -28,9 +28,10 @@ func SSEEventBusServerHandler(eventBus event_bus.Interface) gin.HandlerFunc {
 			return
 		}
 
-		// Initialize client channel
+		// Buffered so a burst of source_sync events during import does not block the event bus
+		// or get dropped when the SSE writer is briefly busy (#337).
 		clientListener := event_bus.EventBusListener{
-			ResponseChan: make(chan string),
+			ResponseChan: make(chan string, 256),
 			UserID:       foundUser.ID.String(),
 		}
 

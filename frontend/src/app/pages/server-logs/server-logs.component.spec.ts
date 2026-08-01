@@ -45,6 +45,7 @@ describe('ServerLogsComponent', () => {
     expect(api.setServerLogLevel).toHaveBeenCalledWith('debug');
     expect(api.getServerLogs).toHaveBeenCalledTimes(2); // init + reload
     expect(component.level).toBe('debug');
+    expect(component.levelMsg).toContain('Showing buffered lines');
   });
 
   it('flags an error when the logs request fails', () => {

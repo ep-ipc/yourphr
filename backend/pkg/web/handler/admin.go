@@ -21,8 +21,9 @@ type ServerLogsResponse struct {
 	Lines       []string `json:"lines"`        // most-recent log lines, oldest first
 }
 
-// GetServerLogs returns the recent in-memory log lines and the current level. Admin-only — logs can
-// contain sensitive operational detail.
+// GetServerLogs returns recent in-memory log lines at or above the running level, plus that level.
+// Admin-only — logs can contain sensitive operational detail. Raising the level (e.g. to error)
+// filters the buffered view as well as future emission (#435).
 func GetServerLogs(c *gin.Context) {
 	if !IsAdmin(c) {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "admin role required"})

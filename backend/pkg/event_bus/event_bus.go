@@ -69,12 +69,21 @@ func (bus *eventBus) listen() {
 
 		// Broadcast message to client
 		case eventMsg := <-bus.message:
-			if _, exists := bus.totalRoomListeners[eventMsg.UserID]; !exists {
-				log.Printf("Room `%s` not found, could not send message: `%s`", eventMsg.UserID, eventMsg.Message)
+			listeners, exists := bus.totalRoomListeners[eventMsg.UserID]
+			if !exists || len(listeners) == 0 {
+				// No open SSE stream for this user (tab closed, refresh mid-sync, never connected).
+				// Drop quietly — frontend reconciles via latest_background_job poll (#337).
+				// Avoid log.Printf spam: every resource upsert published source_sync and flooded logs.
+				bus.logger.Debugf("Room `%s` not found, dropped event (no SSE listeners)", eventMsg.UserID)
 				continue
-			} else {
-				for _, roomListener := range bus.totalRoomListeners[eventMsg.UserID] {
-					roomListener.ResponseChan <- eventMsg.Message
+			}
+			for _, roomListener := range listeners {
+				// Non-blocking: a slow/stuck client must not freeze the bus (would block AddListener
+				// and drop subsequent completes). Prefer drop over deadlock.
+				select {
+				case roomListener.ResponseChan <- eventMsg.Message:
+				default:
+					bus.logger.Debugf("Room `%s` listener channel full, dropped event", eventMsg.UserID)
 				}
 			}
 

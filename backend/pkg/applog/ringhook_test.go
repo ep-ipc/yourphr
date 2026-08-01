@@ -80,3 +80,38 @@ func TestSetLevel_RuntimeToggle(t *testing.T) {
 		t.Errorf("SetLevel with an unknown level should error")
 	}
 }
+
+// Raising the level filters already-buffered lower-severity lines from Recent() (#435).
+func TestRecent_FiltersByRunningLevel(t *testing.T) {
+	l := newTestLogger()
+	l.SetLevel(logrus.DebugLevel)
+	Install(l, 100)
+
+	l.Debug("dbg-line")
+	l.Info("info-line")
+	l.Error("err-line")
+
+	// At debug: all three visible.
+	joined := strings.Join(Recent(), "\n")
+	for _, want := range []string{"dbg-line", "info-line", "err-line"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("at debug, missing %q in %q", want, joined)
+		}
+	}
+
+	// Raise to error: only error+ remains in the view; buffer still holds the rest.
+	if err := SetLevel("error"); err != nil {
+		t.Fatalf("SetLevel(error): %v", err)
+	}
+	joined = strings.Join(Recent(), "\n")
+	if !strings.Contains(joined, "err-line") {
+		t.Errorf("error line should remain: %q", joined)
+	}
+	if strings.Contains(joined, "dbg-line") || strings.Contains(joined, "info-line") {
+		t.Errorf("debug/info should be filtered from view at error level: %q", joined)
+	}
+	all := strings.Join(RecentAll(), "\n")
+	if !strings.Contains(all, "dbg-line") || !strings.Contains(all, "info-line") {
+		t.Errorf("RecentAll should still hold lower-severity lines: %q", all)
+	}
+}

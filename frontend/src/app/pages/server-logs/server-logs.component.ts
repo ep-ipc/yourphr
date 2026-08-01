@@ -75,7 +75,7 @@ export class ServerLogsComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.level = res.level;
         this.levelSaving = false;
-        this.levelMsg = `Log level set to ${res.level}. New lines at this level appear as the server logs activity.`;
+        this.levelMsg = `Log level set to ${res.level}. Showing buffered lines at this severity or higher; new activity is also limited to this level (resets to config on restart).`;
         this.load(true);
       },
       error: (err) => { this.levelSaving = false; this.levelMsg = 'Could not change level: ' + (extractErrorFromResponse(err) || 'Unknown Error'); },
