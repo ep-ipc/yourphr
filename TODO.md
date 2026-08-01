@@ -28,7 +28,6 @@ _None._
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
 - [#435](https://github.com/jwilleke/yourphr/issues/435) — [BUG] Log level set to error. New lines at this level appear as the server logs activity.
 - [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
-- [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
@@ -94,6 +93,7 @@ _None._
 
 - [#441](https://github.com/jwilleke/yourphr/issues/441) — [FEATURE] Structured sync metrics on background jobs
 - [#439](https://github.com/jwilleke/yourphr/issues/439) — [BUG] Oracle/Cerner SMART sync aborts at 1000-page cap; Patient never stored; UI shows Failed
+- [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 
 ## Open PRs
 
