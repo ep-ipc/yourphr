@@ -11,17 +11,18 @@ How to get sandbox credentials for **CMS Blue Button 2.0** (Medicare claims). Th
 | **2026-06-14** | production YourPHR (nerdsbythehour) | ✅ **E2E verified** — synthetic login `BBUser00000` / `PW00000!` → token → sync (claims/coverage) |
 | **2026-06-18** | sandbox matrix | ✅ still listed green in vendor matrix |
 | **2026-07-31** | **demo.yourphr.org** and **yourphr.nerdsbythehour.com** | ⛔ **sandbox beneficiary login fails on CMS side** (see below). YourPHR OAuth start + relay poll behave as designed; no auth code is ever posted. |
+| **2026-08-01** | **demo.yourphr.org** (`demo-relay.yourphr.org`, app **v1.19.1**) | ⛔ **same CMS failure** during #438 acceptance: CMS page shows **"We can't process your request at this time. Try logging into your account later."** for `BBUser00000` / `PW00000!`. Authorize page still loads from YourPHR; failure is on CMS login before any redirect to the relay. |
 
-### Failure detail — 2026-07-31 (CMS sandbox login)
+### Failure detail — CMS sandbox login (2026-07-31, reconfirmed 2026-08-01)
 
-Retested the **sandbox** Blue Button catalog entry on both demo and prod. Same symptoms on both instances (so not a single-host config/relay bug):
+Retested the **sandbox** Blue Button catalog entry. Same CMS-side symptoms on demo (2026-08-01) and previously on demo + prod (2026-07-31) — not a single-host config/relay bug:
 
 | Step | What happened |
 |---|---|
 | Authorize | CMS authorize page loads (200); YourPHR opens the popup and polls the relay |
-| Synthetic login `BBUser00000` / `PW00000!` | CMS UI: **"can't process request"** (or equivalent) — never completes authorize |
+| Synthetic login `BBUser00000` / `PW00000!` | CMS UI: **"We can't process your request at this time. Try logging into your account later."** (or shorter "can't process request") — never completes authorize |
 | Alternate path (ID.me / medicare.gov chooser) | Fails with **patient data not found** (synthetic sandbox has no real Medicare identity) |
-| After ~55s | Connect returns **502** / relay timeout; relay logs provider **`not_found`** (no code stored). Cloudflare may surface the 502 as a generic connect error |
+| After connect wait | Connect times out / no auth code; relay has nothing to deliver |
 
 **Interpretation:** Our client_id, scopes, and relay callback are fine enough to reach CMS login. The **CMS sandbox synthetic login path itself is failing** (or has changed in a way that breaks the published `BBUser`/`PW…!` credentials). Until CMS restores sandbox login (or documents a new synthetic path), use **SMART Health IT** for E2E smoke tests ([`smart-health-it.md`](./smart-health-it.md)). Production Medicare still needs CMS production credentials ([#433](https://github.com/jwilleke/yourphr/issues/433), [#408](https://github.com/jwilleke/yourphr/issues/408)).
 
