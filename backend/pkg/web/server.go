@@ -16,6 +16,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/event_bus"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/metrics"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/tls"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/version"
@@ -506,6 +507,7 @@ func (ae *AppEngine) Start() error {
 	}
 
 	ae.startServer(r)
+	ae.startMetricsServer()
 
 	// Scheduled SMART OAuth token-refresh worker (#51). Skipped in StandbyMode (no DB-backed
 	// sources to refresh there).
@@ -516,6 +518,28 @@ func (ae *AppEngine) Start() error {
 
 	// Block indefinitely to keep the server running until process termination
 	select {}
+}
+
+// startMetricsServer optionally binds an internal Prometheus scrape listener (#441).
+// Off unless metrics.enabled is true. Never put this port on a public Ingress.
+func (ae *AppEngine) startMetricsServer() {
+	if !ae.Config.GetBool("metrics.enabled") {
+		return
+	}
+	addr := ae.Config.GetString("metrics.addr")
+	if addr == "" {
+		port := ae.Config.GetInt("metrics.port")
+		if port <= 0 {
+			port = 9091
+		}
+		addr = fmt.Sprintf(":%d", port)
+	}
+	srv, err := metrics.StartServer(addr, metrics.Global)
+	if err != nil {
+		ae.Logger.Errorf("metrics server failed to start on %s: %v (continuing without metrics)", addr, err)
+		return
+	}
+	ae.Logger.Infof("metrics scrape listener on %s (GET /metrics) — cluster-internal only (#441)", srv.Addr)
 }
 
 func (ae *AppEngine) startServer(r *gin.Engine) {

@@ -173,6 +173,18 @@ By default the app points at the project's demo relay (`https://relay.nerdsbythe
 | `PORT` | no | `8080` | Public listener. Serves `/callback` (open) and `/pending` (secret-gated). |
 | `METRICS_PORT` | no | `9090` | Prometheus `/metrics` + `/healthz`. **Internal only — do not expose publicly** (keeps callback/poll counts off the internet). |
 
+### Main app sync metrics (#441)
+
+Background SMART sync jobs persist a structured summary on each job’s `data.summary` (duration, outcome, resource counts by type). Optionally scrape process counters:
+
+| Config / env | Default | Purpose |
+|---|---|---|
+| `metrics.enabled` / `YOURPHR_METRICS_ENABLED` | `false` | Turn on the scrape listener |
+| `metrics.port` / `YOURPHR_METRICS_PORT` | `9091` (when enabled and `addr` empty) | Port for `GET /metrics` + `/healthz` |
+| `metrics.addr` / `YOURPHR_METRICS_ADDR` | — | Full bind address (e.g. `127.0.0.1:9091`); overrides port |
+
+**Internal only** — do not expose on public Ingress. Series include `yourphr_sync_jobs_total`, `yourphr_sync_duration_seconds`, `yourphr_sync_resources_total` (no patient/source ids in labels).
+
 Two hard requirements:
 
 - The relay must be **publicly reachable** and **excluded from any forward-auth** (e.g. Authentik). The provider redirects the user's browser to `/callback`, so it must arrive **unauthenticated**.

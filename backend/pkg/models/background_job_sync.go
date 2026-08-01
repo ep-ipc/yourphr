@@ -31,4 +31,6 @@ type BackgroundJobSyncData struct {
 	BrandID        string                 `json:"brand_id"`
 	CheckpointData map[string]interface{} `json:"checkpoint_data,omitempty"`
 	ErrorData      map[string]interface{} `json:"error_data,omitempty"`
+	// Summary is filled when the job finishes (success, partial, or failed) — durable sync metrics (#441).
+	Summary *SyncJobSummary `json:"summary,omitempty"`
 }

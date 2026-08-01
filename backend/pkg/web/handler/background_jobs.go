@@ -4,16 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/metrics"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/fastenhealth/fasten-sources/clients/factory"
 	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 // This function is used to sync resources from a source (via a callback function). The BackgroundJobSyncResourcesWrapper contains the logic for registering the background job tracking the sync.
@@ -77,6 +79,7 @@ func BackgroundJobSyncResourcesWrapper(
 ) (sourceModels.UpsertSummary, error) {
 	var resultErr error
 	var backgroundJob *models.BackgroundJob
+	var summary sourceModels.UpsertSummary // filled by callback; finalizer records structured metrics (#441)
 
 	//Begin Sync JobStatus update process
 	//1. Check if the source is already syncing
@@ -134,28 +137,46 @@ func BackgroundJobSyncResourcesWrapper(
 				backgroundJob = updatedBackgroundJob
 			}
 
+			now := time.Now()
+			// Always attach structured sync metrics (#441) — success, partial, or failed.
+			var backgroundJobSyncData models.BackgroundJobSyncData
+			if backgroundJob.Data != nil {
+				_ = json.Unmarshal(backgroundJob.Data, &backgroundJobSyncData)
+			}
+			started := backgroundJob.LockedTime
+			if started == nil && !backgroundJob.CreatedAt.IsZero() {
+				t := backgroundJob.CreatedAt
+				started = &t
+			}
+			jobSummary := models.BuildSyncJobSummary(sourceCred, summary, started, now, resultErr)
+			backgroundJobSyncData.Summary = &jobSummary
 			if resultErr == nil {
 				backgroundJob.JobStatus = pkg.BackgroundJobStatusDone
 			} else {
-				//if there's an error that we need to store, lets unmarshal the data from the backgroundjob
-				var backgroundJobSyncData models.BackgroundJobSyncData
-				if backgroundJob.Data != nil {
-					err = json.Unmarshal(backgroundJob.Data, &backgroundJobSyncData)
-				}
-
-				//ensure there's a map to store the error data
 				if backgroundJobSyncData.ErrorData == nil {
 					backgroundJobSyncData.ErrorData = map[string]interface{}{}
 				}
 				backgroundJobSyncData.ErrorData["final"] = resultErr.Error()
-
-				//marshal the new background job data
-				backgroundJob.Data, err = json.Marshal(backgroundJobSyncData)
 				backgroundJob.JobStatus = pkg.BackgroundJobStatusFailed
 			}
-			now := time.Now()
+			if dataJSON, mErr := json.Marshal(backgroundJobSyncData); mErr == nil {
+				backgroundJob.Data = dataJSON
+			}
 			backgroundJob.DoneTime = &now
 			backgroundJob.LockedTime = nil
+
+			// Process metrics + one greppable log line (no PHI — counts and outcomes only).
+			metrics.Global.RecordSyncJob(jobSummary)
+			logger.WithFields(logrus.Fields{
+				"event":           "sync_complete",
+				"outcome":         string(jobSummary.Outcome),
+				"duration_ms":     jobSummary.DurationMs,
+				"total_resources": jobSummary.TotalResources,
+				"environment":     jobSummary.Environment,
+				"platform_type":   jobSummary.PlatformType,
+				"source_id":       sourceCred.ID.String(),
+				"job_id":          backgroundJob.ID.String(),
+			}).Info("sync_complete")
 
 			err = databaseRepo.UpdateBackgroundJob(backgroundJobContext, backgroundJob)
 			if err != nil {
@@ -167,7 +188,6 @@ func BackgroundJobSyncResourcesWrapper(
 	// END FINALIZER
 
 	var sourceClient sourceModels.SourceClient
-	var summary sourceModels.UpsertSummary
 	sourceClient, summary, resultErr = callbackFn(backgroundJobContext, logger, databaseRepo, sourceCred)
 	if resultErr != nil {
 		logger.Errorln("An error occurred while syncing resources, ignoring", resultErr)
