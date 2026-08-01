@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.18.1](https://github.com/jwilleke/yourphr/compare/v1.18.0...v1.18.1) (2026-08-01)
+
+Explore sandbox filter for admins, vendor status dated from live retests, and markdownlint CI cleanups.
+
+### Features
+
+- **explore:** admin toggle to show/hide sandbox sources (default off; preference in localStorage) so patient-facing Explore stays clean of `/sandbox` test connects
+
+### Documentation
+
+- **vendors:** dated Blue Button sandbox login regression (2026-07-31), SMART Health IT E2E on demo, Oracle page-cap abort ([#439](https://github.com/jwilleke/yourphr/issues/439)), Epic sandbox E2E notes
+- **vendors:** remove obsolete `blue-button.md` (superseded by `medicare.md`)
+
+### Bug Fixes
+
+- **ci:** markdownlint MD051/MD036/MD012 in Blue Button docs and `TODO.md`
+
+### Known issues
+
+- Oracle large imports can abort at the global 1000-page cap and leave Patient missing ([#439](https://github.com/jwilleke/yourphr/issues/439))
+- FHIR Consent has no card yet (raw-only on Explore) ([#440](https://github.com/jwilleke/yourphr/issues/440))
+- Reference display resolve/link for Practitioner participants still open ([#280](https://github.com/jwilleke/yourphr/issues/280))
+
 ## [1.18.0](https://github.com/jwilleke/yourphr/compare/v1.17.0...v1.18.0) (2026-07-31)
 
 Operator-visible scheduled backup health so failures no longer stay silent for weeks when a destination falls outside the allowlist.
