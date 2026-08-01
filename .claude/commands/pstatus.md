@@ -39,9 +39,13 @@ For each open Dependabot / code-scanning / GitGuardian alert:
 
 ### Step 3: Triage gate
 
-- Any open issue with **no** placement label (`P0` / `P1` / `P2` / `deferred` / `in-review`) gets
-  `needs-triage` so it shows up as awaiting a decision rather than being silently mis-ranked. An
-  `in-review` issue is already placed (it lands in the In review band) and is never flagged.
+- Any open issue **or pull request** with **no** placement label (`P0` / `P1` / `P2` / `deferred` /
+  `in-review`) gets `needs-triage` so it shows up as awaiting a decision rather than being silently
+  mis-ranked. An `in-review` item is already placed (it lands in the In review band) and is never
+  flagged.
+- PRs are triaged on the same scale as issues, because a PR *is* work: a merge-ready security fix is
+  `P0`, a routine dependency bump nobody is waiting on is `P2`, one held pending an unrelated
+  upgrade is `deferred`. Apply the label with `gh pr edit <n> --add-label <band>`.
 
 ### Step 4: Rank and regenerate `TODO.md`
 
@@ -67,25 +71,34 @@ The bands, in this order:
 - `🔴 P0 — Security & Critical` (list `security` / vulnerability issues first)
 - `🟠 P1`
 - `🟡 P2`
-- `🔵 In review` (issues labeled `in-review` — work complete and pushed, awaiting the operator's
-  decision to close; takes precedence over an issue's priority band so it surfaces as "ready for your call")
+- `🔵 In review` (items labeled `in-review` — work complete and pushed, awaiting the operator's
+  decision to close; takes precedence over an item's priority band so it surfaces as "ready for your call")
 - `⏸ Deferred`
 - `❓ Needs triage` (count + titles)
-- `🔀 Open PRs` — every open pull request, newest first. Mark each `draft`, `ready`, or
-  `conflicted` from `isDraft` / `mergeStateStatus`, and flag any open more than 7 days as stale.
-  Dependency-bump PRs (Dependabot / Renovate) belong here too: they are frequently
-  security-relevant and are exactly the kind of thing that goes unnoticed, because the
-  corresponding scanner alert often looks *already tracked* by an unrelated issue.
 
-**One issue per line — never bundle.** Each issue gets its OWN bullet, starting with a full clickable
-GitHub link. No grouping headers that pack several refs onto one bullet, no comma-separated runs of
-issues, no bare `#<num>`. Each line:
+**Open PRs are not a separate band.** Every open pull request is ranked into the bands above by its
+own placement label, interleaved with issues. A merge-ready security PR belongs in `P0` next to the
+advisory it fixes — parking it in a trailing "Open PRs" section is exactly how finished, shippable
+work goes unread. Dependency-bump PRs (Dependabot / Renovate) are ranked the same way: they are
+frequently security-relevant and are easy to miss, because the corresponding scanner alert often
+looks *already tracked* by an unrelated issue.
+
+Within a band, list PRs **before** issues of the same priority — a written change is closer to done
+than an unstarted one.
+
+**One item per line — never bundle.** Each issue and each PR gets its OWN bullet, starting with a
+full clickable GitHub link. No grouping headers that pack several refs onto one bullet, no
+comma-separated runs, no bare `#<num>`. Issue lines:
 
 `- [#<num>](https://github.com/{owner}/{repo}/issues/<num>) — <title>`
 
-PRs use the same one-per-line rule with the `/pull/` path, and **must name their related issues**:
+PR lines use the `/pull/` path, are prefixed `PR:` so they are distinguishable at a glance inside a
+mixed band, carry their merge state, and **must name their related issues**:
 
-`- [#<num>](https://github.com/{owner}/{repo}/pull/<num>) — <title> *(ready | draft | conflicted)* — closes [#<n>](…/issues/<n>)`
+`- PR: [#<num>](https://github.com/{owner}/{repo}/pull/<num>) — <title> *(ready | draft | conflicted | CI red)* — closes [#<n>](…/issues/<n>)`
+
+Mark each `draft`, `ready`, or `conflicted` from `isDraft` / `mergeStateStatus`, note failing
+required checks, and flag any PR open more than 7 days as stale.
 
 #### Resolving a PR's related issues
 
