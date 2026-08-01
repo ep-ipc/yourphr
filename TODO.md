@@ -33,8 +33,7 @@ _None._
 
 ## P2 — Nice to have
 
-- [#447](https://github.com/jwilleke/yourphr/issues/447) — [FEATURE] MedicationRequest Explore table — status/intent first; sparse Synthea dosage
-- [#446](https://github.com/jwilleke/yourphr/issues/446) — [FEATURE] Explore Media list — falls back to raw-only warning (card exists)
+- [#448](https://github.com/jwilleke/yourphr/issues/448) — [FEATURE] Resource detail breadcrumb trail (replace "unknown Resource Type id")
 - [#445](https://github.com/jwilleke/yourphr/issues/445) — [FEATURE] Session JWT: refresh / sliding expiry on activity
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
@@ -93,6 +92,8 @@ _None._
 
 ## In review
 
+- [#447](https://github.com/jwilleke/yourphr/issues/447) — [FEATURE] MedicationRequest Explore table — status/intent first; sparse Synthea dosage
+- [#446](https://github.com/jwilleke/yourphr/issues/446) — [FEATURE] Explore Media list — falls back to raw-only warning (card exists)
 - [#444](https://github.com/jwilleke/yourphr/issues/444) — [FEATURE] Encounter Explore table — class/status + reference fallbacks (SMART/Synthea)
 - [#443](https://github.com/jwilleke/yourphr/issues/443) — [FEATURE] DiagnosticReport Explore table — lab panels vs document columns
 - [#442](https://github.com/jwilleke/yourphr/issues/442) — [BUG] Device Explore: Unique ID blank — udiCarrier is R4 array; ignore distinctIdentifier/serial
