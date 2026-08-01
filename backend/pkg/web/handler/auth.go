@@ -113,10 +113,11 @@ func AuthSignin(c *gin.Context) {
 // browser clients (#103 / H2). The Authorization: Bearer header remains the primary transport
 // (RFC 6750 / SMART); this cookie is an optional fallback that keeps the token out of JS to
 // shrink the XSS-theft surface. Secure is gated on HTTPS so local http dev still works;
-// SameSite=Strict mitigates CSRF. Max-age matches the 1h token lifetime.
+// SameSite=Strict mitigates CSRF. Max-age matches jwt.session_ttl_minutes (#445 sliding TTL).
 func setSessionCookie(c *gin.Context, appConfig config.Interface, token string) {
+	policy := auth.SessionPolicyFromConfig(appConfig)
 	c.SetSameSite(http.SameSiteStrictMode)
-	c.SetCookie(pkg.SessionCookieName, token, 3600, "/", "", appConfig.GetBool("web.listen.https.enabled"), true)
+	c.SetCookie(pkg.SessionCookieName, token, policy.CookieMaxAgeSeconds(), "/", "", appConfig.GetBool("web.listen.https.enabled"), true)
 }
 
 // AuthLogout clears the session cookie. The session JWT is otherwise stateless, and an

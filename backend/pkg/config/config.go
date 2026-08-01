@@ -157,6 +157,12 @@ func (c *configuration) Init() error {
 	c.SetDefault("cache.location", "/opt/fasten/cache/")
 
 	c.SetDefault("jwt.issuer.key", DefaultJWTIssuerKey)
+	// Browser session JWT (#445 Option A): sliding TTL + absolute cap from first login.
+	// Env: YOURPHR_JWT_SESSION_TTL_MINUTES, YOURPHR_JWT_SESSION_ABSOLUTE_HOURS,
+	// YOURPHR_JWT_SESSION_RENEW_IF_REMAINING_MINUTES.
+	c.SetDefault("jwt.session_ttl_minutes", 60)
+	c.SetDefault("jwt.session_absolute_hours", 12)
+	c.SetDefault("jwt.session_renew_if_remaining_minutes", 30)
 
 	c.SetDefault("log.level", "INFO")
 	c.SetDefault("log.file", "")

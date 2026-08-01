@@ -30,6 +30,11 @@ func runRequireAuth(t *testing.T, build func(req *http.Request)) (*gin.Context, 
 	ctrl := gomock.NewController(t)
 	mockConfig := mock_config.NewMockInterface(ctrl)
 	mockConfig.EXPECT().GetString("jwt.issuer.key").Return(testJWTKey).AnyTimes()
+	// Session sliding policy (#445) — defaults when zero are applied in SessionPolicyFromConfig.
+	mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
+	mockConfig.EXPECT().GetInt("jwt.session_absolute_hours").Return(12).AnyTimes()
+	mockConfig.EXPECT().GetInt("jwt.session_renew_if_remaining_minutes").Return(30).AnyTimes()
+	mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false).AnyTimes()
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

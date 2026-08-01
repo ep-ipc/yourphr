@@ -130,6 +130,9 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 | `database.encryption.enabled` | `true` | DB-at-rest encryption (encrypted SQLite build). |
 | `database.encryption.key` | *(unset — required)* | Set on first-run setup or via `YOURPHR_DATABASE_ENCRYPTION_KEY` (≥10 chars). |
 | `jwt.issuer.key` | *(public placeholder — auto-gen)* | Auto-generates a strong key if unset; override with `YOURPHR_JWT_ISSUER_KEY` (`openssl rand -hex 32`). Never use the committed default in production. |
+| `jwt.session_ttl_minutes` | `60` | Browser session sliding window (#445). Cookie Max-Age and JWT `exp` extension length. Env: `YOURPHR_JWT_SESSION_TTL_MINUTES`. |
+| `jwt.session_absolute_hours` | `12` | Hard cap from first login (`session_start`); no further renew after this. Env: `YOURPHR_JWT_SESSION_ABSOLUTE_HOURS`. |
+| `jwt.session_renew_if_remaining_minutes` | `30` | Renew session JWT/cookie on authenticated API calls when less than this much lifetime remains. Env: `YOURPHR_JWT_SESSION_RENEW_IF_REMAINING_MINUTES`. |
 | `log.level` | `INFO` | `DEBUG` / `INFO` / `WARN` / `ERROR`. |
 | `log.file` | `""` | Optional log file (also writes to stderr). |
 | `cda_converter.enabled` | `false` | C-CDA/CCD import — needs the Metriport sidecar (opt-in). See [`FHIR/fhir-converter-local.md`](../FHIR/fhir-converter-local.md). |

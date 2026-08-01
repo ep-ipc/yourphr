@@ -32,6 +32,10 @@ func TestAuthSignup(t *testing.T) {
 			assert.Equal(t, pkg.UserRoleAdmin, user.Role)
 		}).Return(nil)
 		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
+		// setSessionCookie → SessionPolicyFromConfig (#445)
+		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_absolute_hours").Return(12).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_renew_if_remaining_minutes").Return(30).AnyTimes()
 		mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false) // setSessionCookie (#103)
 
 		w := httptest.NewRecorder()
@@ -67,6 +71,10 @@ func TestAuthSignup(t *testing.T) {
 			assert.Equal(t, pkg.UserRoleUser, user.Role)
 		}).Return(nil)
 		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
+		// setSessionCookie → SessionPolicyFromConfig (#445)
+		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_absolute_hours").Return(12).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_renew_if_remaining_minutes").Return(30).AnyTimes()
 		mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false) // setSessionCookie (#103)
 
 		w := httptest.NewRecorder()

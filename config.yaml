@@ -100,3 +100,10 @@ jwt:
     # zero-config). To pin your own instead, set a non-default value here or via
     # the YOURPHR_JWT_ISSUER_KEY env var (generate one with: openssl rand -hex 32).
     key: "thisismysupersecuressessionsecretlength"
+  # Browser session JWT (#445): sliding lifetime + absolute max from first login.
+  # Activity near the end of TTL re-issues a cookie; hard stop after absolute_hours.
+  # Env: YOURPHR_JWT_SESSION_TTL_MINUTES, YOURPHR_JWT_SESSION_ABSOLUTE_HOURS,
+  # YOURPHR_JWT_SESSION_RENEW_IF_REMAINING_MINUTES.
+  session_ttl_minutes: 60
+  session_absolute_hours: 12
+  session_renew_if_remaining_minutes: 30
