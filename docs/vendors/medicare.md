@@ -62,8 +62,12 @@ Blue Button is a **confidential** client (unlike the others here) — you get _a
 
 A separate CMS **production** app-review (no cost); the base becomes `https://api.bluebutton.cms.gov/v2/fhir` and you use the Production `client_id` / `client_secret`.
 
+**Operator runbook (email → form → Zoom → post-approval → enable catalog):**  
+[`../cms-bluebutton-production-access.md`](../cms-bluebutton-production-access.md) ([#433](https://github.com/jwilleke/yourphr/issues/433)).
+
 ## See also
 
 - **Full connect guide + troubleshooting:** [`../medicare-bluebutton.md`](../medicare-bluebutton.md)
+- **Production access runbook:** [`../cms-bluebutton-production-access.md`](../cms-bluebutton-production-access.md)
 - Index: [`../testing-sandboxes/test-sandboxes.md`](../testing-sandboxes/test-sandboxes.md)
 - Vendor matrix: [`README.md`](./README.md)

@@ -2,7 +2,7 @@
 
 How to connect **CMS Blue Button 2.0** (Medicare claims data) to YourPHR as a SMART-on-FHIR source — **sandbox** (verified) and **production** (after CMS credentials).
 
-**Related:** [provider catalog](provider-catalog/README.md) · [connection policy](connection-policy.md) · [attributions](Attributions.md) · [#432](https://github.com/jwilleke/yourphr/issues/432) · [#408](https://github.com/jwilleke/yourphr/issues/408)
+**Related:** [provider catalog](provider-catalog/README.md) · [connection policy](connection-policy.md) · [attributions](Attributions.md) · **[CMS production access runbook](cms-bluebutton-production-access.md)** ([#433](https://github.com/jwilleke/yourphr/issues/433)) · [#432](https://github.com/jwilleke/yourphr/issues/432) · [#408](https://github.com/jwilleke/yourphr/issues/408)
 
 ## Patient-facing name: “Medicare” (#429)
 
@@ -98,7 +98,7 @@ CMS portal may show `client_id/client_secret` as one string. Put **only** the id
 
 ### A. CMS production app
 
-1. Complete CMS [production access](https://bluebutton.cms.gov/production-access/) process (privacy, terms, demo — [#433](https://github.com/jwilleke/yourphr/issues/433)).
+1. Complete the full operator runbook: **[cms-bluebutton-production-access.md](cms-bluebutton-production-access.md)** (email, form, Zoom script, PP/ToS gates — [#433](https://github.com/jwilleke/yourphr/issues/433)). CMS process: [production access](https://bluebutton.cms.gov/production-access/).
 2. Register **production** app with:
    - Confidential client, authorization-code
    - **Callback URL** = this instance’s relay callback ([below](#b-relay-callback-uri)) — **exact match**

@@ -16,7 +16,7 @@ How to obtain credentials for each test sandbox. The index with connect values +
 | Sandbox | Register at | What you get | Guide |
 |---|---|---|---|
 | **SMART Health IT** | _nothing — open sandbox_ | any `client_id`, no secret | [`smart-health-it.md`](./smart-health-it.md) |
-| **CMS Blue Button 2.0** | <https://bluebutton.cms.gov/developers/> | `client_id` + `client_secret` (confidential) | [`medicare.md`](./medicare.md) |
+| **CMS Blue Button 2.0** | <https://bluebutton.cms.gov/developers/> | `client_id` + `client_secret` (confidential) | [`medicare.md`](./medicare.md) · **prod access:** [`../cms-bluebutton-production-access.md`](../cms-bluebutton-production-access.md) |
 | **Epic** | <https://fhir.epic.com> | `client_id` (public/PKCE) | [`epic-sandbox.md`](./epic-sandbox.md) |
 | **FollowMyHealth / Veradigm** | <https://developer.veradigm.com> | `client_id` (public/PKCE) — ⛔ provisioning-gated | [`followmyhealth.md`](./followmyhealth.md) |
 | **Oracle Health (Cerner)** | <https://code-console.cerner.com/> | `client_id` (public/PKCE), console-issued | [`oracle-cerner.md`](./oracle-cerner.md) |
