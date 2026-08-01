@@ -87,7 +87,7 @@ CMS portal may show `client_id/client_secret` as one string. Put **only** the id
 | `invalid_scope` | Wildcard / `fhirUser` / `offline_access` | Use exact scopes above |
 | Relay timeout + popup “Connected” | Login longer than connect wait | Raise `YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS` (default 240); or pre-login at CMS |
 | Relay timeout, no “Connected” | Redirect URI mismatch or incomplete login | Callback must match [Relay callback](#b-relay-callback-uri) exactly |
-| CMS “We can't process your request at this time” on `BBUser…` login (**2026-07-31**, **2026-08-01** demo) | CMS sandbox synthetic login broken/changed; authorize never yields a code | Vendor-side — not a YourPHR callback bug. See [`vendors/medicare.md`](vendors/medicare.md); use SMART Health IT for E2E; watch CMS sandbox docs / BlueButtonAPI@cms.hhs.gov |
+| CMS “We can't process your request at this time” on `BBUser…` login (**2026-07-31**, **2026-08-01** demo) | CMS sandbox synthetic login broken/changed; authorize never yields a code | Vendor-side — not a YourPHR callback bug. See [`vendors/medicare.md`](vendors/medicare.md); use SMART Health IT for E2E; watch CMS sandbox docs / [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov) |
 | ID.me / medicare.gov “patient data not found” (sandbox) | Sandbox has no real Medicare identity | Expected for synthetic path; do not use ID.me for BB sandbox |
 
 ---

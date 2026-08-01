@@ -36,7 +36,7 @@ YourPHR connects to all of these the same way: a one-click button on **`/sandbox
 
 | Sandbox | Auth model | Test patient | Live status |
 |---|---|---|---|
-| **CMS Blue Button 2.0** | confidential (id+secret) | synthetic Medicare beneficiary (`BBUser00000` / `PW00000!`) | ⛔ **sandbox login broken (2026-07-31, reconfirmed 2026-08-01 on demo)** — OAuth authorize reaches CMS; synthetic login: *"We can't process your request at this time"*; no auth code (see [`medicare.md`](./medicare.md)). Was ✅ E2E 2026-06-14. |
+| **CMS Blue Button 2.0** | confidential (id+secret) | synthetic Medicare beneficiary (`BBUser00000` / `PW00000!`) | ⛔ **sandbox login broken (2026-07-31, reconfirmed 2026-08-01 on demo)** — OAuth authorize reaches CMS; synthetic login: _"We can't process your request at this time"_; no auth code (see [`medicare.md`](./medicare.md)). Was ✅ E2E 2026-06-14. |
 | **Epic** | public / PKCE | sandbox test patients (e.g. Camila Lopez) | ✅ **E2E verified 2026-07-31** on production (also 2026-06-18); skips some 403/400 types; watch **offline refresh token** after connect ([`epic-sandbox.md`](./epic-sandbox.md)) |
 | **SMART Health IT** | open (any `client_id`, no secret) | pick at launcher | ✅ **E2E verified 2026-07-31** on demo.yourphr.org (~455 KB export) |
 | **athenahealth** | confidential (id+secret) | `phrtest_preview@mailinator.com` / `Password1` (also `athenainterop@aol.com`) | 🟡 **auth works** (2026-06-18); patient login works; record-sharing **gated** on app onboarding/provisioning in the Developer Portal |
