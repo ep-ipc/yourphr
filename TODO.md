@@ -1,17 +1,18 @@
 # TODO
 
 <!-- RESUME:START -->
-## ▶ Resume here — 2026-07-29
+## ▶ Resume here — 2026-08-01
 
-- Last worked on: `#411` closed — `AGENTS.md` is the canonical project brief; `CLAUDE.md` is a pointer. SMART flow map + issues `#406`–`#415` earlier; `#413` held for `#407`. Session committed and pushed (`16af8ba6`, `71efb6d4`).
-- Branch / state: `main`, clean, synced with `origin/main` (resume-pointer commit may be unpushed until approved)
-- Running / in-flight: CI on latest docs push (Markdown Lint + Push on main) may still be in progress at wrap; no local dev servers from this agent
+- Last worked on: Released **v1.20.3** (sliding sessions #445, disconnect/remove #437, log filter #435, sync progress #337, CMS prod runbook #433, patient vitals slice #313). Demo UX clarified: dashboard greets FHIR Patient (Christopher Abshire from SMART Health IT on **Sandbox**); `/sources` only shows production tiles (empty YourPHR + odd **fh** label).
+- Branch / state: `main`, clean, synced with `origin/main` (HEAD `4f1d1932` = release commit)
+- Running / in-flight: **local dev servers** may still be up — backend `:9090`, frontend `localhost:4200` (npx ng). Docker image build for v1.20.3 **succeeded**; CI Markdown Lint **failed** on `TODO.md` MD049 (fixed in this wrap if present).
 - Parked / half-done: none in working tree
 - Next steps:
-  - Verify `ghcr.io/jwilleke/yourphr:1.16.0` pulls natively on arm64, then close [#405](https://github.com/jwilleke/yourphr/issues/405)
-  - Grade / act on security [#416](https://github.com/jwilleke/yourphr/issues/416) (12 yarn Dependabot alerts)
-  - Decide Path B [#407](https://github.com/jwilleke/yourphr/issues/407) (unblocks [#413](https://github.com/jwilleke/yourphr/issues/413))
-- Blockers / significant notes: [#397](https://github.com/jwilleke/yourphr/issues/397) still in-review (awaiting reporter). Live instance may still lack cda-converter sidecar (from prior log). Open PR [#378](https://github.com/jwilleke/yourphr/pull/378) zone.js held for Angular 21. Start next session with `/context` (not `/pstatus` first) so this block is read before bands regenerate.
+  - Fix/verify CI green after TODO.md emphasis fix; confirm Flux/demo pulled `1.20.3`
+  - Operator: verify in-review (#445, #437, #435, #337); dry-run CMS Zoom (#433 runbook); optional CMS application email
+  - Inspect demo production source labeled **fh** (bad display string)
+  - Mission: #408 production SMART proof; #438 demo epic remainder; #313 further PGHD slices
+- Blockers / significant notes: CMS Blue Button **sandbox login** still broken vendor-side (Medicare E2E on demo). #413 blocked on Path B #407. Dependabot open alerts: 0.
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
@@ -31,9 +32,9 @@ _None. Open Dependabot alerts: 0. Code-scanning open: 0._
 
 ## 🟡 P2
 
-- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj) *(blocked; security)*
+- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj) _(blocked; security)_
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
-- [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping *(blocked)*
+- [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping _(blocked)_
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
 - [#407](https://github.com/jwilleke/yourphr/issues/407) — [FEATURE] Decide fate of BYO SMART Path B (/source/authorize + /source/connect)
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
@@ -50,7 +51,7 @@ _None. Open Dependabot alerts: 0. Code-scanning open: 0._
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
 - [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
-- [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated) *(blocked)*
+- [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated) _(blocked)_
 - [#336](https://github.com/jwilleke/yourphr/issues/336) — [FEATURE] Explore — Send to Email
 - [#335](https://github.com/jwilleke/yourphr/issues/335) — [FEATURE] Explore — Export to PDF
 - [#334](https://github.com/jwilleke/yourphr/issues/334) — [FEATURE] Explore — Save Report
@@ -67,7 +68,7 @@ _None. Open Dependabot alerts: 0. Code-scanning open: 0._
 - [#252](https://github.com/jwilleke/yourphr/issues/252) — [FEATURE] Harden re-import dedup: guard idempotent upserts against stale (older) overwrites + add coverage
 - [#251](https://github.com/jwilleke/yourphr/issues/251) — [FEATURE] Explore Apple Health's supported-institution list as a provider-catalog / FHIR-endpoint source
 - [#244](https://github.com/jwilleke/yourphr/issues/244) — [EPIC] Per-profile dashboard widgets (US Core display end-state)
-- [#53](https://github.com/jwilleke/yourphr/issues/53) — [SMART] Veradigm/FollowMyHealth registration + end-to-end integration *(blocked)*
+- [#53](https://github.com/jwilleke/yourphr/issues/53) — [SMART] Veradigm/FollowMyHealth registration + end-to-end integration _(blocked)_
 - [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 - [#14](https://github.com/jwilleke/yourphr/issues/14) — [FEATURE] User Profile Update
 
@@ -80,10 +81,10 @@ _None. Open Dependabot alerts: 0. Code-scanning open: 0._
 
 ## ⏸ Deferred
 
-- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt *(security)*
+- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt _(security)_
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
-- [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
+- [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten_ → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
 - [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
@@ -94,5 +95,5 @@ _None._
 
 ## 🔀 Open PRs
 
-- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready · blocked/deferred)* — held for Angular 21 — *no linked security issue (Dependabot open alerts: 0)*
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready · **stale** · blocked/deferred)* — held for Angular 21 — *no linked security issue (Dependabot open alerts: 0)*
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(ready · blocked/deferred)_ — held for Angular 21 — _no linked security issue (Dependabot open alerts: 0)_
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(ready · **stale** · blocked/deferred)_ — held for Angular 21 — _no linked security issue (Dependabot open alerts: 0)*
