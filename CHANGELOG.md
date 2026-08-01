@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.20.0](https://github.com/jwilleke/yourphr/compare/v1.19.1...v1.20.0) (2026-08-01)
+
+Explore display improvements from demo SMART Health IT acceptance.
+
+### Features
+
+- **consent:** first-class Explore table, `ConsentModel`, and detail card — no more parse error / Id-only fallback ([#440](https://github.com/jwilleke/yourphr/issues/440))
+- **diagnostic-report:** lab-oriented Explore columns (status, category, title, results summary) ([#443](https://github.com/jwilleke/yourphr/issues/443))
+- **encounter:** Explore columns for status, class, type, period; practitioner/org reference fallbacks ([#444](https://github.com/jwilleke/yourphr/issues/444))
+
+### Bug Fixes
+
+- **device:** Unique ID from R4 `udiCarrier[]` array + distinctIdentifier/serial fallbacks ([#442](https://github.com/jwilleke/yourphr/issues/442))
+
+### Notes for operators
+
+- Re-check Explore on demo after Flux picks `1.20.0`: Device Unique ID, Consent×3, DiagnosticReport×6, Encounter×21 for the SMART Health IT source.
+
 ## [1.19.1](https://github.com/jwilleke/yourphr/compare/v1.19.0...v1.19.1) (2026-08-01)
 
 ### Bug Fixes
