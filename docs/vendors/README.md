@@ -37,7 +37,7 @@ YourPHR connects to all of these the same way: a one-click button on **`/sandbox
 | Sandbox | Auth model | Test patient | Live status |
 |---|---|---|---|
 | **CMS Blue Button 2.0** | confidential (id+secret) | synthetic Medicare beneficiary (`BBUser00000` / `PW00000!`) | ⛔ **sandbox login broken (2026-07-31)** — OAuth authorize reaches CMS; synthetic + ID.me paths fail before any auth code (see [`medicare.md`](./medicare.md)). Was ✅ E2E 2026-06-14. |
-| **Epic** | public / PKCE | `fhircamila` / `epicepic1` | ✅ **works** (last green: 2026-06-18) — imports records (skips types Epic 403/400s) |
+| **Epic** | public / PKCE | sandbox test patients (e.g. Camila Lopez) | ✅ **E2E verified 2026-07-31** on production (also 2026-06-18); skips some 403/400 types; watch **offline refresh token** after connect ([`epic-sandbox.md`](./epic-sandbox.md)) |
 | **SMART Health IT** | open (any `client_id`, no secret) | pick at launcher | ✅ **E2E verified 2026-07-31** on demo.yourphr.org (~455 KB export) |
 | **athenahealth** | confidential (id+secret) | `phrtest_preview@mailinator.com` / `Password1` (also `athenainterop@aol.com`) | 🟡 **auth works** (2026-06-18); patient login works; record-sharing **gated** on app onboarding/provisioning in the Developer Portal |
 | **Oracle Health (Cerner)** | public / PKCE | `nancysmart` / `Cerner01` | 🟡 **partial** — connect works; large patients can **page-cap abort** (~1000 pages) and leave **no Patient** → UI Failed (**2026-07-31**, [#439](https://github.com/jwilleke/yourphr/issues/439)). Needs pinned authorize + enumerated v2 `.rs` + Offline (see below) |

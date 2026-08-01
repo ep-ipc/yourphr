@@ -18,25 +18,32 @@ and rides on the now-complete SMART on FHIR stack ([EPIC #20](https://github.com
 - **Is anything blocking Epic? No.** Epic's sandbox is self-service — register a
   patient-facing app, get a non-production `client_id`, run the flow. There is
   no approval gate. (That gate is Veradigm-specific, [#53](https://github.com/jwilleke/yourphr/issues/53) — see below.)
-- **The SMART flow is already proven end-to-end** against the SMART Health IT
-  sandbox (`launch.smarthealthit.org`): authorize → login → token exchange →
-  `$everything` import all succeeded (spike [#48](https://github.com/jwilleke/yourphr/issues/48)).
-  Epic reuses that exact same generic SMART-R4 client — it is just a different
-  provider in the same, working code path.
-- **Has *Epic specifically* been connected yet? Not yet** — no one has run a real
-  authorize → token → import against `fhir.epic.com`. That is a remaining
-  **task, not a blocker**: it needs a `client_id` and a run. Epic's discovery
-  endpoints are confirmed reachable.
-- **Supporting stack — DONE** (all closed): SMART spike
-  ([#48](https://github.com/jwilleke/yourphr/issues/48)), generic Go SMART-R4
-  client ([#49](https://github.com/jwilleke/yourphr/issues/49)), self-hosted
-  store-and-poll relay ([#50](https://github.com/jwilleke/yourphr/issues/50),
-  live at `relay.nerdsbythehour.com`), backend OAuth endpoints + token storage
-  ([#51](https://github.com/jwilleke/yourphr/issues/51)), and the frontend
-  connect UI ([#52](https://github.com/jwilleke/yourphr/issues/52)).
-- **This change — IN REVIEW**: PR [#260](https://github.com/jwilleke/yourphr/pull/260)
-  adds this doc, a one-click **"Use Epic Sandbox"** pre-fill in the connect
-  modal, and Epic reference values in `.env.example`.
+- **Epic sandbox E2E is verified** on production (see [Live connect log](#live-connect-log-dated) below). Same generic SMART-R4 client as SMART Health IT ([#48](https://github.com/jwilleke/yourphr/issues/48)–[#52](https://github.com/jwilleke/yourphr/issues/52)); catalog one-click path is live on `/web/sandbox`.
+- **Supporting stack — DONE**: SMART spike ([#48](https://github.com/jwilleke/yourphr/issues/48)), generic client ([#49](https://github.com/jwilleke/yourphr/issues/49)), relay ([#50](https://github.com/jwilleke/yourphr/issues/50)), backend OAuth ([#51](https://github.com/jwilleke/yourphr/issues/51)), connect UI ([#52](https://github.com/jwilleke/yourphr/issues/52)), sandbox pre-fill / this guide ([#257](https://github.com/jwilleke/yourphr/issues/257) / PR [#260](https://github.com/jwilleke/yourphr/pull/260)).
+
+### Live connect log (dated)
+
+| Date | Host | Result |
+|---|---|---|
+| **2026-06-15** | discovery only | ✅ `.well-known/smart-configuration` **200**, PKCE `S256`, `launch-standalone` + `client-public` + `context-standalone-patient` + `permission-offline` |
+| **2026-06-18** | production matrix | ✅ **works** — imports records; skips types Epic **403/400**s (e.g. AdverseEvent 403, CarePlan “requires category” 400) |
+| **2026-07-31** | **yourphr.nerdsbythehour.com** `/web/sandbox` | ✅ **E2E connect + import** — authorize/connect **200** (~11 s connect); per-resource SMART walk ~**4 min** for first pass; Patient stored (UUID). Brief UI 500 on Patient while first pages were still writing (race); later loads **200**. |
+| **2026-08-01** | same host, Sources recheck | ✅ Patient `GET` **200** for Epic sources; imported data still present |
+
+#### 2026-07-31 production notes (detail)
+
+- Catalog entry authorize `POST …/provider-catalog/fbf29bef-…/authorize` **200** at **14:00:49Z**; connect **200** at **14:01:00Z** (latency ~11 s). Second Epic-path catalog connect **14:22:20Z** also completed a short type walk.
+- Import path: `no Patient/$everything` → per-resource compartment search. Many empty/403 types skipped gracefully; usable clinical types + Patient imported.
+- **AuditEvent / Communication / Task:** log noise `error upserting … Invalid resource type for model: AuditEvent` (and similar) — fetch succeeds, **DB model missing** for those types; not fatal to the rest of the import.
+- **Token refresh (ongoing after connect):** source `bb1dbc09-…` (Epic sandbox, user `jwilleke`) logs every ~30 min:
+
+  ```text
+  token-refresh: source bb1dbc09-…: access token expired and no refresh token is available; reconnect the source
+  ```
+
+  Access token dies; **no `refresh_token` stored**. Other sources on the same host still refresh (`attempted N, refreshed M` with M≥1). Ensure the Epic app grants **offline** / `offline_access` (scopes table below already request it) and reconnect once so a refresh token is issued — otherwise re-sync / scheduled refresh will fail until the user reconnects. Contrast Oracle Challenge 4 / Offline app type in [`oracle-cerner.md`](./oracle-cerner.md).
+
+- **Not the multi-hour hang:** wall clock for Epic was minutes; the long 2026-07-31 download was **Oracle** ([#439](https://github.com/jwilleke/yourphr/issues/439)).
 
 ## Why Epic (vs. Veradigm)
 
@@ -125,24 +132,12 @@ URL, scopes, and your `client_id`.
 
 ## What's next on Epic sandbox
 
-The remaining work is the **first real connection** — code is ready, it just
-hasn't been run against Epic:
+**First production E2E is done** (see [Live connect log](#live-connect-log-dated)). Remaining polish:
 
-- **Land PR [#260](https://github.com/jwilleke/yourphr/pull/260)** (docs + UI
-  pre-fill).
-- **Register a patient-facing app** at `fhir.epic.com` and capture a
-  non-production `client_id` (Step 1).
-- **Register the relay redirect URI** (`https://relay.nerdsbythehour.com/callback`)
-  on that Epic app.
-- **Run the manual E2E** (Steps 2–3) against a test patient and confirm tokens
-  exchange and the bundle imports.
-- **Verify US Core resources render** (Patient, Allergies, Conditions,
-  Medications, Labs/Observations, DocumentReference) from the imported data;
-  file display gaps separately (the non-US-Core display track was
-  [#54](https://github.com/jwilleke/yourphr/issues/54), now closed).
-- **Record the result here** (which test patient, which resources loaded) so the
-  next contributor has a known-good baseline, then close
-  [#257](https://github.com/jwilleke/yourphr/issues/257).
+- Confirm every sandbox Epic app registration includes **offline access** so `offline_access` actually yields a refresh token (see 2026-07-31 token-refresh note).
+- Optionally skip or model unsupported types that spam upsert warnings (`AuditEvent`, etc.).
+- Re-verify US Core display for Camila Lopez / current test patients after import; file display gaps separately ([#54](https://github.com/jwilleke/yourphr/issues/54) closed).
+- Close or update tracking [#257](https://github.com/jwilleke/yourphr/issues/257) if the original “first connection” acceptance is satisfied.
 
 Deliberately **out of scope**: a fully automated CI E2E against the sandbox —
 Epic's login is interactive, so automating it is brittle. This manual procedure
@@ -158,11 +153,21 @@ is the supported verification path.
   scheme and path. Confirm whether your instance uses the default relay or a
   self-hosted one (`YOURPHR_RELAY_URL`).
 - **"Connection failed … complete the login and try again."** The backend polls
-  the relay for the code for ~30s and retries up to 3 times. If login took
-  longer, just retry **Connect** after finishing the Epic login.
+  the relay for the code (login wait is configurable; default is minutes, not
+  30s). If login took longer, retry **Connect** after finishing the Epic login.
 - **No data after connecting.** Pick a test patient that actually has the
   resource types you selected in Step 1 (the test-patient page lists each
   patient's data).
+- **Patient 500 for a few seconds right after Connect.** UI may request
+  `Patient/{id}` before the first upsert lands — transient; refresh. (Not the
+  Oracle missing-Patient case [#439](https://github.com/jwilleke/yourphr/issues/439).)
+- **`token-refresh: … no refresh token is available`.** Epic access token
+  expired and no refresh was stored. Reconnect after confirming the app allows
+  offline / `offline_access`. Imported FHIR data remains; only live re-sync
+  needs a new login.
+- **Log spam `Invalid resource type for model: AuditEvent` (etc.).** Epic
+  returned a type YourPHR has no GORM model for; those rows are dropped, other
+  types continue.
 
 ## References
 
