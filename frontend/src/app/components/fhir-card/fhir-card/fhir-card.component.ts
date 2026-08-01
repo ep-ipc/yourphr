@@ -40,6 +40,7 @@ import {CarePlanComponent} from '../resources/care-plan/care-plan.component';
 import {CareTeamComponent} from '../resources/care-team/care-team.component';
 import {GoalComponent} from '../resources/goal/goal.component';
 import {DeviceComponent} from '../resources/device/device.component';
+import {ConsentComponent} from '../resources/consent/consent.component';
 import {CoverageComponent} from '../resources/coverage/coverage.component';
 import {ServiceRequestComponent} from '../resources/service-request/service-request.component';
 import {SpecimenComponent} from '../resources/specimen/specimen.component';
@@ -132,6 +133,9 @@ export class FhirCardComponent implements OnInit, OnChanges {
       // }
       case "Condition": {
         return ConditionComponent;
+      }
+      case "Consent": {
+        return ConsentComponent;
       }
       case "Coverage": {
         return CoverageComponent;

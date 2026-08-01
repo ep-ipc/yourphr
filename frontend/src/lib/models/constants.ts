@@ -8,6 +8,7 @@ export enum ResourceType {
   CareTeam = "CareTeam",
   Condition = "Condition",
   Composition = "Composition",
+  Consent = "Consent",
   Coverage = "Coverage",
   Device = "Device",
   DiagnosticReport = "DiagnosticReport",

@@ -48,6 +48,29 @@ describe('DeviceModel', () => {
       expect(model.manufacture_date).toEqual('2022-01-15')
       expect(model.get_udi).toEqual('00844588003288')
     });
+
+    // Real R4 (and SMART Health IT) emit udiCarrier as an array, not a bare object.
+    it('should read udiCarrier[0] when carrier is an array (R4 shape)', () => {
+      const model = new DeviceModel({
+        resourceType: 'Device',
+        status: 'active',
+        type: { text: 'Implantable defibrillator, device (physical object)' },
+        distinctIdentifier: '82098268425231',
+        serialNumber: '6429801698439588073',
+        lotNumber: '53749990',
+        udiCarrier: [
+          {
+            deviceIdentifier: '82098268425231',
+            carrierHRF: '(01)82098268425231(11)940629(17)190714(10)53749990(21)6429801698439588073',
+          },
+        ],
+      })
+      expect(model.get_udi).toEqual('82098268425231')
+      expect(model.udi_carrier_hrf).toContain('(01)82098268425231')
+      expect(model.distinct_identifier).toEqual('82098268425231')
+      expect(model.serial_number).toEqual('6429801698439588073')
+      expect(model.lot_number).toEqual('53749990')
+    });
   })
 
 });

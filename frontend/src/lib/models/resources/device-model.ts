@@ -69,11 +69,20 @@ export class DeviceModel extends FastenDisplayModel {
   };
 
   r4DTO(fhirResource:any){
-    this.get_udi = _.get(fhirResource, 'udiCarrier.deviceIdentifier');
+    // R4 udiCarrier is 0..* (array). Some fixtures/handlers pass a single object — accept both.
+    // Prefer first carrier's deviceIdentifier (US Core Implantable Device MS).
+    this.get_udi =
+      _.get(fhirResource, 'udiCarrier.0.deviceIdentifier') ||
+      _.get(fhirResource, 'udiCarrier.deviceIdentifier') ||
+      _.get(fhirResource, 'distinctIdentifier');
     this.has_expiry = _.has(fhirResource, 'expirationDate');
     this.get_expiry = _.get(fhirResource, 'expirationDate');
-    this.udi_carrier_aidc = _.get(fhirResource, 'udiCarrier.carrierAIDC');
-    this.udi_carrier_hrf = _.get(fhirResource, 'udiCarrier.carrierHRF');
+    this.udi_carrier_aidc =
+      _.get(fhirResource, 'udiCarrier.0.carrierAIDC') ||
+      _.get(fhirResource, 'udiCarrier.carrierAIDC');
+    this.udi_carrier_hrf =
+      _.get(fhirResource, 'udiCarrier.0.carrierHRF') ||
+      _.get(fhirResource, 'udiCarrier.carrierHRF');
     this.safety = _.get(fhirResource, 'safety', []);
     this.has_safety = hasValue(this.safety);
   };

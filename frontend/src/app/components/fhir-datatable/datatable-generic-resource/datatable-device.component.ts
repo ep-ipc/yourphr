@@ -14,6 +14,12 @@ export class DatatableDeviceComponent extends DatatableGenericResourceComponent 
     { title: 'Manufacturer', versions: '*', getter: d => d.manufacturer },
     { title: 'Model', versions: '*', getter: d => d.modelNumber },
     { title: 'Type', versions: '*', format: 'codeableConcept', getter: d => d.type },
-    { title: 'Unique ID', versions: '*', getter: d => d.udi?.name || d.udiCarrier?.deviceIdentifier },
+    // R4 udiCarrier is an array; also fall back to distinctIdentifier / serial (implantable devices).
+    { title: 'Unique ID', versions: '*', getter: d =>
+        d.udi?.name ||
+        d.udiCarrier?.[0]?.deviceIdentifier ||
+        d.udiCarrier?.deviceIdentifier ||
+        d.distinctIdentifier ||
+        d.serialNumber },
   ]
 }

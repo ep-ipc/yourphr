@@ -8,11 +8,50 @@ import {GenericColumnDefn, DatatableGenericResourceComponent, ResourceListCompon
     standalone: false
 })
 export class DatatableEncounterComponent extends DatatableGenericResourceComponent  {
+  // SMART Health IT / Synthea: always has period, type, class, status; reason/discharge rare;
+  // participants often reference-only (no display). Prefer always-populated columns first.
   columnDefinitions: GenericColumnDefn[] = [
+    { title: 'Status', versions: '*', getter: e => e.status },
+    {
+      title: 'Class',
+      versions: '*',
+      getter: e => e.class?.display || e.class?.code,
+    },
+    {
+      title: 'Type',
+      versions: '*',
+      format: 'codeableConcept',
+      getter: e => e.type?.[0],
+    },
     { title: 'Period', versions: '*', format: 'period', getter: e => e.period },
-    { title: 'Encounter', versions: '*', format: 'codeableConcept', getter: e => e.type?.[0] },
-    { title: 'Reason', versions: '*', format: 'codeableConcept', getter: e => e.reasonCode?.[0] },
-    { title: 'Practitioner', versions: '*', getter: e => e.participant?.[0]?.individual?.display },
-    { title: 'Discharge Disposition', versions: '*', format: 'codeableConcept', getter: e => e.hospitalization?.dischargeDisposition },
+    {
+      title: 'Reason',
+      versions: '*',
+      format: 'codeableConcept',
+      getter: e => e.reasonCode?.[0],
+    },
+    {
+      title: 'Practitioner',
+      versions: '*',
+      getter: e => {
+        const ind = e.participant?.[0]?.individual;
+        if (!ind) {
+          return undefined;
+        }
+        // Prefer human display; fall back to bare reference (common in SMART/Synthea).
+        return ind.display || ind.reference;
+      },
+    },
+    {
+      title: 'Organization',
+      versions: '*',
+      getter: e => e.serviceProvider?.display || e.serviceProvider?.reference,
+    },
+    {
+      title: 'Discharge',
+      versions: '*',
+      format: 'codeableConcept',
+      getter: e => e.hospitalization?.dischargeDisposition,
+    },
   ]
 }

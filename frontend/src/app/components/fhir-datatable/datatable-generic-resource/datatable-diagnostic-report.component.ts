@@ -9,11 +9,54 @@ import {attributeXTime} from './utils';
     standalone: false
 })
 export class DatatableDiagnosticReportComponent extends DatatableGenericResourceComponent {
+  // Prefer lab-panel fields (code, category, results). Document/author only when the export
+  // has presentedForm / performer — blank is correct for many SMART Health IT lab reports.
   columnDefinitions: GenericColumnDefn[] = [
-    { title: 'Issued', versions: '*', format: 'date', getter: d => d.issued },
+    { title: 'Status', versions: '*', getter: d => d.status },
+    {
+      title: 'Category',
+      versions: '*',
+      format: 'codeableConcept',
+      getter: d => d.category?.[0],
+    },
     { title: 'Title', versions: '*', format: 'codeableConcept', getter: d => d.code },
-    { title: 'Document Title', versions: '*', getter: d => d.presentedForm?.[0]?.title }, //Doc title
-    { title: 'Author', versions: '*', getter: d => d.performer?.[0]?.display },
-
+    {
+      title: 'Effective',
+      versions: '*',
+      format: 'date',
+      getter: d => d.effectiveDateTime || d.effectivePeriod?.start || d.issued,
+    },
+    { title: 'Issued', versions: '*', format: 'date', getter: d => d.issued },
+    {
+      title: 'Results',
+      versions: '*',
+      getter: d => {
+        const results = d.result;
+        if (!Array.isArray(results) || results.length === 0) {
+          return undefined;
+        }
+        const labels = results
+          .map((r: { display?: string; reference?: string }) => r?.display || r?.reference)
+          .filter((x: string | undefined): x is string => !!x);
+        if (labels.length === 0) {
+          return `${results.length}`;
+        }
+        const head = labels.slice(0, 3).join(', ');
+        return labels.length > 3 ? `${head} (+${labels.length - 3})` : head;
+      },
+    },
+    {
+      title: 'Document',
+      versions: '*',
+      getter: d => d.presentedForm?.[0]?.title,
+    },
+    {
+      title: 'Author',
+      versions: '*',
+      getter: d =>
+        d.performer?.[0]?.display ||
+        d.performer?.[0]?.actor?.display ||
+        d.performer?.[0]?.reference,
+    },
   ]
 }
