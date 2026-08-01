@@ -21,7 +21,7 @@ A national **FHIR R4** API for Medicare beneficiaries. Claims/insurance data: **
 | Credentials | Self-serve developer portal | CMS production-access review ([#433](https://github.com/jwilleke/yourphr/issues/433)) |
 | YourPHR path | Admin `/sandbox` (env-seeded) | Patient `/sources` (catalog `environment=production`) |
 
-> **Sandbox status:** ✅ E2E verified **2026-06-14** (login → token → sync). ⛔ **Regressed 2026-07-31** — CMS synthetic beneficiary login (`BBUser…` / `PW…!`) and ID.me path fail before any auth code (same on demo + prod). Details: [`vendors/medicare.md`](vendors/medicare.md). Use SMART Health IT for smoke tests until CMS restores sandbox login.
+> **Sandbox status:** ✅ E2E verified **2026-06-14** (login → token → sync). ⛔ **Regressed 2026-07-31**, **reconfirmed 2026-08-01** on demo.yourphr.org v1.19.1 — CMS synthetic beneficiary login (`BBUser00000` / `PW00000!`) shows *"We can't process your request at this time"*; no auth code reaches the relay (not a YourPHR callback bug). Details: [`vendors/medicare.md`](vendors/medicare.md). Use SMART Health IT for smoke tests until CMS restores sandbox login.
 
 ---
 
@@ -87,7 +87,7 @@ CMS portal may show `client_id/client_secret` as one string. Put **only** the id
 | `invalid_scope` | Wildcard / `fhirUser` / `offline_access` | Use exact scopes above |
 | Relay timeout + popup “Connected” | Login longer than connect wait | Raise `YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS` (default 240); or pre-login at CMS |
 | Relay timeout, no “Connected” | Redirect URI mismatch or incomplete login | Callback must match [Relay callback](#b-relay-callback-uri) exactly |
-| CMS “can't process request” on `BBUser…` login (**2026-07-31**) | CMS sandbox synthetic login broken/changed; authorize never yields a code | Vendor-side — not a YourPHR callback bug. Confirm on both hosts; use SMART Health IT for E2E; watch CMS sandbox docs |
+| CMS “We can't process your request at this time” on `BBUser…` login (**2026-07-31**, **2026-08-01** demo) | CMS sandbox synthetic login broken/changed; authorize never yields a code | Vendor-side — not a YourPHR callback bug. See [`vendors/medicare.md`](vendors/medicare.md); use SMART Health IT for E2E; watch CMS sandbox docs / BlueButtonAPI@cms.hhs.gov |
 | ID.me / medicare.gov “patient data not found” (sandbox) | Sandbox has no real Medicare identity | Expected for synthetic path; do not use ID.me for BB sandbox |
 
 ---
