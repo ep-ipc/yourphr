@@ -22,8 +22,6 @@ _None._
 
 ## P1 — Delivers value to the mission
 
-- [#442](https://github.com/jwilleke/yourphr/issues/442) — [BUG] Device Explore: Unique ID blank — udiCarrier is R4 array; ignore distinctIdentifier/serial
-- [#440](https://github.com/jwilleke/yourphr/issues/440) — [FEATURE] Display FHIR Consent resources (explore falls back to raw-only warning)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#437](https://github.com/jwilleke/yourphr/issues/437) — [FEATURE] Split source Disconnect vs Remove data into separate actions
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
@@ -35,8 +33,9 @@ _None._
 
 ## P2 — Nice to have
 
-- [#444](https://github.com/jwilleke/yourphr/issues/444) — [FEATURE] Encounter Explore table — class/status + reference fallbacks (SMART/Synthea)
-- [#443](https://github.com/jwilleke/yourphr/issues/443) — [FEATURE] DiagnosticReport Explore table — lab panels vs document columns
+- [#447](https://github.com/jwilleke/yourphr/issues/447) — [FEATURE] MedicationRequest Explore table — status/intent first; sparse Synthea dosage
+- [#446](https://github.com/jwilleke/yourphr/issues/446) — [FEATURE] Explore Media list — falls back to raw-only warning (card exists)
+- [#445](https://github.com/jwilleke/yourphr/issues/445) — [FEATURE] Session JWT: refresh / sliding expiry on activity
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
@@ -94,7 +93,11 @@ _None._
 
 ## In review
 
+- [#444](https://github.com/jwilleke/yourphr/issues/444) — [FEATURE] Encounter Explore table — class/status + reference fallbacks (SMART/Synthea)
+- [#443](https://github.com/jwilleke/yourphr/issues/443) — [FEATURE] DiagnosticReport Explore table — lab panels vs document columns
+- [#442](https://github.com/jwilleke/yourphr/issues/442) — [BUG] Device Explore: Unique ID blank — udiCarrier is R4 array; ignore distinctIdentifier/serial
 - [#441](https://github.com/jwilleke/yourphr/issues/441) — [FEATURE] Structured sync metrics on background jobs
+- [#440](https://github.com/jwilleke/yourphr/issues/440) — [FEATURE] Display FHIR Consent resources (explore falls back to raw-only warning)
 - [#439](https://github.com/jwilleke/yourphr/issues/439) — [BUG] Oracle/Cerner SMART sync aborts at 1000-page cap; Patient never stored; UI shows Failed
 - [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 
