@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.20.3](https://github.com/jwilleke/yourphr/compare/v1.20.2...v1.20.3) (2026-08-01)
+
+Session reliability, enrollee data controls, admin logs, CMS prod-access runbook, and first patient-entered vitals slice.
+
+### Features
+
+- **auth:** sliding browser session JWT (60m window, renew when ≤30m remain, 12h absolute max from `session_start`) ([#445](https://github.com/jwilleke/yourphr/issues/445))
+- **sources:** split **Disconnect** (tokens only) vs **Remove data** vs combined full teardown; PP/ToS revoke disconnects Medicare-class without wiping records ([#437](https://github.com/jwilleke/yourphr/issues/437))
+- **pghd:** patient-entered home vitals (`POST /resource/patient-entry`, UI `/resource/add`) — weight, HR, temp, SpO2, BP on the YourPHR source ([#313](https://github.com/jwilleke/yourphr/issues/313) first slice)
+- **docs:** CMS Blue Button production access runbook (form, Zoom script, PP/ToS gates) ([#433](https://github.com/jwilleke/yourphr/issues/433))
+
+### Bug Fixes
+
+- **admin-logs:** filter ring-buffer lines by running log level (Error hides buffered info/debug) ([#435](https://github.com/jwilleke/yourphr/issues/435))
+- **sync:** clear stuck import progress — wire `source_complete`, poll job status when SSE misses, buffer SSE channel ([#337](https://github.com/jwilleke/yourphr/issues/337))
+
+### Notes for operators
+
+- After Flux picks `1.20.3` on demo: long sessions should not kick at 1h if active; Connected Sources Actions show Disconnect / Remove data; Medical History **Add record** saves a home vital; CMS application path is in `docs/cms-bluebutton-production-access.md`.
+- Config (optional): `jwt.session_ttl_minutes`, `jwt.session_absolute_hours`, `jwt.session_renew_if_remaining_minutes` (env `YOURPHR_JWT_SESSION_*`).
+
 ## [1.20.2](https://github.com/jwilleke/yourphr/compare/v1.20.1...v1.20.2) (2026-08-01)
 
 ### Bug Fixes
