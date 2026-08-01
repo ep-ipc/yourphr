@@ -117,6 +117,28 @@ YourPHR's SMART client is built to survive this ([#341](https://github.com/jwill
 - **Graceful skip** — a persistent failure (504, or a 403 for an unrequested scope) skips that resource, never the whole import.
 - **Per-resource logging** — every resource emits a `smart sync:` line (`fetched N page(s)` / `deferred for retry (…)` / `skipped (…)`), so an import is fully explainable from the logs.
 
+### Live failure — global 1000-page cap aborts remaining types (**2026-07-31**)
+
+Tracked: **[#439](https://github.com/jwilleke/yourphr/issues/439)**.
+
+On production (`yourphr.nerdsbythehour.com`), sandbox patient connect ran **~1 h 48 min** (13:56:33–15:44:11 UTC), imported large **Condition** + **DocumentReference** sets (DocRef alone **967 pages**), then hit the SMART client's **global** `maxFetchPages = 1000` mid-**Encounter**:
+
+```text
+smart sync: DocumentReference fetched 967 page(s)
+smart sync: Encounter skipped (aborting capability fetch: exceeded 1000 pages)
+fetching 9697 document attachment(s) as Binary resources  →  nearly all 403 insufficient_scope
+```
+
+**Effect:** types after the abort (alphabetically including **Patient**) never ran. No `Patient/{oauth-patient-id}` was stored. Next day the UI requested that Patient for the source card and got **500 / no resource found** — reads as **Oracle Failed** even though thousands of clinical resources were already in the DB.
+
+| Date | Host | Result |
+|---|---|---|
+| **2026-06-18** (matrix) | production | ✅ works — imports records (pinned authorize + enumerated v2 `.rs` + Offline) |
+| **2026-07-31** | production sandbox | ⛔ long import then **page-cap abort**; missing Patient → UI Failed ([#439](https://github.com/jwilleke/yourphr/issues/439)) |
+| **2026-08-01** | production UI recheck | still 500 on Oracle Patient `12724066` for source `4d96252b-…` |
+
+**Workaround until #439 ships:** reconnect after a fix, or treat partial Cerner imports as data-only (browse by resource type); do not rely on the source Patient header. Prefer smaller smoke patients if available. **Fix direction:** fetch Patient first; make page limits **per-type** so one huge DocumentReference/Encounter walk cannot drop the rest of the plan.
+
 ## Data shape — what you actually get back
 
 From a real sandbox import (test patient `nancysmart`, 2,299 resources). Useful for setting expectations and planning the display layer:
@@ -153,4 +175,6 @@ Read-only probes that established the working path (a bare HTTP `200` is **not**
 
 - Sandbox index: [`../testing-sandboxes/test-sandboxes.md`](../testing-sandboxes/test-sandboxes.md)
 - Cerner discovery document (scopes + endpoints): [`oracle-cerner.json`](./oracle-cerner.json)
+- Open: page-cap abort / missing Patient UI fail — [#439](https://github.com/jwilleke/yourphr/issues/439)
+- Resilience / long-import survival — [#341](https://github.com/jwilleke/yourphr/issues/341); Binary attachments — [#342](https://github.com/jwilleke/yourphr/issues/342)
 - Oracle docs: [Build & Test SMART on FHIR Apps](https://docs.oracle.com/en/industries/health/millennium-platform-apis/build-smart-on-fhir-apps/) · [SMART App Provisioning](https://docs.oracle.com/en/industries/health/millennium-platform-apis/smart-app-provisioning/)
