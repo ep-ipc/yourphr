@@ -95,10 +95,15 @@ comma-separated runs, no bare `#<num>`. Issue lines:
 PR lines use the `/pull/` path, are prefixed `PR:` so they are distinguishable at a glance inside a
 mixed band, carry their merge state, and **must name their related issues**:
 
-`- PR: [#<num>](https://github.com/{owner}/{repo}/pull/<num>) — <title> *(ready | draft | conflicted | CI red)* — closes [#<n>](…/issues/<n>)`
+`- PR: [#<num>](https://github.com/{owner}/{repo}/pull/<num>) — <title> _(ready | draft | conflicted | CI red)_ — closes [#<n>](…/issues/<n>)`
 
 Mark each `draft`, `ready`, or `conflicted` from `isDraft` / `mergeStateStatus`, note failing
 required checks, and flag any PR open more than 7 days as stale.
+
+**Use `_underscore_` for the status annotation, never `*asterisk*`.** `TODO.md` is linted under
+MD049 `consistent`, and the issue lines already use underscores — a single asterisk annotation
+turns the whole file red in the `Lint Markdown` job of `.github/workflows/development.yaml`. This
+has broken CI before. Verify with `npx markdownlint-cli2 TODO.md` before committing.
 
 #### Resolving a PR's related issues
 
@@ -121,7 +126,7 @@ open work. Annotate it in its own priority band as `— PR open: [#<pr>](…/pul
 does not recommend starting something that is already written.
 
 Where a PR turns out to be redundant — the change is already on the default branch, or a tracking
-issue was resolved another way — say so on the PR line as `*(redundant — already on <branch>)*`.
+issue was resolved another way — say so on the PR line as `_(redundant — already on <branch>)_`.
 Stale dependency PRs routinely outlive the fix that superseded them.
 
 ### Step 5: Brief the user
