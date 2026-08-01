@@ -1,5 +1,3 @@
-# TODO
-
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-07-29
 
@@ -14,28 +12,29 @@
 - Blockers / significant notes: [#397](https://github.com/jwilleke/yourphr/issues/397) still in-review (awaiting reporter). Live instance may still lack cda-converter sidecar (from prior log). Open PR [#378](https://github.com/jwilleke/yourphr/pull/378) zone.js held for Angular 21. Start next session with `/context` (not `/pstatus` first) so this block is read before bands regenerate.
 <!-- RESUME:END -->
 
-> Generated from live GitHub state — ranked by priority label.
+# TODO
 
-## 🔴 P0 — Security & Critical
+_Regenerated from GitHub labels — do not hand-edit priority bands._
 
-- None.
+## P0 — Broken. Stop all work and fix it.
 
-## 🟠 P1
+_None._
 
-- [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
+## P1 — Delivers value to the mission.
+
 - [#440](https://github.com/jwilleke/yourphr/issues/440) — [FEATURE] Display FHIR Consent resources (explore falls back to raw-only warning)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#437](https://github.com/jwilleke/yourphr/issues/437) — [FEATURE] Split source Disconnect vs Remove data into separate actions
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
 - [#435](https://github.com/jwilleke/yourphr/issues/435) — [BUG] Log level set to error. New lines at this level appear as the server logs activity.
 - [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
+- [#416](https://github.com/jwilleke/yourphr/issues/416) — [SECURITY] frontend/yarn.lock build-chain — 12 open Dependabot alerts (postcss, brace-expansion, js-yaml, engine.io, webpack-dev-server, @hono/node-server, picomatch)
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 
-## 🟡 P2
+## P2 — Nice to have.
 
-- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
@@ -52,6 +51,7 @@
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
+- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
 - [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
@@ -76,23 +76,26 @@
 - [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 - [#14](https://github.com/jwilleke/yourphr/issues/14) — [FEATURE] User Profile Update
 
-## 🔵 In review
+## Deferred
 
-- [#441](https://github.com/jwilleke/yourphr/issues/441) — [FEATURE] Structured sync metrics on background jobs
-- [#439](https://github.com/jwilleke/yourphr/issues/439) — [BUG] Oracle/Cerner SMART sync aborts at 1000-page cap; Patient never stored; UI shows Failed
-
-## ⏸ Deferred
-
-- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(PR · ready · deferred/blocked)_ — no linked issue
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · deferred/blocked · stale 37d)_ — no linked issue
-- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
+- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
 - [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
 
-## ❓ Needs triage
+## Needs triage
 
-- None.
+_None._
+
+## In review
+
+- [#441](https://github.com/jwilleke/yourphr/issues/441) — [FEATURE] Structured sync metrics on background jobs
+- [#439](https://github.com/jwilleke/yourphr/issues/439) — [BUG] Oracle/Cerner SMART sync aborts at 1000-page cap; Patient never stored; UI shows Failed
+
+## Open PRs
+
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend
