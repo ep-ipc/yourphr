@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.19.1](https://github.com/jwilleke/yourphr/compare/v1.19.0...v1.19.1) (2026-08-01)
+
+### Bug Fixes
+
+- **config:** repair broken `config.yaml` YAML — the `#441` metrics block had been spliced into the middle of `web.listen`, so the server failed to start (`yaml: line 20: did not find expected key`). That broke CI E2E on every push since metrics landed and would break any install using the image default config. Also fix `TODO.md` band headings (MD026 trailing punctuation)
+
 ## [1.19.0](https://github.com/jwilleke/yourphr/compare/v1.18.2...v1.19.0) (2026-08-01)
 
 Runtime deployment labels and frontend build-chain security pins.
