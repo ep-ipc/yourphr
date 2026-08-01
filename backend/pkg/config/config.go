@@ -115,6 +115,11 @@ func (c *configuration) Init() error {
 	// It enables direct API access to healthcare providers without authentication.
 	c.SetDefault("web.allow_unsafe_endpoints", false)
 
+	// Human-facing deployment label shown in the UI footer as "<name>-<semver>" (e.g. demo-1.18.2).
+	// Same release image is used for prod/demo/dev; set this per instance so the footer is not always
+	// "prod". Env: YOURPHR_WEB_ENVIRONMENT_NAME. Empty → frontend falls back to its build-time name.
+	c.SetDefault("web.environment_name", "")
+
 	// How long the SMART-on-FHIR connect flow waits for the user to finish logging in at the
 	// provider (the relay-poll phase) before giving up. A first provider login (read consent, pick
 	// account, authorize) can be slow — e.g. CMS Blue Button. Served to the frontend so it can be

@@ -109,6 +109,7 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 | `database.encryption.key` | `YOURPHR_DATABASE_ENCRYPTION_KEY` |
 | `jwt.issuer.key` | `YOURPHR_JWT_ISSUER_KEY` |
 | `web.listen.port` | `YOURPHR_WEB_LISTEN_PORT` |
+| `web.environment_name` | `YOURPHR_WEB_ENVIRONMENT_NAME` |
 | `log.level` | `YOURPHR_LOG_LEVEL` |
 | `cda_converter.enabled` | `YOURPHR_CDA_CONVERTER_ENABLED` |
 | `web.smart_connect.login_wait_seconds` | `YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS` |
@@ -121,6 +122,7 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 | `web.listen.host` | `0.0.0.0` | Bind address. |
 | `web.listen.basepath` | `""` | Sub-path when behind a reverse proxy (e.g. `/phr`). |
 | `web.listen.https.enabled` | `false` | Serve HTTPS with a self-generated CA (see the README HTTPS section). |
+| `web.environment_name` | `""` | Deployment label in the UI footer (`demo-1.18.2`, `prod-1.18.2`, …). Same release image for every instance — set per env (e.g. `demo` / `prod` / `dev`). Empty → frontend build-time default. |
 | `web.allow_unsafe_endpoints` | `false` | **Never enable in production** — exposes unauthenticated API access. |
 | `web.smart_connect.login_wait_seconds` | `240` | How long the SMART-on-FHIR connect flow waits for the user to finish logging in at the provider before timing out. Served to the frontend, so changing it needs **no frontend rebuild** — raise it for slow provider logins (e.g. CMS Blue Button). |
 | `database.type` | `sqlite` | Only SQLite is supported; Postgres is present but **broken**. |

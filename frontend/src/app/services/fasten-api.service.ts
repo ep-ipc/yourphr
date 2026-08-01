@@ -245,12 +245,18 @@ export class FastenApiService {
       );
   }
 
-  // getVersion returns the running backend's app version (the deployed semver). Public endpoint.
-  getVersion(): Observable<string> {
+  // getVersion returns the running backend's app version and optional deployment label.
+  // Public endpoint — footer shows "<environment_name>-<version>" (e.g. demo-1.18.2).
+  // environment_name is runtime config (YOURPHR_WEB_ENVIRONMENT_NAME); empty when unset.
+  getVersion(): Observable<{ version: string; environment_name: string }> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/version`)
       .pipe(
         map((response: ResponseWrapper) => {
-          return ((response.data as any)?.version || 'unknown') as string
+          const data = (response.data as any) || {};
+          return {
+            version: (data.version || 'unknown') as string,
+            environment_name: (typeof data.environment_name === 'string' ? data.environment_name : '').trim(),
+          };
         })
       );
   }

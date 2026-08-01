@@ -8,9 +8,11 @@ describe('FooterComponent', () => {
   let component: FooterComponent;
   let fixture: ComponentFixture<FooterComponent>;
 
+  let apiSpy: jasmine.SpyObj<FastenApiService>;
+
   beforeEach(waitForAsync(() => {
-    const apiSpy = jasmine.createSpyObj('FastenApiService', ['getVersion']);
-    apiSpy.getVersion.and.returnValue(of('1.9.0'));
+    apiSpy = jasmine.createSpyObj('FastenApiService', ['getVersion']);
+    apiSpy.getVersion.and.returnValue(of({ version: '1.9.0', environment_name: '' }));
     TestBed.configureTestingModule({
       declarations: [ FooterComponent ],
       providers: [ { provide: FastenApiService, useValue: apiSpy } ]
@@ -26,5 +28,20 @@ describe('FooterComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('uses runtime environment_name from /api/version when set', () => {
+    apiSpy.getVersion.and.returnValue(of({ version: '1.18.2', environment_name: 'demo' }));
+    component.ngOnInit();
+    expect(component.appVersion).toBe('demo-1.18.2');
+  });
+
+  it('falls back to build-time environment_name when API omits it', () => {
+    apiSpy.getVersion.and.returnValue(of({ version: '1.18.2', environment_name: '' }));
+    component.ngOnInit();
+    // TestBed uses the default environment.ts (sandbox) unless fileReplacements apply.
+    expect(component.appVersion).toMatch(/^.+-1\.18\.2$/);
+    expect(component.appVersion.endsWith('-1.18.2')).toBeTrue();
+    expect(component.appVersion.startsWith('demo-')).toBeFalse();
   });
 });

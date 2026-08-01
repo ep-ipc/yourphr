@@ -28,3 +28,12 @@ func TestEnvPrefix_Relay(t *testing.T) {
 	require.Equal(t, "https://relay.example.org", cfg.GetString("relay.public_url"))
 	require.Equal(t, "s3cret", cfg.GetString("relay.secret"))
 }
+
+// Footer deployment label: one release image, different labels per instance.
+func TestEnvPrefix_WebEnvironmentName(t *testing.T) {
+	t.Setenv("YOURPHR_WEB_ENVIRONMENT_NAME", "demo")
+
+	cfg := configuration{}
+	require.NoError(t, cfg.Init())
+	require.Equal(t, "demo", cfg.GetString("web.environment_name"))
+}

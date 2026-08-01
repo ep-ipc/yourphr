@@ -9,8 +9,9 @@ import {FastenApiService} from '../../services/fasten-api.service';
     standalone: false
 })
 export class FooterComponent implements OnInit {
-  // Shows "<channel>-<semver>" of the RUNNING backend, e.g. "dev-1.9.0" / "prod-1.9.0", so the footer
-  // reflects what's actually deployed (fetched from the public /api/version endpoint).
+  // Shows "<env>-<semver>" of the RUNNING backend, e.g. "demo-1.18.2" / "prod-1.18.2".
+  // Environment label prefers the backend runtime config (YOURPHR_WEB_ENVIRONMENT_NAME) so one
+  // release image can label prod/demo/dev differently; falls back to the Angular build-time name.
   appVersion: string = environment.environment_name;
   currentYear: number = new Date().getFullYear();
 
@@ -18,7 +19,10 @@ export class FooterComponent implements OnInit {
 
   ngOnInit() {
     this.fastenApi.getVersion().subscribe({
-      next: (version) => { this.appVersion = `${environment.environment_name}-${version}`; },
+      next: ({ version, environment_name }) => {
+        const env = environment_name || environment.environment_name || 'prod';
+        this.appVersion = `${env}-${version}`;
+      },
       error: () => { /* keep the channel-only fallback */ },
     });
   }

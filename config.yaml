@@ -6,6 +6,10 @@
 version: 1
 
 web:
+  # Deployment label shown in the UI footer as "<name>-<semver>" (e.g. demo-1.18.2 / prod-1.18.2).
+  # Same release image ships to every instance — set this per env so demo is not labeled "prod".
+  # Env: YOURPHR_WEB_ENVIRONMENT_NAME (e.g. demo, prod, dev). Empty → frontend build-time default.
+  environment_name: ''
   listen:
     port: 8080
     host: 0.0.0.0

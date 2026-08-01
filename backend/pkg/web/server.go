@@ -92,9 +92,15 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 	{
 		api := base.Group("/api")
 		{
-			// Public: the running app version, so the UI footer can show what's deployed.
+			// Public: running app version + optional deployment label for the UI footer
+			// ("demo-1.18.2"). Label is runtime config so one release image can serve prod/demo/dev
+			// (YOURPHR_WEB_ENVIRONMENT_NAME / web.environment_name).
 			api.GET("/version", func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"version": version.VERSION}})
+				envName := strings.TrimSpace(ae.Config.GetString("web.environment_name"))
+				c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+					"version":          version.VERSION,
+					"environment_name": envName,
+				}})
 			})
 			api.GET("/health", func(c *gin.Context) {
 				// This function does a quick check to see if the server is up and running
