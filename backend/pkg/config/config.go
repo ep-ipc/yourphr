@@ -139,6 +139,12 @@ func (c *configuration) Init() error {
 	c.SetDefault("relay.secret", "")
 
 	c.SetDefault("web.src.frontend.path", "/opt/fasten/web")
+
+	// Process metrics scrape server for completed sync jobs (#441). Off unless enabled; internal only.
+	c.SetDefault("metrics.enabled", false)
+	c.SetDefault("metrics.port", 9091)
+	c.SetDefault("metrics.addr", "")
+
 	c.SetDefault("database.type", "sqlite")
 	c.SetDefault("database.location", "/opt/fasten/db/fasten.db")
 	c.SetDefault("database.encryption.enabled", false)
