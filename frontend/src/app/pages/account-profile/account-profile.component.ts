@@ -102,7 +102,7 @@ export class AccountProfileComponent implements OnInit {
         };
         const n = s.medicare_sources_disconnected ?? 0;
         this.legalConsentMsg = n > 0
-          ? `Consent revoked. Removed ${n} Medicare source(s) and their imported records from this instance. New Medicare connections are blocked until you agree again.`
+          ? `Consent revoked. Disconnected ${n} Medicare source(s) (tokens cleared; imported records kept). New Medicare connections are blocked until you agree again.`
           : 'Consent revoked. New Medicare connections are blocked until you agree again.';
         this.legalOptInChecked = false;
         this.legalConsentBusy = false;

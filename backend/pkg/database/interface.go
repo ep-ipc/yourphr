@@ -51,6 +51,12 @@ type DatabaseRepository interface {
 	GetSourceSummary(context.Context, string) (*models.SourceSummary, error)
 	GetSources(context.Context) ([]models.SourceCredential, error)
 	UpdateSource(ctx context.Context, sourceCreds *models.SourceCredential) error
+	// DisconnectSource clears OAuth/tokens for the source but keeps the credential row and all
+	// FHIR resources so Explore still works; user can Reconnect later (#437).
+	DisconnectSource(ctx context.Context, sourceId string) error
+	// RemoveSourceData deletes FHIR resources (+ related links) for the source; keeps credentials (#437).
+	RemoveSourceData(ctx context.Context, sourceId string) (int64, error)
+	// DeleteSource is disconnect + remove data + soft-delete credential (full teardown).
 	DeleteSource(ctx context.Context, sourceId string) (int64, error)
 
 	// Admin-configured provider catalog (#304). Instance-wide (not per-user).

@@ -45,7 +45,7 @@ When you connect Medicare (or another provider):
 
 **Shared with CMS:** only what OAuth/API requires. **Shared with the YourPHR project:** nothing about your Medicare or clinical data.
 
-**How long:** the instance may re-sync while the connection is authorized. **Disconnect / remove source** in the app removes that source’s stored OAuth credentials **and** the health records imported from it on this instance. **Delete account** removes your whole account and all of your data on this instance. Operator backups may still hold copies until the operator prunes them.
+**How long:** the instance may re-sync while the connection is authorized. On **Sources**, you can **Disconnect** (clear stored OAuth tokens; imported records stay), **Remove data** (delete records imported from that source on this instance), or **Disconnect & remove data** (both, and remove the source card). **Delete account** removes your whole account and all of your data on this instance. Operator backups may still hold copies until the operator prunes them.
 
 ---
 
@@ -73,8 +73,10 @@ The stock software is **not** designed to sell data, use it for advertising/mark
 ## Your control
 
 - Do not connect Medicare (or any source) if you do not want that import  
-- **Disconnect / remove a source** (Sources → connected source → Actions): stops that connection and deletes records imported from that source on this instance  
-- **Revoke Privacy & Terms** (Account Profile): blocks new Medicare connects and removes Medicare-class sources the same way as disconnect  
+- **Disconnect** (Sources → Actions): clears OAuth tokens so the instance stops syncing; imported records stay until you remove them  
+- **Remove data** (Sources → Actions): deletes records imported from that source on this instance  
+- **Disconnect & remove data** (Sources → Actions): both, and removes the source card  
+- **Revoke Privacy & Terms** (Account Profile): blocks new Medicare connects and **disconnects** Medicare-class sources (tokens only; records stay until you remove them)  
 - **Delete account** (Account Profile): permanently deletes your account and all of your data on this instance  
 - Ask the operator about backups or a full deployment wipe if needed  
 

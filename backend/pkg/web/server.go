@@ -232,6 +232,9 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 
 					secure.GET("/source", handler.ListSource)
 					secure.GET("/source/:sourceId", handler.GetSource)
+					// #437: granular disconnect vs remove-data; DELETE remains full teardown.
+					secure.POST("/source/:sourceId/disconnect", handler.DisconnectSource)
+					secure.POST("/source/:sourceId/remove-data", handler.RemoveSourceData)
 					secure.DELETE("/source/:sourceId", handler.DeleteSource)
 					secure.POST("/source/:sourceId/sync", handler.SourceSync)
 					secure.GET("/source/:sourceId/summary", handler.GetSourceSummary)

@@ -7,7 +7,7 @@ describe('MEDICARE_PRE_CONNECT', () => {
     expect(all.toLowerCase()).toContain('claims');
     expect(all.toLowerCase()).toContain('stored');
     expect(all.toLowerCase()).toContain('disconnect');
-    expect(all.toLowerCase()).toContain('removes');
+    expect(all.toLowerCase()).toContain('remove');
     expect(all.toLowerCase()).toContain('medical advice');
     expect(MEDICARE_PRE_CONNECT.continueLabel.length).toBeGreaterThan(0);
     expect(MEDICARE_PRE_CONNECT.cancelLabel.toLowerCase()).toContain('cancel');

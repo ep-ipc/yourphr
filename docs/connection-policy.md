@@ -10,7 +10,7 @@
 |---|---|
 | PP/ToS active opt-in | **Required** before any catalog connect |
 | Pre-connect informed modal | **Yes** — generic medical-records copy |
-| Disconnect & remove data | All sources |
+| Disconnect / Remove data / combined | All sources (#437) |
 | Attributions page | Always available |
 
 Medicare / CMS Blue Button-class sources (URL/display auto-detect) additionally:
@@ -47,7 +47,7 @@ Rare escape hatch — document why in operator notes.
 1. If `requires_user_consent` and user has not granted PP/ToS → block (Account Profile).  
 2. If resolved `pre_connect_profile` ≠ `none` → show modular modal (Cancel / Continue).  
 3. Continue → OAuth (popup in same click).  
-4. Connected Sources → Disconnect & remove data for any source.
+4. Connected Sources → **Disconnect** (tokens only), **Remove data** (records only), or **Disconnect & remove data** (full teardown).
 
 ## Where UI lives
 

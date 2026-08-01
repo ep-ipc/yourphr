@@ -1199,18 +1199,76 @@ func (gr *GormRepository) GetSources(ctx context.Context) ([]models.SourceCreden
 	return sourceCreds, results.Error
 }
 
-func (gr *GormRepository) DeleteSource(ctx context.Context, sourceId string) (int64, error) {
+// DisconnectSource clears stored OAuth tokens for the source so sync/token-refresh cannot run,
+// but keeps the SourceCredential row and all imported FHIR data (#437).
+func (gr *GormRepository) DisconnectSource(ctx context.Context, sourceId string) error {
+	currentUser, currentUserErr := gr.GetCurrentUser(ctx)
+	if currentUserErr != nil {
+		return currentUserErr
+	}
+	if strings.TrimSpace(sourceId) == "" {
+		return fmt.Errorf("sourceId cannot be blank")
+	}
+	sourceUUID, err := uuid.Parse(sourceId)
+	if err != nil {
+		return err
+	}
+
+	// Ensure the source belongs to the current user before mutating credentials.
+	var existing models.SourceCredential
+	if err := gr.GormClient.WithContext(ctx).
+		Where(models.SourceCredential{
+			ModelBase: models.ModelBase{ID: sourceUUID},
+			UserID:    currentUser.ID,
+		}).
+		First(&existing).Error; err != nil {
+		return err
+	}
+
+	// Zero secret material; leave display/endpoint/client_id so Reconnect can re-auth.
+	result := gr.GormClient.WithContext(ctx).
+		Model(&models.SourceCredential{}).
+		Where(models.SourceCredential{
+			ModelBase: models.ModelBase{ID: sourceUUID},
+			UserID:    currentUser.ID,
+		}).
+		Updates(map[string]interface{}{
+			"access_token":        "",
+			"refresh_token":       "",
+			"id_token":            "",
+			"expires_at":          0,
+			"code_challenge":      "",
+			"code_verifier":       "",
+			"client_secret":       "",
+			"dynamic_client_id":   "",
+			"dynamic_client_jwks": nil,
+		})
+	return result.Error
+}
+
+// RemoveSourceData deletes all FHIR resources and related-resource links for the source.
+// Source credentials are left in place so the card/connection can remain (#437).
+func (gr *GormRepository) RemoveSourceData(ctx context.Context, sourceId string) (int64, error) {
 	currentUser, currentUserErr := gr.GetCurrentUser(ctx)
 	if currentUserErr != nil {
 		return 0, currentUserErr
 	}
-
 	if strings.TrimSpace(sourceId) == "" {
 		return 0, fmt.Errorf("sourceId cannot be blank")
 	}
-	//delete all resources for this source
 	sourceUUID, err := uuid.Parse(sourceId)
 	if err != nil {
+		return 0, err
+	}
+
+	// Ownership check — refuse if the source is not this user's.
+	var existing models.SourceCredential
+	if err := gr.GormClient.WithContext(ctx).
+		Where(models.SourceCredential{
+			ModelBase: models.ModelBase{ID: sourceUUID},
+			UserID:    currentUser.ID,
+		}).
+		First(&existing).Error; err != nil {
 		return 0, err
 	}
 
@@ -1234,16 +1292,38 @@ func (gr *GormRepository) DeleteSource(ctx context.Context, sourceId string) (in
 		}
 	}
 
-	//delete relatedResources entries
 	results := gr.GormClient.WithContext(ctx).
 		Where(models.RelatedResource{ResourceBaseUserID: currentUser.ID, ResourceBaseSourceID: sourceUUID}).
 		Delete(&models.RelatedResource{})
 	if results.Error != nil {
 		return rowsEffected, results.Error
 	}
+	return rowsEffected, nil
+}
 
-	//soft delete the source credential
-	results = gr.GormClient.WithContext(ctx).
+// DeleteSource is full teardown: remove imported FHIR data, then soft-delete the source credential
+// (tokens gone with the row). Prefer DisconnectSource / RemoveSourceData for granular control (#437).
+func (gr *GormRepository) DeleteSource(ctx context.Context, sourceId string) (int64, error) {
+	currentUser, currentUserErr := gr.GetCurrentUser(ctx)
+	if currentUserErr != nil {
+		return 0, currentUserErr
+	}
+
+	if strings.TrimSpace(sourceId) == "" {
+		return 0, fmt.Errorf("sourceId cannot be blank")
+	}
+	sourceUUID, err := uuid.Parse(sourceId)
+	if err != nil {
+		return 0, err
+	}
+
+	rowsEffected, err := gr.RemoveSourceData(ctx, sourceId)
+	if err != nil {
+		return rowsEffected, err
+	}
+
+	// soft delete the source credential
+	results := gr.GormClient.WithContext(ctx).
 		Where(models.SourceCredential{
 			ModelBase: models.ModelBase{
 				ID: sourceUUID,

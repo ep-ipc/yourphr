@@ -569,6 +569,27 @@ export class FastenApiService {
       {responseType: 'blob', observe: 'response'});
   }
 
+  // #437 — Disconnect clears OAuth only; records stay for Explore / later Remove data.
+  disconnectSource(sourceId: string): Observable<{disconnected: boolean}> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/source/${sourceId}/disconnect`, {})
+      .pipe(
+        map((response: ResponseWrapper) => {
+          return response.data as {disconnected: boolean}
+        })
+      );
+  }
+
+  // #437 — Delete imported FHIR for this source; credentials remain (Reconnect still possible).
+  removeSourceData(sourceId: string): Observable<number> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/source/${sourceId}/remove-data`, {})
+      .pipe(
+        map((response: ResponseWrapper) => {
+          return response.data as number
+        })
+      );
+  }
+
+  // Full teardown: records + soft-delete credential (combined "Disconnect & remove data").
   deleteSource(sourceId: string): Observable<number> {
     return this._httpClient.delete<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/source/${sourceId}`)
       .pipe(

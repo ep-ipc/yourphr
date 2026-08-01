@@ -94,7 +94,8 @@
                     <i class="fas fa-ban mg-r-5"></i>{{ legalConsentBusy ? 'Revoking…' : 'Revoke consent' }}
                   </button>
                   <p *ngIf="legalConsent.accepted" class="tx-gray-500 tx-12 mg-t-10 mg-b-0">
-                    Revoking blocks new Medicare connections and removes Medicare sources <strong>and</strong> records imported from them on this instance.
+                    Revoking blocks new Medicare connections and <strong>disconnects</strong> Medicare-class sources
+                    (clears tokens; imported records stay until you use Remove data on Sources).
                   </p>
                 </ng-container>
               </div>
@@ -148,11 +149,12 @@
                 <ul class="tx-13 mg-b-15 ps-3">
                   <li class="mg-b-5">
                     <strong>Sources</strong> — connect a provider; manage connected cards; Actions →
-                    <em>Disconnect &amp; remove data</em> (credentials + imported records for that source).
+                    <em>Disconnect</em> (clear tokens, keep records), <em>Remove data</em> (delete imported records),
+                    or <em>Disconnect &amp; remove data</em> (both + remove the card).
                   </li>
                   <li class="mg-b-5">
                     <strong>Revoke Privacy &amp; Terms</strong> (card above) — blocks new medical-source connects
-                    and removes Medicare-class sources the same way as disconnect.
+                    and <em>disconnects</em> Medicare-class sources (tokens only; records stay until you remove them).
                   </li>
                   <li>
                     <strong>Delete account</strong> (below) — permanently deletes your account and all of your data on this instance.

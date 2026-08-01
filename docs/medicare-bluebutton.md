@@ -150,7 +150,7 @@ Never commit these values. Prefer a sealed Secret / external secret store.
 2. **Sources** → **Medicare** (not “Blue Button”)
 3. Pre-connect informed modal → Continue
 4. CMS login → Authorize → import on Connected Sources
-5. Disconnect & remove data works from Connected Sources
+5. Disconnect / Remove data / combined teardown work from Connected Sources (#437)
 
 ### E. Operator contact (optional but useful for demos)
 

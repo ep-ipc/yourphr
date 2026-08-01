@@ -590,9 +590,99 @@ export class MedicalSourcesConnectedComponent implements OnInit, OnDestroy {
     )
   }
 
+  // #437 — clear OAuth only; keep imported records and the source card.
+  public sourceDisconnectHandler() {
+    const source = this.modalSelectedSourceListItem?.source
+    if (!source?.id) { return }
+    const sourceDisplayName = source.display || this.modalSelectedSourceListItem?.brand?.name || 'unknown'
+    if (!confirm(
+      `Disconnect ${sourceDisplayName}?\n\n` +
+      `This clears OAuth tokens so YourPHR stops syncing with the provider. ` +
+      `Imported records stay on this instance until you use Remove data. ` +
+      `Does not change data at Medicare/CMS or your provider.`
+    )) {
+      return
+    }
+
+    this.status[source.id] = 'authorize'
+    this.modalService.dismissAll()
+
+    this.fastenApi.disconnectSource(source.id).subscribe(
+      () => {
+        delete this.status[source.id]
+        delete this.status[source.brand_id]
+        // Keep the tile; zero local token fields so UI can reflect disconnected state.
+        source.access_token = ''
+        source.refresh_token = ''
+        source.expires_at = 0
+
+        const toastNotification = new ToastNotification()
+        toastNotification.type = ToastType.Success
+        toastNotification.message = `Disconnected ${sourceDisplayName}. Imported records were kept. Use Reconnect to authorize again, or Remove data to delete records.`
+        this.toastService.show(toastNotification)
+      },
+      (err) => {
+        delete this.status[source.id]
+        delete this.status[source.brand_id]
+        const toastNotification = new ToastNotification()
+        toastNotification.type = ToastType.Error
+        toastNotification.message = `Could not disconnect ${sourceDisplayName}: ${extractErrorFromResponse(err)}`
+        this.toastService.show(toastNotification)
+        console.error(err)
+      },
+    )
+  }
+
+  // #437 — delete imported FHIR for this source; keep credentials / card.
+  public sourceRemoveDataHandler() {
+    const source = this.modalSelectedSourceListItem?.source
+    if (!source?.id) { return }
+    const sourceDisplayName = source.display || this.modalSelectedSourceListItem?.brand?.name || 'unknown'
+    if (!confirm(
+      `Remove all records imported from ${sourceDisplayName} on this instance?\n\n` +
+      `This deletes stored health data from that source on YourPHR. ` +
+      `The connection may remain (or you can Reconnect). ` +
+      `Does not change data at Medicare/CMS or your provider. Does not delete your account.`
+    )) {
+      return
+    }
+
+    this.status[source.id] = 'authorize'
+    this.modalService.dismissAll()
+
+    this.fastenApi.removeSourceData(source.id).subscribe(
+      (respData) => {
+        delete this.status[source.id]
+        delete this.status[source.brand_id]
+        const toastNotification = new ToastNotification()
+        toastNotification.type = ToastType.Success
+        toastNotification.message = `Removed imported records from ${sourceDisplayName} (${respData} row(s)). Connection credentials were kept.`
+        this.toastService.show(toastNotification)
+      },
+      (err) => {
+        delete this.status[source.id]
+        delete this.status[source.brand_id]
+        const toastNotification = new ToastNotification()
+        toastNotification.type = ToastType.Error
+        toastNotification.message = `Could not remove data for ${sourceDisplayName}: ${extractErrorFromResponse(err)}`
+        this.toastService.show(toastNotification)
+        console.error(err)
+      },
+    )
+  }
+
+  // Full teardown: records + soft-delete credential (#437 combined).
   public sourceDeleteHandler(){
     const source = this.modalSelectedSourceListItem.source
     const sourceDisplayName = this.modalSelectedSourceListItem?.source?.display || this.modalSelectedSourceListItem?.brand?.name || 'unknown'
+
+    if (!confirm(
+      `Disconnect ${sourceDisplayName} and remove all of its imported records?\n\n` +
+      `This clears tokens, deletes records from that source on this instance, and removes the source card. ` +
+      `Does not change data at Medicare/CMS or your provider. Does not delete your account.`
+    )) {
+      return
+    }
 
     this.status[source.id] = "authorize"
     this.modalService.dismissAll()
@@ -625,7 +715,7 @@ export class MedicalSourcesConnectedComponent implements OnInit, OnDestroy {
 
         const toastNotification = new ToastNotification()
         toastNotification.type = ToastType.Error
-        toastNotification.message = `Could not disconnect ${sourceDisplayName}: ${extractErrorFromResponse(err)}`
+        toastNotification.message = `Could not remove ${sourceDisplayName}: ${extractErrorFromResponse(err)}`
         this.toastService.show(toastNotification)
         console.log(err)
       })

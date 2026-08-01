@@ -138,7 +138,7 @@ Default for medical sources (modular; see connection policy):
 2. `/sources`: pick provider (Medicare-class shows CMS attribution when listed)  
 3. Pre-connect informed modal (Cancel / Continue) unless `pre_connect_profile=none`  
 4. OAuth popup → relay → connect → Connected Sources on the same page  
-5. Disconnect & remove data from Connected Sources (credentials **and** imported records for that source)
+5. Connected Sources: **Disconnect** (tokens only), **Remove data**, or **Disconnect & remove data** (full teardown)
 
 ## Security
 

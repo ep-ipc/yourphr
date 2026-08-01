@@ -263,6 +263,35 @@ func (mr *MockDatabaseRepositoryMockRecorder) DeleteSource(ctx, sourceId interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSource", reflect.TypeOf((*MockDatabaseRepository)(nil).DeleteSource), ctx, sourceId)
 }
 
+// DisconnectSource mocks base method.
+func (m *MockDatabaseRepository) DisconnectSource(ctx context.Context, sourceId string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DisconnectSource", ctx, sourceId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DisconnectSource indicates an expected call of DisconnectSource.
+func (mr *MockDatabaseRepositoryMockRecorder) DisconnectSource(ctx, sourceId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisconnectSource", reflect.TypeOf((*MockDatabaseRepository)(nil).DisconnectSource), ctx, sourceId)
+}
+
+// RemoveSourceData mocks base method.
+func (m *MockDatabaseRepository) RemoveSourceData(ctx context.Context, sourceId string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveSourceData", ctx, sourceId)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveSourceData indicates an expected call of RemoveSourceData.
+func (mr *MockDatabaseRepositoryMockRecorder) RemoveSourceData(ctx, sourceId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveSourceData", reflect.TypeOf((*MockDatabaseRepository)(nil).RemoveSourceData), ctx, sourceId)
+}
+
 // CreateProviderCatalogEntry mocks base method.
 func (m *MockDatabaseRepository) CreateProviderCatalogEntry(ctx context.Context, entry *models.ProviderCatalogEntry) error {
 	m.ctrl.T.Helper()

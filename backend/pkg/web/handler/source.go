@@ -571,6 +571,34 @@ func ListSource(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": sourceCreds})
 }
 
+// DisconnectSource clears OAuth tokens for a source but keeps imported records (#437).
+func DisconnectSource(c *gin.Context) {
+	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
+	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+
+	if err := databaseRepo.DisconnectSource(c, c.Param("sourceId")); err != nil {
+		logger.Errorln("An error occurred while disconnecting source", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not disconnect source"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"disconnected": true}})
+}
+
+// RemoveSourceData deletes FHIR resources for a source; credentials remain (#437).
+func RemoveSourceData(c *gin.Context) {
+	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
+	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+
+	rowsEffected, err := databaseRepo.RemoveSourceData(c, c.Param("sourceId"))
+	if err != nil {
+		logger.Errorln("An error occurred while removing source data", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not remove source data"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": rowsEffected})
+}
+
+// DeleteSource full teardown: imported records + soft-delete credential (#437 combined action).
 func DeleteSource(c *gin.Context) {
 	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
 	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
@@ -578,7 +606,7 @@ func DeleteSource(c *gin.Context) {
 	rowsEffected, err := databaseRepo.DeleteSource(c, c.Param("sourceId"))
 	if err != nil {
 		logger.Errorln("An error occurred while deleting source credential", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not delete source"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": rowsEffected})

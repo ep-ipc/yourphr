@@ -52,7 +52,7 @@ func GrantLegalConsent(c *gin.Context) {
 }
 
 // RevokeLegalConsent clears PP/ToS acceptance and disconnects Medicare-class sources for this user
-// (tokens removed; imported records stay until the user deletes them — matches Privacy Policy).
+// (tokens cleared only; imported records stay until the user chooses Remove data — #437 / Privacy Policy).
 func RevokeLegalConsent(c *gin.Context) {
 	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
 	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
@@ -71,7 +71,8 @@ func RevokeLegalConsent(c *gin.Context) {
 			if !models.ProviderRequiresLegalConsent(src.Display, src.ApiEndpointBaseUrl, string(src.PlatformType)) {
 				continue
 			}
-			if _, delErr := databaseRepo.DeleteSource(c, src.ID.String()); delErr != nil {
+			// Disconnect only — do not wipe imported claims/records on revoke (#437).
+			if delErr := databaseRepo.DisconnectSource(c, src.ID.String()); delErr != nil {
 				logger.Warnf("legal consent revoke: disconnect source %s: %v", src.ID, delErr)
 				continue
 			}
