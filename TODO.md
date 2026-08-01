@@ -16,11 +16,11 @@
 
 _Regenerated from GitHub labels — do not hand-edit priority bands._
 
-## P0 — Broken. Stop all work and fix it.
+## P0 — Broken: stop all work and fix it
 
 _None._
 
-## P1 — Delivers value to the mission.
+## P1 — Delivers value to the mission
 
 - [#440](https://github.com/jwilleke/yourphr/issues/440) — [FEATURE] Display FHIR Consent resources (explore falls back to raw-only warning)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
@@ -32,7 +32,7 @@ _None._
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 
-## P2 — Nice to have.
+## P2 — Nice to have
 
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
