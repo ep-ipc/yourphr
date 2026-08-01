@@ -30,13 +30,13 @@ All credentials, endpoints, and test patients documented here and in `private/se
 
 ## How each sandbox operates + live connect status
 
-_Last full retest of status rows: **2026-07-31** (demo.yourphr.org + yourphr.nerdsbythehour.com). Prior matrix pass: 2026-06-18._
+_Last full retest of status rows: **2026-07-31** (demo.yourphr.org + yourphr.nerdsbythehour.com). Blue Button sandbox login **reconfirmed broken 2026-08-01** on demo v1.19.1 ([#438](https://github.com/jwilleke/yourphr/issues/438)). Prior matrix pass: 2026-06-18._
 
 YourPHR connects to all of these the same way: a one-click button on **`/sandbox`** runs the SMART-on-FHIR flow (server-side `client_id`/secret, PKCE, our relay catches the redirect). What differs per vendor is the auth model and how gated record access is.
 
 | Sandbox | Auth model | Test patient | Live status |
 |---|---|---|---|
-| **CMS Blue Button 2.0** | confidential (id+secret) | synthetic Medicare beneficiary (`BBUser00000` / `PW00000!`) | ⛔ **sandbox login broken (2026-07-31)** — OAuth authorize reaches CMS; synthetic + ID.me paths fail before any auth code (see [`medicare.md`](./medicare.md)). Was ✅ E2E 2026-06-14. |
+| **CMS Blue Button 2.0** | confidential (id+secret) | synthetic Medicare beneficiary (`BBUser00000` / `PW00000!`) | ⛔ **sandbox login broken (2026-07-31, reconfirmed 2026-08-01 on demo)** — OAuth authorize reaches CMS; synthetic login: *"We can't process your request at this time"*; no auth code (see [`medicare.md`](./medicare.md)). Was ✅ E2E 2026-06-14. |
 | **Epic** | public / PKCE | sandbox test patients (e.g. Camila Lopez) | ✅ **E2E verified 2026-07-31** on production (also 2026-06-18); skips some 403/400 types; watch **offline refresh token** after connect ([`epic-sandbox.md`](./epic-sandbox.md)) |
 | **SMART Health IT** | open (any `client_id`, no secret) | pick at launcher | ✅ **E2E verified 2026-07-31** on demo.yourphr.org (~455 KB export) |
 | **athenahealth** | confidential (id+secret) | `phrtest_preview@mailinator.com` / `Password1` (also `athenainterop@aol.com`) | 🟡 **auth works** (2026-06-18); patient login works; record-sharing **gated** on app onboarding/provisioning in the Developer Portal |
@@ -45,7 +45,7 @@ YourPHR connects to all of these the same way: a one-click button on **`/sandbox
 
 ### Per-vendor operating notes
 
-- **Blue Button** — pure OAuth2; confidential client; restricted scopes (no wildcard / `offline_access`). **Do not treat as the reliable smoke test right now:** as of **2026-07-31** the CMS sandbox beneficiary login and ID.me synthetic path both fail on CMS's side (same on demo + prod). Full connect guide: [`../medicare-bluebutton.md`](../medicare-bluebutton.md); registration: [`medicare.md`](./medicare.md).
+- **Blue Button** — pure OAuth2; confidential client; restricted scopes (no wildcard / `offline_access`). **Do not treat as the reliable smoke test right now:** as of **2026-07-31** (reconfirmed **2026-08-01** on demo.yourphr.org v1.19.1 during [#438](https://github.com/jwilleke/yourphr/issues/438)) the CMS sandbox beneficiary login fails on CMS's side before any auth code. Full connect guide: [`../medicare-bluebutton.md`](../medicare-bluebutton.md); registration + dated log: [`medicare.md`](./medicare.md).
 - **Epic** — public/PKCE patient app; advertises ~100 resource types but **403/400s** several (AdverseEvent 403, CarePlan "requires category" 400). YourPHR skips inaccessible types so the rest import. ([`epic-sandbox.md`](./epic-sandbox.md))
 - **SMART Health IT** — open reference launcher; needs the long `/sim/<base64>/fhir` base; accepts any `client_id`; lets you pick a synthetic patient. **Best smoke test while Blue Button sandbox login is broken.** Live E2E on demo 2026-07-31. ([`smart-health-it.md`](./smart-health-it.md))
 - **athenahealth** — confidential ("Web") app; **approval-gated**. OAuth + patient login succeed, but the patient record-sharing step ("Could not confirm access to additional health records") needs the app fully onboarded in the Developer Portal. Not a YourPHR bug. Live note dated **2026-06-18**. ([`athenahealth.md`](./athenahealth.md))
