@@ -15,5 +15,6 @@ export class BackgroundJobSyncData {
   brand_id: string
   checkpoint_data?: Record<string, string>
   error_data?: Record<string, string>
-
+  /** Structured sync metrics when the job finishes (#441). */
+  summary?: import('./admin-metrics').SyncJobSummary
 }

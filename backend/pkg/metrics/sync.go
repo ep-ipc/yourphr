@@ -102,6 +102,40 @@ func (r *SyncRegistry) RecordSyncJob(s models.SyncJobSummary) {
 	}
 }
 
+// Snapshot is a JSON-friendly view of process metrics for the Admin UI (#441).
+type Snapshot struct {
+	JobsTotal      map[string]int64 `json:"jobs_total"` // key: "outcome|platform|environment"
+	ResourcesTotal map[string]int64 `json:"resources_total"`
+	DurationCount  int64            `json:"duration_count"`
+	DurationSumSec float64          `json:"duration_sum_seconds"`
+}
+
+// Snapshot returns a copy of counters for admin JSON (no scrape port needed).
+func (r *SyncRegistry) Snapshot() Snapshot {
+	out := Snapshot{
+		JobsTotal:      map[string]int64{},
+		ResourcesTotal: map[string]int64{},
+	}
+	if r == nil {
+		return out
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for outcome, byPlat := range r.jobsTotal {
+		for platform, byEnv := range byPlat {
+			for env, n := range byEnv {
+				out.JobsTotal[fmt.Sprintf("%s|%s|%s", outcome, platform, env)] = n
+			}
+		}
+	}
+	for typ, n := range r.resourcesTotal {
+		out.ResourcesTotal[typ] = n
+	}
+	out.DurationCount = r.durationCount
+	out.DurationSumSec = r.durationSum
+	return out
+}
+
 // WritePrometheus emits Prometheus text exposition v0.0.4.
 func (r *SyncRegistry) WritePrometheus(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")

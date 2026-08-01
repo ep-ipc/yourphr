@@ -64,6 +64,13 @@ function setup(
         getDatabaseInfo: () => opts.dbFail
           ? throwError(() => new Error('boom'))
           : of({backup_health: health}),
+        getAdminMetrics: () => of({
+          scrape_enabled: false,
+          scrape_path: '/metrics',
+          scrape_note: 'test',
+          process: {jobs_total: {}, resources_total: {}, duration_count: 0, duration_sum_seconds: 0},
+          recent_jobs: [],
+        }),
       },
     }],
   });

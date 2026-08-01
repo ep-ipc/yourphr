@@ -38,6 +38,7 @@ import {SmartAuthorizeRequest, SmartAuthorizeResponse} from '../models/fasten/sm
 import {RelayConfig} from '../models/fasten/relay-config';
 import {InstanceSettings} from '../models/fasten/instance-settings';
 import {LegalConsentStatus} from '../models/fasten/legal-consent';
+import {AdminMetrics} from '../models/fasten/admin-metrics';
 import {CDAConverterStatus} from '../models/fasten/cda-converter-status';
 import {ConnectableProvider, ProviderCatalogEntry, ProviderCatalogEntryRequest} from '../models/fasten/provider-catalog';
 import {
@@ -429,6 +430,12 @@ export class FastenApiService {
   setInstanceSettings(settings: InstanceSettings): Observable<InstanceSettings> {
     return this._httpClient.put<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/instance`, settings)
       .pipe(map((response: ResponseWrapper) => response.data as InstanceSettings));
+  }
+
+  // Admin Metrics card (#441) — scrape config, process counters, recent sync job summaries.
+  getAdminMetrics(): Observable<AdminMetrics> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/metrics`)
+      .pipe(map((response: ResponseWrapper) => response.data as AdminMetrics));
   }
 
   // Per-user Privacy Policy + Terms opt-in (#427) — Account Profile grant/revoke.

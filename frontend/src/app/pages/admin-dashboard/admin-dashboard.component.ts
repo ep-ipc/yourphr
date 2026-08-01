@@ -6,6 +6,7 @@ import {FastenApiService} from '../../services/fasten-api.service';
 import {RelayConfig, RelayResolvedValue} from '../../models/fasten/relay-config';
 import {InstanceSettings} from '../../models/fasten/instance-settings';
 import {BackupHealth} from '../../models/fasten/database-info';
+import {AdminMetrics, RecentSyncJob} from '../../models/fasten/admin-metrics';
 
 // Admin Dashboard (#170): the single admin hub — a grid of cards, each linking to a dedicated admin
 // page (Sandbox Testing, Provider Catalog, Server Logs, …). The route is gated by IsAdminAuthGuard and
@@ -44,6 +45,11 @@ export class AdminDashboardComponent implements OnInit {
   backupHealth: BackupHealth | null = null;
   dbLoading = false;
 
+  // Sync metrics (#441) — scrape config + process counters + recent job summaries.
+  metrics: AdminMetrics | null = null;
+  metricsLoading = false;
+  metricsError = '';
+
   toggleRelay(): void {
     this.relayExpanded = !this.relayExpanded;
   }
@@ -80,6 +86,49 @@ export class AdminDashboardComponent implements OnInit {
       (_err) => { this.backupHealth = null; this.dbLoading = false; },
       () => { this.dbLoading = false },
     );
+
+    this.metricsLoading = true;
+    this.fastenApi.getAdminMetrics().subscribe(
+      (m) => { this.metrics = m; },
+      (_err) => { this.metricsError = 'Could not load metrics.'; this.metricsLoading = false; },
+      () => { this.metricsLoading = false },
+    );
+  }
+
+  /** Total completed sync jobs in this process (all outcomes). */
+  processJobTotal(): number {
+    if (!this.metrics?.process?.jobs_total) { return 0; }
+    return Object.values(this.metrics.process.jobs_total).reduce((a, b) => a + (b || 0), 0);
+  }
+
+  /** Template helper — templates cannot call Math.round. */
+  avgDurationMs(): number {
+    const p = this.metrics?.process;
+    if (!p?.duration_count) { return 0; }
+    return Math.round(((p.duration_sum_seconds || 0) / p.duration_count) * 1000);
+  }
+
+  formatDurationMs(ms: number | undefined): string {
+    if (ms == null || ms < 0) { return '—'; }
+    if (ms < 1000) { return `${ms} ms`; }
+    const s = Math.round(ms / 1000);
+    if (s < 60) { return `${s}s`; }
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return rem ? `${m}m ${rem}s` : `${m}m`;
+  }
+
+  outcomeBadgeClass(outcome: string | undefined): string {
+    switch (outcome) {
+      case 'success': return 'badge-success';
+      case 'partial': return 'badge-warning';
+      case 'failed': return 'badge-danger';
+      default: return 'badge-secondary';
+    }
+  }
+
+  recentJobsWithSummary(): RecentSyncJob[] {
+    return (this.metrics?.recent_jobs || []).filter((j) => !!j.summary);
   }
 
   saveInstance(): void {

@@ -265,6 +265,8 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					//admin Instance card — operator contact for this deployment (no hardcoding)
 					secure.GET("/admin/instance", handler.GetInstanceSettings)
 					secure.PUT("/admin/instance", handler.SetInstanceSettings)
+					//admin Metrics card (#441) — scrape config + process counters + recent sync summaries
+					secure.GET("/admin/metrics", handler.GetAdminMetrics)
 
 					secure.POST("/practitioners", handler.CreatePractitioner)
 					secure.PUT("/practitioners/:practitionerId", handler.UpdatePractitioner)
