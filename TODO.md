@@ -1,18 +1,18 @@
 # TODO
 
 <!-- RESUME:START -->
-## ▶ Resume here — 2026-08-01
+## ▶ Resume here — 2026-08-02
 
-- Last worked on: **v1.20.3** shipped (sessions #445, disconnect/remove #437, logs #435, SSE #337, CMS runbook #433, PGHD vitals slice #313). Demo: greeting = FHIR Patient (Christopher Abshire from SMART Health IT on **Sandbox**); `/sources` is production-only (empty YourPHR + short **fh** label). Email: Cloudflare Email Routing MX/SPF on for yourphr.org; **`help@yourphr.org`** returns SMTP 550 address does not exist until a CF route is added.
-- Branch / state: `main`, clean except possible unpushed wrap commits; HEAD after wrap includes resume refresh
-- Running / in-flight: **none** — local dev servers stopped at wrap (`:9090` / `:4200`). Docker image for v1.20.3 built successfully earlier.
-- Parked / half-done: none
+- Last worked on: **v1.21.1** shipped and verified live. v1.21.0 delivered the instance-config chain (#451 `storage.data_dir`, #452 custom config store, #453 `GET /api/instance/public`, #454 footer operator contact, #455 env-read sweep) plus #450 relay semver tags — then **crash-looped prod AND demo** and was fixed by v1.21.1 ~40 min later. Email for yourphr.org is fully working (Cloudflare catch-all → `mjsservers@willeke.com`); DMARC is live via Cloudflare DMARC Management at `p=none`.
+- Branch / state: `main` clean, everything pushed, no stashes. `mj-infra-flux` `master` clean and pushed (2 untracked files pre-date this session: `.github/workflows/pat-health-check.yml`, `macos-setings.md`).
+- Running / in-flight: **none** — no local dev servers, no background agents. `Push on main` workflow was still running at wrap (cosmetic; CI + Markdown Lint already green on the same commit).
+- Parked / half-done: #455 settings-file half — `.backup_settings.json`, `.backup_dest`, `.backup_health.json` still have their own readers, deliberately deferred because that path is backup/restore where a mistake loses data.
 - Next steps:
-  - Push any unpushed wrap commits; confirm CI green (TODO.md MD049 fixed)
-  - Cloudflare: create `help@yourphr.org` (or catch-all) Email Routing destination, then test
-  - Operator verify in-review (#445 #437 #435 #337); Flux/demo on `1.20.3`
-  - CMS application email when ready (#433); mission #408 / #438 remainder; more #313 PGHD
-- Blockers / significant notes: CMS Blue Button sandbox login still broken vendor-side. #413 blocked on #407. No DMARC on yourphr.org yet. Dependabot open: 0.
+  - Rotate the Cloudflare API token — still live, and it was pasted into a session transcript (`rm ~/.config/cloudflare/token`, then delete at <https://dash.cloudflare.com/profile/api-tokens>)
+  - Operator verify in-review: #452 #453 #454 (shipped in v1.21.0/1.21.1) plus older #437 #435 #433
+  - `mj-infra-flux`: relay `ImagePolicy` still filters `main-*` — semver tags now exist (`1.21.1`, `1.21`, `latest`), so it can move to semver like the app's policy
+  - Mission work: #408 prove one production SMART provider; #438 demo epic remainder; #433 CMS application email when ready
+- Blockers / significant notes: **v1.21.0 outage post-mortem is in `private/project_log.md` (`2026-08-02-03`) — read it before touching config resolution.** Root cause: inferring "was this configured?" by comparing a value against its default; a ConfigMap that sets `database.location` to exactly the default string was read as unset and the DB path gained an extra `/db`. Viper cannot answer that question — do not rebuild the inference. Green CI is not deployment evidence: nothing in CI starts the binary against a real data volume. Cluster access is `ssh 192.168.68.71` + `sudo -n kubectl` (this Mac has no kubeconfig). CMS Blue Button sandbox login still broken vendor-side. #413 blocked on #407. Dependabot open: 0.
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — open issues **and pull requests** ranked together by priority label. PRs are prefixed `PR:` and listed first within their band.
