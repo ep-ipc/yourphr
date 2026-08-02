@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 )
@@ -193,23 +192,10 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
-// FromEnv builds a Client from YOURPHR_RELAY_URL (default DefaultBaseURL) and the required
-// YOURPHR_RELAY_SECRET (the same shared secret configured on the relay). It returns an error
-// if the secret is unset, so callers can fall back to a directly-supplied code.
-//
-// Prefer FromConfig where a config.Interface is available: raw env reads see .env/.env_custom
-// (those are loaded into the process environment at startup) but NOT config.yaml.
-func FromEnv() (Client, error) {
-	secret := os.Getenv("YOURPHR_RELAY_SECRET")
-	if secret == "" {
-		return Client{}, errors.New("relay: YOURPHR_RELAY_SECRET is not set")
-	}
-	baseURL := os.Getenv("YOURPHR_RELAY_URL")
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
-	}
-	return Client{BaseURL: baseURL, Secret: secret}, nil
-}
+// FromEnv was removed in #455. It read YOURPHR_RELAY_* straight from the process environment,
+// which saw .env/.env_custom but NOT config.yaml — so a relay configured in the config file was
+// invisible to it. FromConfig above is the replacement and had already superseded it; FromEnv
+// had no remaining callers.
 
 func (c Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {

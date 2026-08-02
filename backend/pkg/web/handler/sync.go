@@ -32,7 +32,9 @@ func GetServerBaseURLs(c *gin.Context, appConfig config.Interface) []string {
 
 	// Determine the port to use
 	port := appConfig.GetString("web.listen.port") // Default to internal port
-	if hostPort := os.Getenv("HOST_PORT"); hostPort != "" {
+	// HOST_PORT: the port docker-compose published on the host, which is what a browser on the
+	// LAN must connect to. Read through config, not os.Getenv — see #455.
+	if hostPort := appConfig.GetString("host.port"); hostPort != "" {
 		port = hostPort
 	}
 
@@ -57,8 +59,8 @@ func GetServerBaseURLs(c *gin.Context, appConfig config.Interface) []string {
 		addBaseURL(hostname, port)
 	}
 
-	// Priority 1: Environment variable override
-	if envHost := os.Getenv("HOST_IP"); envHost != "" {
+	// Priority 1: explicit host override (HOST_IP), via config rather than os.Getenv (#455)
+	if envHost := appConfig.GetString("host.ip"); envHost != "" {
 		addBaseURL(envHost, port)
 	}
 

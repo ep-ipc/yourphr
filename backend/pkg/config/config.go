@@ -205,6 +205,13 @@ func (c *configuration) Init() error {
 	c.AutomaticEnv()
 	//CLI options will be added via the `Set()` function
 
+	// Unprefixed host vars, bound explicitly because AutomaticEnv only maps YOURPHR_*. These
+	// describe how the app is reached from OUTSIDE the container (docker-compose publishes
+	// HOST_IP:HOST_PORT), so they cannot be derived from web.listen.*. Bound here rather than
+	// read with os.Getenv at the point of use, so config stays the single accessor (#455).
+	_ = c.BindEnv("host.port", "HOST_PORT")
+	_ = c.BindEnv("host.ip", "HOST_IP")
+
 	return nil
 }
 
