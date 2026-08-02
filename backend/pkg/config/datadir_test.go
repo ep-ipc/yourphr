@@ -48,3 +48,55 @@ func TestDataDir_TrimsSurroundingWhitespace(t *testing.T) {
 
 	require.Equal(t, "/srv/yourphr", config.DataDir(c))
 }
+
+// --- ResolveStoragePaths: the data root is primary, paths derive under it -------------------
+
+func TestResolveStoragePaths_DerivesDbAndCacheUnderDataRoot(t *testing.T) {
+	c := newTestConfig(t)
+	c.Set("storage.data_dir", "/srv/yourphr")
+
+	config.ResolveStoragePaths(c)
+
+	require.Equal(t, "/srv/yourphr/db/fasten.db", c.GetString("database.location"))
+	require.Equal(t, "/srv/yourphr/cache", c.GetString("cache.location"))
+	require.Equal(t, "/srv/yourphr", config.DataDir(c))
+}
+
+// Setting a data root AND an explicit DB path is a legitimate split (DB on fast local disk,
+// the rest elsewhere). An operator's stated choice must never be overridden.
+func TestResolveStoragePaths_ExplicitPathsAreNotOverridden(t *testing.T) {
+	c := newTestConfig(t)
+	c.Set("storage.data_dir", "/srv/yourphr")
+	c.Set("database.location", "/mnt/fast/fasten.db")
+	c.Set("cache.location", "/mnt/fast/cache")
+
+	config.ResolveStoragePaths(c)
+
+	require.Equal(t, "/mnt/fast/fasten.db", c.GetString("database.location"))
+	require.Equal(t, "/mnt/fast/cache", c.GetString("cache.location"))
+	// The data root stays what the operator set — it is not re-derived from the DB path.
+	require.Equal(t, "/srv/yourphr", config.DataDir(c))
+}
+
+// The pre-#451 layout must be byte-identical when no data root is configured, otherwise
+// upgrading installs would silently look for their DB somewhere new.
+func TestResolveStoragePaths_NoOpWithoutDataRoot(t *testing.T) {
+	c := newTestConfig(t)
+
+	config.ResolveStoragePaths(c)
+
+	require.Equal(t, config.DefaultDatabaseLocation, c.GetString("database.location"))
+	require.Equal(t, config.DefaultCacheLocation, c.GetString("cache.location"))
+	require.Equal(t, "/opt/fasten/db", config.DataDir(c))
+}
+
+func TestResolveStoragePaths_IsIdempotent(t *testing.T) {
+	c := newTestConfig(t)
+	c.Set("storage.data_dir", "/srv/yourphr")
+
+	config.ResolveStoragePaths(c)
+	config.ResolveStoragePaths(c)
+
+	require.Equal(t, "/srv/yourphr/db/fasten.db", c.GetString("database.location"))
+	require.Equal(t, "/srv/yourphr/cache", c.GetString("cache.location"))
+}

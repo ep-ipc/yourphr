@@ -478,6 +478,12 @@ func (ae *AppEngine) Start() error {
 		gin.SetMode(gin.DebugMode)
 	}
 
+	// Relocate db/ and cache/ under storage.data_dir when one is configured and those paths
+	// are still at their built-in defaults (#451). Must run before initializeDatabase opens
+	// the DB and before anything else resolves a path — every config layer has been merged
+	// by this point (defaults, env, config file, CLI flags).
+	config.ResolveStoragePaths(ae.Config)
+
 	if err := ae.initializeDatabase(); err != nil {
 		return err
 	}

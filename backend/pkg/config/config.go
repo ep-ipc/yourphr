@@ -150,17 +150,18 @@ func (c *configuration) Init() error {
 	c.SetDefault("metrics.port", 9091)
 	c.SetDefault("metrics.addr", "")
 
-	// Instance data root (#451). Everything an instance owns and must not lose lives here:
-	// the DB, the generated JWT key, backups, and the settings files. Empty default means
-	// "derive from database.location's parent", which is exactly what every consumer did
-	// before this key existed — so upgrading installs do not move. See config.DataDir.
+	// Instance data root (#451) — ONE top folder holding everything this instance owns and
+	// must not lose: db/, cache/, backups/, the generated JWT key, the settings files. Set it
+	// and the rest derive under it (config.ResolveStoragePaths, called at startup).
+	// Empty default means "derive from database.location's parent" instead, which is exactly
+	// what every consumer did before this key existed — so upgrading installs do not move.
 	c.SetDefault("storage.data_dir", "")
 
 	c.SetDefault("database.type", "sqlite")
-	c.SetDefault("database.location", "/opt/fasten/db/fasten.db")
+	c.SetDefault("database.location", DefaultDatabaseLocation)
 	c.SetDefault("database.encryption.enabled", false)
 	//c.SetDefault("database.encryption.key", "") //encryption key must be set by the user.
-	c.SetDefault("cache.location", "/opt/fasten/cache/")
+	c.SetDefault("cache.location", DefaultCacheLocation)
 
 	c.SetDefault("jwt.issuer.key", DefaultJWTIssuerKey)
 	// Browser session JWT (#445 Option A): sliding TTL + absolute cap from first login.
