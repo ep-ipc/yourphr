@@ -489,7 +489,7 @@ func (ae *AppEngine) Start() error {
 	// manager dependency. Set it back into config so the existing read sites use it.
 	jwtKey, err := config.ResolveJWTIssuerKey(
 		ae.Config.GetString("jwt.issuer.key"),
-		filepath.Dir(ae.Config.GetString("database.location")),
+		config.DataDir(ae.Config),
 	)
 	if err != nil {
 		return err

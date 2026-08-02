@@ -85,8 +85,11 @@ type BackupFile struct {
 	Modified  string `json:"modified"` // RFC3339 UTC
 }
 
+// dbDirFromConfig is the instance data root. Kept as a thin alias because it is the name
+// every settings file in this package already reaches for; config.DataDir is the definition
+// (storage.data_dir, falling back to the DB's parent directory) — see #451.
 func dbDirFromConfig(appConfig config.Interface) string {
-	return filepath.Dir(appConfig.GetString("database.location"))
+	return config.DataDir(appConfig)
 }
 
 // DefaultBackupDir is where backups go unless a destination is chosen: a "backups" folder next to the

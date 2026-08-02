@@ -150,6 +150,12 @@ func (c *configuration) Init() error {
 	c.SetDefault("metrics.port", 9091)
 	c.SetDefault("metrics.addr", "")
 
+	// Instance data root (#451). Everything an instance owns and must not lose lives here:
+	// the DB, the generated JWT key, backups, and the settings files. Empty default means
+	// "derive from database.location's parent", which is exactly what every consumer did
+	// before this key existed — so upgrading installs do not move. See config.DataDir.
+	c.SetDefault("storage.data_dir", "")
+
 	c.SetDefault("database.type", "sqlite")
 	c.SetDefault("database.location", "/opt/fasten/db/fasten.db")
 	c.SetDefault("database.encryption.enabled", false)
