@@ -484,6 +484,18 @@ func (ae *AppEngine) Start() error {
 	// by this point (defaults, env, config file, CLI flags).
 	config.ResolveStoragePaths(ae.Config)
 
+	// Overlay the instance-custom config store (#452), then fold in any pre-#452
+	// .operator_settings.json. Both run before the DB opens so every later read — including
+	// database.* keys an operator customized — sees the merged view.
+	if err := config.LoadCustomConfig(ae.Config); err != nil {
+		return err
+	}
+	if err := database.MigrateLegacyOperatorSettings(ae.Config); err != nil {
+		// A failed migration must not take the instance down: the values are contact details,
+		// and the legacy file is left in place for a retry on the next start.
+		ae.Logger.Warnf("could not migrate legacy operator settings: %v", err)
+	}
+
 	if err := ae.initializeDatabase(); err != nil {
 		return err
 	}
