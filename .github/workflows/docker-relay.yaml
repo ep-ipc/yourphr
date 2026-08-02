@@ -8,6 +8,10 @@ name: Docker (YourPHR relay)
 # Dockerfile.relay cross-compiles (CGO_ENABLED=0, $BUILDPLATFORM builder, GOOS/GOARCH retarget) and
 # its final stage is COPY-only. Contrast docker-jwilleke.yaml, whose CGO/SQLCipher + Angular build
 # needs native runners.
+#
+# DEV TAGS ONLY (main / main-<N>). Semver tags (:X.Y.Z / :X.Y / :latest) are published on release
+# tags by docker-relay-release.yaml (#450) — the `paths:` filter below would otherwise skip a
+# release commit, which touches only version/CHANGELOG files.
 
 on:
   push:

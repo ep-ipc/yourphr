@@ -9,12 +9,27 @@ See also: [`docs/releasing.md`](../releasing.md) (how releases are cut) and the 
 
 ## What is published, and where
 
+Two images are published. Both follow the same semver contract.
+
+### Application
+
 | | |
 |---|---|
 | Registry image | `ghcr.io/jwilleke/yourphr` |
 | Visibility | **public** (anonymous pull + tag scanning) |
-| Platform | `linux/amd64` |
+| Platform | `linux/amd64`, `linux/arm64` |
 | Built by | [`.github/workflows/docker-jwilleke.yaml`](../../.github/workflows/docker-jwilleke.yaml) |
+
+### SMART on FHIR relay
+
+Only needed if you connect providers that require a public OAuth callback.
+
+| | |
+|---|---|
+| Registry image | `ghcr.io/jwilleke/yourphr-relay` |
+| Visibility | **public** (anonymous pull + tag scanning) |
+| Platform | `linux/amd64`, `linux/arm64` |
+| Built by | [`docker-relay-release.yaml`](../../.github/workflows/docker-relay-release.yaml) (semver) and [`docker-relay.yaml`](../../.github/workflows/docker-relay.yaml) (dev tags) |
 
 ## The contract: deploy off **semver tags only**
 
@@ -22,7 +37,7 @@ See also: [`docs/releasing.md`](../releasing.md) (how releases are cut) and the 
 `main` are CI-tested but produce **no image** and trigger **no deploy**. This is deliberate
 (release-gated deployment): the running instance changes only when a release is cut.
 
-Image tags emitted:
+Image tags emitted — `ghcr.io/jwilleke/yourphr`:
 
 | Trigger | Tags pushed to ghcr | Deployable? |
 |---|---|---|
@@ -30,8 +45,19 @@ Image tags emitted:
 | Manual `workflow_dispatch` | `:sha-<shortsha>` | ⚠️ build only — not a release |
 | Push to `main` | *(nothing built)* | — |
 
+Image tags emitted — `ghcr.io/jwilleke/yourphr-relay`:
+
+| Trigger | Tags pushed to ghcr | Deployable? |
+|---|---|---|
+| Release tag `vX.Y.Z` | `:X.Y.Z`, `:X.Y`, `:latest` | ✅ yes |
+| Push to `main` touching relay sources | `:main`, `:main-<run>` | ⚠️ dev build — not a release |
+| Manual `workflow_dispatch` | as above, per workflow | ⚠️ build only |
+
+The relay's semver tags track the **repository** release, not a separate relay version — `yourphr-relay:1.20.3` is the relay as of the `v1.20.3` release. A release always publishes both images, even when the relay's own sources did not change in it, so the two are always pullable at the same version.
+
 **Integrator rule:** follow the immutable `:X.Y.Z` tags (or `:X.Y` for auto-patch, or `:latest` for
-"newest release"). Never deploy `:sha-*` or expect a `:main` tag — they are not part of the contract.
+"newest release") on both images. Never deploy `:sha-*` or `:main` / `:main-<run>` — they are not
+part of the contract, and `:main-<run>` in particular is a CI run counter, not a version.
 
 ## Versioning
 

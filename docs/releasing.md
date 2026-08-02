@@ -31,6 +31,7 @@ From a clean `main` with everything pushed and tests green:
 The live instance deploys **strictly off release tags** — not off `main`:
 
 - Pushing the `vX.Y.Z` tag triggers `docker-jwilleke.yaml`, which builds + pushes `ghcr.io/jwilleke/yourphr:X.Y.Z` (+ `:X.Y`, `:latest`).
+- The same tag triggers `docker-relay-release.yaml`, which publishes `ghcr.io/jwilleke/yourphr-relay:X.Y.Z` (+ `:X.Y`, `:latest`) — so both images are always available at the same version, even if the relay's sources did not change in that release ([#450](https://github.com/jwilleke/yourphr/issues/450)).
 - Flux's `ImagePolicy` (in `jwilleke/mj-infra-flux`, `apps/production/image-automation/yourphr-policy.yaml`) filters **semver** tags and bumps the deployment to the newest release. So the live instance updates **only when you cut a release**.
 - Pushes to `main` are CI-tested but produce **no image and no deploy**. To ship anything to the live instance — including a hotfix — cut a release (a `patch` release for hotfixes).
 
