@@ -180,6 +180,10 @@ func (c *configuration) Init() error {
 	c.SetDefault("cda_converter.url", "")
 	c.SetDefault("cda_converter.timeout_seconds", 60)
 
+	// UI theme for this instance (#436). Served unauthenticated by /api/instance/public so it
+	// can apply on first paint. Empty → the frontend's built-in default.
+	c.SetDefault("theme.name", "")
+
 	// Instance operator contact (Admin Dashboard card). Empty defaults; set via config/env
 	// (YOURPHR_OPERATOR_NAME, YOURPHR_OPERATOR_CONTACT_EMAIL, YOURPHR_OPERATOR_CONTACT_URL)
 	// or persist from the UI into the data dir (.operator_settings.json).

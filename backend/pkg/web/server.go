@@ -179,6 +179,11 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				api.POST("/cors/:endpointId/*proxyPath", handler.CORSProxy)
 				api.OPTIONS("/cors/:endpointId/*proxyPath", handler.CORSProxy)
 
+				// Public instance identity — operator contact + theme (#453). Unauthenticated
+				// because the theme must apply on first paint and operator contact is useless
+				// if only admins can see it. Serves an explicit allowlist, never config state.
+				api.GET("/instance/public", handler.GetPublicInstanceInfo)
+
 				api.GET("/glossary/code", handler.GlossarySearchByCode)
 				api.POST("/support/request", handler.SupportRequest)
 				api.POST("/support/healthsystem", handler.HealthSystemRequest)
