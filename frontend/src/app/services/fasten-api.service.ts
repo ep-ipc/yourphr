@@ -245,6 +245,27 @@ export class FastenApiService {
       );
   }
 
+  // getPublicInstanceInfo returns this instance's public identity: who operates it and how the
+  // UI should look. Public endpoint (#453) — the operator contact has to be visible to the
+  // people whose records these are, not only to admins.
+  // Every field is optional and empty when the operator has not set it; render nothing rather
+  // than substituting a fallback.
+  getPublicInstanceInfo(): Observable<{ name: string; contact_email: string; contact_url: string; theme: string }> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/instance/public`)
+      .pipe(
+        map((response: ResponseWrapper) => {
+          const data = (response.data as any) || {};
+          const str = (value: any): string => (typeof value === 'string' ? value.trim() : '');
+          return {
+            name: str(data.name),
+            contact_email: str(data.contact_email),
+            contact_url: str(data.contact_url),
+            theme: str(data.theme),
+          };
+        })
+      );
+  }
+
   // getVersion returns the running backend's app version and optional deployment label.
   // Public endpoint — footer shows "<environment_name>-<version>" (e.g. demo-1.18.2).
   // environment_name is runtime config (YOURPHR_WEB_ENVIRONMENT_NAME); empty when unset.
