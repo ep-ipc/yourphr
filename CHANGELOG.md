@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.21.0](https://github.com/jwilleke/yourphr/compare/v1.20.3...v1.21.0) (2026-08-02)
+
+One instance data root, one instance config store, and the operator contact finally visible to the people whose records these are.
+
+### Features
+
+- **config:** `storage.data_dir` (`YOURPHR_STORAGE_DATA_DIR`) names the instance data root; `db/`, `cache/`, `backups/`, the generated JWT key and the settings files derive under it ([#451](https://github.com/jwilleke/yourphr/issues/451))
+- **config:** instance custom config store at `<data root>/config/app-custom-config.json`, deep-merged over the built-in defaults, replacing the per-concern settings files; `.operator_settings.json` migrates automatically ([#452](https://github.com/jwilleke/yourphr/issues/452))
+- **api:** `GET /api/instance/public` — unauthenticated, explicitly allowlisted instance identity (operator name, contact email, contact URL, theme) ([#453](https://github.com/jwilleke/yourphr/issues/453))
+- **ui:** the footer shows who operates this instance and how to reach them, when the operator has set it ([#454](https://github.com/jwilleke/yourphr/issues/454))
+- **ci:** the relay image is published with semver tags on a release — `ghcr.io/jwilleke/yourphr-relay:X.Y.Z`, `:X.Y`, `:latest` ([#450](https://github.com/jwilleke/yourphr/issues/450), reported by @thevoltagesource)
+
+### Refactoring
+
+- **config:** environment reads route through `config.Interface` instead of `os.Getenv`, so a value set in `config.yaml` is no longer invisible to them; an AST test fails the build on new direct reads ([#455](https://github.com/jwilleke/yourphr/issues/455))
+
+### Notes for operators
+
+- **`YOURPHR_STORAGE_DATA_DIR` must equal the directory that actually persists** — the volume mount, not a sibling of it. Everything the instance owns lives under it, including the new config store. Leave it unset and the root is derived from `database.location`'s parent exactly as before, so an existing install does not move. Prod and demo now set it explicitly to `/opt/fasten/db`.
+- Operator contact set in Admin → Instance is now rendered in the footer. It was previously stored and displayed nowhere.
+- `.operator_settings.json` is folded into the config store on first start and renamed `.migrated` rather than deleted.
+- Self-hosters tracking the relay image can move from `:main-<run>` to `:X.Y.Z`. `:main-<run>` is a CI run counter, not a version, and is not part of the deployment contract.
+- `relay.FromEnv` was removed (no callers; `FromConfig` supersedes it).
+
 ## [1.20.3](https://github.com/jwilleke/yourphr/compare/v1.20.2...v1.20.3) (2026-08-01)
 
 Session reliability, enrollee data controls, admin logs, CMS prod-access runbook, and first patient-entered vitals slice.
