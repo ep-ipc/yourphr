@@ -5,10 +5,11 @@ import (
 	"strings"
 )
 
-// Built-in path defaults. Kept as constants because ResolveStoragePaths has to distinguish
-// "the operator chose this path" from "nobody set it, this is just the default" — viper's
-// IsSet reports true for a value that came from SetDefault, so comparing against the default
-// is the only way to tell the two apart.
+// Built-in path defaults, referenced by config.Init so the literals live in one place.
+//
+// Do NOT use these to infer whether an operator configured a path: a configured value that
+// equals the default is indistinguishable from an unset one, which is exactly the mistake that
+// broke v1.21.0. See ResolveStoragePaths.
 const (
 	DefaultDatabaseLocation = "/opt/fasten/db/fasten.db"
 	DefaultCacheLocation    = "/opt/fasten/cache/"
@@ -35,34 +36,29 @@ func DataDir(c Interface) string {
 	return filepath.Dir(c.GetString("database.location"))
 }
 
-// ResolveStoragePaths makes the data root primary: when storage.data_dir is set and a path
-// key is still at its built-in default, that path is relocated under the data root. Call it
-// once at startup, after every config layer has been merged (defaults, env, config file, CLI)
-// and before anything reads a path.
+// ResolveStoragePaths is retained as an explicit no-op so callers and future readers find this
+// note rather than reinventing the bug.
 //
-// Resulting layout under a configured data root:
+// It used to relocate database.location and cache.location under storage.data_dir whenever
+// those keys were "still at their built-in defaults", detected by comparing against the default
+// constants. That took down prod and demo on v1.21.0.
 //
-//	<data_dir>/db/fasten.db     database.location
-//	<data_dir>/cache/           cache.location
-//	<data_dir>/backups/         backups
-//	<data_dir>/.jwt_issuer_key  generated signing key
-//	<data_dir>/...              settings files
+// The reason is worth keeping: an operator setting a key to a value that HAPPENS TO EQUAL the
+// default is indistinguishable, by value comparison, from nobody setting it. Both instances'
+// ConfigMaps set database.location to /opt/fasten/db/fasten.db — exactly the default string —
+// so the check read a deliberate configuration as unset and relocated the DB to
+// /opt/fasten/db/db/fasten.db. The database was not there, and the backend crash-looped on
+// "unable to open database file".
 //
-// An explicitly configured database.location or cache.location always wins — setting both a
-// data root and an absolute DB path is a legitimate split (DB on fast local disk, everything
-// else elsewhere), so this never overrides an operator's stated choice.
+// Viper cannot answer "did anyone actually set this?" — IsSet reports true for a defaulted key,
+// and reconstructing the answer from InConfig plus env plus overrides is a pile of guesswork
+// guarding a feature worth very little: every real deployment configures database.location
+// explicitly, and a fresh install already lands at /opt/fasten/db/fasten.db by default. The
+// derivation only ever mattered for a case that resolves correctly without it.
 //
-// No-op when storage.data_dir is unset, which keeps the pre-#451 layout byte-identical.
-func ResolveStoragePaths(c Interface) {
-	root := strings.TrimSpace(c.GetString("storage.data_dir"))
-	if root == "" {
-		return
-	}
-
-	if c.GetString("database.location") == DefaultDatabaseLocation {
-		c.Set("database.location", filepath.Join(root, "db", "fasten.db"))
-	}
-	if c.GetString("cache.location") == DefaultCacheLocation {
-		c.Set("cache.location", filepath.Join(root, "cache"))
-	}
-}
+// So storage.data_dir now does exactly one thing: name the directory that holds what the
+// instance owns and must not lose — the custom config store, the generated JWT signing key,
+// backups. It never moves the database or the cache. See DataDir and #451.
+//
+// Deprecated: does nothing. Kept so the startup call site stays greppable to this explanation.
+func ResolveStoragePaths(_ Interface) {}

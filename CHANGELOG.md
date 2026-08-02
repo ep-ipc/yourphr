@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.21.1](https://github.com/jwilleke/yourphr/compare/v1.21.0...v1.21.1) (2026-08-02)
+
+**Fixes a startup crash introduced in 1.21.0. Upgrade directly from 1.20.3 to this release; do not deploy 1.21.0.**
+
+### Bug Fixes
+
+- **config:** `storage.data_dir` no longer relocates `database.location` or `cache.location` ([#451](https://github.com/jwilleke/yourphr/issues/451))
+
+  1.21.0 moved those paths under the data root whenever their value equalled the built-in default — but a value that *equals* the default is indistinguishable from one nobody set, and a deployment that deliberately configures `database.location: /opt/fasten/db/fasten.db` hits exactly that. The DB was relocated to `/opt/fasten/db/db/fasten.db`, which does not exist, and the backend crash-looped on `unable to open database file`. Any instance setting `YOURPHR_STORAGE_DATA_DIR` together with a `database.location` matching the default was affected.
+
+  `storage.data_dir` now does one thing: name the directory holding what the instance owns and must not lose — the custom config store, the generated JWT signing key, backups. It never moves the database or the cache.
+
+### Notes for operators
+
+- No action needed beyond upgrading. `YOURPHR_STORAGE_DATA_DIR` is safe to keep set; it is now purely additive.
+- If you deployed 1.21.0 and saw a crash loop, no data was lost — the database was never moved, only looked for in the wrong place.
+
 ## [1.21.0](https://github.com/jwilleke/yourphr/compare/v1.20.3...v1.21.0) (2026-08-02)
 
 One instance data root, one instance config store, and the operator contact finally visible to the people whose records these are.
