@@ -32,6 +32,11 @@ _None. Open Dependabot alerts: 0. Open code-scanning alerts: 0._
 ## 🟡 P2
 
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj) _(blocked; security)_
+- [#453](https://github.com/jwilleke/yourphr/issues/453) — [FEATURE] Public instance-info endpoint (allowlisted, unauthenticated) _(security; blocked by #452)_
+- [#455](https://github.com/jwilleke/yourphr/issues/455) — [CHORE] Route all config reads through config.Interface (retire direct os.Getenv and ad-hoc settings files) _(blocked by #452)_
+- [#454](https://github.com/jwilleke/yourphr/issues/454) — [FEATURE] Render operator contact in footer and About _(blocked by #453)_
+- [#452](https://github.com/jwilleke/yourphr/issues/452) — [FEATURE] Instance custom config store (app-custom-config.json, deep-merged over defaults) _(blocked by #451, soft)_
+- [#451](https://github.com/jwilleke/yourphr/issues/451) — [FEATURE] Name the instance data root explicitly (fast/slow storage split)
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping _(blocked on #407)_
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
@@ -91,4 +96,6 @@ _None. Open Dependabot alerts: 0. Open code-scanning alerts: 0._
 
 ## ❓ Needs triage
 
-_None — every open issue and PR carries a placement label._
+1 open issue awaiting a placement decision:
+
+- [#450](https://github.com/jwilleke/yourphr/issues/450) — [FEATURE] Set a Semver tag on the relay docker build _(opened 2026-08-01 by thevoltagesource)_
