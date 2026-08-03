@@ -529,6 +529,16 @@ func (ae *AppEngine) Start() error {
 		ae.Logger.Warnf("could not migrate legacy operator settings: %v", err)
 	}
 
+	// Name configuration that will silently do nothing. WARN, never refuse: refusing on an
+	// unknown key would turn a removed setting into a boot loop on upgrade.
+	if report, err := config.FindUnknownKeys(ae.Config); err != nil {
+		ae.Logger.Warnf("could not check for unknown configuration keys: %v", err)
+	} else {
+		for _, message := range report.Messages(config.CustomConfigPath(ae.Config)) {
+			ae.Logger.Warn(message)
+		}
+	}
+
 	// Name anything this instance publishes beyond the shipped set (#457). Widening the `public`
 	// array is allowed by design, so this is a warning rather than a refusal — which makes it the
 	// only signal an operator gets that a key is now readable without a login.
