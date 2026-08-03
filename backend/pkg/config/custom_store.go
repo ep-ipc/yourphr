@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,8 +60,59 @@ func LoadCustomConfig(c Interface) error {
 		return nil
 	}
 
-	if err := c.MergeConfigMap(flattenToKnownKeys(values)); err != nil {
+	flat := flattenToKnownKeys(values)
+
+	// Convert a pre-#456 nested file on disk, once, rather than only when something next saves.
+	// Otherwise the file stays nested indefinitely — not matching its own documented format, and
+	// exercising the compat path on every boot.
+	//
+	// Best-effort: a read-only volume or a permissions problem must not stop the instance
+	// starting, because the in-memory values are already correct either way.
+	if isNested(values) {
+		if err := rewriteCustomConfigFlat(path, flat); err != nil {
+			log.Printf("warning: could not convert %s to flat keys (values still applied): %s", path, err)
+		}
+	}
+
+	if err := c.MergeConfigMap(flat); err != nil {
 		return fmt.Errorf("merging %s: %w", path, err)
+	}
+	return nil
+}
+
+// isNested reports whether any value is an object, i.e. the file predates the flat-key format.
+func isNested(values map[string]interface{}) bool {
+	for _, value := range values {
+		if _, ok := value.(map[string]interface{}); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// rewriteCustomConfigFlat persists the converted file, keeping the original alongside it.
+//
+// The nested copy is retained rather than discarded: this runs unattended at startup, and a
+// config file is the one thing an operator cannot reconstruct from the code.
+func rewriteCustomConfigFlat(path string, flat map[string]interface{}) error {
+	if err := os.Rename(path, path+".nested"); err != nil {
+		return fmt.Errorf("preserving the original: %w", err)
+	}
+
+	out := make(map[string]interface{}, len(flat)+1)
+	for key, value := range flat {
+		out[key] = value
+	}
+	out["_comment"] = customConfigComment
+
+	encoded, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, append(encoded, '\n'), 0o600); err != nil {
+		// Put the original back rather than leaving the instance with no custom config at all.
+		_ = os.Rename(path+".nested", path)
+		return err
 	}
 	return nil
 }

@@ -216,3 +216,68 @@ func TestSetCustomValues_ConvertsLegacyNestedFileOnWrite(t *testing.T) {
 	require.Equal(t, "https://example.org/help", stored["operator.contact_url"],
 		"an untouched legacy value must survive the conversion")
 }
+
+// --- one-time conversion of a pre-#456 nested file --------------------------------------------
+
+func TestLoadCustomConfig_ConvertsNestedFileOnDisk(t *testing.T) {
+	c, root := newStoreConfig(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "config"), 0o755))
+	path := filepath.Join(root, "config", config.CustomConfigFileName)
+	require.NoError(t, os.WriteFile(path,
+		[]byte(`{"operator":{"name":"Legacy Ops","contact_email":"legacy@example.org"}}`), 0o600))
+
+	require.NoError(t, config.LoadCustomConfig(c))
+
+	// Values applied...
+	require.Equal(t, "Legacy Ops", c.GetString("operator.name"))
+
+	// ...and the file on disk is now flat, so the compat path is not re-run every boot.
+	stored := readStoreFile(t, root)
+	require.Equal(t, "Legacy Ops", stored["operator.name"])
+	require.Equal(t, "legacy@example.org", stored["operator.contact_email"])
+	require.NotContains(t, stored, "operator")
+
+	// The original is kept — this runs unattended at startup, and a config file is the one thing
+	// an operator cannot reconstruct from the code.
+	require.FileExists(t, path+".nested")
+}
+
+func TestLoadCustomConfig_LeavesAFlatFileAlone(t *testing.T) {
+	c, root := newStoreConfig(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "config"), 0o755))
+	path := filepath.Join(root, "config", config.CustomConfigFileName)
+	require.NoError(t, os.WriteFile(path, []byte(`{"operator.name":"Flat Ops"}`), 0o600))
+
+	require.NoError(t, config.LoadCustomConfig(c))
+
+	require.NoFileExists(t, path+".nested", "an already-flat file must not be rewritten")
+	require.Equal(t, "Flat Ops", c.GetString("operator.name"))
+}
+
+func TestLoadCustomConfig_ConvertedFileKeepsItsPermissions(t *testing.T) {
+	c, root := newStoreConfig(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "config"), 0o755))
+	path := filepath.Join(root, "config", config.CustomConfigFileName)
+	require.NoError(t, os.WriteFile(path, []byte(`{"operator":{"name":"Legacy Ops"}}`), 0o600))
+
+	require.NoError(t, config.LoadCustomConfig(c))
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+}
+
+// A conversion that cannot write must not stop the instance starting — the in-memory values are
+// already correct, so a read-only volume is a warning, not an outage.
+func TestLoadCustomConfig_UnwritableFileStillApplies(t *testing.T) {
+	c, root := newStoreConfig(t)
+	dir := filepath.Join(root, "config")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	path := filepath.Join(dir, config.CustomConfigFileName)
+	require.NoError(t, os.WriteFile(path, []byte(`{"operator":{"name":"Legacy Ops"}}`), 0o600))
+	require.NoError(t, os.Chmod(dir, 0o500)) // no write on the directory: rename will fail
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	require.NoError(t, config.LoadCustomConfig(c))
+	require.Equal(t, "Legacy Ops", c.GetString("operator.name"))
+}
