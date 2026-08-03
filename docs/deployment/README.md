@@ -145,7 +145,30 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 There are **two distinct kinds** — don't conflate them:
 
 1. **Operator/server secrets** (deployment-level, one set): the **DB encryption key** (required) and an optional pinned **JWT key**. Supply via `YOURPHR_*` env, a mounted `config.yaml`, or `.env_custom` — never in the committed `config.yaml`.
-2. **Per-user OAuth credentials** (runtime, per user *and* per connected source): when a user connects a SMART source they enter their own `client_id`/`client_secret` in the UI. These are **stored encrypted in the database** (the `source_credentials` table, [#286](https://github.com/jwilleke/yourphr/issues/286)) — **not** an env var or file, because they are dynamic per-user data, not server config.
+2. **Per-user OAuth credentials** (runtime, per user *and* per connected source): when a user connects a SMART source they enter their own `client_id`/`client_secret` in the UI. These live in the `source_credentials` table ([#286](https://github.com/jwilleke/yourphr/issues/286)) — **not** an env var or file, because they are dynamic per-user data, not server config. They are never serialized to the browser (`json:"-"`).
+
+   Their protection at rest is **whole-database encryption, not per-column** — so they are encrypted only when `database.encryption.enabled` is on. It is **off by default**. See the risk note below.
+
+### What the data volume holds
+
+The instance data root (`storage.data_dir`, [#451](https://github.com/jwilleke/yourphr/issues/451) — the volume you mount and back up) contains, in one place:
+
+| | |
+|---|---|
+| `db/fasten.db` | every imported record, plus `source_credentials`: OAuth **access and refresh tokens** and `client_secret` for each connected provider |
+| `.jwt_issuer_key` | the generated HS256 session signing key (0600) |
+| `config/app-custom-config.json` | instance settings, and any secret an operator chooses to set there (0600) |
+| `backups/` | database snapshots, if a local destination is used |
+
+**Treat this volume as the crown jewels.** A stored refresh token is not historical data — it grants *ongoing* access to that patient's records at Epic, CMS or Medicare until revoked. Anyone who can read the volume can use them.
+
+Practical consequences:
+
+- **With `database.encryption.enabled` off (the default), all of the above is cleartext on disk.** A copied PVC, a snapshot, a decommissioned disk, or a `kubectl cp` of the data dir yields live provider credentials.
+- **Backups are cleartext too**, and they are the copy most likely to leave the machine — a NAS, another host, cold storage. See [#461](https://github.com/jwilleke/yourphr/issues/461).
+- An operator **may** set secrets through Admin → Configuration, which writes them to `app-custom-config.json` on this volume. That is supported and adds little marginal risk given what is already here — but it is a choice, and the alternative is to keep secrets in `YOURPHR_*` env (or reference them from the config with `${VAR}`, [#460](https://github.com/jwilleke/yourphr/issues/460)) so they live in your secret manager instead.
+
+**Encryption and backup are currently mutually exclusive.** Turning on `database.encryption.enabled` refuses backup *and* restore ([#367](https://github.com/jwilleke/yourphr/issues/367) / [#363](https://github.com/jwilleke/yourphr/issues/363)), because a `VACUUM INTO` snapshot of an encrypted database would be written in plaintext. So today you pick one: encrypted at rest with no backups, or backups with cleartext at rest. Closing that gap is [#461](https://github.com/jwilleke/yourphr/issues/461).
 
 ## Sandbox provider credentials
 
