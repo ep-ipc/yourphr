@@ -10,12 +10,14 @@ import (
 func TestPublicKeys_ShippedDefault(t *testing.T) {
 	c := newTestConfig(t)
 
+	// contact_email is deliberately NOT here (#459) — an address on an unauthenticated endpoint
+	// gets harvested. Signed-in users still get it via AuthenticatedInstanceKeys.
 	require.Equal(t, []string{
-		"operator.contact_email",
 		"operator.contact_url",
 		"operator.name",
 		"theme.name",
 	}, config.PublicKeys(c))
+	require.NotContains(t, config.PublicKeys(c), "operator.contact_email")
 }
 
 // The list is an ALLOW-list. Nothing outside it is public, however many other keys exist.
@@ -94,9 +96,43 @@ func TestDefaultPublicKeys_ComesFromTheShippedFile(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{
-		"operator.contact_email",
 		"operator.contact_url",
 		"operator.name",
 		"theme.name",
 	}, shipped)
+}
+
+// A signed-in user gets the operator contact block on top of whatever is public — the operator
+// holds the records, so reaching them is not a preference the public array should withhold.
+func TestAuthenticatedInstanceKeys_AddsTheOperatorContactBlock(t *testing.T) {
+	c := newTestConfig(t)
+
+	keys := config.AuthenticatedInstanceKeys(c)
+	require.Contains(t, keys, "operator.contact_email")
+	require.Contains(t, keys, "operator.name")
+	require.Contains(t, keys, "operator.contact_url")
+	require.Contains(t, keys, "theme.name", "public keys are still included")
+}
+
+// The floor holds even when an operator narrows the public array to nothing.
+func TestAuthenticatedInstanceKeys_SurviveANarrowedPublicArray(t *testing.T) {
+	c := newTestConfig(t)
+	c.Set("public", []string{})
+
+	require.Equal(t, []string{
+		"operator.contact_email",
+		"operator.contact_url",
+		"operator.name",
+	}, config.AuthenticatedInstanceKeys(c))
+}
+
+// Secrets stay out of the authenticated view too — it is public plus a named block, not
+// everything-minus-a-few.
+func TestAuthenticatedInstanceKeys_ExcludeSecrets(t *testing.T) {
+	c := newTestConfig(t)
+
+	keys := config.AuthenticatedInstanceKeys(c)
+	require.NotContains(t, keys, "jwt.issuer.key")
+	require.NotContains(t, keys, "relay.secret")
+	require.NotContains(t, keys, "database.location")
 }

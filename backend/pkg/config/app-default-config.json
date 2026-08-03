@@ -74,10 +74,9 @@
   "_comment_theme": "UI theme id, served unauthenticated so it can apply before first paint. Empty means the frontend's built-in default.",
   "theme.name": "",
 
-  "_comment_public": "Keys served by GET /api/instance/public to callers with NO login (#457). Direction matters: this is an allow-list, so a key added anywhere else in this file is private until it is named here. A deny-list would publish anything nobody remembered to list. An instance may change this array in <data>/config/app-custom-config.json — including adding keys — and the server logs a WARN naming anything promoted beyond this shipped set.",
+  "_comment_public": "Keys served by GET /api/instance/public to callers with NO login (#457). Direction matters: this is an allow-list, so a key added anywhere else in this file is private until it is named here. A deny-list would publish anything nobody remembered to list. An instance may change this array in <data>/config/app-custom-config.json — including adding keys — and the server logs a WARN naming anything promoted beyond this shipped set. NOTE operator.contact_email is deliberately absent (#459): an address on an unauthenticated endpoint gets harvested. Signed-in users still see it via GET /api/secure/instance, and an operator running a public help desk can add it back here.",
   "public": [
     "operator.name",
-    "operator.contact_email",
     "operator.contact_url",
     "theme.name"
   ],

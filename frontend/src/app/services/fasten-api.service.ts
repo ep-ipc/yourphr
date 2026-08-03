@@ -245,30 +245,23 @@ export class FastenApiService {
       );
   }
 
-  // getPublicInstanceInfo returns this instance's public identity: who operates it and how the
-  // UI should look. Public endpoint (#453) — the operator contact has to be visible to the
-  // people whose records these are, not only to admins.
-  // Every field is optional and empty when the operator has not set it; render nothing rather
-  // than substituting a fallback.
-  getPublicInstanceInfo(): Observable<{ name: string; contact_email: string; contact_url: string; theme: string }> {
+  // getPublicInstanceInfo returns this instance's public identity for callers with NO login.
+  // The backend decides what to publish from the `public` array (#457), so the payload names the
+  // setting each value came from. Mapped to short names here, in one place, so components do not
+  // carry config-key strings.
+  // Any key absent from the response is an operator choosing not to publish it; render nothing
+  // rather than substituting a fallback. Note contact_email is NOT public by default (#459).
+  getPublicInstanceInfo(): Observable<InstanceInfo> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/instance/public`)
-      .pipe(
-        map((response: ResponseWrapper) => {
-          // Keys are the backend config keys (#457) — the server decides what to publish from the
-          // `public` array, so the payload names the setting each value came from. Mapped to short
-          // names here, in one place, so components do not carry config-key strings.
-          // Any key absent from the response is an operator choosing not to publish it; render
-          // nothing rather than substituting a fallback.
-          const data = (response.data as any) || {};
-          const str = (key: string): string => (typeof data[key] === 'string' ? data[key].trim() : '');
-          return {
-            name: str('operator.name'),
-            contact_email: str('operator.contact_email'),
-            contact_url: str('operator.contact_url'),
-            theme: str('theme.name'),
-          };
-        })
-      );
+      .pipe(map((response: ResponseWrapper) => mapInstanceInfo(response)));
+  }
+
+  // getInstanceInfo returns the same shape for a SIGNED-IN user, which additionally includes the
+  // operator contact email (#459): it is withheld from anonymous callers so it is not harvested,
+  // but someone with an account is entitled to reach whoever holds their records.
+  getInstanceInfo(): Observable<InstanceInfo> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/instance`)
+      .pipe(map((response: ResponseWrapper) => mapInstanceInfo(response)));
   }
 
   // getVersion returns the running backend's app version and optional deployment label.
@@ -1119,4 +1112,26 @@ export class FastenApiService {
       );
     
   }
+}
+
+// InstanceInfo is the frontend view of an instance's identity. Every field is optional and empty
+// when the operator has not set it, or when this caller is not entitled to see it.
+export interface InstanceInfo {
+  name: string;
+  contact_email: string;
+  contact_url: string;
+  theme: string;
+}
+
+// mapInstanceInfo translates backend config keys to short names. Both instance endpoints return
+// the same shape, so the mapping lives here once.
+function mapInstanceInfo(response: ResponseWrapper): InstanceInfo {
+  const data = (response.data as any) || {};
+  const str = (key: string): string => (typeof data[key] === 'string' ? data[key].trim() : '');
+  return {
+    name: str('operator.name'),
+    contact_email: str('operator.contact_email'),
+    contact_url: str('operator.contact_url'),
+    theme: str('theme.name'),
+  };
 }

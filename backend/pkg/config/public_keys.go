@@ -93,3 +93,41 @@ func PublicKeysPromotedBeyondDefault(c Interface) ([]string, error) {
 	}
 	return promoted, nil
 }
+
+// operatorContactKeys are the "who runs this instance" settings a signed-in user is entitled to
+// see regardless of the public array.
+//
+// The operator holds the records, so a patient with an account has a direct interest in reaching
+// them — that is not a preference the public array should be able to withhold. Anonymous callers
+// are a different matter, which is why operator.contact_email is not shipped as public (#459):
+// an address on an unauthenticated endpoint gets harvested.
+//
+// Deliberately a short fixed list in code rather than a second config array. One array was the
+// decision; this is not a second visibility surface an operator tunes, it is the floor below it.
+var operatorContactKeys = []string{
+	"operator.name",
+	"operator.contact_email",
+	"operator.contact_url",
+}
+
+// AuthenticatedInstanceKeys returns the keys served to a signed-in user: everything public, plus
+// the operator contact block.
+func AuthenticatedInstanceKeys(c Interface) []string {
+	seen := map[string]struct{}{}
+	var out []string
+
+	for _, key := range PublicKeys(c) {
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	for _, key := range operatorContactKeys {
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+
+	sort.Strings(out)
+	return out
+}

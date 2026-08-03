@@ -40,3 +40,25 @@ func GetPublicInstanceInfo(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
 }
+
+// GetInstanceInfoForUser serves instance identity to a signed-in user: everything public, plus
+// the operator contact block (#459).
+//
+// The split exists because operator.contact_email is not shipped in the public array — an
+// address on an unauthenticated endpoint gets harvested — while someone with an account has a
+// direct interest in reaching whoever holds their records. Anonymous callers still get the
+// operator name and support URL from /api/instance/public, so /contact is useful either way.
+func GetInstanceInfoForUser(c *gin.Context) {
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+
+	data := gin.H{}
+	for _, key := range config.AuthenticatedInstanceKeys(appConfig) {
+		value := appConfig.Get(key)
+		if value == nil {
+			value = ""
+		}
+		data[key] = value
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
+}

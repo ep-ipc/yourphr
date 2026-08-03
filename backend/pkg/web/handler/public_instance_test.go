@@ -18,10 +18,10 @@ import (
 // checking would pass automatically the moment somebody added a key, and forcing that edit to be
 // deliberate is the entire point. Widening it is a security decision (#457).
 var allowedPublicInstanceKeys = []string{
-	"operator.name", "operator.contact_email", "operator.contact_url", "theme.name",
+	"operator.name", "operator.contact_url", "theme.name",
 }
 
-func newPublicInstanceRequest(t *testing.T, configure func(config.Interface)) *httptest.ResponseRecorder {
+func newPublicInstanceRequest(t *testing.T, configure func(config.Interface), h ...gin.HandlerFunc) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -38,7 +38,11 @@ func newPublicInstanceRequest(t *testing.T, configure func(config.Interface)) *h
 	ctx.Set(pkg.ContextKeyTypeConfig, appConfig)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/instance/public", nil)
 
-	handler.GetPublicInstanceInfo(ctx)
+	target := handler.GetPublicInstanceInfo
+	if len(h) > 0 {
+		target = h[0]
+	}
+	target(ctx)
 	return recorder
 }
 
@@ -64,9 +68,10 @@ func TestGetPublicInstanceInfo_ServesConfiguredValues(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	data := decodePublicInstanceData(t, recorder)
 	require.Equal(t, "Nerds by the Hour", data["operator.name"])
-	require.Equal(t, "help@example.org", data["operator.contact_email"])
 	require.Equal(t, "https://example.org/help", data["operator.contact_url"])
 	require.Equal(t, "flatly", data["theme.name"])
+	require.NotContains(t, data, "operator.contact_email",
+		"the operator address must not reach an anonymous caller (#459)")
 }
 
 // Unset values are empty strings, not omitted and not defaulted — the frontend renders nothing
@@ -132,4 +137,29 @@ func TestGetPublicInstanceInfo_HonoursAWidenedPublicArray(t *testing.T) {
 
 	data := decodePublicInstanceData(t, recorder)
 	require.Equal(t, "demo", data["web.environment_name"])
+}
+
+// --- #459: the address is withheld from anonymous callers, not from users --------------------
+
+func TestGetInstanceInfoForUser_IncludesTheOperatorEmail(t *testing.T) {
+	recorder := newPublicInstanceRequest(t, func(c config.Interface) {
+		c.Set("operator.name", "Nerds by the Hour")
+		c.Set("operator.contact_email", "help@example.org")
+	}, handler.GetInstanceInfoForUser)
+
+	data := decodePublicInstanceData(t, recorder)
+	require.Equal(t, "help@example.org", data["operator.contact_email"])
+	require.Equal(t, "Nerds by the Hour", data["operator.name"])
+}
+
+// Even the signed-in view is a named set, not "everything except secrets".
+func TestGetInstanceInfoForUser_StillExcludesSecrets(t *testing.T) {
+	recorder := newPublicInstanceRequest(t, func(c config.Interface) {
+		c.Set("jwt.issuer.key", "super-secret-signing-key")
+		c.Set("relay.secret", "super-secret-relay-secret")
+	}, handler.GetInstanceInfoForUser)
+
+	body := recorder.Body.String()
+	require.NotContains(t, body, "super-secret-signing-key")
+	require.NotContains(t, body, "super-secret-relay-secret")
 }

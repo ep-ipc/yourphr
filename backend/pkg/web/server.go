@@ -279,6 +279,11 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.GET("/admin/database/browse", handler.BrowseDirectories)                // server-folder browser (pick destination)
 					secure.POST("/admin/database/restore", handler.RestoreDatabase)                // stage a restore (applied on restart) — #362
 					//admin Instance card — operator contact for this deployment (no hardcoding)
+					// Instance identity for a signed-in user: everything public, plus the
+					// operator contact block. contact_email is withheld from anonymous callers
+					// (#459) but a patient with an account is entitled to reach whoever holds
+					// their records.
+					secure.GET("/instance", handler.GetInstanceInfoForUser)
 					secure.GET("/admin/instance", handler.GetInstanceSettings)
 					secure.PUT("/admin/instance", handler.SetInstanceSettings)
 					//admin Metrics card (#441) — scrape config + process counters + recent sync summaries
