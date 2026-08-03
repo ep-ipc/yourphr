@@ -1,0 +1,8 @@
+// Long dotted keys are the point of the first column; keep them from wrapping mid-key.
+code {
+  white-space: nowrap;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}

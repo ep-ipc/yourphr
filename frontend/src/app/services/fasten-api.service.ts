@@ -37,6 +37,7 @@ import {SmartConnectRequest} from '../models/fasten/smart-connect-request';
 import {SmartAuthorizeRequest, SmartAuthorizeResponse} from '../models/fasten/smart-authorize';
 import {RelayConfig} from '../models/fasten/relay-config';
 import {InstanceSettings} from '../models/fasten/instance-settings';
+import {AdminConfig, RevealedConfigValue} from '../models/fasten/admin-config';
 import {LegalConsentStatus} from '../models/fasten/legal-consent';
 import {AdminMetrics} from '../models/fasten/admin-metrics';
 import {CDAConverterStatus} from '../models/fasten/cda-converter-status';
@@ -262,6 +263,37 @@ export class FastenApiService {
   getInstanceInfo(): Observable<InstanceInfo> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/instance`)
       .pipe(map((response: ResponseWrapper) => mapInstanceInfo(response)));
+  }
+
+  /*
+  ADMIN CONFIGURATION (#458) — admin-only.
+  */
+
+  // The whole merged configuration: effective value, where it came from, and whether it is
+  // public. Values outside the `public` array arrive MASKED — the real value is not in this
+  // response, so revealing one is a separate request.
+  getAdminConfig(): Observable<AdminConfig> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/config`)
+      .pipe(map((response: ResponseWrapper) => response.data as AdminConfig));
+  }
+
+  // Fetch the real value of ONE key. Deliberately one at a time: this is the request that puts a
+  // secret on the wire, and the backend logs each one.
+  revealAdminConfigValue(key: string): Observable<RevealedConfigValue> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/config/reveal/${encodeURIComponent(key)}`)
+      .pipe(map((response: ResponseWrapper) => response.data as RevealedConfigValue));
+  }
+
+  setAdminConfigValue(key: string, value: any): Observable<boolean> {
+    return this._httpClient.put<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/config`, {key, value})
+      .pipe(map((response: ResponseWrapper) => response.success));
+  }
+
+  // Drop an override so the setting falls back to its shipped default. Not the same as setting an
+  // empty value, which is itself a legitimate choice.
+  resetAdminConfigValue(key: string): Observable<boolean> {
+    return this._httpClient.delete<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/config/${encodeURIComponent(key)}`)
+      .pipe(map((response: ResponseWrapper) => response.success));
   }
 
   // getVersion returns the running backend's app version and optional deployment label.
