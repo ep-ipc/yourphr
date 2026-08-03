@@ -61,9 +61,9 @@
                   Required before connecting medical records (catalog providers). Active opt-in is saved to your account. Rare providers may be configured to skip this.
                 </p>
                 <p class="mg-b-15">
-                  <a [href]="legalConsent?.privacy_policy_url || 'https://yourphr.org/privacy.html'" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                  <a routerLink="/privacy">Privacy Policy</a>
                   &nbsp;·&nbsp;
-                  <a [href]="legalConsent?.terms_of_service_url || 'https://yourphr.org/terms.html'" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+                  <a routerLink="/terms">Terms of Service</a>
                 </p>
 
                 <div *ngIf="legalConsentLoading" class="tx-gray-500">Loading…</div>
@@ -163,7 +163,7 @@
                 <a routerLink="/sources" class="btn btn-az-primary mg-r-10">
                   <i class="fas fa-plug mg-r-5"></i> Go to Sources
                 </a>
-                <a href="https://yourphr.org/privacy.html" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">
+                <a routerLink="/privacy" class="btn btn-outline-secondary">
                   Privacy Policy
                 </a>
               </div>

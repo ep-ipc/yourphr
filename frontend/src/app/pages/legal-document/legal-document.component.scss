@@ -1,0 +1,13 @@
+// Long legal prose reads badly at full page width.
+.legal-body {
+  max-width: 70ch;
+
+  h1, h2, h3 {
+    margin-top: 1.5rem;
+  }
+
+  // The digest is long; let it wrap rather than push the page sideways.
+  + hr + p code {
+    word-break: break-all;
+  }
+}

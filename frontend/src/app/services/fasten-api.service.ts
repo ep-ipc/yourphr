@@ -38,6 +38,7 @@ import {SmartAuthorizeRequest, SmartAuthorizeResponse} from '../models/fasten/sm
 import {RelayConfig} from '../models/fasten/relay-config';
 import {InstanceSettings} from '../models/fasten/instance-settings';
 import {AdminConfig, RevealedConfigValue} from '../models/fasten/admin-config';
+import {LegalDocument} from '../models/fasten/legal-document';
 import {LegalConsentStatus} from '../models/fasten/legal-consent';
 import {AdminMetrics} from '../models/fasten/admin-metrics';
 import {CDAConverterStatus} from '../models/fasten/cda-converter-status';
@@ -244,6 +245,14 @@ export class FastenApiService {
           return response.data as ServerLogs
         })
       );
+  }
+
+  // getLegalDocument returns this instance's Privacy Policy or Terms of Service (#463).
+  // Public endpoint — read before signing up, and linked from the sign-in page. Served by the
+  // instance rather than yourphr.org so it works offline and reflects the operator's own text.
+  getLegalDocument(kind: string): Observable<LegalDocument> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/legal/${encodeURIComponent(kind)}`)
+      .pipe(map((response: ResponseWrapper) => response.data as LegalDocument));
   }
 
   // getPublicInstanceInfo returns this instance's public identity for callers with NO login.

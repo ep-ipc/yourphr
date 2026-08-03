@@ -97,8 +97,8 @@ export class AccountProfileComponent implements OnInit {
         this.legalConsent = {
           accepted: false,
           accepted_at: '',
-          privacy_policy_url: s.privacy_policy_url || this.legalConsent?.privacy_policy_url || 'https://yourphr.org/privacy.html',
-          terms_of_service_url: s.terms_of_service_url || this.legalConsent?.terms_of_service_url || 'https://yourphr.org/terms.html',
+          privacy_policy_url: s.privacy_policy_url || this.legalConsent?.privacy_policy_url || '/privacy',
+          terms_of_service_url: s.terms_of_service_url || this.legalConsent?.terms_of_service_url || '/terms',
         };
         const n = s.medicare_sources_disconnected ?? 0;
         this.legalConsentMsg = n > 0

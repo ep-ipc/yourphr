@@ -85,7 +85,9 @@ These ship targets map to closed CMS prep issues. Re-check on the **demo host** 
 | Privacy Policy | `https://yourphr.org/privacy.html` |
 | Terms of Service | `https://yourphr.org/terms.html` |
 
-Source of truth in-repo: `docs/legal/privacy-policy.md`, `docs/legal/terms-of-service.md`. After editing source, republish `gh-pages` (`privacy.html` / `terms.html`) before attaching PDFs.
+Source of truth in-repo: `backend/pkg/legal/privacy-policy.md`, `backend/pkg/legal/terms-of-service.md` (moved there in [#463](https://github.com/jwilleke/yourphr/issues/463) so they can be embedded and served by the instance at `/privacy` and `/terms`). After editing source, republish `gh-pages` (`privacy.html` / `terms.html`) before attaching PDFs.
+
+**Which URL to submit.** CMS asks for a public URL, so submit the `yourphr.org` pages — an instance URL may sit behind auth or be unreachable from outside. The instance serves the same text unless its operator has published their own; see the operator override in [`deployment/README.md`](deployment/README.md).
 
 ### PDF for CMS form
 
@@ -121,7 +123,7 @@ YourPHR PP is written for **self-hosted** software: the **instance operator** ho
 
 ### PP/ToS **changes after** CMS approval
 
-1. Draft new PP/ToS in `docs/legal/`.  
+1. Draft new PP/ToS in `backend/pkg/legal/`.  
 2. Draft enrollee notification text (what changed + how to opt out / delete).  
 3. Email both to [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov) **before** shipping.  
 4. Wait for CMS approval (they target five business days).  

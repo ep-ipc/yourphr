@@ -168,6 +168,27 @@ Practical consequences:
 - **Backups are cleartext too**, and they are the copy most likely to leave the machine — a NAS, another host, cold storage. See [#461](https://github.com/jwilleke/yourphr/issues/461).
 - An operator **may** set secrets through Admin → Configuration, which writes them to `app-custom-config.json` on this volume. That is supported and adds little marginal risk given what is already here — but it is a choice, and the alternative is to keep secrets in `YOURPHR_*` env (or reference them from the config with `${VAR}`, [#460](https://github.com/jwilleke/yourphr/issues/460)) so they live in your secret manager instead.
 
+### Privacy Policy and Terms of Service
+
+Both documents are **served by your instance** at `/privacy` and `/terms`, not fetched from `yourphr.org`. They are embedded in the binary, so they work with no internet access and there is no file to forget to mount.
+
+**You are the data controller.** The shipped policy says so — the YourPHR project holds no records, the operator of each instance does. So if your deployment differs from the stock description (you host for a clinic, you changed retention, you added a feature that shares data), you should publish your own text rather than point users at a document you did not write.
+
+Drop either or both of these into your data directory:
+
+```text
+<data>/config/privacy-policy.md
+<data>/config/terms-of-service.md
+```
+
+Markdown. Present → served instead of the shipped document, and the page tells readers it was published by the operator. Absent → the shipped document is served, and the page says the operator has not published their own. Overriding one does not affect the other.
+
+An **empty or unreadable** override is an error, not a silent fallback: serving the stock policy in place of one you deliberately replaced is exactly the failure this feature exists to prevent. Remove the file if you want the shipped text back.
+
+Every served document carries a digest (`sha256:…` over the Markdown) shown at the foot of the page. It identifies precisely which text a reader saw — computed over the source rather than the rendered HTML, so upgrading the renderer does not make an old version look like a new one.
+
+**If you have CMS Blue Button production approval, PP/ToS changes need CMS pre-approval first** ([#367](https://github.com/jwilleke/yourphr/issues/367) context in [`../cms-bluebutton-production-access.md`](../cms-bluebutton-production-access.md)). That applies to an override on an approved instance as much as to the shipped text.
+
 ### Should a production instance enable `database.encryption.enabled`?
 
 **Eventually yes — today, only with your eyes open.** Turning it on refuses backup *and* restore ([#367](https://github.com/jwilleke/yourphr/issues/367)), because a `VACUUM INTO` snapshot of an encrypted database would be written in plaintext. So the choice today is:

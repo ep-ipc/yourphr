@@ -21,6 +21,7 @@ import { MedicalConcernsComponent } from './pages/medical-concerns/medical-conce
 import { AccountProfileComponent } from './pages/account-profile/account-profile.component';
 import { AttributionsComponent } from './pages/attributions/attributions.component';
 import { ContactComponent } from './pages/contact/contact.component';
+import { LegalDocumentComponent } from './pages/legal-document/legal-document.component';
 import { ProceduresComponent } from './pages/procedures/procedures.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { AdminDatabaseComponent } from './pages/admin-database/admin-database.component';
@@ -84,6 +85,10 @@ const routes: Routes = [
   // Deliberately NOT auth-guarded: the footer renders on the sign-in page, and someone who cannot
   // get into their account is exactly who needs to reach the operator. The endpoint is public too.
   { path: 'contact', component: ContactComponent },
+  // This instance's legal documents (#463). Unguarded for the same reason as /contact, plus one
+  // more: someone deciding whether to sign up must be able to read the terms first.
+  { path: 'privacy', component: LegalDocumentComponent, data: { kind: 'privacy' } },
+  { path: 'terms', component: LegalDocumentComponent, data: { kind: 'terms' } },
   { path: 'medications', component: CurrentMedicationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'allergies', component: AllergiesComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'immunizations', component: ImmunizationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },

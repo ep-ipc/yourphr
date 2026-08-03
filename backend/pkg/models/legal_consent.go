@@ -8,8 +8,12 @@ import "strings"
 const (
 	LegalConsentSettingKey         = "tos_privacy_accepted_at"
 	LegalConsentSettingDescription = "When the user actively accepted the Privacy Policy and Terms of Service (RFC3339 UTC); empty if revoked or never accepted"
-	LegalPrivacyPolicyURL          = "https://yourphr.org/privacy.html"
-	LegalTermsOfServiceURL         = "https://yourphr.org/terms.html"
+	// Instance-relative (#463). The documents are served by this instance — an offline
+	// deployment must still show its own policy, and the operator (who is the data controller)
+	// may have published their own text. An absolute yourphr.org URL would point a user at a
+	// document the party holding their records did not write.
+	LegalPrivacyPolicyURL  = "/privacy"
+	LegalTermsOfServiceURL = "/terms"
 )
 
 // LegalConsentStatus is the API payload for GET /account/legal-consent.

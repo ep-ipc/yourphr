@@ -179,6 +179,12 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				api.POST("/cors/:endpointId/*proxyPath", handler.CORSProxy)
 				api.OPTIONS("/cors/:endpointId/*proxyPath", handler.CORSProxy)
 
+				// This instance's Privacy Policy and Terms of Service (#463). Unauthenticated:
+				// someone deciding whether to sign up reads the terms first, and the sign-in
+				// page links to them. Served by the instance so an offline deployment still
+				// shows its own policy, and so an operator can publish their own.
+				api.GET("/legal/:kind", handler.GetLegalDocument)
+
 				// Public instance identity — operator contact + theme (#453). Unauthenticated
 				// because the theme must apply on first paint and operator contact is useless
 				// if only admins can see it. Serves an explicit allowlist, never config state.
