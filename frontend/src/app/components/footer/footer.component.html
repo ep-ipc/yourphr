@@ -4,12 +4,10 @@
       <span class="text-muted text-center text-sm-start d-block d-sm-inline-block">Copyright © YourPHR {{currentYear}} | {{appVersion}}
         · <a routerLink="/attributions">Attributions</a>
         · <a href="https://yourphr.org/privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a>
-        <!-- Operator of THIS instance (#454). Rendered only when set — no placeholder, no fallback. -->
-        <ng-container *ngIf="hasOperatorContact">
-          · <span class="text-nowrap">Operated by<span *ngIf="operatorName">&nbsp;{{operatorName}}</span></span>
-          <a *ngIf="operatorContactEmail" [href]="'mailto:' + operatorContactEmail">&nbsp;{{operatorContactEmail}}</a>
-          <a *ngIf="operatorContactUrl" [href]="operatorContactUrl" target="_blank" rel="noopener noreferrer">&nbsp;Support</a>
-        </ng-container>
+        <!-- Operator contact lives on /contact (#454) rather than inline: it is three fields, and
+             a footer is the wrong place to read an address off. Always shown — the page carries
+             project contacts even when this instance's operator published none. -->
+        · <a routerLink="/contact">Contact Us</a>
       </span>
       <span class="float-none float-sm-right d-block mt-1 mt-sm-0 text-center"><a href="https://yourphr.org" externalLink>Your medical records, immediately and in your hands — for free.</a></span>
     </div>

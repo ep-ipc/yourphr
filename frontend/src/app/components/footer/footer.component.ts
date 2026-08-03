@@ -15,21 +15,7 @@ export class FooterComponent implements OnInit {
   appVersion: string = environment.environment_name;
   currentYear: number = new Date().getFullYear();
 
-  // Who runs THIS instance (#454). The operator is the data controller for the records held
-  // here, so a patient needs a way to reach them. All three are empty until an operator fills
-  // in the Admin Dashboard Instance card — nothing is rendered in that case, and nothing is
-  // invented as a stand-in.
-  operatorName = '';
-  operatorContactEmail = '';
-  operatorContactUrl = '';
-
   constructor(private fastenApi: FastenApiService) {}
-
-  // True only when there is something real to show, so an unconfigured instance renders the
-  // footer exactly as before.
-  get hasOperatorContact(): boolean {
-    return !!(this.operatorName || this.operatorContactEmail || this.operatorContactUrl);
-  }
 
   ngOnInit() {
     this.fastenApi.getVersion().subscribe({
@@ -38,15 +24,6 @@ export class FooterComponent implements OnInit {
         this.appVersion = `${env}-${version}`;
       },
       error: () => { /* keep the channel-only fallback */ },
-    });
-
-    this.fastenApi.getPublicInstanceInfo().subscribe({
-      next: ({ name, contact_email, contact_url }) => {
-        this.operatorName = name;
-        this.operatorContactEmail = contact_email;
-        this.operatorContactUrl = contact_url;
-      },
-      error: () => { /* an instance with no operator contact set is the normal case */ },
     });
   }
 

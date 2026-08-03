@@ -1,0 +1,88 @@
+<div class="az-content-body">
+  <div class="mg-b-20">
+    <h4 class="mg-b-5"><i class="fas fa-envelope"></i>&nbsp; Contact Us</h4>
+    <p class="tx-gray-500 mg-b-0">
+      How to reach the people responsible for this YourPHR instance and for the YourPHR project.
+    </p>
+  </div>
+
+  <div class="row">
+    <!-- THIS instance. The operator holds the records, so they are the first point of contact. -->
+    <div class="col-lg-6 mg-b-20">
+      <div class="card h-100">
+        <div class="card-header">
+          <h6 class="card-title mg-b-0"><i class="fas fa-server"></i>&nbsp; This instance</h6>
+        </div>
+        <div class="card-body">
+          <p class="tx-gray-500 mg-b-15">
+            Your records are held by whoever operates this instance. Contact them about your data,
+            your account, or anything you want corrected or removed.
+          </p>
+
+          <dl class="mg-b-0" *ngIf="hasOperatorContact; else noOperator">
+            <ng-container *ngIf="operatorName">
+              <dt class="tx-12 tx-uppercase tx-gray-500">Operated by</dt>
+              <dd class="mg-b-15">{{ operatorName }}</dd>
+            </ng-container>
+
+            <ng-container *ngIf="operatorContactEmail">
+              <dt class="tx-12 tx-uppercase tx-gray-500">Email</dt>
+              <dd class="mg-b-15">
+                <a [href]="'mailto:' + operatorContactEmail">{{ operatorContactEmail }}</a>
+              </dd>
+            </ng-container>
+
+            <ng-container *ngIf="operatorContactUrl">
+              <dt class="tx-12 tx-uppercase tx-gray-500">Support</dt>
+              <dd class="mg-b-0">
+                <a [href]="operatorContactUrl" target="_blank" rel="noopener noreferrer">{{ operatorContactUrl }}</a>
+              </dd>
+            </ng-container>
+          </dl>
+
+          <!-- Say plainly that nothing was configured. Never substitute a project address for an
+               operator who has not published one — they are different parties. -->
+          <ng-template #noOperator>
+            <p class="tx-gray-500 mg-b-0" *ngIf="loaded">
+              The operator of this instance has not published contact details.
+              If you run this instance, add them in
+              <a routerLink="/admin">Admin &rarr; Instance</a>.
+            </p>
+          </ng-template>
+        </div>
+      </div>
+    </div>
+
+    <!-- The project. Same for every instance, and NOT a route to your records. -->
+    <div class="col-lg-6 mg-b-20">
+      <div class="card h-100">
+        <div class="card-header">
+          <h6 class="card-title mg-b-0"><i class="fab fa-github"></i>&nbsp; The YourPHR project</h6>
+        </div>
+        <div class="card-body">
+          <p class="tx-gray-500 mg-b-15">
+            YourPHR is open-source software. The project maintainers can help with bugs and feature
+            requests — but they have no access to your records and cannot act on them.
+          </p>
+          <dl class="mg-b-0">
+            <dt class="tx-12 tx-uppercase tx-gray-500">Issues &amp; feature requests</dt>
+            <dd class="mg-b-15">
+              <a href="https://github.com/jwilleke/yourphr/issues" target="_blank" rel="noopener noreferrer">github.com/jwilleke/yourphr/issues</a>
+            </dd>
+            <dt class="tx-12 tx-uppercase tx-gray-500">Project site</dt>
+            <dd class="mg-b-0">
+              <a href="https://yourphr.org" target="_blank" rel="noopener noreferrer">yourphr.org</a>
+            </dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="tx-gray-500">
+    See also
+    <a href="https://yourphr.org/privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a>,
+    <a href="https://yourphr.org/terms.html" target="_blank" rel="noopener noreferrer">Terms</a>,
+    and <a routerLink="/attributions">Attributions</a>.
+  </p>
+</div>

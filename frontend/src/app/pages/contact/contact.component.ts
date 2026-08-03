@@ -1,0 +1,48 @@
+import {Component, OnInit} from '@angular/core';
+import {CommonModule} from '@angular/common';
+import {RouterModule} from '@angular/router';
+import {FastenApiService} from '../../services/fasten-api.service';
+
+// Contact page (#454) — every contact detail for THIS instance, driven by the Admin Dashboard
+// Instance card and persisted in the instance custom config store (#452). Nothing here is
+// hardcoded per deployment.
+//
+// The operator is the data controller for the records held on this instance, so "who do I ask
+// about my data" is an instance-level question, not a project-level one. Project links are shown
+// separately and clearly labelled, so the two are never confused.
+@Component({
+  standalone: true,
+  imports: [CommonModule, RouterModule],
+  selector: 'app-contact',
+  templateUrl: './contact.component.html',
+  styleUrls: ['./contact.component.scss'],
+})
+export class ContactComponent implements OnInit {
+  operatorName = '';
+  operatorContactEmail = '';
+  operatorContactUrl = '';
+
+  // Distinguishes "the operator set nothing" from "we have not asked yet", so the page never
+  // flashes a "not configured" message while the request is still in flight.
+  loaded = false;
+
+  constructor(private fastenApi: FastenApiService) {}
+
+  get hasOperatorContact(): boolean {
+    return !!(this.operatorName || this.operatorContactEmail || this.operatorContactUrl);
+  }
+
+  ngOnInit() {
+    this.fastenApi.getPublicInstanceInfo().subscribe({
+      next: ({name, contact_email, contact_url}) => {
+        this.operatorName = name;
+        this.operatorContactEmail = contact_email;
+        this.operatorContactUrl = contact_url;
+        this.loaded = true;
+      },
+      // An unreachable endpoint is reported as "no contact details available", not as a blank
+      // page and not as invented details.
+      error: () => { this.loaded = true; },
+    });
+  }
+}

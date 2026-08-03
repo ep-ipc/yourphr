@@ -20,6 +20,7 @@ import { ImmunizationsComponent } from './pages/immunizations/immunizations.comp
 import { MedicalConcernsComponent } from './pages/medical-concerns/medical-concerns.component';
 import { AccountProfileComponent } from './pages/account-profile/account-profile.component';
 import { AttributionsComponent } from './pages/attributions/attributions.component';
+import { ContactComponent } from './pages/contact/contact.component';
 import { ProceduresComponent } from './pages/procedures/procedures.component';
 import { AdminDashboardComponent } from './pages/admin-dashboard/admin-dashboard.component';
 import { AdminDatabaseComponent } from './pages/admin-database/admin-database.component';
@@ -78,6 +79,10 @@ const routes: Routes = [
   { path: 'account-profile', component: AccountProfileComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   // Third-party API/product notices (CMS Blue Button first) — docs/Attributions.md (#428)
   { path: 'attributions', component: AttributionsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
+  // Contact details for this instance, from the Admin Instance card via /api/instance/public (#454).
+  // Deliberately NOT auth-guarded: the footer renders on the sign-in page, and someone who cannot
+  // get into their account is exactly who needs to reach the operator. The endpoint is public too.
+  { path: 'contact', component: ContactComponent },
   { path: 'medications', component: CurrentMedicationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'allergies', component: AllergiesComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'immunizations', component: ImmunizationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },

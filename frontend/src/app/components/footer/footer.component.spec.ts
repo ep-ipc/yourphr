@@ -1,5 +1,5 @@
 import { waitForAsync, ComponentFixture, TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of } from 'rxjs';
 
 import { FooterComponent } from './footer.component';
 import { FastenApiService } from '../../services/fasten-api.service';
@@ -46,49 +46,18 @@ describe('FooterComponent', () => {
     expect(component.appVersion.startsWith('demo-')).toBeFalse();
   });
 
-  it('shows nothing about the operator when none is configured', () => {
-    apiSpy.getPublicInstanceInfo.and.returnValue(of({ name: '', contact_email: '', contact_url: '', theme: '' }));
-    component.ngOnInit();
+  it('links to the Contact Us page', () => {
     fixture.detectChanges();
+    const link = fixture.nativeElement.querySelector('a[routerLink="/contact"]');
+    expect(link).not.toBeNull();
+    expect(link.textContent.trim()).toBe('Contact Us');
+  });
 
-    expect(component.hasOperatorContact).toBeFalse();
+  // The footer no longer renders operator details inline (#454) — they live on /contact, which is
+  // three fields and needs room. A regression here would put an address back in the chrome.
+  it('does not render operator contact details inline', () => {
+    fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('Operated by');
-  });
-
-  it('renders the operator name and a mailto link when configured', () => {
-    apiSpy.getPublicInstanceInfo.and.returnValue(of({
-      name: 'Nerds by the Hour', contact_email: 'help@example.org', contact_url: '', theme: '',
-    }));
-    component.ngOnInit();
-    fixture.detectChanges();
-
-    expect(component.hasOperatorContact).toBeTrue();
-    const text = fixture.nativeElement.textContent;
-    expect(text).toContain('Operated by');
-    expect(text).toContain('Nerds by the Hour');
-    expect(fixture.nativeElement.querySelector('a[href="mailto:help@example.org"]')).not.toBeNull();
-  });
-
-  // A contact URL alone is enough to be worth showing — an operator may prefer a help page
-  // to publishing an address.
-  it('renders a support link when only a contact URL is set', () => {
-    apiSpy.getPublicInstanceInfo.and.returnValue(of({
-      name: '', contact_email: '', contact_url: 'https://example.org/help', theme: '',
-    }));
-    component.ngOnInit();
-    fixture.detectChanges();
-
-    expect(component.hasOperatorContact).toBeTrue();
-    expect(fixture.nativeElement.querySelector('a[href="https://example.org/help"]')).not.toBeNull();
-  });
-
-  // The footer must survive the endpoint being unavailable — it carries the version string.
-  it('still renders when the instance-info call fails', () => {
-    apiSpy.getPublicInstanceInfo.and.returnValue(throwError(() => new Error('boom')));
-    component.ngOnInit();
-    fixture.detectChanges();
-
-    expect(component.hasOperatorContact).toBeFalse();
-    expect(fixture.nativeElement.textContent).toContain('Copyright');
+    expect(fixture.nativeElement.querySelector('a[href^="mailto:"]')).toBeNull();
   });
 });
