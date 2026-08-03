@@ -74,6 +74,14 @@
   "_comment_theme": "UI theme id, served unauthenticated so it can apply before first paint. Empty means the frontend's built-in default.",
   "theme.name": "",
 
+  "_comment_public": "Keys served by GET /api/instance/public to callers with NO login (#457). Direction matters: this is an allow-list, so a key added anywhere else in this file is private until it is named here. A deny-list would publish anything nobody remembered to list. An instance may change this array in <data>/config/app-custom-config.json — including adding keys — and the server logs a WARN naming anything promoted beyond this shipped set.",
+  "public": [
+    "operator.name",
+    "operator.contact_email",
+    "operator.contact_url",
+    "theme.name"
+  ],
+
   "_comment_operator": "Who runs this instance. Shown on /contact. Set from Admin Dashboard -> Instance; the operator is the data controller for the records held here.",
   "operator.name": "",
   "operator.contact_email": "",

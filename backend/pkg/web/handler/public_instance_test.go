@@ -13,11 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// allowedPublicInstanceKeys is the complete set of fields /api/instance/public may expose.
-// Widening it is a security decision, so it lives here as an explicit list rather than being
-// derived from the struct — a test that reflected over the struct would pass automatically
-// when someone added a field, which is exactly the review moment this exists to force.
-var allowedPublicInstanceKeys = []string{"name", "contact_email", "contact_url", "theme"}
+// allowedPublicInstanceKeys mirrors the `public` array shipped in app-default-config.json.
+// Written out by hand rather than read from the config: a test that loaded the same array it is
+// checking would pass automatically the moment somebody added a key, and forcing that edit to be
+// deliberate is the entire point. Widening it is a security decision (#457).
+var allowedPublicInstanceKeys = []string{
+	"operator.name", "operator.contact_email", "operator.contact_url", "theme.name",
+}
 
 func newPublicInstanceRequest(t *testing.T, configure func(config.Interface)) *httptest.ResponseRecorder {
 	t.Helper()
@@ -61,10 +63,10 @@ func TestGetPublicInstanceInfo_ServesConfiguredValues(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	data := decodePublicInstanceData(t, recorder)
-	require.Equal(t, "Nerds by the Hour", data["name"])
-	require.Equal(t, "help@example.org", data["contact_email"])
-	require.Equal(t, "https://example.org/help", data["contact_url"])
-	require.Equal(t, "flatly", data["theme"])
+	require.Equal(t, "Nerds by the Hour", data["operator.name"])
+	require.Equal(t, "help@example.org", data["operator.contact_email"])
+	require.Equal(t, "https://example.org/help", data["operator.contact_url"])
+	require.Equal(t, "flatly", data["theme.name"])
 }
 
 // Unset values are empty strings, not omitted and not defaulted — the frontend renders nothing
@@ -96,11 +98,38 @@ func TestGetPublicInstanceInfo_ExposesNothingOutsideTheAllowlist(t *testing.T) {
 
 	for key := range data {
 		require.Contains(t, allowedPublicInstanceKeys, key,
-			"%q is not on the public allowlist — adding a field to PublicInstanceInfo publishes it to anonymous callers", key)
+			"%q is not in the shipped `public` array — adding a key there publishes it to anonymous callers", key)
 	}
 
 	body := recorder.Body.String()
 	require.NotContains(t, body, "super-secret-signing-key")
 	require.NotContains(t, body, "super-secret-relay-secret")
 	require.NotContains(t, body, "super-secret-db-key")
+}
+
+// The endpoint serves whatever the `public` array says, so an operator hiding a key actually
+// removes it from the wire rather than merely hiding it in the UI.
+func TestGetPublicInstanceInfo_HonoursANarrowedPublicArray(t *testing.T) {
+	recorder := newPublicInstanceRequest(t, func(c config.Interface) {
+		c.Set("operator.name", "Nerds by the Hour")
+		c.Set("operator.contact_email", "help@example.org")
+		c.Set("public", []string{"operator.name"})
+	})
+
+	data := decodePublicInstanceData(t, recorder)
+	require.Equal(t, "Nerds by the Hour", data["operator.name"])
+	require.NotContains(t, data, "operator.contact_email",
+		"a key removed from the public array must not be on the wire at all")
+}
+
+// Widening is permitted (operator decision) — this pins that the endpoint really does follow the
+// array, which is also why the startup warning exists.
+func TestGetPublicInstanceInfo_HonoursAWidenedPublicArray(t *testing.T) {
+	recorder := newPublicInstanceRequest(t, func(c config.Interface) {
+		c.Set("web.environment_name", "demo")
+		c.Set("public", []string{"web.environment_name"})
+	})
+
+	data := decodePublicInstanceData(t, recorder)
+	require.Equal(t, "demo", data["web.environment_name"])
 }

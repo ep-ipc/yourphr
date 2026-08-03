@@ -254,13 +254,18 @@ export class FastenApiService {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/instance/public`)
       .pipe(
         map((response: ResponseWrapper) => {
+          // Keys are the backend config keys (#457) — the server decides what to publish from the
+          // `public` array, so the payload names the setting each value came from. Mapped to short
+          // names here, in one place, so components do not carry config-key strings.
+          // Any key absent from the response is an operator choosing not to publish it; render
+          // nothing rather than substituting a fallback.
           const data = (response.data as any) || {};
-          const str = (value: any): string => (typeof value === 'string' ? value.trim() : '');
+          const str = (key: string): string => (typeof data[key] === 'string' ? data[key].trim() : '');
           return {
-            name: str(data.name),
-            contact_email: str(data.contact_email),
-            contact_url: str(data.contact_url),
-            theme: str(data.theme),
+            name: str('operator.name'),
+            contact_email: str('operator.contact_email'),
+            contact_url: str('operator.contact_url'),
+            theme: str('theme.name'),
           };
         })
       );

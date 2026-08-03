@@ -501,6 +501,20 @@ func (ae *AppEngine) Start() error {
 		ae.Logger.Warnf("could not migrate legacy operator settings: %v", err)
 	}
 
+	// Name anything this instance publishes beyond the shipped set (#457). Widening the `public`
+	// array is allowed by design, so this is a warning rather than a refusal — which makes it the
+	// only signal an operator gets that a key is now readable without a login.
+	if promoted, err := config.PublicKeysPromotedBeyondDefault(ae.Config); err != nil {
+		ae.Logger.Warnf("could not check the public config keys: %v", err)
+	} else {
+		for _, key := range promoted {
+			ae.Logger.Warnf(
+				"config: %q is served to callers with NO login via the %q override in %s — "+
+					"remove it there if that was not intended",
+				key, config.PublicKeysConfigKey, config.CustomConfigPath(ae.Config))
+		}
+	}
+
 	if err := ae.initializeDatabase(); err != nil {
 		return err
 	}
