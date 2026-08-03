@@ -168,7 +168,22 @@ Practical consequences:
 - **Backups are cleartext too**, and they are the copy most likely to leave the machine — a NAS, another host, cold storage. See [#461](https://github.com/jwilleke/yourphr/issues/461).
 - An operator **may** set secrets through Admin → Configuration, which writes them to `app-custom-config.json` on this volume. That is supported and adds little marginal risk given what is already here — but it is a choice, and the alternative is to keep secrets in `YOURPHR_*` env (or reference them from the config with `${VAR}`, [#460](https://github.com/jwilleke/yourphr/issues/460)) so they live in your secret manager instead.
 
-**Encryption and backup are currently mutually exclusive.** Turning on `database.encryption.enabled` refuses backup *and* restore ([#367](https://github.com/jwilleke/yourphr/issues/367) / [#363](https://github.com/jwilleke/yourphr/issues/363)), because a `VACUUM INTO` snapshot of an encrypted database would be written in plaintext. So today you pick one: encrypted at rest with no backups, or backups with cleartext at rest. Closing that gap is [#461](https://github.com/jwilleke/yourphr/issues/461).
+### Should a production instance enable `database.encryption.enabled`?
+
+**Eventually yes — today, only with your eyes open.** Turning it on refuses backup *and* restore ([#367](https://github.com/jwilleke/yourphr/issues/367)), because a `VACUUM INTO` snapshot of an encrypted database would be written in plaintext. So the choice today is:
+
+| | At rest | Backups | Suits |
+|---|---|---|---|
+| `enabled: false` (default) | cleartext | work | An instance whose disk you physically control, where losing records is the bigger fear |
+| `enabled: true` | encrypted | **refused** | An instance on hardware you do not control (VPS, shared host, cloud disk), where disclosure is the bigger fear |
+
+For most self-hosters on their own hardware, **losing the records is a worse outcome than a stolen disk**, which is why the default is off and why this page does not simply tell you to turn it on. If your instance runs somewhere you would not leave an unlocked filing cabinet — a rented VPS, a cloud volume, a laptop that travels — invert that judgement and enable it.
+
+Either way, treat the volume as sensitive: with encryption off it is cleartext, and with encryption on you have no backup to fall back on.
+
+[#461](https://github.com/jwilleke/yourphr/issues/461) removes the trade by encrypting the backup artifact itself, at which point enabling encryption becomes the straightforward recommendation.
+
+**Why it is not the default.** Enabling it requires an operator-supplied `database.encryption.key` — there is deliberately no default, because a generated key stored next to the database protects against nothing. So a default of `true` would fail every fresh install on boot (`database encryption key is not set`), and would fail every *existing* install, whose plaintext database cannot be opened with a cipher key. Migrating an existing database is [#363](https://github.com/jwilleke/yourphr/issues/363).
 
 ## Sandbox provider credentials
 
