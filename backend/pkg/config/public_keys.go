@@ -131,3 +131,48 @@ func AuthenticatedInstanceKeys(c Interface) []string {
 	sort.Strings(out)
 	return out
 }
+
+// SecretKeysConfigKey names the array of settings masked on the Admin Configuration screen.
+const SecretKeysConfigKey = "secret"
+
+// SecretKeys returns the config keys hidden on the Admin screen until explicitly revealed (#458).
+//
+// This is a DENY-list, the opposite shape to PublicKeys, and the asymmetry is deliberate. A key
+// missing from `public` stays private, because a mistake there exposes a value to anonymous
+// callers on the internet. A key missing from here is merely shown to an admin who is already
+// authenticated, looking at their own screen — so the safe default is to show, and the list names
+// the handful of values worth hiding.
+//
+// Getting this backwards is not hypothetical: masking everything outside `public` hid 47 of 51
+// settings, including the listen port and the log level. That does not protect anything; it
+// teaches an operator to click reveal without reading, which is worse than showing the value.
+func SecretKeys(c Interface) []string {
+	keys := c.GetStringSlice(SecretKeysConfigKey)
+
+	seen := make(map[string]struct{}, len(keys))
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		key = strings.ToLower(strings.TrimSpace(key))
+		if key == "" {
+			continue
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// IsSecretKey reports whether a key is masked on the Admin screen.
+func IsSecretKey(c Interface, key string) bool {
+	key = strings.ToLower(strings.TrimSpace(key))
+	for _, secret := range SecretKeys(c) {
+		if secret == key {
+			return true
+		}
+	}
+	return false
+}

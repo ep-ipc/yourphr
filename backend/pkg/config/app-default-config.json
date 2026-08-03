@@ -81,6 +81,15 @@
     "theme.name"
   ],
 
+  "_comment_secret": "Keys masked on the Admin Configuration screen until an admin explicitly reveals one (#458). Deliberately SHORT: masking 47 of 51 settings — which is what happens if everything outside `public` is hidden — makes an operator click through the listen port and the log level, and trains them to reveal reflexively. Note this list is the OPPOSITE shape to `public` and that is intentional: `public` is an allow-list because a mistake there exposes a value to the internet, while this is a deny-list because a mistake here shows a value to an already-authenticated admin on their own screen. Different consequence, different safe default. Entries need not exist in this file — listing a key that is env-only is harmless and future-proofs it.",
+  "secret": [
+    "jwt.issuer.key",
+    "relay.secret",
+    "database.encryption.key",
+    "sandbox.bluebutton.client_secret",
+    "sandbox.athena.client_secret"
+  ],
+
   "_comment_operator": "Who runs this instance. Shown on /contact. Set from Admin Dashboard -> Instance; the operator is the data controller for the records held here.",
   "operator.name": "",
   "operator.contact_email": "",

@@ -18,15 +18,18 @@ import (
 // configured to do, and which of it did I choose? A value that silently fell back to a default
 // is indistinguishable from one set on purpose — the ambiguity behind #397 and #399.
 //
-// MASKING. Every value NOT named in the `public` array (#457) is masked. The list response
-// carries "••••••••", never the real value, and revealing one requires a separate request for a
-// single key. That is the difference between masked and actually-not-sent: with cosmetic masking
-// the secret is already in the page for devtools, view-source, a screenshot of the network tab,
-// or any XSS. Screen-sharing this page is safe by default.
+// MASKING. Values named in the `secret` array are masked. The list response carries "••••••••",
+// never the real value, and revealing one requires a separate request for a single key. That is
+// the difference between masked and actually-not-sent: with cosmetic masking the secret is
+// already in the page for devtools, view-source, a screenshot of the network tab, or any XSS.
+// Screen-sharing this page is safe by default.
 //
-// One array does both jobs, per the operator decision: `public` says what anonymous callers may
-// read AND what is shown unmasked here. A key that is safe to serve to the world is safe to
-// print on an admin screen; everything else is worth a deliberate click.
+// `secret` is a short DENY-list, not the inverse of `public`. Masking everything outside `public`
+// hid 47 of 51 settings — the listen port, the log level — which protects nothing and teaches an
+// operator to click reveal without reading. The two arrays answer different questions and so have
+// opposite safe defaults: `public` is an allow-list because a mistake exposes a value to the
+// internet; `secret` is a deny-list because a mistake shows a value to an already-authenticated
+// admin on their own screen.
 
 // maskedValue is what a non-public value looks like in the list response.
 const maskedValue = "••••••••"
@@ -83,6 +86,10 @@ func GetAdminConfig(c *gin.Context) {
 	for _, key := range config.PublicKeys(appConfig) {
 		public[key] = true
 	}
+	secret := map[string]bool{}
+	for _, key := range config.SecretKeys(appConfig) {
+		secret[key] = true
+	}
 	promoted := map[string]bool{}
 	var warnings []string
 	if extras, err := config.PublicKeysPromotedBeyondDefault(appConfig); err == nil {
@@ -90,6 +97,14 @@ func GetAdminConfig(c *gin.Context) {
 			promoted[key] = true
 			warnings = append(warnings, fmt.Sprintf(
 				"%q is served to callers with NO login because this instance added it to %q",
+				key, config.PublicKeysConfigKey))
+		}
+	}
+
+	for _, key := range config.SecretKeys(appConfig) {
+		if public[key] {
+			warnings = append(warnings, fmt.Sprintf(
+				"%q is marked secret but is also in %q, so it is served to callers with NO login",
 				key, config.PublicKeysConfigKey))
 		}
 	}
@@ -116,7 +131,7 @@ func GetAdminConfig(c *gin.Context) {
 			Public:   public[key],
 			Promoted: promoted[key],
 		}
-		if !public[key] {
+		if secret[key] {
 			entry.Value = maskedValue
 			entry.Default = maskedValue
 			entry.Masked = true

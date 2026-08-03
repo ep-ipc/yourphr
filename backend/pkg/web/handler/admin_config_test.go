@@ -131,6 +131,49 @@ func (suite *AdminConfigHandlerTestSuite) TestPublicValuesAreNotMasked() {
 	require.True(suite.T(), entry.Public)
 }
 
+// REGRESSION. Masking everything outside `public` hid 47 of 51 settings — the listen port, the
+// log level — which protects nothing and trains an operator to click reveal without reading.
+// Only the short `secret` list is masked.
+func (suite *AdminConfigHandlerTestSuite) TestOrdinarySettingsAreNotMasked() {
+	for _, key := range []string{
+		"web.listen.port",
+		"log.level",
+		"metrics.port",
+		"database.type",
+		"cda_converter.enabled",
+	} {
+		require.Falsef(suite.T(), suite.entry(key).Masked,
+			"%s is not a secret and must be readable without a click", key)
+	}
+}
+
+func (suite *AdminConfigHandlerTestSuite) TestMaskingIsRareRatherThanTheDefault() {
+	entries := suite.listConfig().Entries
+	masked := 0
+	for _, e := range entries {
+		if e.Masked {
+			masked++
+		}
+	}
+
+	require.NotZero(suite.T(), masked, "the genuinely secret keys must still be masked")
+	require.Lessf(suite.T(), masked, len(entries)/4,
+		"masked %d of %d settings — masking should be the exception, not the rule", masked, len(entries))
+}
+
+// A key that is both secret and public is served to anonymous callers, which defeats masking it.
+func (suite *AdminConfigHandlerTestSuite) TestSecretAlsoPublicIsFlagged() {
+	suite.AppConfig.Set("public", []string{"relay.secret"})
+
+	listing := suite.listConfig()
+	joined := ""
+	for _, w := range listing.Warnings {
+		joined += w + "\n"
+	}
+	require.Contains(suite.T(), joined, "relay.secret")
+	require.Contains(suite.T(), joined, "NO login")
+}
+
 // --- source, so an operator can tell chosen from defaulted -------------------------------------
 
 func (suite *AdminConfigHandlerTestSuite) TestSourceDistinguishesCustomFromDefault() {

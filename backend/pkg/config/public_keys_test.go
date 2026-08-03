@@ -136,3 +136,59 @@ func TestAuthenticatedInstanceKeys_ExcludeSecrets(t *testing.T) {
 	require.NotContains(t, keys, "relay.secret")
 	require.NotContains(t, keys, "database.location")
 }
+
+// --- secret: masking on the Admin screen, the OPPOSITE shape to public ------------------------
+
+func TestSecretKeys_ShippedDefault(t *testing.T) {
+	c := newTestConfig(t)
+
+	require.Contains(t, config.SecretKeys(c), "jwt.issuer.key")
+	require.Contains(t, config.SecretKeys(c), "relay.secret")
+}
+
+// REGRESSION. The list must stay SHORT. Masking everything outside `public` hid 47 of 51
+// settings — the listen port, the log level — which protects nothing and teaches an operator to
+// click reveal without reading.
+func TestSecretKeys_IsShortNotTheInverseOfPublic(t *testing.T) {
+	c := newTestConfig(t)
+
+	values, err := config.DefaultConfigValues()
+	require.NoError(t, err)
+
+	secrets := config.SecretKeys(c)
+	require.Less(t, len(secrets), len(values)/4,
+		"marked %d of %d settings secret; masking is meant to be the exception", len(secrets), len(values))
+
+	for _, ordinary := range []string{"web.listen.port", "log.level", "metrics.port", "database.type"} {
+		require.False(t, config.IsSecretKey(c, ordinary), "%s is not a secret", ordinary)
+	}
+}
+
+func TestIsSecretKey_NormalisesTheKey(t *testing.T) {
+	c := newTestConfig(t)
+
+	require.True(t, config.IsSecretKey(c, "JWT.Issuer.Key"))
+	require.True(t, config.IsSecretKey(c, "  jwt.issuer.key  "))
+	require.False(t, config.IsSecretKey(c, "jwt.session_ttl_minutes"))
+}
+
+// An instance may add to it — an operator with a key they consider sensitive should be able to
+// hide it, and unlike `public`, over-marking here costs only a click.
+func TestSecretKeys_InstanceCanExtend(t *testing.T) {
+	c := newTestConfig(t)
+	c.Set("secret", []string{"jwt.issuer.key", "operator.contact_email"})
+
+	require.True(t, config.IsSecretKey(c, "operator.contact_email"))
+}
+
+// Listing a key that does not exist in the catalogue is harmless — it future-proofs a key that
+// is env-only today.
+func TestSecretKeys_ToleratesKeysNotInTheCatalogue(t *testing.T) {
+	c := newTestConfig(t)
+
+	values, err := config.DefaultConfigValues()
+	require.NoError(t, err)
+	require.NotContains(t, values, "database.encryption.key",
+		"env-only by design, but still worth naming as secret")
+	require.True(t, config.IsSecretKey(c, "database.encryption.key"))
+}
