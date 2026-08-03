@@ -112,6 +112,10 @@ We may update this policy; the date above will change. For a CMS-approved Blue B
 
 ## Contact
 
-- Project: [GitHub issues](https://github.com/jwilleke/yourphr/issues)  
-- CMS Blue Button: [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov)  
-- Your instance: the operator who runs the server  
+**Your instance first.** Your records are held by whoever operates the instance you use — they are the people to ask about your data, to correct it, or to have it removed. Their contact details are on the **Contact** page of that instance, filled in by the operator; if they have published none, the software cannot supply one on their behalf.
+
+- Your instance: its **Contact** page — `https://<your-instance>/contact`
+- Project (bugs, features — no access to anyone's records): [GitHub issues](https://github.com/jwilleke/yourphr/issues)
+- CMS Blue Button: [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov)
+
+This document deliberately names no operator. It is the same policy on every instance, and each is run by a different party — so the operator's identity comes from the instance itself, not from here.  
