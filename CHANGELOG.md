@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.23.0](https://github.com/jwilleke/yourphr/compare/v1.22.0...v1.23.0) (2026-08-03)
+
+Your instance serves its own Privacy Policy and Terms — offline, and replaceable by the operator who actually holds the records.
+
+### Features
+
+- **legal:** Privacy Policy and Terms of Service are served by the instance at `/privacy` and `/terms`, embedded in the binary rather than fetched from `yourphr.org` ([#463](https://github.com/jwilleke/yourphr/issues/463))
+- **legal:** an operator can publish their own text by dropping `privacy-policy.md` or `terms-of-service.md` into `<data>/config/`; the page states whether you are reading the operator's document or the shipped one ([#463](https://github.com/jwilleke/yourphr/issues/463))
+- **legal:** each document carries a `sha256:` digest of its source, shown at the foot of the page — the identifier that will pin consent records in [#465](https://github.com/jwilleke/yourphr/issues/465) ([#463](https://github.com/jwilleke/yourphr/issues/463))
+
+### Bug Fixes
+
+- **legal:** the privacy policy'"'"'s Contact section pointed only at "the operator who runs the server", which told a patient nothing actionable. It now points at that instance'"'"'s `/contact` page, which renders the operator's real details ([#454](https://github.com/jwilleke/yourphr/issues/454))
+
+### Notes for operators
+
+- **The links in the app now stay inside your instance.** Previously every Privacy/Terms link left for `yourphr.org`, which broke on an offline or air-gapped deployment — including at the moment a user was asked to consent.
+- **You are the data controller; you can now say so.** The shipped policy states that the project holds no records and the operator does. If your deployment differs from that description — you host for others, you changed retention, you added a feature that shares data — publish your own text rather than pointing users at a document you did not write. Setup is in [`docs/deployment/README.md`](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/README.md).
+- **An empty or unreadable override is an error, not a fallback.** Serving the stock policy in place of one you deliberately replaced is the failure the override exists to prevent, so the instance says so loudly instead. Remove the file to go back to the shipped text.
+- **If you have CMS Blue Button production approval, PP/ToS changes need CMS pre-approval first** — that applies to an operator override as much as to the shipped document.
+- **`yourphr.org/privacy.html` is now behind the in-repo source.** The published pages were not regenerated in this release, so the public copies lack the Contact-section change. They remain valid for a CMS submission — just not byte-identical to what an instance serves. Regenerating them is tracked in [#463](https://github.com/jwilleke/yourphr/issues/463).
+- Consent records are unchanged in this release; nothing to migrate. Persisting the document digest onto them is [#465](https://github.com/jwilleke/yourphr/issues/465).
+
 ## [1.22.0](https://github.com/jwilleke/yourphr/compare/v1.21.1...v1.22.0) (2026-08-03)
 
 Configuration becomes something an operator can see and change: one shipped catalogue, one overrides file, and an Admin screen that shows which is which.
