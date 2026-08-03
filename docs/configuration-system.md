@@ -74,6 +74,8 @@ Two things live outside this system on purpose.
 
 Sandbox and production Blue Button credentials are *provisioned* from `YOURPHR_SANDBOX_*` / `YOURPHR_PROD_BLUEBUTTON_*` at first start. The upsert is provision-only: once an entry has a `client_id`, the seed leaves it alone, so the database owns it thereafter. One-way flow, not a competing source.
 
+**Those variables are deliberately NOT configuration keys**, and must not be added to the catalogue. They are provisioning inputs, consumed once and then ignored — the value in effect afterwards is the one in the catalog row, which an admin may have edited. Cataloguing them would put them on the Admin Configuration screen showing the environment's value while the row held a different one, so the screen would state something untrue. The unknown-key check allowlists them instead, and their provisioning status belongs on Admin → Provider Catalog, beside the row they created ([#471](https://github.com/jwilleke/yourphr/issues/471)).
+
 **Backup state** — `.backup_settings.json`, `.backup_dest`, `.backup_health.json` — still has its own readers.
 
 > **GAP: backup state should fold into the config store** — [#455](https://github.com/jwilleke/yourphr/issues/455). Deferred because it touches backup and restore, where a mistake loses data.
@@ -109,7 +111,7 @@ Same structure, opposite safe default, because the consequences differ by orders
 
 Only keys in the shipped catalogue can be set. A free-form "add any property" form makes a typo permanent: the key sits in the file forever, looks configured, and does nothing.
 
-> **GAP: unknown keys are not detected on *read*.** A typo already in `app-custom-config.json`, or a misspelled `YOURPHR_*` variable, is silent. This is not hypothetical — the reference deployment's `config.yaml` set four keys that do not exist (`web.listen_port` is not `web.listen.port`), and nobody noticed. Should **warn**, not refuse: rejecting at startup would turn a removed key into a boot loop on upgrade.
+> **GAP: unknown keys are not detected on *read*.** A typo already in `app-custom-config.json`, or a misspelled `YOURPHR_*` variable, is silent. This is not hypothetical — the reference deployment's `config.yaml` set four keys that do not exist (`web.listen_port` is not `web.listen.port`), and nobody noticed. Should **warn**, not refuse: rejecting at startup would turn a removed key into a boot loop on upgrade. The check must allowlist the provisioning variables described above, which are not config keys.
 
 ## Differences from ngdpbase
 
@@ -137,10 +139,11 @@ Tests that keep the above true rather than aspirational:
 
 | | Issue |
 |---|---|
-| Retire `config.yaml` | — |
+| Retire `config.yaml` | [#470](https://github.com/jwilleke/yourphr/issues/470) |
 | Warn on unknown keys from the custom file and the environment | — |
 | Fold backup state into the store | [#455](https://github.com/jwilleke/yourphr/issues/455) |
-| Should `YOURPHR_SANDBOX_*` be catalogued, so the unknown-key check is clean and they appear on the Admin screen? | — |
-| Move ordinary settings out of environment on the reference deployment, leaving bootstrap and secrets | — |
+| Move ordinary settings out of environment on the reference deployment, leaving bootstrap and secrets | [#472](https://github.com/jwilleke/yourphr/issues/472) |
 
-The last one is the judgement call. On the reference deployment, environment carries one bootstrap variable, seven secrets, and five ordinary settings. The five could live in the config store and become editable — at the cost that GitOps would no longer describe them. That is the trade between *declarative deployment* and *operator-editable app*, and it should be chosen rather than drifted into.
+On the last one, the win is smaller than it first appears. Of the five non-secret, non-bootstrap variables the reference deployment passes, three are **topology** — cluster-internal DNS and "is a sidecar present" — which belong with the deployment that defines that cluster, whatever layer they sit in. Only `backup.label` and `medications.rxterms_enrich` are settings in the ordinary sense.
+
+It also has to follow [#467](https://github.com/jwilleke/yourphr/issues/467): `app-custom-config.json` is not covered by backups today, so moving a value out of a versioned Git repo and into that file trades *declarative and recoverable* for *editable and lost with the disk*.
