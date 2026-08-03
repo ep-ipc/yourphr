@@ -284,6 +284,13 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					// (#459) but a patient with an account is entitled to reach whoever holds
 					// their records.
 					secure.GET("/instance", handler.GetInstanceInfoForUser)
+					// Admin Configuration screen (#458) — the whole merged config, what this
+					// instance overrode, and per-key reveal. Values outside the `public` array
+					// are masked in the list and never sent until explicitly revealed.
+					secure.GET("/admin/config", handler.GetAdminConfig)
+					secure.GET("/admin/config/reveal/:key", handler.RevealAdminConfigValue)
+					secure.PUT("/admin/config", handler.SetAdminConfigValue)
+					secure.DELETE("/admin/config/:key", handler.ResetAdminConfigValue)
 					secure.GET("/admin/instance", handler.GetInstanceSettings)
 					secure.PUT("/admin/instance", handler.SetInstanceSettings)
 					//admin Metrics card (#441) — scrape config + process counters + recent sync summaries

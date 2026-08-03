@@ -245,3 +245,64 @@ func stripComments(values map[string]interface{}) {
 		}
 	}
 }
+
+// CustomConfigValues returns ONLY this instance's overrides, flat and without comments.
+//
+// Distinct from reading the running config, which is the merged view and cannot tell you which
+// values an operator actually chose. The Admin configuration screen (#458) needs both: the
+// merged result to show what is in effect, and this to show what was changed from stock.
+//
+// A missing file means no overrides, not an error.
+func CustomConfigValues(c Interface) (map[string]interface{}, error) {
+	path := CustomConfigPath(c)
+
+	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return map[string]interface{}{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	values, err := decodeCustomConfig(raw, path)
+	if err != nil {
+		return nil, err
+	}
+	return flattenToKnownKeys(values), nil
+}
+
+// ClearCustomValue removes a key from the overlay, so the setting falls back to its shipped
+// default. Returns false when the key was not overridden in the first place.
+//
+// Deliberately distinct from setting an empty value: "" is a legitimate setting an operator may
+// choose (no contact URL), and it must stay distinguishable from "use whatever ships".
+func ClearCustomValue(c Interface, key string) (bool, error) {
+	path := CustomConfigPath(c)
+
+	current, err := CustomConfigValues(c)
+	if err != nil {
+		return false, err
+	}
+	if _, present := current[key]; !present {
+		return false, nil
+	}
+	delete(current, key)
+
+	current["_comment"] = customConfigComment
+	encoded, err := json.MarshalIndent(current, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(path, append(encoded, '\n'), 0o600); err != nil {
+		return false, fmt.Errorf("writing %s: %w", path, err)
+	}
+
+	// Restore the shipped default in the running config, so the change takes effect without a
+	// restart in the same way a set does.
+	defaults, err := DefaultConfigValues()
+	if err != nil {
+		return true, err
+	}
+	c.Set(key, defaults[key])
+	return true, nil
+}
