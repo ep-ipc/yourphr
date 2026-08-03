@@ -59,10 +59,56 @@ func LoadCustomConfig(c Interface) error {
 		return nil
 	}
 
-	if err := c.MergeConfigMap(values); err != nil {
+	if err := c.MergeConfigMap(flattenToKnownKeys(values)); err != nil {
 		return fmt.Errorf("merging %s: %w", path, err)
 	}
 	return nil
+}
+
+// flattenToKnownKeys converts nested objects into the flat dotted keys the defaults use (#456),
+// so a custom file written before that change still applies.
+//
+// The instances running v1.21.x wrote {"operator":{"contact_email":"..."}}; the format is now
+// {"operator.contact_email":"..."}. Both must work, because the old file is sitting on a PVC and
+// nobody is going to hand-edit it.
+//
+// Flattening stops as soon as the accumulated path names a real setting, so an object that IS a
+// value (a future key whose default is a map) is passed through whole rather than being torn
+// apart into keys nobody declared.
+func flattenToKnownKeys(values map[string]interface{}) map[string]interface{} {
+	known, err := DefaultConfigValues()
+	if err != nil {
+		// Defaults are embedded, so this cannot fail in practice. If it somehow does, pass the
+		// values through untouched rather than silently dropping the operator's settings.
+		return values
+	}
+
+	out := make(map[string]interface{}, len(values))
+	var walk func(prefix string, value interface{})
+	walk = func(prefix string, value interface{}) {
+		if _, isSetting := known[prefix]; !isSetting {
+			if nested, ok := value.(map[string]interface{}); ok && prefix != "" {
+				for key, child := range nested {
+					walk(prefix+"."+key, child)
+				}
+				return
+			}
+		}
+		out[prefix] = value
+	}
+
+	for key, value := range values {
+		if nested, ok := value.(map[string]interface{}); ok {
+			if _, isSetting := known[key]; !isSetting {
+				for child, childValue := range nested {
+					walk(key+"."+child, childValue)
+				}
+				continue
+			}
+		}
+		out[key] = value
+	}
+	return out
 }
 
 // SetCustomValues persists dotted keys into the custom overlay and applies them to the running
@@ -91,8 +137,11 @@ func SetCustomValues(c Interface, values map[string]interface{}) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
+	// Written flat, matching app-default-config.json (#456). A file written in the older nested
+	// shape is folded into flat keys first, so a save does not leave the two styles interleaved.
+	current = flattenToKnownKeys(current)
 	for key, value := range values {
-		setNested(current, key, value)
+		current[key] = value
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -140,23 +189,4 @@ func stripComments(values map[string]interface{}) {
 			stripComments(nested)
 		}
 	}
-}
-
-// setNested writes a dotted key ("operator.contact_email") as nested JSON objects, so the file
-// stays readable as structure rather than as a flat list of dotted strings.
-//
-// A non-object value standing where a branch needs to go is replaced. That only happens if a
-// key changed shape between releases, and preserving the stale scalar would leave the new key
-// unwritable.
-func setNested(target map[string]interface{}, dottedKey string, value interface{}) {
-	parts := strings.Split(dottedKey, ".")
-	for _, part := range parts[:len(parts)-1] {
-		next, ok := target[part].(map[string]interface{})
-		if !ok {
-			next = map[string]interface{}{}
-			target[part] = next
-		}
-		target = next
-	}
-	target[parts[len(parts)-1]] = value
 }

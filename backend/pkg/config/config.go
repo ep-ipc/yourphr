@@ -103,93 +103,15 @@ func (c *configuration) Init() error {
 	// Layer dotenv files into the environment before viper reads env via AutomaticEnv below.
 	loadDotEnvFiles()
 
-	//set defaults
-	c.SetDefault("web.listen.port", "8080")
-	c.SetDefault("web.listen.host", "0.0.0.0")
-	c.SetDefault("web.listen.basepath", "")
-	c.SetDefault("web.listen.https.enabled", false)
-	c.SetDefault("web.listen.https.certDir", "certs")
-	c.SetDefault("web.listen.https.sharedDir", "certs/shared")
-
-	// allow unsafe endpoints should never be enabled in Production.
-	// It enables direct API access to healthcare providers without authentication.
-	c.SetDefault("web.allow_unsafe_endpoints", false)
-
-	// Human-facing deployment label shown in the UI footer as "<name>-<semver>" (e.g. demo-1.18.2).
-	// Same release image is used for prod/demo/dev; set this per instance so the footer is not always
-	// "prod". Env: YOURPHR_WEB_ENVIRONMENT_NAME. Empty → frontend falls back to its build-time name.
-	c.SetDefault("web.environment_name", "")
-
-	// How long the SMART-on-FHIR connect flow waits for the user to finish logging in at the
-	// provider (the relay-poll phase) before giving up. A first provider login (read consent, pick
-	// account, authorize) can be slow — e.g. CMS Blue Button. Served to the frontend so it can be
-	// tuned via env/config without a frontend rebuild (YOURPHR_WEB_SMART_CONNECT_LOGIN_WAIT_SECONDS).
-	c.SetDefault("web.smart_connect.login_wait_seconds", 240)
-	// How long one backend connect request polls the relay for the auth code before returning.
-	// The relay holds codes ~60s, so values above 60 are capped. Default 55 leaves headroom under
-	// the TTL. Env: YOURPHR_WEB_SMART_CONNECT_RELAY_POLL_SECONDS. (#406)
-	c.SetDefault("web.smart_connect.relay_poll_seconds", 55)
-
-	// SMART on FHIR OAuth relay (#50). Two distinct URLs, because a self-hosted deployment usually
-	// needs both (#399):
-	//   relay.url        — where the BACKEND polls /pending; may be cluster-internal
-	//                      (http://yourphr-relay.<ns>.svc.cluster.local:8080).
-	//   relay.public_url — the public origin the PROVIDER redirects the user's browser to;
-	//                      relay.public_url + "/callback" is the OAuth redirect_uri registered with
-	//                      the FHIR vendor. Defaults to relay.url when that is public https, else to
-	//                      the project relay.
-	// Empty defaults keep the resolution/"not configured" logic in one place (backend/pkg/relay).
-	c.SetDefault("relay.url", "")
-	c.SetDefault("relay.public_url", "")
-	c.SetDefault("relay.secret", "")
-
-	c.SetDefault("web.src.frontend.path", "/opt/fasten/web")
-
-	// Process metrics scrape server for completed sync jobs (#441). Off unless enabled; internal only.
-	c.SetDefault("metrics.enabled", false)
-	c.SetDefault("metrics.port", 9091)
-	c.SetDefault("metrics.addr", "")
-
-	// Instance data root (#451) — ONE top folder holding everything this instance owns and
-	// must not lose: db/, cache/, backups/, the generated JWT key, the settings files. Set it
-	// and the rest derive under it (config.ResolveStoragePaths, called at startup).
-	// Empty default means "derive from database.location's parent" instead, which is exactly
-	// what every consumer did before this key existed — so upgrading installs do not move.
-	c.SetDefault("storage.data_dir", "")
-
-	c.SetDefault("database.type", "sqlite")
-	c.SetDefault("database.location", DefaultDatabaseLocation)
-	c.SetDefault("database.encryption.enabled", false)
-	//c.SetDefault("database.encryption.key", "") //encryption key must be set by the user.
-	c.SetDefault("cache.location", DefaultCacheLocation)
-
-	c.SetDefault("jwt.issuer.key", DefaultJWTIssuerKey)
-	// Browser session JWT (#445 Option A): sliding TTL + absolute cap from first login.
-	// Env: YOURPHR_JWT_SESSION_TTL_MINUTES, YOURPHR_JWT_SESSION_ABSOLUTE_HOURS,
-	// YOURPHR_JWT_SESSION_RENEW_IF_REMAINING_MINUTES.
-	c.SetDefault("jwt.session_ttl_minutes", 60)
-	c.SetDefault("jwt.session_absolute_hours", 12)
-	c.SetDefault("jwt.session_renew_if_remaining_minutes", 30)
-
-	c.SetDefault("log.level", "INFO")
-	c.SetDefault("log.file", "")
-
-	// C-CDA / CCD import is opt-in: it requires the external fhir-converter sidecar (#254).
-	// Disabled by default so a stock single-binary install is unaffected.
-	c.SetDefault("cda_converter.enabled", false)
-	c.SetDefault("cda_converter.url", "")
-	c.SetDefault("cda_converter.timeout_seconds", 60)
-
-	// UI theme for this instance (#436). Served unauthenticated by /api/instance/public so it
-	// can apply on first paint. Empty → the frontend's built-in default.
-	c.SetDefault("theme.name", "")
-
-	// Instance operator contact (Admin Dashboard card). Empty defaults; set via config/env
-	// (YOURPHR_OPERATOR_NAME, YOURPHR_OPERATOR_CONTACT_EMAIL, YOURPHR_OPERATOR_CONTACT_URL)
-	// or persist from the UI into the data dir (.operator_settings.json).
-	c.SetDefault("operator.name", "")
-	c.SetDefault("operator.contact_email", "")
-	c.SetDefault("operator.contact_url", "")
+	// Register every shipped default from app-default-config.json (#456). One loop, no
+	// hardcoded SetDefault calls — the JSON file is the single catalogue of what an instance
+	// can be configured to do, and is what the Admin configuration screen reads.
+	//
+	// Rationale for each default lives beside it in that file as a "_comment_*" key, so the
+	// explanation travels with the value instead of living in Go the value no longer does.
+	if err := c.applyDefaults(); err != nil {
+		return err
+	}
 
 	//set the default system config file search path.
 	//if you want to load a non-standard location system config file (~/capsule.yml), use ReadConfig

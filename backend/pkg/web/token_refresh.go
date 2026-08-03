@@ -81,7 +81,8 @@ func (ae *AppEngine) refreshExpiringTokens(now time.Time, skew time.Duration, re
 // startTokenRefreshWorker runs refreshExpiringTokens on a ticker for the server's lifetime. Set
 // sync.token_refresh.interval_minutes <= 0 to disable. Blocks; launch in a goroutine.
 func (ae *AppEngine) startTokenRefreshWorker() {
-	ae.Config.SetDefault("sync.token_refresh.interval_minutes", 30)
+	// Default lives in app-default-config.json with every other setting (#456), not here — a
+	// SetDefault at the point of use is invisible to the config catalogue and to the Admin screen.
 	intervalMin := ae.Config.GetInt("sync.token_refresh.interval_minutes")
 	if intervalMin <= 0 {
 		ae.Logger.Info("token-refresh worker disabled (sync.token_refresh.interval_minutes <= 0)")

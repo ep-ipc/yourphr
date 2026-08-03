@@ -62,7 +62,7 @@ func TestLoadCustomConfig_OverlaysOverDefaults(t *testing.T) {
 	require.Equal(t, "", c.GetString("operator.contact_url"))
 }
 
-func TestSetCustomValues_WritesNestedJSONAndAppliesLive(t *testing.T) {
+func TestSetCustomValues_WritesFlatJSONAndAppliesLive(t *testing.T) {
 	c, root := newStoreConfig(t)
 
 	require.NoError(t, config.SetCustomValues(c, map[string]interface{}{
@@ -73,11 +73,12 @@ func TestSetCustomValues_WritesNestedJSONAndAppliesLive(t *testing.T) {
 	// Applied to the running config without a reload.
 	require.Equal(t, "Nerds by the Hour", c.GetString("operator.name"))
 
+	// Flat dotted keys, matching app-default-config.json (#456). This asserted nested objects
+	// before that change.
 	stored := readStoreFile(t, root)
-	operator, ok := stored["operator"].(map[string]interface{})
-	require.True(t, ok, "dotted keys must be written as nested objects, got %#v", stored["operator"])
-	require.Equal(t, "Nerds by the Hour", operator["name"])
-	require.Equal(t, "help@example.org", operator["contact_email"])
+	require.Equal(t, "Nerds by the Hour", stored["operator.name"])
+	require.Equal(t, "help@example.org", stored["operator.contact_email"])
+	require.NotContains(t, stored, "operator")
 }
 
 // The file is the CUSTOM layer. Writing the merged view would freeze today's defaults into the
@@ -104,10 +105,8 @@ func TestSetCustomValues_PreservesUnrelatedKeys(t *testing.T) {
 	require.NoError(t, config.SetCustomValues(c, map[string]interface{}{"operator.name": "NBTH"}))
 
 	stored := readStoreFile(t, root)
-	theme, ok := stored["theme"].(map[string]interface{})
-	require.True(t, ok, "earlier key was clobbered: %#v", stored)
-	require.Equal(t, "flatly", theme["name"])
-	require.Equal(t, "NBTH", stored["operator"].(map[string]interface{})["name"])
+	require.Equal(t, "flatly", stored["theme.name"], "earlier key was clobbered: %#v", stored)
+	require.Equal(t, "NBTH", stored["operator.name"])
 }
 
 // Clobbering a file we cannot parse would destroy settings the operator may want back.
@@ -153,4 +152,67 @@ func TestCustomConfigPath_LivesUnderTheDataRoot(t *testing.T) {
 	require.Equal(t,
 		filepath.Join(root, "config", config.CustomConfigFileName),
 		config.CustomConfigPath(c))
+}
+
+// --- flat keys, and the v1.21.x nested file still working ------------------------------------
+
+// REGRESSION. Prod and demo wrote {"operator":{"contact_email":...}} under v1.21.x. Those files
+// are sitting on PVCs, so the nested shape has to keep applying after #456 flattened the format.
+func TestLoadCustomConfig_ReadsLegacyNestedFile(t *testing.T) {
+	c, root := newStoreConfig(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "config"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, "config", config.CustomConfigFileName),
+		[]byte(`{"operator":{"name":"Legacy Ops","contact_email":"legacy@example.org"}}`), 0o600))
+
+	require.NoError(t, config.LoadCustomConfig(c))
+
+	require.Equal(t, "Legacy Ops", c.GetString("operator.name"))
+	require.Equal(t, "legacy@example.org", c.GetString("operator.contact_email"))
+}
+
+func TestLoadCustomConfig_ReadsFlatKeys(t *testing.T) {
+	c, root := newStoreConfig(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "config"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, "config", config.CustomConfigFileName),
+		[]byte(`{"operator.name":"Flat Ops","metrics.port":9999}`), 0o600))
+
+	require.NoError(t, config.LoadCustomConfig(c))
+
+	require.Equal(t, "Flat Ops", c.GetString("operator.name"))
+	require.Equal(t, 9999, c.GetInt("metrics.port"))
+}
+
+func TestSetCustomValues_WritesFlatKeys(t *testing.T) {
+	c, root := newStoreConfig(t)
+
+	require.NoError(t, config.SetCustomValues(c, map[string]interface{}{
+		"operator.name": "Flat Ops",
+	}))
+
+	stored := readStoreFile(t, root)
+	require.Equal(t, "Flat Ops", stored["operator.name"],
+		"keys must be written flat to match app-default-config.json, got %#v", stored)
+	require.NotContains(t, stored, "operator")
+}
+
+// A save against a legacy nested file must not leave the two shapes interleaved, which would
+// make the same setting appear twice with different values.
+func TestSetCustomValues_ConvertsLegacyNestedFileOnWrite(t *testing.T) {
+	c, root := newStoreConfig(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "config"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, "config", config.CustomConfigFileName),
+		[]byte(`{"operator":{"name":"Legacy Ops","contact_url":"https://example.org/help"}}`), 0o600))
+
+	require.NoError(t, config.SetCustomValues(c, map[string]interface{}{
+		"operator.name": "New Ops",
+	}))
+
+	stored := readStoreFile(t, root)
+	require.NotContains(t, stored, "operator", "the nested block must be folded away")
+	require.Equal(t, "New Ops", stored["operator.name"])
+	require.Equal(t, "https://example.org/help", stored["operator.contact_url"],
+		"an untouched legacy value must survive the conversion")
 }
