@@ -66,6 +66,8 @@
                     title="Readable without a login via /api/instance/public">public</span>
               <span class="badge badge-warning mg-l-5" *ngIf="entry.promoted"
                     title="This instance added it to the public list">promoted</span>
+              <span class="badge badge-dark mg-l-5" *ngIf="entry.from_env"
+                    [title]="'Set by ' + entry.env_var + ', which takes precedence over this screen'">environment</span>
             </td>
 
             <td class="align-middle">
@@ -100,13 +102,19 @@
 
             <td class="align-middle">
               <span class="badge" [class.badge-warning]="entry.source === 'custom'"
+                    [class.badge-dark]="entry.source === 'environment'"
                     [class.badge-secondary]="entry.source === 'default'">{{ entry.source }}</span>
             </td>
 
             <td class="align-middle text-right text-nowrap">
               <ng-container *ngIf="editingKey !== entry.key">
-                <button type="button" class="btn btn-sm btn-az-secondary" (click)="startEdit(entry)">Edit</button>
-                <button type="button" class="btn btn-sm btn-link" *ngIf="entry.source === 'custom'"
+                <!-- Env wins on restart, so editing here would take effect and then silently
+                     revert. Say where to change it instead. -->
+                <span class="tx-gray-500 tx-12" *ngIf="entry.from_env"
+                      [title]="'Change ' + entry.env_var + ' in your deployment configuration'">set by environment</span>
+                <button type="button" class="btn btn-sm btn-az-secondary" *ngIf="!entry.from_env"
+                        (click)="startEdit(entry)">Edit</button>
+                <button type="button" class="btn btn-sm btn-link" *ngIf="entry.source === 'custom' && !entry.from_env"
                         [disabled]="saving" (click)="reset(entry)"
                         title="Drop this override and use the shipped default">Reset</button>
               </ng-container>

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"sort"
 	"strings"
 )
@@ -175,4 +176,27 @@ func IsSecretKey(c Interface, key string) bool {
 		}
 	}
 	return false
+}
+
+// EnvVarFor maps a config key to the environment variable that overrides it, mirroring the
+// prefix and separator rules in Init: operator.contact_email -> YOURPHR_OPERATOR_CONTACT_EMAIL.
+func EnvVarFor(key string) string {
+	return "YOURPHR_" + strings.ToUpper(strings.NewReplacer(".", "_", "-", "_").Replace(strings.TrimSpace(key)))
+}
+
+// IsSetByEnvironment reports whether this key's value comes from the process environment.
+//
+// Matters because env OUTRANKS the custom config store on startup. A value written to
+// app-custom-config.json while the corresponding variable is set takes effect immediately —
+// viper's Set() is the top layer — and then silently reverts on the next restart, when the store
+// is merged into the config layer beneath env.
+//
+// An edit that appears to work and quietly undoes itself is worse than one that is refused, so
+// callers use this to refuse it and say which variable is in charge.
+//
+// Reading the environment directly is correct here: this package is the config accessor, and the
+// question is literally "is this variable present" rather than "what is the effective value".
+func IsSetByEnvironment(key string) bool {
+	_, present := os.LookupEnv(EnvVarFor(key))
+	return present
 }

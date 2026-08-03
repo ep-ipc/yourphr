@@ -19,6 +19,8 @@ describe('AdminConfigComponent', () => {
     public: true,
     promoted: false,
     default: '',
+    from_env: false,
+    env_var: 'YOURPHR_OPERATOR_NAME',
     ...over,
   });
 
@@ -174,5 +176,20 @@ describe('AdminConfigComponent', () => {
 
     expect(component.loading).toBeFalse();
     expect(component.error).toBe('nope');
+  });
+
+  // Env outranks the config store on restart, so an edit here would take effect and then quietly
+  // revert. The row says where to change it instead of offering a button that lies.
+  it('offers no Edit for a key governed by the environment', () => {
+    apiSpy.getAdminConfig.and.returnValue(of(config({
+      entries: [entry({key: 'log.level', from_env: true, env_var: 'YOURPHR_LOG_LEVEL', source: 'environment'})],
+    })));
+    component.load();
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('set by environment');
+    expect(text).toContain('environment');
+    expect(fixture.nativeElement.textContent).not.toContain('Edit');
   });
 });

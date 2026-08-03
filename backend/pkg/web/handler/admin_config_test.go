@@ -302,6 +302,40 @@ func (suite *AdminConfigHandlerTestSuite) TestResetRestoresTheShippedDefault() {
 	require.Equal(suite.T(), "default", suite.entry("log.level").Source)
 }
 
+// --- environment-governed keys ----------------------------------------------------------------
+
+// REGRESSION. Env outranks the custom store on restart, so writing such a key used to take effect
+// immediately and silently revert on the next boot — an edit that appears to work and quietly
+// undoes itself. Refuse it and name the variable instead.
+func (suite *AdminConfigHandlerTestSuite) TestSetRefusesAKeyGovernedByTheEnvironment() {
+	suite.T().Setenv("YOURPHR_LOG_LEVEL", "DEBUG")
+
+	w := suite.putValue("log.level", "WARN")
+
+	require.Equal(suite.T(), http.StatusConflict, w.Code)
+	require.Contains(suite.T(), w.Body.String(), "YOURPHR_LOG_LEVEL")
+	require.Contains(suite.T(), w.Body.String(), "deployment configuration")
+}
+
+func (suite *AdminConfigHandlerTestSuite) TestListingFlagsEnvironmentGovernedKeys() {
+	suite.T().Setenv("YOURPHR_LOG_LEVEL", "DEBUG")
+
+	entry := suite.entry("log.level")
+	require.True(suite.T(), entry.FromEnv)
+	require.Equal(suite.T(), "environment", entry.Source,
+		"the source must say where the value really comes from")
+	require.Equal(suite.T(), "YOURPHR_LOG_LEVEL", entry.EnvVar)
+}
+
+// Every key advertises the variable that would govern it, so an operator can set one without
+// working out the mapping by hand.
+func (suite *AdminConfigHandlerTestSuite) TestEveryKeyNamesItsEnvironmentVariable() {
+	require.Equal(suite.T(), "YOURPHR_OPERATOR_CONTACT_EMAIL", suite.entry("operator.contact_email").EnvVar)
+	require.Equal(suite.T(), "YOURPHR_JWT_ISSUER_KEY", suite.entry("jwt.issuer.key").EnvVar)
+	require.False(suite.T(), suite.entry("operator.contact_email").FromEnv,
+		"unset variables must not be reported as governing")
+}
+
 func TestAdminConfigHandlerTestSuite(t *testing.T) {
 	suite.Run(t, new(AdminConfigHandlerTestSuite))
 }

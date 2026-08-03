@@ -51,6 +51,11 @@ type ConfigEntry struct {
 	// Default is the shipped value, so the screen can show what "reset" would restore. Masked on
 	// the same rule as Value.
 	Default interface{} `json:"default"`
+	// FromEnv means the value comes from the process environment, which OUTRANKS the custom
+	// config store on restart. Such a key cannot be edited here — see SetAdminConfigValue.
+	FromEnv bool `json:"from_env"`
+	// EnvVar names the variable that governs this key, so an operator knows where to change it.
+	EnvVar string `json:"env_var"`
 }
 
 // AdminConfigResponse is the payload for GET /api/secure/admin/config.
@@ -130,6 +135,12 @@ func GetAdminConfig(c *gin.Context) {
 			Source:   source,
 			Public:   public[key],
 			Promoted: promoted[key],
+			EnvVar:   config.EnvVarFor(key),
+			FromEnv:  config.IsSetByEnvironment(key),
+		}
+		if entry.FromEnv {
+			// Env beats the store on restart, so this is where the value really comes from.
+			entry.Source = "environment"
 		}
 		if secret[key] {
 			entry.Value = maskedValue
@@ -218,6 +229,16 @@ func SetAdminConfigValue(c *gin.Context) {
 	if !known {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false,
 			"error": fmt.Sprintf("unknown configuration key %q — only keys shipped in app-default-config.json can be set", key)})
+		return
+	}
+
+	// Refuse rather than accept-then-revert. Environment outranks the custom store on startup, so
+	// writing this key would take effect now and silently undo itself on the next restart — an
+	// edit that appears to work and quietly reverts is worse than one that is refused.
+	if config.IsSetByEnvironment(key) {
+		c.JSON(http.StatusConflict, gin.H{"success": false,
+			"error": fmt.Sprintf("%s is set by the environment variable %s, which takes precedence over this screen — change it in your deployment configuration instead",
+				key, config.EnvVarFor(key))})
 		return
 	}
 
