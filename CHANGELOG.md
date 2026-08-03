@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.22.0](https://github.com/jwilleke/yourphr/compare/v1.21.1...v1.22.0) (2026-08-03)
+
+Configuration becomes something an operator can see and change: one shipped catalogue, one overrides file, and an Admin screen that shows which is which.
+
+### Features
+
+- **config:** `app-default-config.json` is the shipped catalogue — every setting an instance can have, with its default, loaded in one loop instead of 35 hardcoded calls ([#456](https://github.com/jwilleke/yourphr/issues/456))
+- **config:** a `public` array decides what `GET /api/instance/public` serves; adding a setting to the public surface is a line of JSON, not handler code ([#457](https://github.com/jwilleke/yourphr/issues/457))
+- **admin:** new **Configuration** screen (`/admin/config`) — every setting, its value, whether you set it or it defaulted, with per-key edit, reset, and reveal ([#458](https://github.com/jwilleke/yourphr/issues/458))
+- **ui:** **Contact Us** page driven by the Admin Instance card, replacing the operator details that used to sit inline in the footer ([#454](https://github.com/jwilleke/yourphr/issues/454))
+- **config:** values may reference environment variables — `${YOURPHR_RELAY_SECRET}` — so the shipped file can name a secret without holding one ([#460](https://github.com/jwilleke/yourphr/issues/460))
+
+### Bug Fixes
+
+- **config:** the operator contact email is no longer served to callers without a login; signed-in users still see it ([#459](https://github.com/jwilleke/yourphr/issues/459))
+- **config:** a pre-1.22 nested `app-custom-config.json` is converted to flat keys on first start, with the original kept as `.nested` ([#456](https://github.com/jwilleke/yourphr/issues/456))
+- **config:** ten settings were read in code with no default registered at all, so they silently did nothing unless something set them — `backup.auto-backup*`, `backup.max-backups`, `database.validation_mode`, `web.listen.https.certfile`/`keyfile`, `medications.rxterms_enrich`, `medications.rxterms_api_fallback`, `sync.token_refresh.interval_minutes` ([#456](https://github.com/jwilleke/yourphr/issues/456))
+
+### Security
+
+- The JWT signing key is no longer defaulted to a committed placeholder that the code recognised *by value* to mean "generate one". It is now an environment reference resolving to empty, and empty already meant generate — the special case is gone rather than defended by a test ([#460](https://github.com/jwilleke/yourphr/issues/460)).
+- Admin Configuration masks every value outside the `public` array, and a masked value is **not sent to the browser** until explicitly revealed. Revealing one key is a separate request, logged with the acting admin ([#458](https://github.com/jwilleke/yourphr/issues/458)).
+
+### Notes for operators
+
+- **`/api/instance/public` response keys changed** from short names (`contact_email`) to config keys (`operator.contact_email`). Only affects anything reading that endpoint directly — the app itself is updated. The endpoint first shipped in 1.21.0, so this is a two-day-old surface.
+- **Your operator email stops being publicly readable.** If you *want* it public — a public help desk, say — add `operator.contact_email` back to the `public` array in Admin → Configuration. Doing so is flagged there and in the startup log, which is intended: publishing an address is a real decision, not a mistake.
+- The custom config file is converted from nested to flat keys on first start. No action needed; the original is kept alongside as `app-custom-config.json.nested`.
+- New documentation on **what the data volume actually holds** and when to enable at-rest encryption: [`docs/deployment/README.md`](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/README.md). Worth reading — provider refresh tokens live in that database, and they grant *ongoing* access to records at Epic, CMS or Medicare, not just historical data.
+- Enabling `database.encryption.enabled` still disables backup and restore entirely ([#367](https://github.com/jwilleke/yourphr/issues/367)). [#461](https://github.com/jwilleke/yourphr/issues/461) closes that gap.
+
 ## [1.21.1](https://github.com/jwilleke/yourphr/compare/v1.21.0...v1.21.1) (2026-08-02)
 
 **Fixes a startup crash introduced in 1.21.0. Upgrade directly from 1.20.3 to this release; do not deploy 1.21.0.**
