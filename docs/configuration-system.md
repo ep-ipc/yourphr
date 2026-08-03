@@ -111,7 +111,40 @@ Same structure, opposite safe default, because the consequences differ by orders
 
 Only keys in the shipped catalogue can be set. A free-form "add any property" form makes a typo permanent: the key sits in the file forever, looks configured, and does nothing.
 
-> **GAP: unknown keys are not detected on *read*.** A typo already in `app-custom-config.json`, or a misspelled `YOURPHR_*` variable, is silent. This is not hypothetical — the reference deployment's `config.yaml` set four keys that do not exist (`web.listen_port` is not `web.listen.port`), and nobody noticed. Should **warn**, not refuse: rejecting at startup would turn a removed key into a boot loop on upgrade. The check must allowlist the provisioning variables described above, which are not config keys.
+### Unknown keys are reported on read
+
+At startup the server compares `app-custom-config.json` and every `YOURPHR_*` variable against the catalogue, and logs one warning per key that maps to no setting:
+
+```text
+config: "operator.nmae" in /opt/fasten/db/config/app-custom-config.json is not a known setting and has no effect
+config: environment variable YOURPHR_WEB_LISTEN_PORT does not map to any known setting and has no effect
+```
+
+**Warn, never refuse.** Refusing on an unknown key would turn a *removed* setting into a boot loop on upgrade — every instance still carrying the old key would fail to start.
+
+Environment variables are compared in their own spelling. `EnvVarFor` is lossy — both `.` and `-` become `_` — so mapping known keys *to* variable names is exact, while inverting is a guess.
+
+The provisioning variables described above are exempt. Flagging them would train an operator to ignore the warning, which is the only real failure mode a warning has.
+
+> **GAP: these findings are logged, not shown.** A startup line is read approximately never. They belong on Admin → Configuration — [#473](https://github.com/jwilleke/yourphr/issues/473).
+
+## Secrets in code
+
+`config.Secret` is a string that refuses to print itself. It redacts under every format verb and in JSON, so logging a struct cannot leak a value:
+
+```go
+logger.Infof("relay config: %+v", cfg)   // the secret prints as [REDACTED]
+```
+
+Reading the real value requires `Expose()`, deliberately verbose so `grep -rn '\.Expose()'` lists every place a secret leaves its wrapper.
+
+The internal flag is named `exposeSecrets`, not `redactSecrets`, so the **zero value redacts** — a flag that leaked unless something remembered to initialise it would be the wrong way round for the mistake this prevents.
+
+`log.redact_secrets` (default `true`) turns it off for debugging, because sometimes the only way to learn why a provider rejects a token is to see the token. The server warns loudly on every start while it is off.
+
+This is leak prevention, **not encryption**: the value is plain in memory and visible to a debugger. It removes a class of accident.
+
+> **GAP: nothing uses the type yet.** Converting `SourceCredential`'s access and refresh tokens is the highest-value change and touches sync, so it wants its own review.
 
 ## Differences from ngdpbase
 
@@ -134,13 +167,14 @@ Tests that keep the above true rather than aspirational:
 | no `os.Getenv` outside an allowlist | configuration read behind the config layer's back ([#455](https://github.com/jwilleke/yourphr/issues/455)) |
 | `/api/instance/public` exposes only the allow-list | a credential reaching an anonymous caller |
 | masking covers under a quarter of settings | drifting back to masking everything |
+| a `Secret` redacts under every format verb | a careless log line leaking a key |
 
 ## Open decisions
 
 | | Issue |
 |---|---|
 | Retire `config.yaml` | [#470](https://github.com/jwilleke/yourphr/issues/470) |
-| Warn on unknown keys from the custom file and the environment | — |
+| Warn on unknown keys from the custom file and the environment | **done** — [#473](https://github.com/jwilleke/yourphr/issues/473) for surfacing them in the UI |
 | Fold backup state into the store | [#455](https://github.com/jwilleke/yourphr/issues/455) |
 | Move ordinary settings out of environment on the reference deployment, leaving bootstrap and secrets | [#472](https://github.com/jwilleke/yourphr/issues/472) |
 
