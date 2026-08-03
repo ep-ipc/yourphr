@@ -42,16 +42,35 @@ func TestDefaultConfig_KeysAreFlatAndLowercase(t *testing.T) {
 	}
 }
 
-// SENTINEL. ResolveJWTIssuerKey treats a configured value equal to DefaultJWTIssuerKey as
-// "nobody set a key" and generates a random one. If the JSON literal drifts from the constant,
-// that check stops matching and the app signs real sessions with a key published in git.
-func TestDefaultConfig_JWTIssuerKeyMatchesTheSentinel(t *testing.T) {
+// The signing key must never be a literal in a file that lives in git. It is an env reference
+// (#460), so with YOURPHR_JWT_ISSUER_KEY unset it resolves empty — and empty already means
+// "generate a real key", which is how a stock install stays secure with no operator action.
+func TestDefaultConfig_JWTIssuerKeyIsAnEnvReferenceNotALiteral(t *testing.T) {
+	t.Setenv("YOURPHR_JWT_ISSUER_KEY", "")
+
 	values, err := config.DefaultConfigValues()
 	require.NoError(t, err)
 
-	require.Equal(t, config.DefaultJWTIssuerKey, values["jwt.issuer.key"],
-		"app-default-config.json must carry the exact sentinel string, or auto-generation breaks "+
-			"and the committed placeholder becomes a live signing key")
+	require.Equal(t, "", values["jwt.issuer.key"],
+		"an unset YOURPHR_JWT_ISSUER_KEY must resolve empty so a key gets generated")
+	require.NotEqual(t, config.DefaultJWTIssuerKey, values["jwt.issuer.key"],
+		"the committed placeholder must never be the effective default")
+}
+
+func TestDefaultConfig_JWTIssuerKeyUsesTheEnvironmentWhenSet(t *testing.T) {
+	t.Setenv("YOURPHR_JWT_ISSUER_KEY", "operator-supplied-key")
+
+	values, err := config.DefaultConfigValues()
+	require.NoError(t, err)
+
+	require.Equal(t, "operator-supplied-key", values["jwt.issuer.key"])
+}
+
+// The placeholder must not survive anywhere in the shipped file — it is the string an attacker
+// would try first.
+func TestDefaultConfig_ContainsNoCommittedSigningKey(t *testing.T) {
+	require.NotContains(t, string(mustReadDefaults(t)), config.DefaultJWTIssuerKey,
+		"app-default-config.json is in git and must not carry the known-public signing key")
 }
 
 func TestDefaultConfig_PathDefaultsMatchTheirConstants(t *testing.T) {

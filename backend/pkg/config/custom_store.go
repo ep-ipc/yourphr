@@ -60,7 +60,10 @@ func LoadCustomConfig(c Interface) error {
 		return nil
 	}
 
-	flat := flattenToKnownKeys(values)
+	flat, err := ResolveEnvRefs(flattenToKnownKeys(values))
+	if err != nil {
+		return fmt.Errorf("in %s: %w", path, err)
+	}
 
 	// Convert a pre-#456 nested file on disk, once, rather than only when something next saves.
 	// Otherwise the file stays nested indefinitely — not matching its own documented format, and

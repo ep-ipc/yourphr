@@ -42,7 +42,10 @@ func DefaultConfigValues() (map[string]interface{}, error) {
 		}
 		values[key] = normalizeJSONNumber(value)
 	}
-	return values, nil
+
+	// A shipped default may reference an environment variable instead of carrying a value
+	// (#460), so the file can name where a secret comes from without holding one.
+	return ResolveEnvRefs(values)
 }
 
 // normalizeJSONNumber turns whole float64s back into ints.

@@ -23,7 +23,7 @@
   "_comment_relay": "SMART on FHIR OAuth relay. relay.url is where the backend POLLS /pending (may be cluster-internal); relay.public_url is the origin the PROVIDER redirects the browser to. Empty values fall back to the project relay.",
   "relay.url": "",
   "relay.public_url": "",
-  "relay.secret": "",
+  "relay.secret": "${YOURPHR_RELAY_SECRET}",
 
   "_comment_metrics": "Process metrics scrape server for completed sync jobs. Internal only.",
   "metrics.enabled": false,
@@ -49,8 +49,8 @@
   "backup.label": "",
   "backup.allowed-roots": [],
 
-  "_comment_jwt": "SENTINEL: jwt.issuer.key MUST stay byte-identical to config.DefaultJWTIssuerKey. The code reads that exact string as 'nobody set a key' and generates a random one, persisting it to <data>/.jwt_issuer_key. Change this literal and the app will sign real sessions with a value published in git. A test pins the two together.",
-  "jwt.issuer.key": "thisismysupersecuressessionsecretlength",
+  "_comment_jwt": "jwt.issuer.key is the HS256 key signing every session — the root of trust for auth and per-user isolation. It is an ENV REFERENCE, not a value (#460): set YOURPHR_JWT_ISSUER_KEY and it is used; leave it unset and the value resolves empty, which the code reads as 'nobody set a key' and generates a random 256-bit one, persisting it to <data>/.jwt_issuer_key. So a stock install is secure with no action. Do NOT put a literal key here — this file is in git.",
+  "jwt.issuer.key": "${YOURPHR_JWT_ISSUER_KEY}",
   "jwt.session_ttl_minutes": 60,
   "jwt.session_absolute_hours": 12,
   "jwt.session_renew_if_remaining_minutes": 30,

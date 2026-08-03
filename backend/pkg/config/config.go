@@ -32,12 +32,19 @@ func loadDotEnvFiles() {
 	}
 }
 
-// DefaultJWTIssuerKey is the placeholder HS256 signing key shipped in the
-// committed config.yaml. It is a KNOWN PUBLIC value (present in this repo and
-// upstream Fasten), so a deployment running with it can have tokens forged for
-// any user/role. The server refuses to start while this is the effective key —
-// see ValidateJWTIssuerKey. Real deployments must override it via
-// jwt.issuer.key (config.dev.yaml) or the YOURPHR_JWT_ISSUER_KEY env var.
+// DefaultJWTIssuerKey is the placeholder HS256 signing key inherited from upstream Fasten. It is
+// a KNOWN PUBLIC value present in this repo and in every Fasten deployment, so anything signing
+// tokens with it can have sessions forged for any user or role.
+//
+// It is no longer a default. app-default-config.json carries the env reference
+// "${YOURPHR_JWT_ISSUER_KEY}" instead, which resolves empty when unset — and empty already means
+// "generate a real key" (see ResolveJWTIssuerKey). The constant survives only to keep rejecting
+// this specific string, because it still appears in the committed config.yaml and in upstream
+// deployment guides, so an operator can arrive carrying it.
+//
+// Removing the sentinel-as-default matters beyond tidiness: it was a value whose meaning depended
+// on being byte-identical to a constant elsewhere, which is the same shape as the bug that
+// crash-looped prod and demo on v1.21.0.
 const DefaultJWTIssuerKey = "thisismysupersecuressessionsecretlength"
 
 // jwtKeyFileName is the basename of the auto-generated JWT signing key, persisted
