@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.23.1](https://github.com/jwilleke/yourphr/compare/v1.23.0...v1.23.1) (2026-08-03)
+
+### Bug Fixes
+
+- **admin:** the Configuration screen masked 47 of 51 settings, including `web.listen.port` and `log.level`. Only genuine secrets are masked now — 5 keys ([#458](https://github.com/jwilleke/yourphr/issues/458))
+
+  Masking was derived as "everything outside the `public` array", which conflated two different questions: *may an anonymous caller read this* and *should this be hidden on an admin's own screen*. A short `secret` array now governs masking. The two arrays have deliberately opposite shapes — `public` is an allow-list, because a mistake there exposes a value to the internet; `secret` is a deny-list, because a mistake there merely shows a value to an already-authenticated admin.
+
+### Notes for operators
+
+- Nothing to do. The Configuration screen simply shows what it should have shown: everything except `jwt.issuer.key`, `relay.secret`, `database.encryption.key` and the two sandbox client secrets, which stay behind a click.
+- A key listed in **both** `secret` and `public` is now flagged on the screen — marking something secret while serving it to anonymous callers defeats the masking, and that contradiction should be visible.
+
 ## [1.23.0](https://github.com/jwilleke/yourphr/compare/v1.22.0...v1.23.0) (2026-08-03)
 
 Your instance serves its own Privacy Policy and Terms — offline, and replaceable by the operator who actually holds the records.
