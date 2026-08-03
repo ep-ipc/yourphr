@@ -55,9 +55,10 @@
   "jwt.session_absolute_hours": 12,
   "jwt.session_renew_if_remaining_minutes": 30,
 
-  "_comment_log": "log.file empty means stdout only.",
+  "_comment_log": "log.file empty means stdout only. log.redact_secrets makes values of type config.Secret print as [REDACTED] in logs and JSON; turning it OFF is a debugging aid for when the only way to diagnose a rejected token is to see it, and the server warns loudly on every start while it is off. Do not leave it off.",
   "log.level": "INFO",
   "log.file": "",
+  "log.redact_secrets": true,
 
   "_comment_cda": "C-CDA / CCD import needs the external fhir-converter sidecar, so it is opt-in.",
   "cda_converter.enabled": false,

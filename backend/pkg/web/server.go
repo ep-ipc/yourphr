@@ -501,6 +501,16 @@ func (ae *AppEngine) Start() error {
 		gin.SetMode(gin.DebugMode)
 	}
 
+	// Redaction of config.Secret values in logs and JSON. On by default; the zero value of the
+	// underlying flag redacts, so a missed call here fails safe.
+	redactSecrets := ae.Config.GetBool("log.redact_secrets")
+	config.SetSecretRedaction(redactSecrets)
+	if !redactSecrets {
+		// Loud, every start, and named so it is obvious what to set back. A debugging aid left on
+		// writes signing keys and provider tokens into the log file indefinitely.
+		ae.Logger.Warnf("SECRET REDACTION IS OFF (log.redact_secrets=false) — signing keys, relay secrets and provider tokens will appear in logs and API responses. Set it back to true when finished debugging.")
+	}
+
 	// Relocate db/ and cache/ under storage.data_dir when one is configured and those paths
 	// are still at their built-in defaults (#451). Must run before initializeDatabase opens
 	// the DB and before anything else resolves a path — every config layer has been merged
