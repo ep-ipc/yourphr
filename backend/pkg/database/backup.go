@@ -194,7 +194,7 @@ func CurrentBackupDestination(appConfig config.Interface) string {
 
 // AllowedBackupRoots is the allowlist of base directories a backup destination may live under:
 //   - the data volume (covers DefaultBackupDir)
-//   - static backup.destination (viper / config.yaml)
+//   - static backup.destination (config / env)
 //   - static backup.allowed-roots
 //   - destination already stored in .backup_settings.json (Admin UI) — so UI-only NAS paths
 //     keep working after #383 and aren't "invisible" to the allowlist (#434)

@@ -39,8 +39,8 @@ func loadDotEnvFiles() {
 // It is no longer a default. app-default-config.json carries the env reference
 // "${YOURPHR_JWT_ISSUER_KEY}" instead, which resolves empty when unset — and empty already means
 // "generate a real key" (see ResolveJWTIssuerKey). The constant survives only to keep rejecting
-// this specific string, because it still appears in the committed config.yaml and in upstream
-// deployment guides, so an operator can arrive carrying it.
+// this specific string, because it appears in upstream Fasten deployment guides and in older
+// YourPHR config files, so an operator can arrive carrying it.
 //
 // Removing the sentinel-as-default matters beyond tidiness: it was a value whose meaning depended
 // on being byte-identical to a constant elsewhere, which is the same shape as the bug that

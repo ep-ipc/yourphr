@@ -36,7 +36,7 @@ services:
   # so C-CDA import was impossible on the production compose path — the documented
   # YOURPHR_CDA_CONVERTER_URL had nothing to point at, no matter how it was spelled (#397).
   #
-  # C-CDA XML is what patient portals actually export, so this runs by default; config.yaml points
+  # C-CDA XML is what patient portals actually export, so this runs by default; the shipped default points
   # the app here out of the box.
   #
   # INTERNAL ONLY — `expose`, never `ports`. Raw C-CDA is PHI; it must not be reachable from outside

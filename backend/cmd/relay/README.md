@@ -49,7 +49,7 @@ Configure the **app** (not the relay) with two URLs — they are reached by diff
 
 If your relay is a single publicly-reachable `https` origin, set only `YOURPHR_RELAY_URL` — `relay.public_url` defaults to it. Set `YOURPHR_RELAY_PUBLIC_URL` when the poll URL is internal or non-https. With neither set, the project dev/demo relay is used.
 
-These are ordinary config keys, so they can come from `config.yaml`, `.env` / `.env_custom`, or real environment variables (see [`.env.example`](../../../.env.example)). **No frontend rebuild is needed** — `redirect_uri` is derived by the backend at request time, not compiled into the Angular bundle.
+These are ordinary config keys, so they can come from `.env` / `.env_custom`, real environment variables, or Admin → Configuration (see [`docs/configuration-system.md`](../../../docs/configuration-system.md)). **No frontend rebuild is needed** — `redirect_uri` is derived by the backend at request time, not compiled into the Angular bundle.
 
 Check what your instance actually resolved to:
 

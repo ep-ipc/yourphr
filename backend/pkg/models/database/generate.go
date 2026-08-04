@@ -15,7 +15,6 @@ import (
 
 	"github.com/dave/jennifer/jen"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
-	"github.com/fastenhealth/fasten-onprem/backend/pkg/errors"
 	"github.com/iancoleman/strcase"
 	"golang.org/x/exp/slices"
 )
@@ -52,18 +51,17 @@ PLEASE DO NOT EDIT BY HAND
 `, "\n"), "\n")
 
 func main() {
-	// Read config file for database type
+	// Database type comes from the shipped defaults (yourphr#470). This used to read
+	// ../../../../config.yaml, which existed only to supply this one value — and tolerated the
+	// file being absent, falling back to the same default. SQLite is the only supported backend;
+	// postgres_repository.go is present but broken.
 	appconfig, err := config.Create()
 	if err != nil {
 		fmt.Printf("FATAL: %+v\n", err)
 		os.Exit(1)
 	}
-
-	// Find and read the config file
-	err = appconfig.ReadConfig("../../../../config.yaml")
-	if _, ok := err.(errors.ConfigFileMissingError); ok { // Handle errors reading the config file
-		//ignore "could not find config file"
-	} else if err != nil {
+	if err := appconfig.Init(); err != nil {
+		fmt.Printf("FATAL: %+v\n", err)
 		os.Exit(1)
 	}
 	databaseType := appconfig.GetString("database.type")

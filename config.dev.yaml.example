@@ -1,0 +1,24 @@
+# Copy to config.dev.yaml (gitignored) for local development:
+#
+#   cp config.dev.yaml.example config.dev.yaml
+#   make serve-backend
+#
+# Only what must be correct BEFORE the app can serve the Admin screen belongs here. Everything
+# else has a shipped default (backend/pkg/config/app-default-config.json) and is changed at
+# Admin -> Configuration, which writes <data>/config/app-custom-config.json.
+# See docs/configuration-system.md.
+#
+# NOTE: this YAML path is being replaced by a .env.dev.example (yourphr#474).
+
+web:
+  listen:
+    # frontend/proxy.conf.json proxies /api here, so this must match it.
+    port: 9090
+
+database:
+  # Relative to the repo root; keeps dev data out of /opt/fasten.
+  location: ./db/fasten.db
+  encryption:
+    # Off for dev. Turning it on requires database.encryption.key AND disables
+    # backup/restore (#367).
+    enabled: false

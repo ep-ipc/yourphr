@@ -125,7 +125,7 @@ Next, open a browser to `https://localhost:9090`
 
 ### Other deployment options & configuration
 
-The docker-compose flow above is the easy path, but **YourPHR is deployment-agnostic** — it is a single Go binary with an embedded SQLite database and **no required external services**, so it does not depend on any particular orchestrator. You can also run it via plain `docker run`, on bare metal, or in Kubernetes, and configure it via a config file, `.env`/`.env_custom`, or `YOURPHR_*` environment variables (layered, lowest → highest: `defaults < config.yaml < .env < .env_custom < YOURPHR_* env`).
+The docker-compose flow above is the easy path, but **YourPHR is deployment-agnostic** — it is a single Go binary with an embedded SQLite database and **no required external services**, so it does not depend on any particular orchestrator. You can also run it via plain `docker run`, on bare metal, or in Kubernetes, and configure it via `.env`/`.env_custom`, `YOURPHR_*` environment variables, or the Admin → Configuration screen (layered, lowest → highest: shipped defaults < instance overrides in `<data>/config/app-custom-config.json` < `YOURPHR_*` env). See [`docs/configuration-system.md`](docs/configuration-system.md).
 
 ➡️ See **[`docs/deployment/README.md`](docs/deployment/README.md)** for every deployment option (docker-compose / `docker run` / bare metal / Kubernetes), the configuration model + precedence, the full config-key reference, and how secrets are handled (the DB encryption key, the auto-generated JWT key, and per-source OAuth `client_secret`s stored in the DB).
 

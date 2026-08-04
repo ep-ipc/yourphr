@@ -70,10 +70,10 @@ This is a **Personal Health Record** application. Patient data (PHI) and secrets
 
 - **The runtime database.** SQLite files contain all imported PHR. `docker-compose` writes the DB to `./db/`, and the dev config may put `fasten.db` elsewhere. All of `*.db`, `*.db-shm`, `*.db-wal`, `*.sqlite*`, and `/db/` are gitignored — keep it that way.
 - **Real FHIR bundles.** Only ever commit *synthetic* fixtures (Synthea-generated) under `frontend/src/lib/fixtures/` and `backend/pkg/database/testdata/`. Never add a real patient export. Drop ad-hoc real bundles in a gitignored dir (`/sample-data/`, `/phi/`, `/patient-data/`).
-- **Secrets / keys.** No real `jwt.issuer.key`, encryption keys, OAuth client secrets, access/refresh tokens, `.env`, `*.pem` / `*.key` / `*.p12` / `*.pfx`. Real config goes in `config.dev.yaml` (gitignored) or environment variables — never in the committed `config.yaml`.
+- **Secrets / keys.** No real `jwt.issuer.key`, encryption keys, OAuth client secrets, access/refresh tokens, `.env`, `*.pem` / `*.key` / `*.p12` / `*.pfx`. Real config goes in `config.dev.yaml` (gitignored) or environment variables — never in a committed file.
 - **Certs.** `certs/` is gitignored (the app generates its own CA at runtime).
 
-**Note on `config.yaml`:** as of [#470](https://github.com/jwilleke/yourphr/issues/470) this file is **not loaded automatically** and is not shipped in the image — it is a worked example of the YAML shape `fasten start --config <path>` accepts. Defaults live in `backend/pkg/config/app-default-config.json`; see [`docs/configuration-system.md`](docs/configuration-system.md). It still carries the upstream placeholder `jwt.issuer.key` (`"thisismysupersecure..."`), a known public default that the server treats as unset — never replace it with a real generated key in the committed file.
+**Note on `config.yaml`:** removed in [#470](https://github.com/jwilleke/yourphr/issues/470). Defaults live in `backend/pkg/config/app-default-config.json`, an instance overrides them in `<data>/config/app-custom-config.json` (Admin → Configuration), and `YOURPHR_*` env overrides both. For local development copy `config.dev.yaml.example`. See [`docs/configuration-system.md`](docs/configuration-system.md).
 
 **Before any commit or push:** run `git status` / `git diff --staged` and confirm no DB, `.env`, key, or real-patient file is staged. Never use `git add -A` / `git add .` blindly — add specific files. If something sensitive was already committed, treat it as compromised: rotate the secret and scrub history (`git filter-repo` / BFG), don't just delete it in a new commit.
 
@@ -104,13 +104,13 @@ go test -v ./backend/pkg/models/database/ -run TestFhirAllergyIntolerance_Extrac
 ng test --include='**/badge.component.spec.ts'
 ```
 
-`make serve-backend` expects a `config.dev.yaml` (not committed; copy/adapt from `config.yaml`). The frontend dev server runs in **sandbox mode** by default (talks only to synthetic-data test servers); `prod` mode talks to real servers. Build configs are selected with `-c` (e.g. `make build-frontend-prod`, `build-frontend-desktop-prod`, `build-frontend-offline-sandbox`).
+`make serve-backend` expects a `config.dev.yaml` (not committed; `cp config.dev.yaml.example config.dev.yaml`). The frontend dev server runs in **sandbox mode** by default (talks only to synthetic-data test servers); `prod` mode talks to real servers. Build configs are selected with `-c` (e.g. `make build-frontend-prod`, `build-frontend-desktop-prod`, `build-frontend-offline-sandbox`).
 
 ### Backend architecture (`backend/`)
 
 - **Entry point**: `backend/cmd/fasten/fasten.go` — urfave/cli app with `start`, `migrate`, `version` subcommands.
 - **Web layer**: `backend/pkg/web/server.go` defines all routes (Gin). Route groups: `/api` (public — auth, glossary, support, CORS proxy), `/api/secure` (behind `middleware.RequireAuth()` JWT), and `/api/unsafe`. Handlers live in `backend/pkg/web/handler/`.
-- **Database layer**: `backend/pkg/database/interface.go` declares the `DatabaseRepository` interface — the central contract for all data access. Implemented by GORM (`gorm_*.go`, `sqlite_repository.go`). Postgres exists (`postgres_repository.go`) but is **broken/unsupported** — SQLite is the only working backend. Construct via `factory.go`. SQLite uses an encrypted build (`sqlite-jdbc-crypt`); DB encryption is on by default (`config.yaml`).
+- **Database layer**: `backend/pkg/database/interface.go` declares the `DatabaseRepository` interface — the central contract for all data access. Implemented by GORM (`gorm_*.go`, `sqlite_repository.go`). Postgres exists (`postgres_repository.go`) but is **broken/unsupported** — SQLite is the only working backend. Construct via `factory.go`. SQLite uses an encrypted build (`sqlite-jdbc-crypt`); DB encryption is **off** by default (`database.encryption.enabled`), and enabling it currently disables backup and restore ([#367](https://github.com/jwilleke/yourphr/issues/367)).
 - **FHIR resource models**: `backend/pkg/models/database/fhir_*.go` — one struct per FHIR resource type (~70 types). **These are generated, do not edit by hand.** Each has a `PopulateAndExtractSearchParameters` method that runs `searchParameterExtractor.js` via the **goja** JS engine to evaluate FHIRPath expressions and flatten searchable fields into indexed SQLite columns.
 - **Migrations**: `backend/pkg/database/migrations/<timestamp>/` — applied by `make migrate` / on startup.
 

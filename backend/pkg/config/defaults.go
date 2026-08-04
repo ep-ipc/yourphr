@@ -14,8 +14,8 @@ import (
 // EMBEDDED rather than read from disk, for two reasons. It can never be missing at runtime —
 // no mount to forget, no COPY to get wrong. And /opt/fasten/config, the obvious place to ship
 // it, is covered by a ConfigMap mount on both prod and demo, so a file placed there is
-// invisible to the process (the Dockerfile's existing COPY of config.yaml is already shadowed
-// that way). Same approach as backend/resources/related_versions.go.
+// invisible to the process — the Dockerfile used to COPY a config.yaml there and it was shadowed
+// exactly that way (#470). Same approach as backend/resources/related_versions.go.
 //
 //go:embed app-default-config.json
 var defaultConfigJSON []byte
