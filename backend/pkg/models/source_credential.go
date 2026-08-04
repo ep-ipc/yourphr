@@ -147,22 +147,41 @@ codeChallenge: codeChallenge,
 codeVerifier: codeVerifier
 */
 
-// IsDynamicClient this method is used to check if this source uses dynamic client registration (used to customize token refresh logic)
+// IsDynamicClient reports whether this source uses dynamic client registration, which changes the
+// token-refresh logic.
+//
+// It returns false. Always, on every build of YourPHR — not "false for now".
+//
+// Deciding this needs the provider's registration mode, which lives in the upstream source
+// definitions. Those are a commercial dependency YourPHR does not have (fastenhealth/fasten-onprem#629),
+// so definitions.GetSourceDefinition is a stub that returns an error unconditionally. YourPHR is
+// bring-your-own client_id instead — the operator registers with the vendor and enters the
+// credentials themselves (docs/vendors/), which is the same outcome by a different route.
+//
+// Written as a constant rather than left to launder an error into a boolean. The previous form
+// looked like it queried something and could return true; nothing in the signature or the body
+// told a reader the answer was fixed. That is the same failure as a config key that silently has
+// no effect (#455) — "deliberately unsupported" must not be indistinguishable from "broken".
+//
+// See yourphr#476. If provider definitions ever become available, delete this and restore the
+// lookup; RegisterDynamicClient below is still the working implementation it guards.
 func (s *SourceCredential) IsDynamicClient() bool {
-
-	endpoint, err := sourcesDefinitions.GetSourceDefinition(sourcesDefinitions.GetSourceConfigOptions{
-		EndpointId: s.EndpointID.String(),
-	})
-	if err != nil || endpoint == nil {
-		return false
-	}
-	return len(endpoint.DynamicClientRegistrationMode) > 0
+	return false
 }
 
-// This method will generate a new keypair, register a new dynamic client with the provider
-// it will set the following fields:
-// - DynamicClientJWKS
-// - DynamicClientId
+// RegisterDynamicClient generates a keypair, registers a dynamic client with the provider, and
+// sets DynamicClientJWKS + DynamicClientId.
+//
+// UNREACHABLE TODAY, and kept deliberately. Its only caller is guarded by IsDynamicClient, which
+// is a constant false (see above), and its own first statement calls the stubbed
+// definitions.GetSourceDefinition, which always errors. So it cannot run.
+//
+// Not deleted, because it is correct code rather than dead weight: it is a complete, working
+// implementation of the Epic dynamic-registration flow that becomes reachable the moment provider
+// definitions are available again. Deleting it would throw away the part that is hard to rebuild
+// in order to remove the part that is trivial to restore.
+//
+// See yourphr#476.
 func (s *SourceCredential) RegisterDynamicClient() error {
 
 	endpoint, err := sourcesDefinitions.GetSourceDefinition(sourcesDefinitions.GetSourceConfigOptions{

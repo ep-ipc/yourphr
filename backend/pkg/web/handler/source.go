@@ -288,7 +288,11 @@ func CreateReconnectSource(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("Parsed Create SourceCredential Credentials Payload: %v", sourceCred)
+	// Log identifiers only. This printed the whole SourceCredential with %v, which includes
+	// ClientSecret, AccessToken and RefreshToken as plain strings — and %v ignores the `json:"-"`
+	// tag that keeps ClientSecret out of API responses. The Admin Dashboard serves this log over
+	// HTTP (yourphr#476).
+	logger.Infof("Parsed Create SourceCredential payload for endpoint %s", sourceCred.EndpointID)
 
 	//get the endpoint definition
 	endpointDefinition, err := sourceDefinitions.GetSourceDefinition(sourceDefinitions.GetSourceConfigOptions{
@@ -296,9 +300,19 @@ func CreateReconnectSource(c *gin.Context) {
 	})
 
 	if err != nil {
-		err = fmt.Errorf("an error occurred while retrieving source definition: %w", err)
-		logger.Errorln(err)
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		// 501, not 400. This lookup needs the upstream provider definitions, which are a
+		// commercial dependency YourPHR does not have (fastenhealth/fasten-onprem#629), so it
+		// fails for EVERY request regardless of what was posted. A 400 blames the caller for a
+		// payload that was never the problem and invites them to keep retrying variations of it.
+		//
+		// Connect a source through the Provider Catalog or SMART connect instead; those paths do
+		// not depend on the upstream definitions. See yourphr#476.
+		logger.Errorf("source definitions are unavailable, so %s cannot be served: %s", c.Request.URL.Path, err)
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"success": false,
+			"error": "this endpoint requires the upstream provider source definitions, which are not " +
+				"available in YourPHR. Connect a source from the Provider Catalog or with SMART connect instead",
+		})
 		return
 	}
 

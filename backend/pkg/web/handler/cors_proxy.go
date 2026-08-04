@@ -23,8 +23,20 @@ func CORSProxy(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": fmt.Sprintf("endpoint not found: %s", endpointId),
+		// 501, not 404. This proxy needs the upstream provider definitions to know which endpoint
+		// it may relay to and what URL prefix to confine the request to — both of which are the
+		// security controls below. Those definitions are a commercial dependency YourPHR does not
+		// have (fastenhealth/fasten-onprem#629), so this fails for every endpointId, not just an
+		// unknown one. A 404 reads as "you passed a bad id" and sends the caller hunting for a
+		// right one that does not exist.
+		//
+		// Reached only when a source sets cors_relay_required, which comes from Fasten's hosted
+		// lighthouse. Its discovery endpoints (/search, /catalog) currently return nothing, so no
+		// endpointId can be obtained through the UI and this path is unreachable in practice —
+		// which is a fact about an external service, not a guarantee. See yourphr#476.
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"error": "the CORS relay requires the upstream provider source definitions, which are " +
+				"not available in YourPHR",
 		})
 		return
 	}
