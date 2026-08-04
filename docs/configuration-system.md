@@ -147,6 +147,21 @@ This is leak prevention, **not encryption**: the value is plain in memory and vi
 
 > **GAP: nothing uses the type yet.** Converting `SourceCredential`'s access and refresh tokens is the highest-value change and touches sync, so it wants its own review.
 
+## Rejected: editing `.env` from the UI
+
+Technically possible — it is a file the process can read and write. Deliberately not done.
+
+Only two variables genuinely need to live in the environment, and they are exactly the two that must not be editable from a UI:
+
+- **`YOURPHR_STORAGE_DATA_DIR`** — changing it does not move the data. The next start looks in a different directory, finds nothing, and shows the first-run wizard. The records are still on disk, but the instance behaves like a fresh install.
+- **`YOURPHR_DATABASE_ENCRYPTION_KEY`** — writing it to a plaintext file on the same volume as the encrypted database defeats the encryption. The point of that key being external is that it is not beside the thing it locks.
+
+Everything else is already editable in-app, so there is nothing left for such an editor to usefully write.
+
+There is also a mechanical problem: on Kubernetes and Docker Compose the app never reads `.env` — the environment arrives from the pod spec or `env_file:` before the process starts. Writing the file would appear to work and change nothing, which is the accept-then-silently-revert pattern this system has been bitten by three times.
+
+**Reading is already solved, and better than reading the file.** Admin → Configuration reports `source: environment` and names the variable, showing the *effective* value whatever supplied it. Reading `.env` would show one of four possible sources and mislead about the other three.
+
 ## Differences from ngdpbase
 
 The layering, the flat-key format, the comment convention and the environment references are all taken from [jwilleke/ngdpbase](https://github.com/jwilleke/ngdpbase) — read from `src/managers/ConfigurationManager.ts` and `config/app-default-config.json`, not from its docs. Three deliberate divergences:
