@@ -4,14 +4,14 @@ Local development runs **two processes**: the Go API and the Angular dev server.
 
 ## Prerequisites
 
-- **`config.dev.yaml`** at the repo root (gitignored; copy/adapt from the committed `config.yaml`). It sets the backend listen port and dev settings (encryption off, debug). `make serve-backend` requires it.
+- **`.env`** at the repo root (gitignored; `cp .env.dev.example .env`). It sets the backend listen port and dev settings (encryption off, no converter sidecar). `make serve-backend` reads it from the working directory.
 
 ## Start
 
 In two terminals:
 
 ```bash
-make serve-backend      # Go API on :9090 (config.dev.yaml, --debug)
+make serve-backend      # Go API on :9090 (reads ./.env, --debug)
 make serve-frontend     # ng serve on :4200; proxies /api -> :9090 (sandbox mode)
 ```
 
@@ -31,7 +31,7 @@ Then browse to `http://<this-host-ip>:4200` from the other device. The backend a
 
 ## Notes
 
-- **Ports:** backend **9090** (`config.dev.yaml` `web.listen.port` — the `ng serve` dev proxy forwards `/api` here), frontend **4200**.
+- **Ports:** backend **9090** (`YOURPHR_WEB_LISTEN_PORT` in `.env` — the `ng serve` dev proxy forwards `/api` here), frontend **4200**.
 - **Sandbox mode:** the frontend dev server defaults to **sandbox** (talks only to synthetic-data test servers). `prod` mode talks to real servers; pick the build config with `-c` (e.g. `make build-frontend-prod`).
 - **Version:** the footer shows `dev-<version>` (e.g. `dev-1.12.0`) via the public `/api/version` endpoint.
 - **Dev data:** synthetic patient logins live in the local dev SQLite DB (persists on disk between restarts). See [Dev test accounts](#dev-test-accounts).
@@ -101,4 +101,4 @@ go mod vendor
 
 - `Makefile` — the `serve-*` / `build-*` targets.
 - `AGENTS.md` — the Commands section.
-- `config.yaml` — the template for `config.dev.yaml`.
+- `.env.dev.example` — the template for `.env`.

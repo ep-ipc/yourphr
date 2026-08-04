@@ -31,13 +31,15 @@ serve-frontend-lan: dep-frontend
 serve-frontend-prod: dep-frontend
 	cd frontend && yarn dist -- -c prod
 
+# Reads ./.env from the repo root (cp .env.dev.example .env). No --config: the YAML layer was
+# removed in yourphr#474.
 .PHONY: serve-backend
 serve-backend: dep-backend
-	go run backend/cmd/fasten/fasten.go start --config ./config.dev.yaml --debug
+	go run backend/cmd/fasten/fasten.go start --debug
 
 .PHONY: migrate
 migrate: dep-backend
-	go run backend/cmd/fasten/fasten.go migrate --config ./config.dev.yaml --debug
+	go run backend/cmd/fasten/fasten.go migrate --debug
 
 .PHONY: serve-docker-prod
 serve-docker-prod:

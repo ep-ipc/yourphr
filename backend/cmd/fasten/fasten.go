@@ -78,13 +78,8 @@ func main() {
 				Name:  "start",
 				Usage: "Start the fasten server",
 				Action: func(c *cli.Context) error {
-					if c.IsSet("config") {
-						err = appconfig.ReadConfig(c.String("config")) // Find and read the config file
-						if err != nil {                                // Handle errors reading the config file
-							//ignore "could not find config file"
-							fmt.Printf("Could not find config file at specified path: %s", c.String("config"))
-							return err
-						}
+					if err := rejectRemovedConfigFlag(c); err != nil {
+						return err
 					}
 
 					//process cli variables
@@ -130,7 +125,7 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "config",
-						Usage: "Specify the path to the config file",
+						Usage: "REMOVED. Configuration comes from .env and YOURPHR_* environment variables",
 					},
 					&cli.StringFlag{
 						Name:  "variable",
@@ -162,13 +157,8 @@ func main() {
 				Usage: "Run database migrations, without starting application",
 				Action: func(c *cli.Context) error {
 
-					if c.IsSet("config") {
-						err = appconfig.ReadConfig(c.String("config")) // Find and read the config file
-						if err != nil {                                // Handle errors reading the config file
-							//ignore "could not find config file"
-							fmt.Printf("Could not find config file at specified path: %s", c.String("config"))
-							return err
-						}
+					if err := rejectRemovedConfigFlag(c); err != nil {
+						return err
 					}
 
 					if c.Bool("debug") {
@@ -196,7 +186,7 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "config",
-						Usage: "Specify the path to the config file",
+						Usage: "REMOVED. Configuration comes from .env and YOURPHR_* environment variables",
 					},
 					&cli.BoolFlag{
 						Name:    "debug",
@@ -245,4 +235,26 @@ func CreateLogger(appConfig config.Interface) (*logrus.Entry, *os.File, error) {
 		}
 	}
 	return logger, logFile, nil
+}
+
+// rejectRemovedConfigFlag fails loudly when --config is passed, instead of ignoring it.
+//
+// The YAML configuration layer was removed in yourphr#474: bootstrap comes from .env and the
+// YOURPHR_* environment, everything else from Admin -> Configuration. An operator still carrying
+// --config in a systemd unit or a Makefile has real settings in that file, so accepting the flag
+// and silently dropping them would recreate exactly the failure this removal was for — a
+// configuration source that appears to be in effect and is not.
+//
+// Deleting the flag would also fail, with "flag provided but not defined: -config", which is true
+// and tells nobody what to do instead. The flag is kept solely to produce this message.
+func rejectRemovedConfigFlag(c *cli.Context) error {
+	if !c.IsSet("config") {
+		return nil
+	}
+	return fmt.Errorf(
+		"--config was removed (%s is not read). Configuration now comes from .env plus YOURPHR_* "+
+			"environment variables for bootstrap, and Admin -> Configuration for everything else. "+
+			"Start from the template for your deployment: .env.docker.example, .env.baremetal.example, "+
+			".env.k8s.example, or .env.dev.example. See docs/configuration-system.md",
+		c.String("config"))
 }

@@ -2,41 +2,23 @@ package config
 
 import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/errors"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func Test_ValidateConfig(t *testing.T) {
-	testConfig := configuration{
-		Viper: viper.New(),
-	}
-	testConfig.Set("database.encryption.enabled", true)
+// ValidateEncryptionKey guards the moment an operator commits to a key. It is deliberately not a
+// startup check: encryption enabled with no key is standby mode, which is how the first-run wizard
+// gets a key in at all.
+func Test_ValidateEncryptionKey(t *testing.T) {
+	require.NoError(t, ValidateEncryptionKey("a-real-key-long-enough"))
 
-	testConfig.Set("database.encryption.key", "tooshort")
-	err := testConfig.ValidateConfig()
+	err := ValidateEncryptionKey("tooshort")
 	require.ErrorIs(t, err, errors.ConfigValidationError("database.encryption.key must be at least 10 characters"))
 
-	testConfig.Set("database.encryption.key", "")
-	err = testConfig.ValidateConfig()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "database.encryption.key is required")
-
-	testConfig.Set("database.encryption.key", "a-real-key-long-enough")
-	require.NoError(t, testConfig.ValidateConfig())
-}
-
-// The empty key is the catalogue's DEFAULT, so validation must not treat "present in the
-// catalogue" as "supplied by the operator". Gating on IsSet would reject every unencrypted
-// install, because viper reports a registered default as set.
-func Test_ValidateConfig_EmptyKeyIsFineWhenEncryptionIsOff(t *testing.T) {
-	testConfig := configuration{Viper: viper.New()}
-	testConfig.Set("database.encryption.enabled", false)
-	testConfig.Set("database.encryption.key", "")
-
-	require.NoError(t, testConfig.ValidateConfig())
+	err = ValidateEncryptionKey("")
+	require.ErrorIs(t, err, errors.ConfigValidationError("database.encryption.key cannot be empty"))
 }
 
 func Test_ResolveJWTIssuerKey(t *testing.T) {

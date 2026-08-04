@@ -160,20 +160,6 @@ func (mr *MockInterfaceMockRecorder) MergeConfigMap(cfg interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MergeConfigMap", reflect.TypeOf((*MockInterface)(nil).MergeConfigMap), cfg)
 }
 
-// ReadConfig mocks base method.
-func (m *MockInterface) ReadConfig(configFilePath string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadConfig", configFilePath)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ReadConfig indicates an expected call of ReadConfig.
-func (mr *MockInterfaceMockRecorder) ReadConfig(configFilePath interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadConfig", reflect.TypeOf((*MockInterface)(nil).ReadConfig), configFilePath)
-}
-
 // Set mocks base method.
 func (m *MockInterface) Set(key string, value interface{}) {
 	m.ctrl.T.Helper()

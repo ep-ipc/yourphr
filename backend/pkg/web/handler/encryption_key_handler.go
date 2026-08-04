@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"os"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
@@ -57,7 +59,22 @@ func (h *EncryptionKeyHandler) SetEncryptionKey(c *gin.Context) {
 		return
 	}
 
-	if payload.EncryptionKey == "" {
+	// Enforced here rather than at startup: this is the moment an operator commits to a key, and
+	// until yourphr#474 the rule lived in ValidateConfig, which only the removed --config path
+	// reached. So the first-run wizard — the way nearly every install actually sets its key — had
+	// no length check at all.
+	//
+	// ONLY for a database that does not exist yet. The UI calls /encryption-key/validate and then
+	// this endpoint for both cases, and validate succeeds precisely when the key opens the existing
+	// database. Applying a minimum here unconditionally would take a correct legacy key, confirm it
+	// against the real database, and then refuse to use it — locking the operator out of their own
+	// records to enforce a rule that can no longer change anything.
+	if !databaseExists(h.AppConfig.GetString("database.location")) {
+		if err := config.ValidateEncryptionKey(payload.EncryptionKey); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+			return
+		}
+	} else if payload.EncryptionKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "encryption key is required"})
 		return
 	}
@@ -82,7 +99,9 @@ func (h *EncryptionKeyHandler) ValidateEncryptionKey(c *gin.Context) {
 		return
 	}
 
-	h.Logger.Info(payload.EncryptionKey)
+	// The key was logged here in cleartext, defeating the encryption it unlocks for anyone with
+	// read access to the log — which the Admin Dashboard exposes over HTTP.
+	h.Logger.Info("Validating a supplied database encryption key")
 
 	if payload.EncryptionKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "encryption key is required"})
@@ -110,4 +129,18 @@ func (h *EncryptionKeyHandler) ValidateEncryptionKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// databaseExists reports whether the SQLite file is already there.
+//
+// A missing path means a fresh instance about to create its database, which is the only moment a
+// key requirement can be applied without risking a lockout. Errors other than "not found" are
+// treated as "exists" — the safe direction, since guessing "fresh" for a database that is merely
+// unreadable would apply the rule to an existing instance.
+func databaseExists(location string) bool {
+	if location == "" {
+		return false
+	}
+	_, err := os.Stat(location)
+	return !errors.Is(err, os.ErrNotExist)
 }

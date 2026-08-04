@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"github.com/analogj/go-util/utils"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/errors"
 	"github.com/spf13/viper"
 	"github.com/subosito/gotenv"
@@ -144,46 +143,30 @@ func (c *configuration) Init() error {
 	return nil
 }
 
-func (c *configuration) ReadConfig(configFilePath string) error {
-
-	if !utils.FileExists(configFilePath) {
-		message := fmt.Sprintf("The configuration file (%s) could not be found. Skipping", configFilePath)
-		log.Print(message)
-		return errors.ConfigFileMissingError("The configuration file could not be found.")
-	}
-
-	log.Printf("Loading configuration file: %s", configFilePath)
-
-	config_data, err := os.Open(configFilePath)
-	if err != nil {
-		log.Printf("Error reading configuration file: %s", err)
-		return err
-	}
-	err = c.MergeConfig(config_data)
-	if err != nil {
-		log.Printf("Error merging config file: %s", err)
-		return err
-	}
-	return c.ValidateConfig()
-}
-
-// ValidateConfig ensures required configuration is present.
+// MinEncryptionKeyLength is the shortest accepted database encryption key.
 //
-// The encryption key is checked against database.encryption.enabled rather than against IsSet.
-// viper's IsSet reports true for a registered default, so once the key was catalogued (it must be,
-// or the startup unknown-key check calls YOURPHR_DATABASE_ENCRYPTION_KEY a no-op) an IsSet gate
-// would fire on every UNencrypted install and reject the empty default it just supplied itself.
-// "Is encryption on?" is the question that actually decides whether a key is required.
-func (c *configuration) ValidateConfig() error {
-	if !c.GetBool("database.encryption.enabled") {
-		return nil
-	}
-	key := c.GetString("database.encryption.key")
+// Modest on purpose: it rejects a key typed by accident, not a weak one. A key long enough to
+// resist offline attack on a stolen disk is far longer, and the first-run wizard suggests
+// `openssl rand -hex 32`.
+const MinEncryptionKeyLength = 10
+
+// ValidateEncryptionKey checks a key an operator is about to commit to.
+//
+// Deliberately NOT called at startup. Encryption enabled with no key is a legitimate running
+// state — the server enters standby mode and serves only the endpoints the first-run wizard uses
+// to supply one (see AppEngine.initializeDatabase). Refusing to boot would break exactly the flow
+// that exists to get the key in.
+//
+// Equally NOT called when unlocking an existing database. An instance whose key predates this rule
+// must still be able to open its own records; enforcing a minimum on the unlock path would lock
+// out the data it was meant to protect.
+func ValidateEncryptionKey(key string) error {
 	if key == "" {
-		return errors.ConfigValidationError("database.encryption.key is required when database.encryption.enabled is true (set YOURPHR_DATABASE_ENCRYPTION_KEY, or set YOURPHR_DATABASE_ENCRYPTION_ENABLED=false to run unencrypted)")
+		return errors.ConfigValidationError("database.encryption.key cannot be empty")
 	}
-	if len(key) < 10 {
-		return errors.ConfigValidationError("database.encryption.key must be at least 10 characters")
+	if len(key) < MinEncryptionKeyLength {
+		return errors.ConfigValidationError(fmt.Sprintf(
+			"database.encryption.key must be at least %d characters", MinEncryptionKeyLength))
 	}
 	return nil
 }

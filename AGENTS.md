@@ -70,10 +70,10 @@ This is a **Personal Health Record** application. Patient data (PHI) and secrets
 
 - **The runtime database.** SQLite files contain all imported PHR. `docker-compose` writes the DB to `./db/`, and the dev config may put `fasten.db` elsewhere. All of `*.db`, `*.db-shm`, `*.db-wal`, `*.sqlite*`, and `/db/` are gitignored — keep it that way.
 - **Real FHIR bundles.** Only ever commit *synthetic* fixtures (Synthea-generated) under `frontend/src/lib/fixtures/` and `backend/pkg/database/testdata/`. Never add a real patient export. Drop ad-hoc real bundles in a gitignored dir (`/sample-data/`, `/phi/`, `/patient-data/`).
-- **Secrets / keys.** No real `jwt.issuer.key`, encryption keys, OAuth client secrets, access/refresh tokens, `.env`, `*.pem` / `*.key` / `*.p12` / `*.pfx`. Real config goes in `config.dev.yaml` (gitignored) or environment variables — never in a committed file.
+- **Secrets / keys.** No real `jwt.issuer.key`, encryption keys, OAuth client secrets, access/refresh tokens, `.env`, `*.pem` / `*.key` / `*.p12` / `*.pfx`. Real config goes in `.env` (gitignored) or environment variables — never in a committed file. The `.env.*.example` templates are committed: placeholders only.
 - **Certs.** `certs/` is gitignored (the app generates its own CA at runtime).
 
-**Note on `config.yaml`:** removed in [#470](https://github.com/jwilleke/yourphr/issues/470). Defaults live in `backend/pkg/config/app-default-config.json`, an instance overrides them in `<data>/config/app-custom-config.json` (Admin → Configuration), and `YOURPHR_*` env overrides both. For local development copy `config.dev.yaml.example`. See [`docs/configuration-system.md`](docs/configuration-system.md).
+**Note on YAML configuration:** removed in [#470](https://github.com/jwilleke/yourphr/issues/470) and [#474](https://github.com/jwilleke/yourphr/issues/474) — there is no `config.yaml` and no `--config` flag. Defaults live in `backend/pkg/config/app-default-config.json`, bootstrap comes from `.env` plus `YOURPHR_*` env, and everything else is changed at Admin → Configuration (`<data>/config/app-custom-config.json`). For local development `cp .env.dev.example .env`. See [`docs/configuration-system.md`](docs/configuration-system.md).
 
 **Before any commit or push:** run `git status` / `git diff --staged` and confirm no DB, `.env`, key, or real-patient file is staged. Never use `git add -A` / `git add .` blindly — add specific files. If something sensitive was already committed, treat it as compromised: rotate the secret and scrub history (`git filter-repo` / BFG), don't just delete it in a new commit.
 
@@ -86,7 +86,7 @@ make test              # run both backend and frontend test suites
 make test-backend      # go vet ./... && go test -v ./...  (slow on first run; vendors deps + generates)
 make test-frontend     # cd frontend && npx ng test --watch=false  (ChromeHeadless)
 
-make serve-backend     # go run backend/cmd/fasten/fasten.go start --config ./config.dev.yaml --debug
+make serve-backend     # go run backend/cmd/fasten/fasten.go start --debug   (reads ./.env)
 make serve-frontend    # cd frontend && ng serve --hmr --live-reload -c dev  (proxies API to backend)
 make migrate           # run DB migrations without starting the server
 
@@ -104,7 +104,7 @@ go test -v ./backend/pkg/models/database/ -run TestFhirAllergyIntolerance_Extrac
 ng test --include='**/badge.component.spec.ts'
 ```
 
-`make serve-backend` expects a `config.dev.yaml` (not committed; `cp config.dev.yaml.example config.dev.yaml`). The frontend dev server runs in **sandbox mode** by default (talks only to synthetic-data test servers); `prod` mode talks to real servers. Build configs are selected with `-c` (e.g. `make build-frontend-prod`, `build-frontend-desktop-prod`, `build-frontend-offline-sandbox`).
+`make serve-backend` expects a `.env` at the repo root (not committed; `cp .env.dev.example .env`). The frontend dev server runs in **sandbox mode** by default (talks only to synthetic-data test servers); `prod` mode talks to real servers. Build configs are selected with `-c` (e.g. `make build-frontend-prod`, `build-frontend-desktop-prod`, `build-frontend-offline-sandbox`).
 
 ### Backend architecture (`backend/`)
 

@@ -21,8 +21,8 @@ YourPHR ships from `main` (rolling release). Security fixes land on `main` and t
 
 ## For operators — handling secrets & data
 
-- **Never commit** secrets, keys, `.env`, real FHIR bundles, or the SQLite DB. See the "NEVER commit personal health data or unencrypted secrets" section of `AGENTS.md`. `*.db`, `/db/`, `config.dev.yaml`, `certs/`, and key files are gitignored — keep them that way.
-- DB encryption is **on by default**; **override** the placeholder `jwt.issuer.key` in any real deployment (via `config.dev.yaml` or an environment variable).
+- **Never commit** secrets, keys, `.env`, real FHIR bundles, or the SQLite DB. See the "NEVER commit personal health data or unencrypted secrets" section of `AGENTS.md`. `*.db`, `/db/`, `.env`, `certs/`, and key files are gitignored — keep them that way. The `.env.*.example` templates are committed and must never hold a real value.
+- DB encryption is **on by default**. There is no default `jwt.issuer.key` — a strong one is generated and persisted at `<data>/.jwt_issuer_key` on first start. Pin your own via `YOURPHR_JWT_ISSUER_KEY` only if you have a reason to.
 - The app is meant to run behind your own authentication and network controls (e.g. a reverse proxy / forward-auth) on a trusted network — it is not hardened for direct exposure to the public internet.
 
 ## Attribution

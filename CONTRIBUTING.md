@@ -117,25 +117,20 @@ make test-backend    # Go only
 
 ## Start the dev environment
 
-Running from source needs two processes: the Angular frontend and the Go backend. First create a dev config (`config.dev.yaml`):
+Running from source needs two processes: the Angular frontend and the Go backend. First create a dev config:
 
-```yaml
-version: 1
-web:
-  listen:
-    port: 9090
-    host: 0.0.0.0
-    basepath: ''
-  src:
-    frontend:
-      path: ./dist
-database:
-  location: 'fasten.db'
-cache:
-  location: ''
-log:
-  file: '' # absolute or relative paths allowed, eg. web.log
-  level: INFO
+```bash
+cp .env.dev.example .env
+```
+
+```bash
+# .env — bootstrap only; everything else is changed at Admin -> Configuration
+YOURPHR_WEB_LISTEN_PORT=9090          # frontend/proxy.conf.json proxies /api here
+YOURPHR_STORAGE_DATA_DIR=./db
+YOURPHR_DATABASE_LOCATION=./db/fasten.db
+YOURPHR_DATABASE_ENCRYPTION_ENABLED=false
+YOURPHR_CDA_CONVERTER_ENABLED=false
+YOURPHR_BACKUP_LABEL=dev
 ```
 
 Then, in two terminals:

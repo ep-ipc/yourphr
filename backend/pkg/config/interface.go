@@ -8,7 +8,6 @@ import (
 //go:generate mockgen -source=interface.go -destination=mock/mock_config.go
 type Interface interface {
 	Init() error
-	ReadConfig(configFilePath string) error
 	Set(key string, value interface{})
 	SetDefault(key string, value interface{})
 	MergeConfigMap(cfg map[string]interface{}) error

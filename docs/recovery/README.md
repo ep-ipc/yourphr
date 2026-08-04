@@ -70,7 +70,7 @@ Restoring from an **uploaded** file (rather than one already in the destination)
 
 ## Configuration
 
-Schedule settings are normally managed from the card and persisted to `<db-dir>/.backup_settings.json`. These config keys (in `config.yaml` / `config.dev.yaml`, or `YOURPHR_*` env, e.g. `YOURPHR_BACKUP_LABEL`) provide the **initial defaults**:
+Schedule settings are normally managed from the card and persisted to `<db-dir>/.backup_settings.json`. These config keys (Admin → Configuration, or `YOURPHR_*` env, e.g. `YOURPHR_BACKUP_LABEL`) provide the **initial defaults**:
 
 | Key | Env | Meaning | Default |
 |---|---|---|---|
