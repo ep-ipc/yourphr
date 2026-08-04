@@ -101,7 +101,7 @@
     "typescript-eslint": "8.46.4"
   },
   "resolutions": {
-    "ip-address": "10.2.2",
+    "ip-address": "10.3.1",
     "webpack": "5.105.0",
     "serialize-javascript": "7.0.5",
     "uuid": "11.1.1",
@@ -109,8 +109,10 @@
     "@angular-devkit/build-angular/http-proxy-middleware": "3.0.7",
     "webpack-dev-server/http-proxy-middleware": "2.0.10",
     "piscina": "5.2.0",
-    "undici": "6.27.0",
+    "undici": "6.28.0",
     "postcss": "8.5.23",
+    "fast-uri": "3.1.5",
+    "socket.io-parser": "4.2.7",
     "@babel/runtime": "^7.26.10",
     "crypto-js": "^4.2.0",
     "ws": "^8.17.1",
