@@ -1,4 +1,15 @@
 ######################################################################
+# EXAMPLE ONLY — this file is NOT loaded automatically (yourphr#470).
+#
+# Defaults ship embedded in the binary (backend/pkg/config/app-default-config.json).
+# An instance overrides them in <data>/config/app-custom-config.json, editable from
+# Admin -> Configuration. The environment (YOURPHR_*) overrides both.
+# See docs/configuration-system.md.
+#
+# Kept as a worked example of the YAML shape `fasten start --config <path>` accepts.
+# Local development uses config.dev.yaml (gitignored), not this file.
+######################################################################
+######################################################################
 # Version
 #
 # version specifies the version of this configuration file schema, not
@@ -20,7 +31,8 @@ web:
     basepath: ''
 
     https:
-      enabled: true
+      # Matches the shipped default. Enabling this needs certificates present in certDir.
+      enabled: false
       certDir: "certs"
       sharedDir: "certs/shared"
   src:
@@ -37,7 +49,9 @@ metrics:
   # addr: '127.0.0.1:9091'  # optional full bind address (overrides port)
 database:
   encryption:
-    enabled: true
+    # Matches the shipped default. Turning this on REQUIRES database.encryption.key, and while it
+    # is on, backup and restore are refused (yourphr#367). See docs/deployment/README.md.
+    enabled: false
   #    key: ''
   type: 'sqlite' # postgres will be supported in the future, but is completely **BROKEN** at the moment.
   location: '/opt/fasten/db/fasten.db' # if postgres (**BROKEN**) use a DSN, eg. `host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=required TimeZone=Asia/Shanghai`

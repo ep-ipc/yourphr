@@ -13,13 +13,14 @@ Lowest to highest precedence:
 | Layer | Location | Who writes it |
 |---|---|---|
 | Shipped defaults | `backend/pkg/config/app-default-config.json`, embedded in the binary | developers, in a release |
-| ~~`config.yaml`~~ | mounted at `/opt/fasten/config/config.yaml` | **GAP — being retired** |
 | Instance overrides | `<data root>/config/app-custom-config.json` | the operator, via Admin → Configuration |
 | Environment | `YOURPHR_*` | the deployment |
 
+A config file is read **only** when one is asked for with `fasten start --config <path>`. Nothing is loaded by proximity.
+
 Later layers win. A key absent from a layer falls through to the one below.
 
-> **GAP: `config.yaml` is a redundant fourth layer.** It predates the custom config store and does nothing the other layers cannot. Retiring it needs care — one of its keys (`cache.location`) differs from the shipped default, so deleting it in one step would silently relocate the cache.
+> **GAP: the reference deployment still mounts a `config.yaml` ConfigMap.** The binary no longer ships or reads one, so the mount is inert — but it must be removed from the deployment to finish [#470](https://github.com/jwilleke/yourphr/issues/470). Order matters: the image change had to land *first*, because the ConfigMap was **shadowing** the image's own `config.yaml`, and removing the mount while that file existed would have revealed `database.encryption.enabled: true` with no key — a crash loop on both instances.
 
 ### Why the defaults are embedded
 
@@ -173,7 +174,7 @@ Tests that keep the above true rather than aspirational:
 
 | | Issue |
 |---|---|
-| Retire `config.yaml` | [#470](https://github.com/jwilleke/yourphr/issues/470) |
+| Retire `config.yaml` | [#470](https://github.com/jwilleke/yourphr/issues/470) — binary done; ConfigMap removal needs a release first |
 | Warn on unknown keys from the custom file and the environment | **done** — [#473](https://github.com/jwilleke/yourphr/issues/473) for surfacing them in the UI |
 | Fold backup state into the store | [#455](https://github.com/jwilleke/yourphr/issues/455) |
 | Move ordinary settings out of environment on the reference deployment, leaving bootstrap and secrets | [#472](https://github.com/jwilleke/yourphr/issues/472) |

@@ -73,7 +73,7 @@ This is a **Personal Health Record** application. Patient data (PHI) and secrets
 - **Secrets / keys.** No real `jwt.issuer.key`, encryption keys, OAuth client secrets, access/refresh tokens, `.env`, `*.pem` / `*.key` / `*.p12` / `*.pfx`. Real config goes in `config.dev.yaml` (gitignored) or environment variables — never in the committed `config.yaml`.
 - **Certs.** `certs/` is gitignored (the app generates its own CA at runtime).
 
-**Note on `config.yaml`:** the committed file ships the upstream *default* placeholder `jwt.issuer.key` (`"thisismysupersecure..."`). That is a known public default, not a real secret — it **must** be overridden in any real deployment (via `config.dev.yaml`/env). Never replace it with a real generated key in the committed file.
+**Note on `config.yaml`:** as of [#470](https://github.com/jwilleke/yourphr/issues/470) this file is **not loaded automatically** and is not shipped in the image — it is a worked example of the YAML shape `fasten start --config <path>` accepts. Defaults live in `backend/pkg/config/app-default-config.json`; see [`docs/configuration-system.md`](docs/configuration-system.md). It still carries the upstream placeholder `jwt.issuer.key` (`"thisismysupersecure..."`), a known public default that the server treats as unset — never replace it with a real generated key in the committed file.
 
 **Before any commit or push:** run `git status` / `git diff --staged` and confirm no DB, `.env`, key, or real-patient file is staged. Never use `git add -A` / `git add .` blindly — add specific files. If something sensitive was already committed, treat it as compromised: rotate the secret and scrub history (`git filter-repo` / BFG), don't just delete it in a new commit.
 

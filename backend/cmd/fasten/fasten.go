@@ -7,7 +7,6 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/applog"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
-	"github.com/fastenhealth/fasten-onprem/backend/pkg/errors"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/event_bus"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/version"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/web"
@@ -32,13 +31,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	//we're going to load the config file manually, since we need to validate it.
-	err = appconfig.ReadConfig("config.yaml")             // Find and read the config file
-	if _, ok := err.(errors.ConfigFileMissingError); ok { // Handle errors reading the config file
-		//ignore "could not find config file"
-	} else if err != nil {
-		os.Exit(1)
-	}
+	// No config file is read unless one is asked for with --config (yourphr#470).
+	//
+	// This used to load "config.yaml" from the working directory automatically, which made it a
+	// silent fourth configuration layer on every deployment. Defaults now ship embedded in the
+	// binary (app-default-config.json), an instance overrides them in
+	// <data>/config/app-custom-config.json, and the environment overrides that — three layers with
+	// a documented precedence, and no file appearing by proximity.
+	//
+	// `--config <path>` still works and is what the Makefile uses for local development.
 
 	app := &cli.App{
 		Name:     "goweb",

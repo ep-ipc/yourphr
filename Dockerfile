@@ -59,6 +59,7 @@ COPY --from=backend-build  /opt/fasten/ /opt/fasten/
 COPY --from=frontend-build /usr/src/fastenhealth/dist /opt/fasten/web
 COPY --from=backend-build /go/bin/fasten /opt/fasten/fasten
 COPY LICENSE.md /opt/fasten/LICENSE.md
-COPY config.yaml /opt/fasten/config/config.yaml
 RUN ["/opt/fasten/fasten", "--help"]
-CMD ["/opt/fasten/fasten", "start", "--config", "/opt/fasten/config/config.yaml"]
+# No --config: defaults are embedded in the binary, an instance overrides them in
+# <data>/config/app-custom-config.json, and the environment overrides that (yourphr#470).
+CMD ["/opt/fasten/fasten", "start"]
