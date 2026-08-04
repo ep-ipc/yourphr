@@ -124,6 +124,6 @@ This is why backups must live **off** the DB volume (the NAS mount): a backup on
 ## Security & limitations
 
 - **Admin-only.** Every backup/restore endpoint is gated by the admin role; the backup destination + folder browser are intentionally arbitrary admin-chosen paths (an admin already has full DB control). CodeQL path/SQL-injection findings on these were reviewed, hardened where applicable, and the by-design ones accepted — see [#365](https://github.com/jwilleke/yourphr/issues/365).
-- **Plaintext backups.** At-rest encryption is off by default and deferred ([#363](https://github.com/jwilleke/yourphr/issues/363)); treat backup files as sensitive PHI.
+- **Plaintext backups.** Backups exist only on instances running with `database.encryption.enabled=false` — encryption is on by default and currently refuses backup and restore ([#367](https://github.com/jwilleke/yourphr/issues/367)). So every backup file is plaintext PHI, including live provider refresh tokens ([#461](https://github.com/jwilleke/yourphr/issues/461)); treat them accordingly.
 - **Verify your backups.** A backup is only proven by a successful restore — exercise the restore path periodically.
 - **Roadmap:** card polish (free disk space, schema version, totals, vacuum) — [#364](https://github.com/jwilleke/yourphr/issues/364); restore-from-upload; at-rest encryption — [#363](https://github.com/jwilleke/yourphr/issues/363).

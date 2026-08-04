@@ -167,16 +167,23 @@ func (c *configuration) ReadConfig(configFilePath string) error {
 	return c.ValidateConfig()
 }
 
-// This function ensures that required configuration keys (that must be manually set) are present
+// ValidateConfig ensures required configuration is present.
+//
+// The encryption key is checked against database.encryption.enabled rather than against IsSet.
+// viper's IsSet reports true for a registered default, so once the key was catalogued (it must be,
+// or the startup unknown-key check calls YOURPHR_DATABASE_ENCRYPTION_KEY a no-op) an IsSet gate
+// would fire on every UNencrypted install and reject the empty default it just supplied itself.
+// "Is encryption on?" is the question that actually decides whether a key is required.
 func (c *configuration) ValidateConfig() error {
-	if c.IsSet("database.encryption.key") {
-		key := c.GetString("database.encryption.key")
-		if key == "" {
-			return errors.ConfigValidationError("database.encryption.key cannot be empty")
-		}
-		if len(key) < 10 {
-			return errors.ConfigValidationError("database.encryption.key must be at least 10 characters")
-		}
+	if !c.GetBool("database.encryption.enabled") {
+		return nil
+	}
+	key := c.GetString("database.encryption.key")
+	if key == "" {
+		return errors.ConfigValidationError("database.encryption.key is required when database.encryption.enabled is true (set YOURPHR_DATABASE_ENCRYPTION_KEY, or set YOURPHR_DATABASE_ENCRYPTION_ENABLED=false to run unencrypted)")
+	}
+	if len(key) < 10 {
+		return errors.ConfigValidationError("database.encryption.key must be at least 10 characters")
 	}
 	return nil
 }

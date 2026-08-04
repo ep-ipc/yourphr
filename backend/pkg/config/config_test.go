@@ -10,20 +10,33 @@ import (
 )
 
 func Test_ValidateConfig(t *testing.T) {
-	//setup
 	testConfig := configuration{
 		Viper: viper.New(),
 	}
+	testConfig.Set("database.encryption.enabled", true)
 
-	//test & verify
 	testConfig.Set("database.encryption.key", "tooshort")
 	err := testConfig.ValidateConfig()
 	require.ErrorIs(t, err, errors.ConfigValidationError("database.encryption.key must be at least 10 characters"))
 
 	testConfig.Set("database.encryption.key", "")
 	err = testConfig.ValidateConfig()
-	require.ErrorIs(t, err, errors.ConfigValidationError("database.encryption.key cannot be empty"))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "database.encryption.key is required")
 
+	testConfig.Set("database.encryption.key", "a-real-key-long-enough")
+	require.NoError(t, testConfig.ValidateConfig())
+}
+
+// The empty key is the catalogue's DEFAULT, so validation must not treat "present in the
+// catalogue" as "supplied by the operator". Gating on IsSet would reject every unencrypted
+// install, because viper reports a registered default as set.
+func Test_ValidateConfig_EmptyKeyIsFineWhenEncryptionIsOff(t *testing.T) {
+	testConfig := configuration{Viper: viper.New()}
+	testConfig.Set("database.encryption.enabled", false)
+	testConfig.Set("database.encryption.key", "")
+
+	require.NoError(t, testConfig.ValidateConfig())
 }
 
 func Test_ResolveJWTIssuerKey(t *testing.T) {

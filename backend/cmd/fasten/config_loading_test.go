@@ -34,10 +34,15 @@ func TestNoConfigFileIsReadFromTheWorkingDirectory(t *testing.T) {
 }
 
 // The explicit flag still works — the Makefile and bare-metal installs rely on it.
+//
+// The file turns encryption off because the shipped default is ON and validation now requires a
+// key when it is: an unencrypted install has to say so, which is what every deployment template
+// does.
 func TestConfigFileIsReadWhenAskedFor(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mine.yaml")
-	require.NoError(t, os.WriteFile(path, []byte("log:\n  level: DEBUG\n"), 0o644))
+	require.NoError(t, os.WriteFile(path,
+		[]byte("log:\n  level: DEBUG\ndatabase:\n  encryption:\n    enabled: false\n"), 0o644))
 
 	c, err := config.Create()
 	require.NoError(t, err)
@@ -45,4 +50,24 @@ func TestConfigFileIsReadWhenAskedFor(t *testing.T) {
 	require.NoError(t, c.ReadConfig(path))
 
 	require.Equal(t, "DEBUG", c.GetString("log.level"))
+}
+
+// The other half of yourphr#470: encryption on with no key is the combination that crashed the
+// backend at startup once the shadowing ConfigMap was removed. It is now refused by name, with the
+// two ways out in the message, instead of failing later inside the database driver.
+func TestEncryptionWithoutAKeyIsRefusedByName(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mine.yaml")
+	require.NoError(t, os.WriteFile(path,
+		[]byte("database:\n  encryption:\n    enabled: true\n"), 0o644))
+
+	c, err := config.Create()
+	require.NoError(t, err)
+	require.NoError(t, c.Init())
+
+	err = c.ReadConfig(path)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "database.encryption.key is required")
+	require.Contains(t, err.Error(), "YOURPHR_DATABASE_ENCRYPTION_ENABLED=false",
+		"the error must name the way out, not just the problem")
 }

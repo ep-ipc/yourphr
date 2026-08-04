@@ -23,7 +23,7 @@ This page covers running and configuring an instance. The rest of the deployment
 | Doc | What it covers |
 |---|---|
 | [Deployment options](#deployment-options) (this page) | docker-compose, `docker run`, bare metal, Kubernetes/GitOps — all from the same `YOURPHR_*` config interface. |
-| [Configuration model](#configuration-model) (this page) | Precedence (`config.yaml` < `.env` < `.env_custom` < `YOURPHR_*`), the env mapping, and the full key reference. |
+| [Configuration model](#configuration-model) (this page) | Precedence (shipped defaults < `.env` < `.env_custom` < Admin → Configuration < `YOURPHR_*`), the env mapping, and the full key reference. |
 | [Sandbox provider credentials](#sandbox-provider-credentials) (this page) | The optional `YOURPHR_SANDBOX_*` one-click sandbox catalog ([#291](https://github.com/jwilleke/yourphr/issues/291)) — env-only, works on any deployment. |
 | [OAuth relay (self-hosting)](#oauth-relay-self-hosting) (this page) | Self-host the public SMART redirect relay ([#20](https://github.com/jwilleke/yourphr/issues/20)) — Docker or k8s; only needed for live provider sync. |
 | [`../testing-sandboxes/test-sandboxes.md`](../testing-sandboxes/test-sandboxes.md) | The test sandboxes themselves (Blue Button, Epic, SMART Health IT, …) and how to exercise them. |
@@ -43,7 +43,7 @@ docker run -p 8080:8080 -v "$(pwd)/db:/opt/fasten/db" ghcr.io/jwilleke/yourphr:m
 
 Open `http://localhost:8080` and complete the first-run setup. On first run YourPHR is **secure by default**:
 
-- The **JWT signing key auto-generates** and is persisted (0600) at `<db-dir>/.jwt_issuer_key` — zero config ([#102](https://github.com/jwilleke/yourphr/issues/102)). The committed `config.yaml` ships a *known public placeholder* key that the server treats as "unset" and never signs with.
+- The **JWT signing key auto-generates** and is persisted (0600) at `<db-dir>/.jwt_issuer_key` — zero config ([#102](https://github.com/jwilleke/yourphr/issues/102)). There is no default key. Upstream Fasten's *known public placeholder* is still recognised and rejected, because older deployment guides hand it to you.
 - The **database-encryption key** is set during first-run setup (the setup wizard prompts for it) — or you can supply it ahead of time via `YOURPHR_DATABASE_ENCRYPTION_KEY` (see below). DB encryption is **on by default**.
 - The **first user to register becomes the admin**.
 
@@ -66,7 +66,7 @@ docker run -d --name yourphr -p 9090:8080 \
   ghcr.io/jwilleke/yourphr:main
 ```
 
-To override many keys at once, mount a config file at `/opt/fasten/config/config.yaml`, or drop a `.env_custom` at `/opt/fasten/.env_custom` (see [Configuration model](#configuration-model)).
+To override many keys at once, drop a `.env_custom` at `/opt/fasten/.env_custom` (see [Configuration model](#configuration-model)), or change them from **Admin → Configuration** on the running instance — no restart and no redeploy.
 
 ### C. Bare metal
 
@@ -77,12 +77,14 @@ Build the binary (or download a release asset), then run it with a config file a
 make build-frontend-prod
 go build -o fasten ./backend/cmd/fasten/
 
-# run — config via a file and/or YOURPHR_* env
-YOURPHR_DATABASE_ENCRYPTION_KEY="$(openssl rand -hex 16)" \
-  ./fasten start --config ./config.yaml
+# run — the shipped defaults are CONTAINER paths, so bare metal must set its own
+cp .env.baremetal.example .env   # then edit it
+./fasten start
 ```
 
-`fasten start --config <path>` reads that YAML; `fasten migrate` runs DB migrations without starting the server.
+`fasten migrate` runs DB migrations without starting the server.
+
+Bare metal in particular **must** set `YOURPHR_WEB_SRC_FRONTEND_PATH` to wherever you put the compiled Angular app. Its default points inside the container image, and without it the backend starts and serves no interface, with nothing in the log explaining why.
 
 ### D. Kubernetes / GitOps
 
@@ -93,13 +95,15 @@ Provide config via a `ConfigMap` (non-secret) + `Secret` (the DB encryption key,
 Configuration is layered. **Precedence, lowest → highest:**
 
 ```
-built-in defaults  <  config.yaml  <  .env  <  .env_custom  <  YOURPHR_* environment
+shipped defaults  <  .env  <  .env_custom  <  instance overrides  <  YOURPHR_* environment
 ```
 
-- **Built-in defaults** — baked into the binary (`backend/pkg/config/config.go`); sensible for a stock install.
-- **`config.yaml`** — the committed file ships defaults + placeholders. Override by pointing `--config` at your own file (e.g. a gitignored `config.dev.yaml`); never put real secrets in the committed `config.yaml`.
-- **`.env` / `.env_custom`** — *optional* dotenv files loaded from the process **working directory** at startup (repo root for `make serve-backend`; `/opt/fasten/` inside the container — mount `.env_custom` there). `.env` is a per-deployment base; `.env_custom` (gitignored) holds instance overrides. Both are optional — config works on defaults + `YOURPHR_*` env alone. Copy `.env.example` to start.
-- **`YOURPHR_*` environment** — the universal override, highest precedence (ideal for secrets and k8s).
+- **Shipped defaults** — `backend/pkg/config/app-default-config.json`, embedded in the binary. This file is the catalogue of every setting that exists: if a key is not in it, it is not a setting, and the app warns at startup about any `YOURPHR_*` variable that maps to nothing.
+- **`.env` / `.env_custom`** — *optional* dotenv files loaded from the process **working directory** at startup (repo root for `make serve-backend`; `/opt/fasten/` inside the container — mount `.env_custom` there). `.env` is a per-deployment base; `.env_custom` (gitignored) holds instance overrides. Both are optional — config works on defaults + `YOURPHR_*` env alone. Start from the template for your deployment: `.env.docker.example`, `.env.baremetal.example`, `.env.k8s.example`, or `.env.dev.example`.
+- **Instance overrides** — `<data>/config/app-custom-config.json`, written by **Admin → Configuration**. This is where ordinary settings are changed on a running instance; no restart, no file editing, no redeploy.
+- **`YOURPHR_*` environment** — the universal override, highest precedence (ideal for secrets and k8s). A value set here **cannot be changed from the Admin screen**: that screen shows it as governed by the environment and refuses the edit, rather than accepting a change that would silently revert on the next restart.
+
+`config.yaml` was removed in [#470](https://github.com/jwilleke/yourphr/issues/470) — it was a committed file baked into the image, shadowed by a ConfigMap in the reference deployment, and the binary read it implicitly from its working directory. See [`docs/configuration-system.md`](../configuration-system.md).
 
 ### The `YOURPHR_*` env mapping
 
@@ -144,10 +148,10 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 
 There are **two distinct kinds** — don't conflate them:
 
-1. **Operator/server secrets** (deployment-level, one set): the **DB encryption key** (required) and an optional pinned **JWT key**. Supply via `YOURPHR_*` env, a mounted `config.yaml`, or `.env_custom` — never in the committed `config.yaml`.
+1. **Operator/server secrets** (deployment-level, one set): the **DB encryption key** (required while encryption is on) and an optional pinned **JWT key**. Supply via `YOURPHR_*` env or `.env_custom` — never in a committed file.
 2. **Per-user OAuth credentials** (runtime, per user *and* per connected source): when a user connects a SMART source they enter their own `client_id`/`client_secret` in the UI. These live in the `source_credentials` table ([#286](https://github.com/jwilleke/yourphr/issues/286)) — **not** an env var or file, because they are dynamic per-user data, not server config. They are never serialized to the browser (`json:"-"`).
 
-   Their protection at rest is **whole-database encryption, not per-column** — so they are encrypted only when `database.encryption.enabled` is on. It is **off by default**. See the risk note below.
+   Their protection at rest is **whole-database encryption, not per-column** — so they are encrypted only when `database.encryption.enabled` is on. It is **on by default**, but an instance that wants working backups has to turn it off. See the risk note below.
 
 ### What the data volume holds
 
@@ -195,16 +199,16 @@ Every served document carries a digest (`sha256:…` over the Markdown) shown at
 
 | | At rest | Backups | Suits |
 |---|---|---|---|
-| `enabled: false` (default) | cleartext | work | An instance whose disk you physically control, where losing records is the bigger fear |
-| `enabled: true` | encrypted | **refused** | An instance on hardware you do not control (VPS, shared host, cloud disk), where disclosure is the bigger fear |
+| `enabled: true` (default) | encrypted | **refused** | An instance on hardware you do not control (VPS, shared host, cloud disk), where disclosure is the bigger fear |
+| `enabled: false` | cleartext | work | An instance whose disk you physically control, where losing records is the bigger fear |
 
-For most self-hosters on their own hardware, **losing the records is a worse outcome than a stolen disk**, which is why the default is off and why this page does not simply tell you to turn it on. If your instance runs somewhere you would not leave an unlocked filing cabinet — a rented VPS, a cloud volume, a laptop that travels — invert that judgement and enable it.
+For most self-hosters on their own hardware, **losing the records is a worse outcome than a stolen disk**. If that describes your instance, set `YOURPHR_DATABASE_ENCRYPTION_ENABLED=false` explicitly so backups work. If your instance runs somewhere you would not leave an unlocked filing cabinet — a rented VPS, a cloud volume, a laptop that travels — keep the default and accept that you have no backups until [#461](https://github.com/jwilleke/yourphr/issues/461) lands, which removes the trade by encrypting the backup artifact itself.
 
 Either way, treat the volume as sensitive: with encryption off it is cleartext, and with encryption on you have no backup to fall back on.
 
-[#461](https://github.com/jwilleke/yourphr/issues/461) removes the trade by encrypting the backup artifact itself, at which point enabling encryption becomes the straightforward recommendation.
+**Why `true` is the default,** despite requiring an operator-supplied key with no fallback (a generated key stored next to the database protects against nothing). It is not a security recommendation — it is what a stock Docker install already *has*. The image shipped a baked `config.yaml` with encryption on for years, so those installs set a key at first-run and their database is encrypted. Defaulting to `false` when `config.yaml` was removed would have left every one of them unopenable ([#470](https://github.com/jwilleke/yourphr/issues/470)). Deployments that run unencrypted must now say so explicitly; every `.env.*.example` template does.
 
-**Why it is not the default.** Enabling it requires an operator-supplied `database.encryption.key` — there is deliberately no default, because a generated key stored next to the database protects against nothing. So a default of `true` would fail every fresh install on boot (`database encryption key is not set`), and would fail every *existing* install, whose plaintext database cannot be opened with a cipher key. Migrating an existing database is [#363](https://github.com/jwilleke/yourphr/issues/363).
+Turning encryption **on** for an existing plaintext database does not work either — that migration is [#363](https://github.com/jwilleke/yourphr/issues/363).
 
 ## Sandbox provider credentials
 

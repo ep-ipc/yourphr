@@ -181,14 +181,29 @@ func TestSecretKeys_InstanceCanExtend(t *testing.T) {
 	require.True(t, config.IsSecretKey(c, "operator.contact_email"))
 }
 
-// Listing a key that does not exist in the catalogue is harmless — it future-proofs a key that
-// is env-only today.
+// Listing a key that does not exist in the catalogue is harmless — naming a key as secret must
+// not depend on the catalogue having caught up with it, or the safe order of operations (mark it
+// secret, then add it) would be the one that fails.
 func TestSecretKeys_ToleratesKeysNotInTheCatalogue(t *testing.T) {
 	c := newTestConfig(t)
 
 	values, err := config.DefaultConfigValues()
 	require.NoError(t, err)
-	require.NotContains(t, values, "database.encryption.key",
-		"env-only by design, but still worth naming as secret")
+	require.NotContains(t, values, "future.provider.client_secret")
+
+	c.Set("secret", []string{"future.provider.client_secret"})
+	require.True(t, config.IsSecretKey(c, "future.provider.client_secret"))
+}
+
+// The encryption key must BE in the catalogue: the startup unknown-key check compares against it,
+// so an absent entry made it warn that YOURPHR_DATABASE_ENCRYPTION_KEY had no effect.
+func TestSecretKeys_EncryptionKeyIsCataloguedAndSecret(t *testing.T) {
+	c := newTestConfig(t)
+
+	values, err := config.DefaultConfigValues()
+	require.NoError(t, err)
+	require.Contains(t, values, "database.encryption.key")
+	require.Equal(t, "", values["database.encryption.key"],
+		"catalogued so it is a known setting, never so a key is stored beside its own database")
 	require.True(t, config.IsSecretKey(c, "database.encryption.key"))
 }

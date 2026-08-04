@@ -105,8 +105,13 @@ certs/
 .env.*
 *.env
 .env_custom
-# ...but the committed template IS tracked (negation must follow the patterns above) (#96)
+# ...but the committed templates ARE tracked (negation must follow the patterns above) (#96).
+# One per deployment type, because what must be set before first start differs by deployment (#474).
 !.env.example
+!.env.baremetal.example
+!.env.docker.example
+!.env.k8s.example
+!.env.dev.example
 
 # Keys, certs, and credential material
 *.pem

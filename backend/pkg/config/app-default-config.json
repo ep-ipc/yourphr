@@ -37,6 +37,8 @@
   "database.type": "sqlite",
   "database.location": "/opt/fasten/db/fasten.db",
   "database.encryption.enabled": true,
+  "_comment_database_encryption_key": "Catalogued with an empty default so it is a KNOWN setting, not so it can be stored here — it is on the secret list, and a key written beside the database it unlocks protects nothing. Empty means 'not supplied'. Without this entry the startup unknown-key check warned that YOURPHR_DATABASE_ENCRYPTION_KEY 'has no effect', which is both false and alarming for the one variable that, if ignored, leaves the database unopenable.",
+  "database.encryption.key": "",
   "database.validation_mode": false,
   "cache.location": "/opt/fasten/cache/",
 
