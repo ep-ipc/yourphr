@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.0.0](https://github.com/jwilleke/yourphr/compare/v1.23.1...v2.0.0) (2026-08-04)
+
+There is now one place a setting comes from before your instance starts, and one place it changes afterwards.
+
+Twelve commits of configuration work land together because they only make sense together. The short version: YAML configuration is gone, `.env` is the bootstrap, and everything else moved to **Admin → Configuration**.
+
+### ⚠ BREAKING CHANGES
+
+- **config:** `fasten start --config <path>` is no longer accepted. Passing it fails with a message naming the replacement rather than being ignored — silently dropping an operator's settings is the failure this release exists to remove ([#474](https://github.com/jwilleke/yourphr/issues/474))
+- **config:** `config.yaml` is gone: not shipped in the image, not read from the working directory, not read from a flag ([#470](https://github.com/jwilleke/yourphr/issues/470))
+- **config:** `database.encryption.enabled` now defaults to **true**. This is not a new recommendation — it is what a stock Docker install already had, via the `config.yaml` baked into the image for years. Defaulting to `false` when that file was removed would have left those encrypted databases unopenable ([#470](https://github.com/jwilleke/yourphr/issues/470))
+
+### Features
+
+- **config:** one bootstrap template per deployment type, because what must be set before first start genuinely differs: `.env.docker.example` (nothing required), `.env.baremetal.example` (four variables — every shipped default is a container path), `.env.k8s.example`, `.env.dev.example` ([#474](https://github.com/jwilleke/yourphr/issues/474))
+- **config:** every setting an instance has is catalogued in one file, `backend/pkg/config/app-default-config.json`, with the reason for each default beside it ([#456](https://github.com/jwilleke/yourphr/issues/456))
+- **config:** the app now warns at startup about any configuration key or `YOURPHR_*` variable that maps to nothing. The reference deployment had been setting four keys that do not exist — `web.listen_port` is not `web.listen.port` — and ran that way indefinitely ([#455](https://github.com/jwilleke/yourphr/issues/455))
+- **config:** a `Secret` type that refuses to print itself under `%s`, `%v`, `%+v`, `%#v`, `%q` or `json.Marshal`, so logging a whole struct cannot leak a signing key ([#455](https://github.com/jwilleke/yourphr/issues/455))
+- **config:** ordinary settings are edited at **Admin → Configuration** and persist to `<data>/config/app-custom-config.json` — no restart, no file editing, no redeploy ([#452](https://github.com/jwilleke/yourphr/issues/452))
+
+### Bug Fixes
+
+- **security:** the first-run wizard logged the submitted database encryption key in cleartext at `Info` level, defeating the encryption it unlocks for anyone able to read the log — which the Admin Dashboard serves over HTTP
+- **admin:** editing a setting that an environment variable governs appeared to work and silently reverted on the next restart. Such a setting is now shown as environment-governed and the write is refused ([#458](https://github.com/jwilleke/yourphr/issues/458))
+- **config:** the minimum encryption-key length had never applied where it mattered. The rule lived only on the `--config` path, while the first-run wizard — how nearly every install actually sets its key — checked only that the key was non-empty. It now applies when a database is first created ([#474](https://github.com/jwilleke/yourphr/issues/474))
+- **config:** `database.encryption.key` was named as a secret but was absent from the settings catalogue, so startup warned that `YOURPHR_DATABASE_ENCRYPTION_KEY` "has no effect" — untrue, of the one variable that if ignored leaves the database unopenable ([#474](https://github.com/jwilleke/yourphr/issues/474))
+
+### Notes for operators
+
+**Docker, docker-compose and Kubernetes installs need no action.** The image defaults are correct by construction and none of them ever passed `--config`.
+
+**If you pass `--config`, the app will now refuse to start.** Move those settings to `.env` (start from `.env.docker.example` or `.env.baremetal.example`) or to `YOURPHR_*` variables. The error names the templates.
+
+**If you run unencrypted, say so explicitly** with `YOURPHR_DATABASE_ENCRYPTION_ENABLED=false`. With the default now `true`, an instance that relied on the old `false` will otherwise start in standby mode asking for a key. Note that encryption still disables backup and restore ([#367](https://github.com/jwilleke/yourphr/issues/367)).
+
+**Turning encryption on for an existing plaintext database still does not work** — that migration is [#363](https://github.com/jwilleke/yourphr/issues/363).
+
+**Bare metal must set `YOURPHR_WEB_SRC_FRONTEND_PATH`.** The default points inside the container image, and without it the backend starts and serves no interface with nothing in the log explaining why. `.env.baremetal.example` documents it.
+
+See [`docs/configuration-system.md`](https://github.com/jwilleke/yourphr/blob/main/docs/configuration-system.md) for the whole model.
+
 ## [1.23.1](https://github.com/jwilleke/yourphr/compare/v1.23.0...v1.23.1) (2026-08-03)
 
 ### Bug Fixes
