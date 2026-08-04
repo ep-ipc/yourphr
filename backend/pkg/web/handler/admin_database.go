@@ -205,6 +205,28 @@ func SetBackupSchedule(c *gin.Context) {
 	if s.MaxBackups <= 0 {
 		s.MaxBackups = 7
 	}
+	// Prove the destination before a schedule is allowed to use it (yourphr#468).
+	//
+	// Refused, not warned: a scheduled backup that fails silently at 02:00 every night is exactly
+	// the failure worth preventing, and it is discovered when a backup is needed and absent.
+	//
+	// Run here rather than trusting a "tested" flag from the client, so the check cannot be skipped
+	// by not pressing the button — and re-run on every save, because a destination that worked last
+	// month is not evidence about an unplugged drive today.
+	//
+	// Only when ENABLING. Saving a disabled schedule, or turning one off, must keep working even
+	// when the destination is currently broken — otherwise an operator whose NAS died cannot switch
+	// the schedule off.
+	if s.Enabled {
+		dest := database.ResolveDestination(appConfig, s)
+		if err := database.TestBackupDestination(dest); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("cannot enable a schedule for %s: %s", dest, err),
+			})
+			return
+		}
+	}
 	if err := database.SaveBackupSettings(appConfig, s); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("save failed: %s", err)})
 		return
@@ -312,4 +334,60 @@ func BrowseDirectories(c *gin.Context) {
 		parent = ""
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": DirListing{Path: path, Parent: parent, Dirs: dirs}})
+}
+
+// TestBackupDestinationRequest is the body of POST /api/secure/admin/database/backup/test.
+type TestBackupDestinationRequest struct {
+	Destination string `json:"destination"`
+}
+
+// TestBackupDestination proves a backup destination works, without writing a backup to it.
+//
+// The endpoint behind the "Test path" button (yourphr#468). It answers the question the removed
+// AllowedBackupRoots allowlist could not: not "are you permitted here", which has one obvious
+// answer on a single-operator instance, but "does this actually work", which nobody knows until it
+// is tried.
+//
+// Returns the REAL OS error on failure — permission denied, no such directory, read-only file
+// system, no space left on device. A generic "invalid destination" would leave the operator
+// guessing at exactly the moment they need to fix something specific.
+func TestBackupDestination(c *gin.Context) {
+	if !IsAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "admin role required"})
+		return
+	}
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+
+	var req TestBackupDestinationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid request"})
+		return
+	}
+
+	// An empty destination means "the default folder", which is what a scheduled backup would
+	// actually use — so test that rather than rejecting the request.
+	dest := strings.TrimSpace(req.Destination)
+	if dest == "" {
+		dest = database.CurrentBackupDestination(appConfig)
+	}
+
+	if err := database.TestBackupDestination(dest); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"destination": dest,
+				"writable":    false,
+				"error":       err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"destination": dest,
+			"writable":    true,
+		},
+	})
 }

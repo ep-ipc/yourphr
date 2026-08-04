@@ -282,6 +282,7 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.POST("/admin/database/backup", handler.BackupDatabase)                  // server-side, fire-and-forget
 					secure.POST("/admin/database/backup/download", handler.BackupDatabaseDownload) // stream to browser (on-demand)
 					secure.POST("/admin/database/schedule", handler.SetBackupSchedule)             // settable auto-backup schedule
+					secure.POST("/admin/database/backup/test", handler.TestBackupDestination)      // prove a destination before a schedule uses it (#468)
 					secure.GET("/admin/database/browse", handler.BrowseDirectories)                // server-folder browser (pick destination)
 					secure.POST("/admin/database/restore", handler.RestoreDatabase)                // stage a restore (applied on restart) — #362
 					//admin Instance card — operator contact for this deployment (no hardcoding)

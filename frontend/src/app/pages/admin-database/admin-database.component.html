@@ -97,13 +97,26 @@
           </div>
           <label class="tx-12 tx-gray-600 mg-t-10 d-block">Destination folder (server)</label>
           <div class="d-flex">
-            <input type="text" class="form-control mg-r-10" [(ngModel)]="schedule.destination" placeholder="default: {{ info.backup_destination }}">
-            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" (click)="openBrowser()"><i class="fas fa-folder-open mg-r-5"></i>Browse</button>
+            <input type="text" class="form-control mg-r-10" [(ngModel)]="schedule.destination" (ngModelChange)="destinationTest = null" placeholder="default: {{ info.backup_destination }}">
+            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap mg-r-5" (click)="openBrowser()"><i class="fas fa-folder-open mg-r-5"></i>Browse</button>
+            <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" (click)="testDestination()" [disabled]="testingDestination">
+              <i class="fas fa-vial mg-r-5"></i>{{ testingDestination ? 'Testing…' : 'Test path' }}
+            </button>
           </div>
-          <p *ngIf="info.allowed_backup_roots?.length" class="tx-gray-500 tx-12 mg-t-5 mg-b-0">
-            Allowed roots: <code *ngFor="let r of info.allowed_backup_roots; let last = last">{{ r }}<span *ngIf="!last">; </span></code>
-            — new paths outside the data volume need <code>backup.allowed-roots</code> (or <code>backup.destination</code>) in config.
+          <p class="tx-gray-500 tx-12 mg-t-5 mg-b-0">
+            Writes a small test file, reads it back and removes it — never a backup, so nothing sensitive is written to a folder you have not proved yet.
+            Turning the schedule <strong>on</strong> runs this same check and is refused if it fails.
           </p>
+          <div *ngIf="destinationTest" class="alert tx-12 mg-t-10 mg-b-0"
+               [ngClass]="destinationTest.writable ? 'alert-success' : 'alert-danger'">
+            <i class="fas mg-r-5" [ngClass]="destinationTest.writable ? 'fa-check-circle' : 'fa-exclamation-triangle'"></i>
+            <ng-container *ngIf="destinationTest.writable">
+              <code>{{ destinationTest.destination }}</code> is writable. A scheduled backup can use it.
+            </ng-container>
+            <ng-container *ngIf="!destinationTest.writable">
+              <code>{{ destinationTest.destination }}</code> cannot be used: {{ destinationTest.error }}
+            </ng-container>
+          </div>
           <div *ngIf="browsing" class="card mg-t-10">
             <div class="card-body pd-15">
               <div class="d-flex justify-content-between align-items-center mg-b-10">

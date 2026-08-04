@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"errors"
@@ -374,4 +375,90 @@ func PruneBackups(dir string, keep int) (int, error) {
 		}
 	}
 	return removed, nil
+}
+
+// TestedDestinationMarker is written, fsynced, read back and removed by TestBackupDestination.
+// Named so an operator who finds a stray one knows what left it there.
+const TestedDestinationMarker = ".yourphr-backup-write-test"
+
+// TestBackupDestination proves a destination actually works, and returns the real OS error when it
+// does not (yourphr#468).
+//
+// This exists because SetBackupSchedule validated the time format and the path allowlist and never
+// checked the directory existed, was writable, or had space. A schedule could therefore be saved
+// pointing somewhere that failed silently at 02:00 every night — discovered when a backup was
+// needed and there wasn't one.
+//
+// It writes a MARKER rather than a real backup. A real backup would prove the path end to end, but
+// it writes the entire PHI database to a location nobody is yet sure about — which is the thing
+// being tested. The marker is a few bytes, and it exercises the same four failures that matter:
+// no such directory, permission denied, read-only filesystem, out of space.
+//
+// fsync is not ceremony. A plain write can succeed against the page cache and only fail when the
+// kernel flushes — on a full disk or a dropped network mount, which is exactly the destination an
+// operator most needs warning about. Without the fsync this returns success for a path that cannot
+// hold a backup.
+//
+// Deliberately does NOT create the directory. "I made it for you" turns a typo into a stray
+// directory in an unexpected place; a missing directory is a legitimate answer to "does this work".
+func TestBackupDestination(dest string) error {
+	dest = strings.TrimSpace(dest)
+	if dest == "" {
+		return fmt.Errorf("destination is empty")
+	}
+	if !filepath.IsAbs(dest) {
+		return fmt.Errorf("destination must be an absolute path")
+	}
+	dest = filepath.Clean(dest)
+
+	info, err := os.Stat(dest)
+	if err != nil {
+		return err // the real OS error: no such file or directory, permission denied, ...
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", dest)
+	}
+
+	marker := filepath.Join(dest, TestedDestinationMarker)
+	// Remove any marker left by an interrupted earlier test, so O_EXCL below cannot fail on our own
+	// litter and report a healthy path as broken.
+	_ = os.Remove(marker)
+
+	payload := []byte("yourphr backup destination write test\n")
+	f, err := os.OpenFile(marker, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(payload); err != nil {
+		f.Close()
+		os.Remove(marker)
+		return err
+	}
+	// Catches the full disk / dropped mount that a buffered write hides.
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(marker)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(marker)
+		return err
+	}
+
+	readBack, err := os.ReadFile(marker)
+	if err != nil {
+		os.Remove(marker)
+		return err
+	}
+	if !bytes.Equal(readBack, payload) {
+		os.Remove(marker)
+		return fmt.Errorf("wrote %d bytes to %s but read back %d — the destination is not storing data reliably",
+			len(payload), dest, len(readBack))
+	}
+
+	// Removal is part of the test: a destination we cannot clean up is one where pruning will fail.
+	if err := os.Remove(marker); err != nil {
+		return fmt.Errorf("wrote to %s but could not remove the test file, so backup pruning would fail: %w", dest, err)
+	}
+	return nil
 }

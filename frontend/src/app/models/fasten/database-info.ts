@@ -56,3 +56,14 @@ export interface BackupResult {
   destination: string;
   size_bytes: number;
 }
+
+// BackupDestinationTest is the verdict from POST /secure/admin/database/backup/test (#468).
+//
+// A schedule pointing at a directory that does not exist used to save happily and fail silently at
+// 02:00 every night — discovered when a backup was needed and absent. This answers "does this
+// actually work?" before the schedule can rely on it.
+export interface BackupDestinationTest {
+  destination: string   // the path actually tested (the default folder when none was supplied)
+  writable: boolean
+  error?: string        // the real OS error when writable is false: permission denied, no such directory, ...
+}

@@ -2,7 +2,7 @@ import {Component, OnInit} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {FastenApiService} from '../../services/fasten-api.service';
-import {DatabaseInfo, BackupSettings, DirListing} from '../../models/fasten/database-info';
+import {DatabaseInfo, BackupSettings, DirListing, BackupDestinationTest} from '../../models/fasten/database-info';
 import {AdminBackLinkComponent} from '../../components/admin-back-link/admin-back-link.component';
 import {LoadingSpinnerComponent} from '../../components/loading-spinner/loading-spinner.component';
 
@@ -29,6 +29,10 @@ export class AdminDatabaseComponent implements OnInit {
   backupError = '';
   backupResult = '';
   scheduleMsg = '';
+
+  // Destination test (#468) — proves the path works before a schedule can rely on it.
+  testingDestination = false;
+  destinationTest: BackupDestinationTest | null = null;
 
   // Server-folder browser
   browsing = false;
@@ -151,6 +155,31 @@ export class AdminDatabaseComponent implements OnInit {
     });
   }
 
+  // testDestination proves the chosen folder is usable and reports the real OS error when it is not.
+  //
+  // Saving an ENABLED schedule runs the same check server-side and refuses on failure, so this
+  // button is a convenience rather than the enforcement — the check cannot be skipped by not
+  // pressing it.
+  testDestination(): void {
+    this.testingDestination = true;
+    this.destinationTest = null;
+    this.fastenApi.testBackupDestination(this.schedule.destination).subscribe({
+      next: (t) => {
+        this.destinationTest = t;
+        this.testingDestination = false;
+      },
+      error: (e) => {
+        // A transport-level failure is itself a useful answer, so surface it in the same place.
+        this.destinationTest = {
+          destination: this.schedule.destination || '',
+          writable: false,
+          error: e?.error?.error || 'Could not reach the server to test that folder.',
+        };
+        this.testingDestination = false;
+      },
+    });
+  }
+
   saveSchedule(): void {
     this.savingSchedule = true;
     this.scheduleMsg = '';
@@ -158,6 +187,7 @@ export class AdminDatabaseComponent implements OnInit {
       next: (s) => {
         this.schedule = {...s};
         this.scheduleMsg = 'Schedule saved.';
+        this.destinationTest = null;
         this.savingSchedule = false;
         this.load(false);
       },

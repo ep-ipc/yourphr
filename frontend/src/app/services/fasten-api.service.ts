@@ -9,7 +9,7 @@ import {ReconciledMedication} from '../models/fasten/reconciled-medication';
 import {ClassifiedCondition} from '../models/fasten/classified-condition';
 import {ClassifiedAllergy} from '../models/fasten/classified-allergy';
 import {ClassifiedImmunization} from '../models/fasten/classified-immunization';
-import {DatabaseInfo, BackupResult, BackupSettings, DirListing} from '../models/fasten/database-info';
+import {DatabaseInfo, BackupResult, BackupSettings, DirListing, BackupDestinationTest} from '../models/fasten/database-info';
 import {AccountUser} from '../models/fasten/account-user';
 import {ResourceListItem} from '../models/fasten/resource-list-item';
 import {ServerLogs} from '../models/fasten/server-logs';
@@ -370,6 +370,22 @@ export class FastenApiService {
       .pipe(
         map((response: ResponseWrapper) => {
           return response.data as {staged: boolean; message: string}
+        })
+      );
+  }
+
+  // testBackupDestination proves a destination works before a schedule is allowed to use it (#468).
+  // Writes a small marker file, fsyncs, reads it back and removes it — never a real backup, because
+  // that would write the whole PHI database to a path nobody is sure about yet.
+  //
+  // Resolves (does not error) when the destination is unwritable: `writable` carries the verdict and
+  // `error` the real OS message, so the caller shows the operator what to fix.
+  testBackupDestination(destination?: string): Observable<BackupDestinationTest> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/database/backup/test`,
+      {destination: destination || ''})
+      .pipe(
+        map((response: ResponseWrapper) => {
+          return response.data as BackupDestinationTest
         })
       );
   }
