@@ -50,7 +50,18 @@ export default defineConfig({
     // mkdir -p db: the db/ dir is gitignored, so it's absent on a fresh CI checkout and
     // sqlite can't create the test DB without it (no-op locally).
     command:
-      'mkdir -p db && rm -f db/fasten-e2e.db db/fasten-e2e.db-shm db/fasten-e2e.db-wal && go run backend/cmd/fasten/fasten.go start --config config.e2e.yaml',
+      'mkdir -p db && rm -f db/fasten-e2e.db db/fasten-e2e.db-shm db/fasten-e2e.db-wal && ' +
+      // Inline env rather than a .env file: cwd is the repo root, so a developer's own .env
+      // would otherwise leak into the test run. Real environment variables outrank .env, so
+      // this stays hermetic either way. Replaces config.e2e.yaml (yourphr#474).
+      'YOURPHR_WEB_LISTEN_PORT=9191 ' +           // never collides with the dev backend on 9090
+      'YOURPHR_WEB_SRC_FRONTEND_PATH=./dist ' +   // repo-root ./dist = the Angular build output
+      'YOURPHR_STORAGE_DATA_DIR=./db ' +
+      'YOURPHR_DATABASE_LOCATION=./db/fasten-e2e.db ' +
+      'YOURPHR_DATABASE_ENCRYPTION_ENABLED=false ' + // default is ON; E2E needs no key prompt
+      'YOURPHR_CDA_CONVERTER_ENABLED=false ' +    // no converter sidecar in CI
+      'YOURPHR_LOG_LEVEL=INFO ' +                 // per-resource import logs, for #148
+      'go run backend/cmd/fasten/fasten.go start',
     cwd: '..',
     url: BASE_URL,
     timeout: 180_000,

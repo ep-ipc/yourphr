@@ -31,15 +31,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// No config file is read unless one is asked for with --config (yourphr#470).
+	// No config file is read at all (yourphr#470, #474).
 	//
 	// This used to load "config.yaml" from the working directory automatically, which made it a
-	// silent fourth configuration layer on every deployment. Defaults now ship embedded in the
-	// binary (app-default-config.json), an instance overrides them in
-	// <data>/config/app-custom-config.json, and the environment overrides that — three layers with
-	// a documented precedence, and no file appearing by proximity.
-	//
-	// `--config <path>` still works and is what the Makefile uses for local development.
+	// silent configuration layer on every deployment. Defaults now ship embedded in the binary
+	// (app-default-config.json), .env supplies bootstrap, an instance overrides the rest in
+	// <data>/config/app-custom-config.json, and the environment overrides everything — a
+	// documented precedence, and no file appearing by proximity.
 
 	app := &cli.App{
 		Name:     "goweb",

@@ -21,8 +21,6 @@
       "program": "${workspaceFolder}/backend/cmd/fasten/fasten.go",
       "args": [
         "start",
-        "--config",
-        "${workspaceFolder}/config.dev.yaml",
         "--debug"
       ]
     },
