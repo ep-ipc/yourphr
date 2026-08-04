@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"fmt"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"os"
 	"testing"
 	"time"
@@ -28,10 +29,10 @@ func TestTokenNeedsRefresh(t *testing.T) {
 	}{
 		{"nil", nil, false},
 		{"no access token (manual source)", &models.SourceCredential{ExpiresAt: now.Add(-time.Hour).Unix()}, false},
-		{"unknown expiry", &models.SourceCredential{AccessToken: "a", ExpiresAt: 0}, false},
-		{"still valid", &models.SourceCredential{AccessToken: "a", ExpiresAt: now.Add(time.Hour).Unix()}, false},
-		{"within skew", &models.SourceCredential{AccessToken: "a", ExpiresAt: now.Add(30 * time.Second).Unix()}, true},
-		{"already expired", &models.SourceCredential{AccessToken: "a", ExpiresAt: now.Add(-time.Minute).Unix()}, true},
+		{"unknown expiry", &models.SourceCredential{AccessToken: config.Secret("a"), ExpiresAt: 0}, false},
+		{"still valid", &models.SourceCredential{AccessToken: config.Secret("a"), ExpiresAt: now.Add(time.Hour).Unix()}, false},
+		{"within skew", &models.SourceCredential{AccessToken: config.Secret("a"), ExpiresAt: now.Add(30 * time.Second).Unix()}, true},
+		{"already expired", &models.SourceCredential{AccessToken: config.Secret("a"), ExpiresAt: now.Add(-time.Minute).Unix()}, true},
 	}
 	for _, tc := range cases {
 		require.Equal(t, tc.want, tokenNeedsRefresh(tc.cred, now, skew), tc.name)
@@ -64,8 +65,8 @@ func TestRefreshExpiringTokens(t *testing.T) {
 		s := &models.SourceCredential{
 			EndpointID:         uuid.New(),
 			ApiEndpointBaseUrl: "https://fhir.example.com",
-			AccessToken:        accessToken,
-			RefreshToken:       "refresh",
+			AccessToken:        config.Secret(accessToken),
+			RefreshToken:       config.Secret("refresh"),
 			ExpiresAt:          expiresAt,
 		}
 		require.NoError(t, repo.CreateSource(uctx, s))
@@ -97,8 +98,8 @@ func TestRefreshExpiringTokens(t *testing.T) {
 		}
 	}
 	require.NotNil(t, got)
-	require.Equal(t, "new", got.AccessToken, "refreshed access token should be persisted")
-	require.Equal(t, "refresh2", got.RefreshToken, "rotated refresh token should be persisted")
+	require.Equal(t, "new", got.AccessToken.Expose(), "refreshed access token should be persisted")
+	require.Equal(t, "refresh2", got.RefreshToken.Expose(), "rotated refresh token should be persisted")
 }
 
 // ensure a failing refresher never persists and never blocks the others
@@ -122,7 +123,7 @@ func TestRefreshExpiringTokens_ErrorIsSkipped(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, repo.CreateUser(context.Background(), &models.User{Username: "u1", Password: "p"}))
 	uctx := context.WithValue(context.Background(), pkg.ContextKeyTypeAuthUsername, "u1")
-	s := &models.SourceCredential{EndpointID: uuid.New(), ApiEndpointBaseUrl: "https://x", AccessToken: "old", ExpiresAt: now.Add(10 * time.Second).Unix()}
+	s := &models.SourceCredential{EndpointID: uuid.New(), ApiEndpointBaseUrl: "https://x", AccessToken: config.Secret("old"), ExpiresAt: now.Add(10 * time.Second).Unix()}
 	require.NoError(t, repo.CreateSource(uctx, s))
 
 	ae := &AppEngine{Config: cfg, Logger: logger, deviceRepo: repo}

@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"os"
 	"testing"
 
@@ -10,10 +11,10 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/event_bus"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
-	"github.com/golang/mock/gomock"
 )
 
 // #437: Disconnect clears tokens but keeps FHIR; Remove data clears FHIR but keeps credential;
@@ -50,9 +51,9 @@ func TestSourceActions_DisconnectRemoveDelete(t *testing.T) {
 		UserID:       userModel.ID,
 		Patient:      "pt-1",
 		Display:      "Test Clinic",
-		AccessToken:  "access-secret",
-		RefreshToken: "refresh-secret",
-		IdToken:      "id-secret",
+		AccessToken:  config.Secret("access-secret"),
+		RefreshToken: config.Secret("refresh-secret"),
+		IdToken:      config.Secret("id-secret"),
 		ExpiresAt:    9999999999,
 		ClientId:     "client-1",
 	}
@@ -97,7 +98,7 @@ func TestSourceActions_DisconnectRemoveDelete(t *testing.T) {
 
 	stillThere, err := dbRepo.GetSource(authCtx, src.ID.String())
 	require.NoError(t, err)
-	require.Equal(t, "again", stillThere.AccessToken)
+	require.Equal(t, "again", stillThere.AccessToken.Expose())
 
 	// DeleteSource: credential soft-deleted.
 	_, err = dbRepo.DeleteSource(authCtx, src.ID.String())

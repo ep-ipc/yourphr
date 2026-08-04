@@ -144,11 +144,11 @@ func ConnectSource(c *gin.Context) {
 		Display:            req.Display,
 		ApiEndpointBaseUrl: req.ApiEndpointBaseUrl,
 		ClientId:           req.ClientId,
-		ClientSecret:       req.ClientSecret, // confidential client; persisted (json:"-") + DB-encrypted (#286)
+		ClientSecret:       config.Secret(req.ClientSecret), // confidential client; persisted (json:"-") + DB-encrypted (#286)
 		Scopes:             req.Scopes,
 		Patient:            patientId,
-		AccessToken:        tok.AccessToken,
-		RefreshToken:       tok.RefreshToken,
+		AccessToken:        config.Secret(tok.AccessToken),
+		RefreshToken:       config.Secret(tok.RefreshToken),
 		ExpiresAt:          tok.Expiry.Unix(),
 	}
 	if err := databaseRepo.CreateSource(c, &sourceCred); err != nil {

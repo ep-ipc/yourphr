@@ -448,11 +448,11 @@ func ConnectSourceFromCatalog(c *gin.Context) {
 		Display:            display,
 		ApiEndpointBaseUrl: entry.ApiEndpointBaseUrl,
 		ClientId:           entry.ClientId,
-		ClientSecret:       entry.ClientSecret,
+		ClientSecret:       config.Secret(entry.ClientSecret),
 		Scopes:             entry.Scopes,
 		Patient:            patientId,
-		AccessToken:        tok.AccessToken,
-		RefreshToken:       tok.RefreshToken,
+		AccessToken:        config.Secret(tok.AccessToken),
+		RefreshToken:       config.Secret(tok.RefreshToken),
 		ExpiresAt:          tok.Expiry.Unix(),
 	}
 	if err := databaseRepo.CreateSource(c, &sourceCred); err != nil {

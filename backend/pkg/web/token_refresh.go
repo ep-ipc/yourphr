@@ -21,7 +21,7 @@ const tokenRefreshSkew = 60 * time.Second
 // with a known expiry, and within the skew window of expiring. Manual-upload sources (no access
 // token), sources with an unknown (zero) expiry, and still-valid tokens are skipped — no guessing.
 func tokenNeedsRefresh(cred *models.SourceCredential, now time.Time, skew time.Duration) bool {
-	if cred == nil || cred.AccessToken == "" || cred.ExpiresAt == 0 {
+	if cred == nil || !cred.AccessToken.IsSet() || cred.ExpiresAt == 0 {
 		return false
 	}
 	return cred.ExpiresAt <= now.Add(skew).Unix()

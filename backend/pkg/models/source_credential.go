@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/jwk"
 	sourcesDefinitions "github.com/fastenhealth/fasten-sources/definitions"
 	sourcesPkg "github.com/fastenhealth/fasten-sources/pkg"
@@ -42,15 +43,28 @@ type SourceCredential struct {
 
 	// auth/credential data
 	ClientId string `json:"client_id"`
-	// ClientSecret is confidential-client secret material (#286). json:"-" so it is never serialized
-	// back to the browser; GORM still persists it (column client_secret), encrypted at rest with the DB.
-	ClientSecret  string `json:"-"`
-	AccessToken   string `json:"access_token"`
-	RefreshToken  string `json:"refresh_token"`
-	IdToken       string `json:"id_token"`
-	ExpiresAt     int64  `json:"expires_at"`
-	CodeChallenge string `json:"code_challenge"`
-	CodeVerifier  string `json:"code_verifier"`
+
+	// The four bearer credentials below are config.Secret, not string (#477).
+	//
+	// They print as [REDACTED] under every format verb and marshal as [REDACTED] in JSON, so
+	// logging this struct — the reflex that leaked all three at Info level in source.go, see
+	// #476 — cannot expose them. Reading the real value requires .Expose(), which is greppable.
+	//
+	// json tags are RETAINED rather than set to "-", because the direction matters: the browser
+	// POSTs a credential built from the provider's token response, so these must still unmarshal
+	// from plain strings. config.Secret is asymmetric by design — it accepts input and redacts
+	// output. Setting json:"-" would silently drop the token on connect.
+	//
+	// GORM persists the real values via driver.Valuer / sql.Scanner; redaction never reaches the
+	// database. Note that "at rest" here means the DB file itself, which is only encrypted when
+	// database.encryption.enabled is on — and backups contain these in cleartext either way (#461).
+	ClientSecret  config.Secret `json:"-"`
+	AccessToken   config.Secret `json:"access_token"`
+	RefreshToken  config.Secret `json:"refresh_token"`
+	IdToken       config.Secret `json:"id_token"`
+	ExpiresAt     int64         `json:"expires_at"`
+	CodeChallenge string        `json:"code_challenge"`
+	CodeVerifier  string        `json:"code_verifier"`
 
 	// SMART config (self-describing credential — issue #49). ApiEndpointBaseUrl is the FHIR
 	// base URL; Scopes is the space-separated SMART scope string. The generic SMART client
@@ -88,7 +102,7 @@ func (s *SourceCredential) GetClientId() string {
 }
 
 func (s *SourceCredential) GetClientSecret() string {
-	return s.ClientSecret
+	return s.ClientSecret.Expose()
 }
 
 func (s *SourceCredential) GetPatientId() string {
@@ -96,11 +110,11 @@ func (s *SourceCredential) GetPatientId() string {
 }
 
 func (s *SourceCredential) GetRefreshToken() string {
-	return s.RefreshToken
+	return s.RefreshToken.Expose()
 }
 
 func (s *SourceCredential) GetAccessToken() string {
-	return s.AccessToken
+	return s.AccessToken.Expose()
 }
 
 func (s *SourceCredential) GetExpiresAt() int64 {
@@ -124,13 +138,16 @@ func (s *SourceCredential) SetTokens(accessToken string, refreshToken string, ex
 		s.ExpiresAt = expiresAt
 	}
 
-	if accessToken != s.AccessToken {
+	// Compare against the exposed value rather than wrapping the argument: a Secret compared to a
+	// Secret is still a plain string comparison, but going through Expose keeps every read of the
+	// real value greppable, which is the whole point of the type.
+	if accessToken != s.AccessToken.Expose() {
 		// update the "source" credential with new data (which will need to be sent
-		s.AccessToken = accessToken
+		s.AccessToken = config.Secret(accessToken)
 		// Don't overwrite `RefreshToken` with an empty value
 		// if this was a token refreshing request.
 		if refreshToken != "" {
-			s.RefreshToken = refreshToken
+			s.RefreshToken = config.Secret(refreshToken)
 		}
 	}
 }
@@ -347,7 +364,7 @@ func (s *SourceCredential) RefreshDynamicClientAccessToken() error {
 	}
 
 	//update the source credential with the new access token
-	s.AccessToken = registrationTokenResponseBytes.AccessToken
+	s.AccessToken = config.Secret(registrationTokenResponseBytes.AccessToken)
 	s.ExpiresAt = time.Now().Add(time.Second * time.Duration(registrationTokenResponseBytes.ExpiresIn)).Unix()
 
 	return nil

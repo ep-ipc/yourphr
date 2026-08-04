@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -138,7 +139,12 @@ func TestConnectSource_HappyPath(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	require.True(t, resp.Success)
 	require.Equal(t, "pat1", resp.Source.Patient, "patient id from the token response should be stored")
-	require.Equal(t, "AT", resp.Source.AccessToken)
+	// The access token is NOT returned to the caller any more (yourphr#477): SourceCredential's
+	// token fields are config.Secret, which redacts on marshal. Assert the redaction here and the
+	// real persisted value from the database below — the token reaching the provider matters, the
+	// token reaching the browser does not, and nothing in the frontend reads it.
+	require.Equal(t, config.RedactedPlaceholder, resp.Source.AccessToken.Expose(),
+		"the connect response must not carry the access token back to the browser")
 
 	// the connected source is persisted (a default manual-upload source also exists per user,
 	// so find ours by its FHIR base URL rather than assuming it's the only one)
@@ -153,6 +159,8 @@ func TestConnectSource_HappyPath(t *testing.T) {
 	}
 	require.NotNil(t, connected, "the connected SMART source should be persisted")
 	require.Equal(t, "pat1", connected.Patient)
+	require.Equal(t, "AT", connected.AccessToken.Expose(),
+		"the REAL token must reach storage — redaction is for output only, never for what is persisted")
 
 	// and Patient/$everything was fetched + ingested by the now-async background sync (wait for it)
 	require.Eventually(t, func() bool {

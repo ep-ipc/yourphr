@@ -1,6 +1,7 @@
 package models_test
 
 import (
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"testing"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
@@ -28,8 +29,8 @@ func TestIsDynamicClient_IsAlwaysFalse(t *testing.T) {
 		{"with credentials populated", models.SourceCredential{
 			EndpointID:   uuid.New(),
 			ClientId:     "some-client-id",
-			AccessToken:  "some-access-token",
-			RefreshToken: "some-refresh-token",
+			AccessToken:  config.Secret("some-access-token"),
+			RefreshToken: config.Secret("some-refresh-token"),
 		}},
 	}
 
