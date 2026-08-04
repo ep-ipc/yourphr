@@ -97,7 +97,11 @@ func TestInit_AppliesShippedDefaults(t *testing.T) {
 	require.Equal(t, "8080", c.GetString("web.listen.port"))
 	require.Equal(t, 9091, c.GetInt("metrics.port"))
 	require.Equal(t, 60, c.GetInt("jwt.session_ttl_minutes"))
-	require.Equal(t, false, c.GetBool("cda_converter.enabled"))
+	// ON by default: the image's baked config.yaml enabled it, and the shipped compose files start
+	// the sidecar. Preserved when that file was removed (#470).
+	require.Equal(t, true, c.GetBool("cda_converter.enabled"))
+	require.Equal(t, true, c.GetBool("database.encryption.enabled"),
+		"a stock Docker install has an ENCRYPTED database; defaulting to false leaves it unopenable")
 	require.Equal(t, "/opt/fasten/db/fasten.db", c.GetString("database.location"))
 	require.Equal(t, "", c.GetString("operator.contact_email"))
 }

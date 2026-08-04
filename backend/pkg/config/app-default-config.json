@@ -33,10 +33,10 @@
   "_comment_storage": "storage.data_dir names the directory holding everything this instance owns and must not lose: db, cache, backups, the generated JWT key, and this config's custom overlay. Empty means derive it from database.location's parent. It NEVER moves the database — see #451.",
   "storage.data_dir": "",
 
-  "_comment_database": "database.location is an absolute path inside the container. Setting it is independent of storage.data_dir.",
+  "_comment_database": "database.location is an absolute path inside the container. Setting it is independent of storage.data_dir. database.encryption.enabled is TRUE because that is what the image's baked config.yaml supplied for years — a stock Docker install set an encryption key at first-run and has an ENCRYPTED database, so defaulting to false would leave it unopenable (#470). Enabling encryption requires database.encryption.key and currently disables backup and restore (#367). Deployments that run unencrypted must set YOURPHR_DATABASE_ENCRYPTION_ENABLED=false explicitly.",
   "database.type": "sqlite",
   "database.location": "/opt/fasten/db/fasten.db",
-  "database.encryption.enabled": false,
+  "database.encryption.enabled": true,
   "database.validation_mode": false,
   "cache.location": "/opt/fasten/cache/",
 
@@ -60,9 +60,9 @@
   "log.file": "",
   "log.redact_secrets": true,
 
-  "_comment_cda": "C-CDA / CCD import needs the external fhir-converter sidecar, so it is opt-in.",
-  "cda_converter.enabled": false,
-  "cda_converter.url": "",
+  "_comment_cda": "C-CDA / CCD import via the external fhir-converter sidecar. ON by default because XML is what patient portals actually export, and the shipped docker-compose files start the sidecar automatically — this was the image's baked default and is preserved here (#470). The URL is the compose service name; Kubernetes deployments set YOURPHR_CDA_CONVERTER_URL, and a deployment without a sidecar sets YOURPHR_CDA_CONVERTER_ENABLED=false. Uploading XML with no reachable converter fails with an error naming what to fix; nothing else is affected.",
+  "cda_converter.enabled": true,
+  "cda_converter.url": "http://cda-converter:8080",
   "cda_converter.timeout_seconds": 60,
 
   "_comment_medications": "Patient-friendly medication names from the embedded (offline) RxTerms crosswalk. The API fallback makes outbound calls to RxNav, so it is off by default.",

@@ -22,6 +22,9 @@ func TestBackupRestoreRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	appConfig.Set("database.location", dbPath)
+	// Encryption defaults ON (#470), and while it is on backup/restore are refused (#367). This
+	// test exercises an UNENCRYPTED round trip, so it opts out explicitly.
+	appConfig.Set("database.encryption.enabled", false)
 
 	openDB := func() *gorm.DB {
 		db, err := gorm.Open(sqlite.Open("file:"+dbPath+"?_busy_timeout=5000"), &gorm.Config{})

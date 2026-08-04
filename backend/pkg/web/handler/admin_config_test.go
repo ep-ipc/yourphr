@@ -40,6 +40,9 @@ func (suite *AdminConfigHandlerTestSuite) SetupTest() {
 	require.NoError(t, appConfig.Init())
 	appConfig.Set("database.location", filepath.Join(dir, "fasten.db"))
 	appConfig.Set("storage.data_dir", dir)
+	// Encryption defaults ON (#470) and requires a key, so an unencrypted test database has to opt
+	// out — exactly as the reference deployment does.
+	appConfig.Set("database.encryption.enabled", false)
 	suite.AppConfig = appConfig
 
 	repo, err := database.NewRepository(appConfig, logrus.WithField("test", t.Name()), event_bus.NewNoopEventBusServer())
