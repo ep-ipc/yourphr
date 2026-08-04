@@ -14,7 +14,13 @@ The footer shows the running version as `<channel>-<semver>` (e.g. `dev-1.10.0`,
 
 ## Backups
 
-A backup is a **consistent online snapshot** taken with SQLite `VACUUM INTO` (safe while the app is running — never a raw file copy), then **gzip-compressed**. Two on-demand actions plus a schedule:
+A backup is the **whole data root** — the database, the instance config store (`config/`, holding the operator contact and theme) and the generated signing key — written as a gzipped tar ([#467](https://github.com/jwilleke/yourphr/issues/467)). The database inside it is a **consistent online snapshot** taken with SQLite `VACUUM INTO` (safe while the app is running — never a raw file copy).
+
+Two things are deliberately **not** in it: the **cache** (disposable and regenerable) and the **backup destination itself** (or every archive would contain every previous archive). Both are computed from configuration rather than matched by name, so renaming your backup folder does not quietly start including it. See [`backup-model.md`](backup-model.md).
+
+**Restore accepts both formats.** The current `*.tar.gz` archive and the older database-only `*.db.gz` — detected by content, not by filename, so a backup renamed by a browser or a NAS still restores. Restoring a legacy backup leaves the current instance's `config/` untouched, because that backup never carried one.
+
+**The signing key is backed up but never restored.** Restoring it would revive every session token ever signed with it, including any lifted from the backup file. A restored instance generates its own on first start; everyone signs in again, which a restore forces anyway. Two on-demand actions plus a schedule:
 
 ### On-demand
 

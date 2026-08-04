@@ -73,7 +73,9 @@ func sanitizeLabel(label string) string {
 // yourphr-backup-<date>.db, <iso>Z-yourphr-backup.db[.gz]). It is anchored on "-backup.db[.gz]" (or the
 // legacy "yourphr-backup-<8 digits>.db") so an unrelated file dropped in the destination
 // (e.g. "…-yourphr-old-backup-notes.db") is NOT treated as a restorable/prunable backup (#368, finding #3).
-var backupFileRe = regexp.MustCompile(`(?i)yourphr-(.*-)?backup(-\d{8})?\.db(\.gz)?$`)
+// The `.tar.gz` alternative is the whole-data-root archive (yourphr#467); `.db[.gz]` are the
+// database-only backups every existing instance already has, which must keep listing and restoring.
+var backupFileRe = regexp.MustCompile(`(?i)yourphr-(.*-)?backup(-\d{8})?(\.db(\.gz)?|\.tar\.gz)$`)
 
 func isBackupFile(name string) bool {
 	return backupFileRe.MatchString(name)
@@ -290,9 +292,12 @@ func (gr *GormRepository) PerformBackup(appConfig config.Interface, destOverride
 		return BackupFile{}, "", fmt.Errorf("cannot create destination: %w", err)
 	}
 
-	name := BackupFileName(time.Now(), appConfig.GetString("backup.label"))
+	// Whole data root, not just the database (yourphr#467). BackupToFile still exists and still
+	// writes a single *.db.gz — the download endpoint uses it, where a bare database is what the
+	// browser should receive.
+	name := BackupArchiveName(time.Now(), appConfig.GetString("backup.label"))
 	full := filepath.Join(dest, name)
-	if err := gr.BackupToFile(full); err != nil {
+	if err := gr.WriteBackupArchive(appConfig, full); err != nil {
 		return BackupFile{}, "", err
 	}
 	// Manual + scheduled paths both call PerformBackup — record health for Admin UI (#434).
