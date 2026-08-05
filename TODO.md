@@ -1,18 +1,25 @@
 # TODO
 
 <!-- RESUME:START -->
-## ▶ Resume here — 2026-08-02
+## ▶ Resume here — 2026-08-05
 
-- Last worked on: **v1.21.1** shipped and verified live. v1.21.0 delivered the instance-config chain (#451 `storage.data_dir`, #452 custom config store, #453 `GET /api/instance/public`, #454 footer operator contact, #455 env-read sweep) plus #450 relay semver tags — then **crash-looped prod AND demo** and was fixed by v1.21.1 ~40 min later. Email for yourphr.org is fully working (Cloudflare catch-all → `mjsservers@willeke.com`); DMARC is live via Cloudflare DMARC Management at `p=none`.
-- Branch / state: `main` clean, everything pushed, no stashes. `mj-infra-flux` `master` clean and pushed (2 untracked files pre-date this session: `.github/workflows/pat-health-check.yml`, `macos-setings.md`).
-- Running / in-flight: **none** — no local dev servers, no background agents. `Push on main` workflow was still running at wrap (cosmetic; CI + Markdown Lint already green on the same commit).
-- Parked / half-done: #455 settings-file half — `.backup_settings.json`, `.backup_dest`, `.backup_health.json` still have their own readers, deliberately deferred because that path is backup/restore where a mistake loses data.
+- Last worked on: **three releases today** — [v2.1.0](https://github.com/jwilleke/yourphr/releases/tag/v2.1.0) (whole-data-root backups #467, destination testing #468, SSRF guard fixed at dial time #484, credentials wrapped in `config.Secret` #477), [v2.1.1](https://github.com/jwilleke/yourphr/releases/tag/v2.1.1) (served PP/ToS: dead link, maintainer text, stray `<br>`), [v2.1.2](https://github.com/jwilleke/yourphr/releases/tag/v2.1.2) (status-badge contrast #486 + a contrast test, footer Terms link, Contact placeholder). All three verified live on demo; the badge fix confirmed present in the shipped CSS bundle, not just by version number.
+- Branch / state: `main` clean, everything pushed, no stashes. `mj-infra-flux` `master` clean and pushed (the 2 untracked files there pre-date this session).
+- Running / in-flight: **none.** No dev servers, no background watchers, port 9191 free, all CI green.
+- Parked / half-done: none.
 - Next steps:
-  - Rotate the Cloudflare API token — still live, and it was pasted into a session transcript (`rm ~/.config/cloudflare/token`, then delete at <https://dash.cloudflare.com/profile/api-tokens>)
-  - Operator verify in-review: #452 #453 #454 (shipped in v1.21.0/1.21.1) plus older #437 #435 #433
-  - `mj-infra-flux`: relay `ImagePolicy` still filters `main-*` — semver tags now exist (`1.21.1`, `1.21`, `latest`), so it can move to semver like the app's policy
-  - Mission work: #408 prove one production SMART provider; #438 demo epic remainder; #433 CMS application email when ready
-- Blockers / significant notes: **v1.21.0 outage post-mortem is in `private/project_log.md` (`2026-08-02-03`) — read it before touching config resolution.** Root cause: inferring "was this configured?" by comparing a value against its default; a ConfigMap that sets `database.location` to exactly the default string was read as unset and the DB path gained an extra `/db`. Viper cannot answer that question — do not rebuild the inference. Green CI is not deployment evidence: nothing in CI starts the binary against a real data volume. Cluster access is `ssh 192.168.68.71` + `sudo -n kubectl` (this Mac has no kubeconfig). CMS Blue Button sandbox login still broken vendor-side. #413 blocked on #407. Dependabot open: 0.
+  - **[#481](https://github.com/jwilleke/yourphr/issues/481) — the only P0.** E2E silently attaches to a stale backend on `:9191` and reports application failures for environmental reasons. Cost a false "did the Angular bump break auth?" investigation today.
+  - **11 items `in-review`** awaiting a close/keep decision, including [#486](https://github.com/jwilleke/yourphr/issues/486) (external), [#463](https://github.com/jwilleke/yourphr/issues/463), [#466](https://github.com/jwilleke/yourphr/issues/466), [#476](https://github.com/jwilleke/yourphr/issues/476), [#484](https://github.com/jwilleke/yourphr/issues/484).
+  - **Eyeball a status badge on demo in both modes** — [#486](https://github.com/jwilleke/yourphr/issues/486). Claude was confident and wrong about this twice; measured contrast passing is not the same as it reading well, and the reporter deserves a human confirmation.
+  - **Rotate the Cloudflare API token** — still live, and it was pasted into a session transcript (`rm ~/.config/cloudflare/token`, then delete at <https://dash.cloudflare.com/profile/api-tokens>).
+  - **Demo Instance card** — needs an admin session: `operator.name` = "Jim Willeke, DBA services.willeke.biz", `operator.contact_email` = `admin@yourphr.org`, clear `operator.contact_url`.
+  - **Run the restore drill** on a throwaway container — [`docs/recovery/data-recovery.md`](docs/recovery/data-recovery.md). v2.1.0 changed the archive format and what restore replaces, and that page argues you should not trust a backup you have never restored. That currently includes yours.
+- Blockers / significant notes:
+  - **Both scanners are at zero.** 12 Dependabot alerts cleared; 14 high CodeQL `go/path-injection` alerts **dismissed** as won't fix per [#488](https://github.com/jwilleke/yourphr/issues/488), citing [#466](https://github.com/jwilleke/yourphr/issues/466). Dismissed alerts are never re-raised by a later scan — `docs/recovery/backup-model.md` records the conditions that would make that dismissal wrong (more than one admin, a hosted/multi-tenant deployment, a destination settable by a non-admin).
+  - **Check code scanning, not just Dependabot, before releasing.** Those 14 alerts were introduced in v2.1.0 and shipped in two releases because only Dependabot was being checked.
+  - **Verify tooling output before concluding from an absence.** A regex that matched nothing was read as proof a CSS rule did not exist; it had simply truncated. That produced a public wrong root cause on [#486](https://github.com/jwilleke/yourphr/issues/486).
+  - **Rollout timing is unpredictable.** The `Docker (YourPHR)` arm64 leg has ranged 12–44 minutes this week. Watch the run; do not estimate from the tag. Also: docs-only commits are path-filtered and produce **no** `CI` run — "no run" and "passed" look identical if you only glance at the list.
+  - New standing rule in memory: **external issues/PRs always get thanks + encouragement and a priority bump.** `TODO.md` now ranks them first within their band.
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
