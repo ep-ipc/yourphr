@@ -21,6 +21,7 @@
 
 ## 🔴 P0 — Security & Critical
 
+- [#488](https://github.com/jwilleke/yourphr/issues/488) — [security] go/path-injection — 14 high CodeQL alerts in the backup destination paths
 - [#481](https://github.com/jwilleke/yourphr/issues/481) — [BUG] E2E silently runs against a stale backend when one is already on :9191
 
 ## 🟠 P1
