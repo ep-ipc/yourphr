@@ -20,9 +20,9 @@
         <!-- US Core 9.0.0 Must-Support: category (problem-list-item vs health-concern), clinical & verification status (#143) -->
         <div *ngIf="conditionDisplayModel?.categories?.length || conditionDisplayModel?.clinical_status || conditionDisplayModel?.verification_status" class="row ps-3 mb-2">
           <div class="col-12">
-            <span class="badge bg-light mg-r-5" *ngFor="let category of conditionDisplayModel?.categories">{{ category }}</span>
-            <span class="badge bg-secondary mg-r-5" *ngIf="conditionDisplayModel?.clinical_status">{{ conditionDisplayModel.clinical_status | titlecase }}</span>
-            <span class="badge bg-info" *ngIf="conditionDisplayModel?.verification_status">{{ conditionDisplayModel.verification_status | titlecase }}</span>
+            <span class="badge text-bg-light mg-r-5" *ngFor="let category of conditionDisplayModel?.categories">{{ category }}</span>
+            <span class="badge text-bg-secondary mg-r-5" *ngIf="conditionDisplayModel?.clinical_status">{{ conditionDisplayModel.clinical_status | titlecase }}</span>
+            <span class="badge text-bg-info" *ngIf="conditionDisplayModel?.verification_status">{{ conditionDisplayModel.verification_status | titlecase }}</span>
           </div>
         </div>
 

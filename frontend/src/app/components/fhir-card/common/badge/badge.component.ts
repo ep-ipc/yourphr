@@ -13,27 +13,38 @@ export class BadgeComponent implements OnInit {
   ngOnInit(): void {
   }
 
+  // text-bg-* rather than bg-* (yourphr#486).
+  //
+  // bg-* sets ONLY a background. This theme replaces Bootstrap's .badge rule with one that
+  // defines geometry and typography and NO color, so the text colour was inherited from the
+  // surrounding row — white in dark mode, and white again on a highlighted row in light mode.
+  // White on light grey is what an "unknown" status looked like.
+  //
+  // text-bg-* pairs each background with a contrast colour Bootstrap computes per variant
+  // (secondary/success/warning/info get #000, primary/danger get #fff). Safe in BOTH modes here
+  // because the dark theme uses its own --dark-* custom properties and does not redefine
+  // --bs-*-rgb, so a variant's background is the same colour in either mode.
   getBadgeStatusColor(status): string {
     const lookup = {
       // condition
-      active: 'bg-primary',
+      active: 'text-bg-primary',
       recurrence: '',
-      relapse: 'bg-info',
-      inactive: 'bg-secondary',
-      remission: 'bg-info',
-      resolved: 'bg-primary',
+      relapse: 'text-bg-info',
+      inactive: 'text-bg-secondary',
+      remission: 'text-bg-info',
+      resolved: 'text-bg-primary',
       // immunization
-      'in-progress': 'bg-warning',
-      'on-hold': 'bg-secondary',
-      completed: 'bg-success',
-      'entered-in-error': 'bg-danger',
-      stopped: 'bg-secondary',
-      'not-done': 'bg-warning',
+      'in-progress': 'text-bg-warning',
+      'on-hold': 'text-bg-secondary',
+      completed: 'text-bg-success',
+      'entered-in-error': 'text-bg-danger',
+      stopped: 'text-bg-secondary',
+      'not-done': 'text-bg-warning',
       // procedure
-      preparation: 'bg-primary',
+      preparation: 'text-bg-primary',
       suspended: '',
       aborted: '',
-      unknown: 'bg-secondary',
+      unknown: 'text-bg-secondary',
       // practitioner
       // allergy intolerance
       unconfirmed: '',
@@ -111,7 +122,7 @@ export class BadgeComponent implements OnInit {
       'temporarily-closed-to-accrual-and-intervention': '',
       withdrawn: '',
     };
-    return lookup[status] || 'bg-secondary'
+    return lookup[status] || 'text-bg-secondary'
   }
 
 }

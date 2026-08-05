@@ -17,7 +17,7 @@
     <ng-template #itemTree let-items>
       <li *ngFor="let item of items" class="mg-b-5">
         <span *ngIf="item.text" class="tx-medium">{{ item.text }}</span>
-        <span *ngFor="let answer of item.answers" class="badge bg-light mg-l-10">{{ answer }}</span>
+        <span *ngFor="let answer of item.answers" class="badge text-bg-light mg-l-10">{{ answer }}</span>
         <ul class="list-unstyled mg-l-20 mg-t-5" *ngIf="item.items?.length">
           <ng-container *ngTemplateOutlet="itemTree; context: { $implicit: item.items }"></ng-container>
         </ul>
