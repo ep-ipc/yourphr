@@ -15,15 +15,25 @@ export class BadgeComponent implements OnInit {
 
   // text-bg-* rather than bg-* (yourphr#486).
   //
-  // bg-* sets ONLY a background. This theme replaces Bootstrap's .badge rule with one that
-  // defines geometry and typography and NO color, so the text colour was inherited from the
-  // surrounding row — white in dark mode, and white again on a highlighted row in light mode.
-  // White on light grey is what an "unknown" status looked like.
+  // Bootstrap's .badge sets `--bs-badge-color: #fff`, so badge text is WHITE by default, and
+  // bg-* sets only a background. This theme (Azia) overrides Bootstrap's palette with colours
+  // chosen for looks, and several of them are far too light to carry white text. Measured
+  // contrast of #fff against each background in the compiled bundle:
   //
-  // text-bg-* pairs each background with a contrast colour Bootstrap computes per variant
-  // (secondary/success/warning/info get #000, primary/danger get #fff). Safe in BOTH modes here
-  // because the dark theme uses its own --dark-* custom properties and does not redefine
-  // --bs-*-rgb, so a variant's background is the same colour in either mode.
+  //   light      1.09:1   effectively invisible — the "white on white" in the report
+  //   warning    1.63:1
+  //   info       1.96:1
+  //   success    2.84:1
+  //   secondary  3.62:1   the "unknown" badge; large-text only, never AA for 10px text
+  //   danger     4.53:1   (ok)
+  //   primary    4.68:1   (ok)
+  //
+  // text-bg-* pairs each background with a foreground Bootstrap computes per variant, which
+  // takes every one of these to WCAG AA: 4.53 – 19.26:1.
+  //
+  // Safe in BOTH modes here because the dark theme is a body.dark-theme class using its own
+  // --dark-* properties and does NOT redefine --bs-*-rgb, so a variant's background is the same
+  // colour either way. A move to Bootstrap 5.3's native [data-bs-theme] would need this revisited.
   getBadgeStatusColor(status): string {
     const lookup = {
       // condition
