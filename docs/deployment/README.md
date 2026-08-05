@@ -32,6 +32,7 @@ This page covers running and configuring an instance. The rest of the deployment
 | [`../medicare-bluebutton.md`](../medicare-bluebutton.md) | A full worked SMART-on-FHIR connect example with exact settings. |
 | [`../cms-bluebutton-production-access.md`](../cms-bluebutton-production-access.md) | CMS production access: form, Zoom demo script, PP/ToS gates (#433). |
 | [`../FHIR/fhir-converter-local.md`](../FHIR/fhir-converter-local.md) | The optional C-CDA/CCD converter sidecar. |
+| [`../recovery/`](../recovery/) | Backup, restore, and the **restore drill** — what a backup contains, and how to prove your instance can come back. |
 
 > **Deployment-agnostic by rule.** Every option below is driven by the same `YOURPHR_*` environment contract and a SQLite file — nothing requires Kubernetes, Flux, SOPS, or any specific orchestrator. The maintainer's production instance uses Flux/GitOps in a separate repo (`mj-infra-flux`); that repo's only job is to *populate the same env vars* a `docker run` would. If a feature can only be configured one way, that is a bug — file it.
 
@@ -206,6 +207,8 @@ For most self-hosters on their own hardware, **losing the records is a worse out
 
 Either way, treat the volume as sensitive: with encryption off it is cleartext, and with encryption on you have no backup to fall back on.
 
+If you turn encryption off so that backups work, then **prove they work**: [`../recovery/data-recovery.md`](../recovery/data-recovery.md). Choosing "records matter more than a stolen disk" and then never testing a restore gets you the downside of both.
+
 **Why `true` is the default,** despite requiring an operator-supplied key with no fallback (a generated key stored next to the database protects against nothing). It is not a security recommendation — it is what a stock Docker install already *has*. The image shipped a baked `config.yaml` with encryption on for years, so those installs set a key at first-run and their database is encrypted. Defaulting to `false` when `config.yaml` was removed would have left every one of them unopenable ([#470](https://github.com/jwilleke/yourphr/issues/470)). Deployments that run unencrypted must now say so explicitly; every `.env.*.example` template does.
 
 Turning encryption **on** for an existing plaintext database does not work either — that migration is [#363](https://github.com/jwilleke/yourphr/issues/363).
@@ -294,7 +297,7 @@ If `YOURPHR_RELAY_SECRET` is unset, the app simply doesn't use a relay (it falls
 ## See also
 
 - [README — Launch / HTTPS / Develop](../../README.md#instructions)
-- [`../data-recovery.md`](../data-recovery.md) — **the restore drill.** A backup you have never restored is not a backup; test recovery, not backup
+- [`../recovery/data-recovery.md`](../recovery/data-recovery.md) — **the restore drill.** A backup you have never restored is not a backup; test recovery, not backup
 - [`../testing-sandboxes/test-sandboxes.md`](../testing-sandboxes/test-sandboxes.md) — the test sandboxes and how to exercise them
 - [`../vendors/README.md`](../vendors/README.md) — per-vendor connection notes and onboarding gates
 - [`../provider-catalog/`](../provider-catalog/) — admin-configured production provider catalog

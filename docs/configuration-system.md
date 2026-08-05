@@ -77,7 +77,7 @@ Sandbox and production Blue Button credentials are *provisioned* from `YOURPHR_S
 
 **Those variables are deliberately NOT configuration keys**, and must not be added to the catalogue. They are provisioning inputs, consumed once and then ignored — the value in effect afterwards is the one in the catalog row, which an admin may have edited. Cataloguing them would put them on the Admin Configuration screen showing the environment's value while the row held a different one, so the screen would state something untrue. The unknown-key check allowlists them instead, and their provisioning status belongs on Admin → Provider Catalog, beside the row they created ([#471](https://github.com/jwilleke/yourphr/issues/471)).
 
-**Backup state** — `.backup_settings.json`, `.backup_dest`, `.backup_health.json` — still has its own readers.
+**Backup state** — `.backup_settings.json`, `.backup_dest`, `.backup_health.json` — still has its own readers. All three live in the data root, so they are covered by a backup ([`recovery/backup-model.md`](recovery/backup-model.md)).
 
 > **GAP: backup state should fold into the config store** — [#455](https://github.com/jwilleke/yourphr/issues/455). Deferred because it touches backup and restore, where a mistake loses data.
 
@@ -196,4 +196,6 @@ Tests that keep the above true rather than aspirational:
 
 On the last one, the win is smaller than it first appears. Of the five non-secret, non-bootstrap variables the reference deployment passes, three are **topology** — cluster-internal DNS and "is a sidecar present" — which belong with the deployment that defines that cluster, whatever layer they sit in. Only `backup.label` and `medications.rxterms_enrich` are settings in the ordinary sense.
 
-It also has to follow [#467](https://github.com/jwilleke/yourphr/issues/467): `app-custom-config.json` is not covered by backups today, so moving a value out of a versioned Git repo and into that file trades *declarative and recoverable* for *editable and lost with the disk*.
+That blocker is now cleared: [#467](https://github.com/jwilleke/yourphr/issues/467) shipped in v2.1.0, so `app-custom-config.json` **is** covered by backups. Moving a value out of a versioned Git repo and into the config store no longer trades *recoverable* for *lost with the disk*.
+
+It does change what recovery depends on, though. A value in Git is recovered by cloning the repo; a value in the config store is recovered only by a backup that was taken and can actually be restored — see [`recovery/data-recovery.md`](recovery/data-recovery.md).

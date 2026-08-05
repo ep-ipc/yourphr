@@ -1,12 +1,20 @@
 # Backup & Recovery
 
-> **Before relying on any of this: [`../data-recovery.md`](../data-recovery.md).** A backup you have never restored is not a backup. This page covers the buttons; that one covers proving they work on your instance.
+Three pages, and it matters which one you need:
 
-How YourPHR backs up and restores its database — the **entire single-file SQLite DB**, i.e. *every user's* complete medical records (PHI). All of it is **admin-only** (gated by the admin role). Implemented under [#361](https://github.com/jwilleke/yourphr/issues/361) (backup) and [#362](https://github.com/jwilleke/yourphr/issues/362) (restore).
+| Page | Answers |
+|---|---|
+| **This page** | How do I run a backup or a restore? Buttons, endpoints, schedule, configuration. |
+| [`data-recovery.md`](data-recovery.md) | **Can my instance actually come back?** The restore drill — start here before relying on any of the above. |
+| [`backup-model.md`](backup-model.md) | What is in a backup, what is deliberately not, and why. |
 
-See also: [`docs/deployment/deployment-contract.md`](../deployment/deployment-contract.md) and [`docs/releasing.md`](../releasing.md).
+> **A backup you have never restored is not a backup.** It is a file you hope is a backup. This page covers the buttons; [`data-recovery.md`](data-recovery.md) covers proving they work on *your* instance.
 
-> ⚠️ A backup is the whole DB — all users' PHI. Keep backup files (and download locations) secure. The database is **not encrypted at rest by default** (at-rest encryption is deferred — [#363](https://github.com/jwilleke/yourphr/issues/363)), so a backup file is plaintext SQLite.
+How YourPHR backs up and restores — the whole data root, i.e. *every user's* complete medical records (PHI) plus the instance's own configuration. All of it is **admin-only** (gated by the admin role). Implemented under [#361](https://github.com/jwilleke/yourphr/issues/361) (backup), [#362](https://github.com/jwilleke/yourphr/issues/362) (restore) and [#467](https://github.com/jwilleke/yourphr/issues/467) (whole data root).
+
+See also: [`docs/deployment/README.md`](../deployment/README.md), [`docs/deployment/deployment-contract.md`](../deployment/deployment-contract.md) and [`docs/releasing.md`](../releasing.md).
+
+> ⚠️ A backup is every user's PHI, **plus live provider refresh tokens** that grant ongoing access at Epic or CMS until revoked. At-rest encryption is **on by default** since v2.0.0 — and while it is on, backup and restore are both refused ([#367](https://github.com/jwilleke/yourphr/issues/367)). So every backup that exists is **plaintext**, on an instance that explicitly turned encryption off. Treat the file exactly as you would treat the database. Encrypting the artifact itself is [#461](https://github.com/jwilleke/yourphr/issues/461).
 
 ## Where to find it
 

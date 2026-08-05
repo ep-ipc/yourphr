@@ -4,7 +4,7 @@
 >
 > Test **recovery**, not backup. A green "Backup complete" proves a file was written. It proves nothing about whether that file can bring your records back, on a machine that no longer has anything on it, on the day you actually need it.
 
-This page is about the drill. For how the buttons work see [`recovery/README.md`](recovery/README.md); for what a backup contains and why, see [`recovery/backup-model.md`](recovery/backup-model.md).
+This page is about the drill. For how the buttons work see [`README.md`](README.md); for what a backup contains and why, see [`backup-model.md`](backup-model.md).
 
 ## Why this page exists
 
@@ -111,6 +111,6 @@ And, because encryption and backup are mutually exclusive today, **every backup 
 
 ## See also
 
-- [`recovery/README.md`](recovery/README.md) — the buttons, endpoints and configuration
-- [`recovery/backup-model.md`](recovery/backup-model.md) — what a backup contains and why
-- [`deployment/README.md`](deployment/README.md) — encryption, and the trade it forces
+- [`README.md`](README.md) — the buttons, endpoints and configuration
+- [`backup-model.md`](backup-model.md) — what a backup contains and why
+- [`../deployment/README.md`](../deployment/README.md) — encryption, and the trade it forces
