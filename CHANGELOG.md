@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.1.0](https://github.com/jwilleke/yourphr/compare/v2.0.0...v2.1.0) (2026-08-05)
+
+A backup now contains your instance, not just its database — and the SSRF guard on user-supplied FHIR URLs actually holds.
+
+### Features
+
+- **backup:** a backup is the whole data root, not just the database. Restoring onto a fresh instance used to return the records and lose the operator contact, the theme, the backup schedule and any legal-document override — the instance came back as *records without identity* ([#467](https://github.com/jwilleke/yourphr/issues/467))
+- **backup:** a destination must prove it works before a schedule can use it. Enabling a schedule writes a small test file, fsyncs it, reads it back and removes it, and is **refused** with the real OS error if any step fails. A schedule pointing at a directory that does not exist used to save happily and fail silently at 02:00 every night ([#468](https://github.com/jwilleke/yourphr/issues/468))
+- **backup:** a **Test path** button beside the destination field, reporting permission denied / no such directory / read-only filesystem / no space as the operating system reports them ([#468](https://github.com/jwilleke/yourphr/issues/468))
+
+### Security
+
+- **ssrf:** the guard on user-supplied FHIR base URLs was bypassed by any non-dotted-quad IP form. `net.ParseIP` accepts only dotted-quad, so `2130706433`, `0x7f.0.0.1` and `127.1` all parsed as nothing and skipped the check entirely — while the resolver read them as `127.0.0.1`, and `2852039166` as the cloud metadata address. The check now runs at **dial time on the resolved address**, which also closes DNS rebinding and redirects ([#484](https://github.com/jwilleke/yourphr/issues/484))
+- **credentials:** provider `client_secret`, access tokens and refresh tokens are now a type that refuses to print itself. One handler was logging an entire credential at `Info` — and the `json:"-"` tag that kept `client_secret` out of API responses did nothing there, because `%v` does not consult json tags ([#477](https://github.com/jwilleke/yourphr/issues/477), [#476](https://github.com/jwilleke/yourphr/issues/476))
+- **wizard:** the first-run setup logged the database encryption key in cleartext ([#476](https://github.com/jwilleke/yourphr/issues/476))
+- **deps:** Angular to 20.3.27, closing two high-severity i18n XSS advisories that the proposed dependency PR would have left open — it moved one package of the three ([#478](https://github.com/jwilleke/yourphr/issues/478)); plus `ip-address`, `fast-uri`, `socket.io-parser`, `undici` and `postcss`, all build-tree only ([#483](https://github.com/jwilleke/yourphr/issues/483), [#479](https://github.com/jwilleke/yourphr/issues/479), [#480](https://github.com/jwilleke/yourphr/issues/480))
+
+### Bug Fixes
+
+- **sources:** six code paths called stubs that always fail, so "deliberately unsupported" was indistinguishable from "broken". Dynamic client registration is now a documented constant, and two endpoints answer `501` with the working alternative instead of `400`/`404` blaming the caller ([#476](https://github.com/jwilleke/yourphr/issues/476))
+- **restore:** a backup renamed by a browser or a NAS could not be restored. Compression and archive format are now detected by **content**, not by filename ([#467](https://github.com/jwilleke/yourphr/issues/467))
+- **e2e:** the test harness passed `--config`, removed in v2.0.0 ([#474](https://github.com/jwilleke/yourphr/issues/474))
+
+### Notes for operators
+
+**Nothing to do.** Existing `*.db.gz` backups still restore, detected by content rather than name, and restoring one leaves your current configuration alone.
+
+**New backups are `*.tar.gz`** and contain the database, `config/` and the signing key. Two things are deliberately outside: the cache, and the backup destination itself — computed from your configuration rather than matched by folder name, so renaming your backup folder does not quietly start including it.
+
+**Restoring `config/` replaces the target instance's configuration**, because that is what "records without identity" was missing. `YOURPHR_*` environment variables still override it afterwards.
+
+**The signing key is backed up but never restored.** Restoring it would revive every session token ever signed with it, including any lifted from the backup file. A restored instance generates its own; everyone signs in again, which a restore forces anyway.
+
+**Turning a backup schedule on now tests the destination first** and refuses if it fails. Turning one *off* always works, so a dead NAS cannot trap you with a schedule you cannot disable.
+
+**The API no longer returns provider access/refresh tokens** in source responses. Nothing in the app reads them; if you script against the API and relied on those fields, they now read `[REDACTED]`.
+
 ## [2.0.0](https://github.com/jwilleke/yourphr/compare/v1.23.1...v2.0.0) (2026-08-04)
 
 There is now one place a setting comes from before your instance starts, and one place it changes afterwards.
