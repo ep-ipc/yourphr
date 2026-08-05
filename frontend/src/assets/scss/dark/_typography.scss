@@ -19,7 +19,20 @@
     }
 
     // Secondary text color
-    span {
+    //
+    // Excludes badges (yourphr#486). This blanket `!important` on EVERY span outranks Bootstrap's
+    // text-bg-* utilities, which pair a background with a foreground chosen to sit on it — so in
+    // dark mode every badge was forced to --dark-text-color regardless of what was behind it:
+    //
+    //   text-bg-warning   #ccc8c1 on #ffc107   1.02:1
+    //   text-bg-info      #ccc8c1 on #0dcaf0   1.17:1
+    //   text-bg-success   #ccc8c1 on #3bb001   1.70:1
+    //   text-bg-secondary #ccc8c1 on #7987a1   2.17:1
+    //
+    // A badge sets its own background, so it is exactly the case a blanket text colour cannot
+    // reason about. Scoped out rather than made more specific elsewhere, because adding a
+    // counter-!important would leave the next component to discover this the same way.
+    span:not(.badge) {
         color: var(--dark-text-color) !important;
     }
 
