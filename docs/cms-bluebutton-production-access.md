@@ -11,8 +11,8 @@ Operator checklist to apply for **production** Blue Button API credentials, run 
 | Sandbox credentials + live login status | [`vendors/medicare.md`](vendors/medicare.md) |
 | Connect walkthrough (scopes, catalog, env) | [`medicare-bluebutton.md`](medicare-bluebutton.md) |
 | Connection policy (PP/ToS, pre-connect) | [`connection-policy.md`](connection-policy.md) |
-| Privacy Policy (source) | [`legal/privacy-policy.md`](legal/privacy-policy.md) → public [yourphr.org/privacy.html](https://yourphr.org/privacy.html) |
-| Terms of Service (source) | [`legal/terms-of-service.md`](legal/terms-of-service.md) → public [yourphr.org/terms.html](https://yourphr.org/terms.html) |
+| Privacy Policy (source) | [`backend/pkg/legal/privacy-policy.md`](../backend/pkg/legal/privacy-policy.md) → public [yourphr.org/privacy.html](https://yourphr.org/privacy.html) |
+| Terms of Service (source) | [`backend/pkg/legal/terms-of-service.md`](../backend/pkg/legal/terms-of-service.md) → public [yourphr.org/terms.html](https://yourphr.org/terms.html) |
 | CMS attribution | [`Attributions.md`](Attributions.md) |
 | Production E2E proof after credentials | [#408](https://github.com/jwilleke/yourphr/issues/408) |
 | This runbook | [#433](https://github.com/jwilleke/yourphr/issues/433) |

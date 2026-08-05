@@ -4,7 +4,7 @@ Planning doc for getting health records from patient portals (primarily FollowMy
 
 ## Background
 
-- **Current store:** [Fasten onprem](https://fasten.nerdsbythehour.com) — deployed, healthy, Authentik-gated, hourly SQLite backup to NAS. See [`docs/apps/fasten.md`](../../apps/fasten.md).
+- **Current store:** [Fasten onprem](https://fasten.nerdsbythehour.com) — deployed, healthy, Authentik-gated, hourly SQLite backup to NAS.
 - **Key limitation:** fasten-onprem [dropped all provider integrations](https://github.com/fastenhealth/fasten-onprem/issues/629). The live SMART on FHIR sync is a commercial Fasten Connect feature only. The self-hosted version is a manual-import-only FHIR viewer.
 - **Primary source:** [FollowMyHealth](https://www.followmyhealth.com/patientaccess) — Veradigm patient portal. Supports FHIR R4 via SMART on FHIR. Does **not** use US Core profiles (native FHIR R4 with custom extensions).
 - **Format requirement:** JSON or XML.
