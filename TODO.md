@@ -19,16 +19,10 @@
 
 ## 🔴 P0 — Security & Critical
 
-- PR: [#464](https://github.com/jwilleke/yourphr/pull/464) — chore(deps): bump @angular/common from 20.3.25 to 20.3.27 in /frontend in the npm_and_yarn group across 1 directory _(ready)_ — closes [#478](https://github.com/jwilleke/yourphr/issues/478) only PARTIALLY: bumps @angular/common, leaves @angular/compiler + @angular/core on 20.3.25
-- [#478](https://github.com/jwilleke/yourphr/issues/478) — [security] @angular/core + @angular/compiler — i18n XSS via event-handler attributes (2 high alerts) — PR open: [#464](https://github.com/jwilleke/yourphr/pull/464) _(partial fix only)_
+- [#481](https://github.com/jwilleke/yourphr/issues/481) — [BUG] E2E silently runs against a stale backend when one is already on :9191
 
 ## 🟠 P1
 
-- [#479](https://github.com/jwilleke/yourphr/issues/479) — [security] ip-address — SSRF/trust-boundary bypass via CIDR suffix and IPv4-mapped IPv6 (2 medium alerts)
-- [#477](https://github.com/jwilleke/yourphr/issues/477) — [FEATURE] Wrap SourceCredential secret fields in config.Secret so credential leaks become impossible
-- [#468](https://github.com/jwilleke/yourphr/issues/468) — [FEATURE] Test a backup destination before a schedule can use it
-- [#467](https://github.com/jwilleke/yourphr/issues/467) — [FEATURE] Back up the whole data root, not just the database
-- [#466](https://github.com/jwilleke/yourphr/issues/466) — [ARCH] Backup model: the data root is exactly what gets backed up
 - [#463](https://github.com/jwilleke/yourphr/issues/463) — [FEATURE] Serve PP/ToS from the instance, with an operator override
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
@@ -38,9 +32,10 @@
 
 ## 🟡 P2
 
-- [#480](https://github.com/jwilleke/yourphr/issues/480) — [security] postcss — arbitrary .map file read via attacker-controlled sourceMappingURL
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#485](https://github.com/jwilleke/yourphr/issues/485) — [FEATURE] Reject obfuscated numeric hosts when a source is added, not when it syncs
+- [#482](https://github.com/jwilleke/yourphr/issues/482) — [FEATURE] Upgrade angular Angular to 22.x
 - [#475](https://github.com/jwilleke/yourphr/issues/475) — [FEATURE] display the bootstrap values
 - [#473](https://github.com/jwilleke/yourphr/issues/473) — [FEATURE] Warn about configuration keys that have no effect
 - [#472](https://github.com/jwilleke/yourphr/issues/472) — [CHORE] Reference deployment: env carries bootstrap and secrets, not settings
@@ -90,7 +85,12 @@
 
 ## 🔵 In review
 
+- [#484](https://github.com/jwilleke/yourphr/issues/484) — [BUG] SSRF guard is bypassed by any non-dotted-quad IP form — decimal, hex or short — reaching loopback and cloud metadata
+- [#483](https://github.com/jwilleke/yourphr/issues/483) — [security] Build-tree dependency sweep — ip-address, fast-uri, socket.io-parser, undici (3 high, 3 medium)
+- [#480](https://github.com/jwilleke/yourphr/issues/480) — [security] postcss — arbitrary .map file read via attacker-controlled sourceMappingURL
+- [#479](https://github.com/jwilleke/yourphr/issues/479) — [security] ip-address — SSRF/trust-boundary bypass via CIDR suffix and IPv4-mapped IPv6 (2 medium alerts)
 - [#476](https://github.com/jwilleke/yourphr/issues/476) — [BUG] Six live call sites invoke always-erroring fasten-sources stubs; "unsupported" is indistinguishable from "broken"
+- [#466](https://github.com/jwilleke/yourphr/issues/466) — [ARCH] Backup model: the data root is exactly what gets backed up
 - [#437](https://github.com/jwilleke/yourphr/issues/437) — [FEATURE] Split source Disconnect vs Remove data into separate actions
 - [#435](https://github.com/jwilleke/yourphr/issues/435) — [BUG] Log level set to error. New lines at this level appear as the server logs activity.
 - [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
@@ -109,4 +109,4 @@
 
 ## ❓ Needs triage
 
-_None._
+- [#486](https://github.com/jwilleke/yourphr/issues/486) — Status column text unreadble depending on light/dark mode.
