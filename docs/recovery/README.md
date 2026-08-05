@@ -1,5 +1,7 @@
 # Backup & Recovery
 
+> **Before relying on any of this: [`../data-recovery.md`](../data-recovery.md).** A backup you have never restored is not a backup. This page covers the buttons; that one covers proving they work on your instance.
+
 How YourPHR backs up and restores its database — the **entire single-file SQLite DB**, i.e. *every user's* complete medical records (PHI). All of it is **admin-only** (gated by the admin role). Implemented under [#361](https://github.com/jwilleke/yourphr/issues/361) (backup) and [#362](https://github.com/jwilleke/yourphr/issues/362) (restore).
 
 See also: [`docs/deployment/deployment-contract.md`](../deployment/deployment-contract.md) and [`docs/releasing.md`](../releasing.md).

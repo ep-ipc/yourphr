@@ -71,3 +71,4 @@ None of these are addressed by an allowlist. All of them are addressed by encryp
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — encrypted backups
 - [#367](https://github.com/jwilleke/yourphr/issues/367) — the encryption/backup exclusion this eventually lifts
 - [`README.md`](README.md) — how to actually run a backup or restore
+- [`../data-recovery.md`](../data-recovery.md) — the restore drill: test recovery, not backup

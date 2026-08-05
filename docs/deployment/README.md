@@ -294,6 +294,7 @@ If `YOURPHR_RELAY_SECRET` is unset, the app simply doesn't use a relay (it falls
 ## See also
 
 - [README — Launch / HTTPS / Develop](../../README.md#instructions)
+- [`../data-recovery.md`](../data-recovery.md) — **the restore drill.** A backup you have never restored is not a backup; test recovery, not backup
 - [`../testing-sandboxes/test-sandboxes.md`](../testing-sandboxes/test-sandboxes.md) — the test sandboxes and how to exercise them
 - [`../vendors/README.md`](../vendors/README.md) — per-vendor connection notes and onboarding gates
 - [`../provider-catalog/`](../provider-catalog/) — admin-configured production provider catalog
