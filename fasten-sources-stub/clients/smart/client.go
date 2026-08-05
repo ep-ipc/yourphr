@@ -69,11 +69,23 @@ type Endpoints struct {
 // timeout). #341.
 const defaultFetchTimeout = 90 * time.Second
 
+// httpClient is the single chokepoint for every outbound request in this package — used directly
+// and injected into oauth2 via oauth2.HTTPClient — so the SSRF guard is installed here. Anything
+// that bypasses this function bypasses the guard.
 func (c Config) httpClient() *http.Client {
 	if c.HTTPClient != nil {
+		// An explicitly supplied client keeps its own transport. Used by tests driving httptest
+		// loopback servers; production never sets it.
 		return c.HTTPClient
 	}
-	return &http.Client{Timeout: defaultFetchTimeout}
+	return &http.Client{
+		Timeout: defaultFetchTimeout,
+		// Refuses internal addresses at DIAL time, after DNS resolution — the only place that
+		// sees what was actually reached. See guardedDialer (yourphr#484): validateBaseURL is a
+		// pre-check, not the boundary, because net.ParseIP misses every non-dotted-quad form and
+		// nothing parsed up front survives DNS rebinding or a redirect.
+		Transport: GuardedTransport(c.AllowInternalHosts),
+	}
 }
 
 // PageFunc receives each fetched FHIR page (a Bundle or bare resource) as it arrives, so the caller can
