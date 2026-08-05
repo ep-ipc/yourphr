@@ -1,8 +1,8 @@
 # Terms of Service — YourPHR
 
-**Public URL:** [https://yourphr.org/terms.html](https://yourphr.org/terms.html)  
-**Source:** this file. Update `gh-pages` `terms.html` when you change it.  
-**Privacy:** [Privacy Policy](privacy-policy.md) / [https://yourphr.org/privacy.html](https://yourphr.org/privacy.html) — **data collection, storage, sharing, and deletion live only there.** These Terms do not override the Privacy Policy on those topics.
+**Public URL:** [https://yourphr.org/terms.html](https://yourphr.org/terms.html)
+
+**Privacy:** [Privacy Policy](privacy) / [https://yourphr.org/privacy.html](https://yourphr.org/privacy.html) — **data collection, storage, sharing, and deletion live only there.** These Terms do not override the Privacy Policy on those topics.
 
 Last updated: 31 July 2026
 
@@ -50,10 +50,10 @@ YourPHR is for viewing and organizing records. It is not medical advice, diagnos
 
 You agree not to:
 
-- Access records without authorization  
-- Abuse or circumvent provider or CMS APIs  
-- Claim CMS or HHS endorsement  
-- Misuse developer credentials  
+- Access records without authorization
+- Abuse or circumvent provider or CMS APIs
+- Claim CMS or HHS endorsement
+- Misuse developer credentials
 
 ---
 
@@ -83,6 +83,6 @@ We may update these Terms; the date above will change. For CMS-approved Blue But
 
 ## Contact
 
-- Project: [GitHub issues](https://github.com/jwilleke/yourphr/issues)  
-- CMS Blue Button: [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov)  
-- Hosted instance: your operator  
+- Project: [GitHub issues](https://github.com/jwilleke/yourphr/issues)
+- CMS Blue Button: [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov)
+- Hosted instance: your operator

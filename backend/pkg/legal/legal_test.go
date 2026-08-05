@@ -160,3 +160,47 @@ func TestOverridePath_LivesUnderTheDataRoot(t *testing.T) {
 		filepath.Join(root, "config", "privacy-policy.md"),
 		legal.OverridePath(c, legal.KindPrivacyPolicy))
 }
+
+// The served page is what patients read, and three things had leaked into it (yourphr#463
+// follow-up, reported from https://yourphr.nerdsbythehour.com/web/privacy):
+//
+//   - "[Terms of Service](terms-of-service.md)" — a link that works on GitHub and 404s on the
+//     served page, which is the copy that actually matters
+//   - "Update `gh-pages` `privacy.html` when you change it" — an instruction to maintainers,
+//     rendered to a patient reading a legal document
+//   - trailing two-space hard breaks, which blackfriday turns into <br> and which appeared as
+//     arbitrary mid-sentence line breaks
+//
+// Asserted on the rendered HTML rather than the Markdown, because the Markdown is not the thing
+// that was wrong — the rendering of it was.
+func TestRenderedDocumentIsFitForAReader(t *testing.T) {
+	c, _ := newConfig(t)
+
+	for _, kind := range []legal.Kind{legal.KindPrivacyPolicy, legal.KindTermsOfService} {
+		t.Run(string(kind), func(t *testing.T) {
+			doc, err := legal.Load(c, kind)
+			require.NoError(t, err)
+
+			require.NotContains(t, doc.HTML, `href="terms-of-service.md"`,
+				"a .md link is dead on the served page")
+			require.NotContains(t, doc.HTML, `href="privacy-policy.md"`,
+				"a .md link is dead on the served page")
+
+			require.NotContains(t, doc.Markdown, "gh-pages",
+				"maintainer instructions belong in backend/pkg/legal/README.md, not in the document")
+
+			// The header block, before the first rule, is where the stray breaks appeared.
+			header := doc.HTML
+			if i := strings.Index(header, "<hr>"); i > 0 {
+				header = header[:i]
+			}
+			require.NotContains(t, header, "<br>",
+				"trailing two-space hard breaks render as arbitrary mid-sentence line breaks")
+
+			// Cross-reference must survive, just in a form that works when served.
+			require.Contains(t, doc.HTML, `href="`+map[legal.Kind]string{
+				legal.KindPrivacyPolicy: "terms", legal.KindTermsOfService: "privacy",
+			}[kind]+`"`, "the two documents must still link to each other")
+		})
+	}
+}

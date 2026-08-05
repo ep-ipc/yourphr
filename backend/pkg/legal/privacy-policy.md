@@ -1,8 +1,8 @@
 # Privacy Policy — YourPHR
 
-**Public URL:** [https://yourphr.org/privacy.html](https://yourphr.org/privacy.html)  
-**Source:** this file. Update `gh-pages` `privacy.html` when you change it.  
-**Related:** [Terms of Service](terms-of-service.md) (rules of use, warranty, license — not repeated here).
+**Public URL:** [https://yourphr.org/privacy.html](https://yourphr.org/privacy.html)
+
+**Related:** [Terms of Service](terms) (rules of use, warranty, license — not repeated here).
 
 Last updated: 31 July 2026
 
@@ -72,13 +72,13 @@ The stock software is **not** designed to sell data, use it for advertising/mark
 
 ## Your control
 
-- Do not connect Medicare (or any source) if you do not want that import  
-- **Disconnect** (Sources → Actions): clears OAuth tokens so the instance stops syncing; imported records stay until you remove them  
-- **Remove data** (Sources → Actions): deletes records imported from that source on this instance  
-- **Disconnect & remove data** (Sources → Actions): both, and removes the source card  
-- **Revoke Privacy & Terms** (Account Profile): blocks new Medicare connects and **disconnects** Medicare-class sources (tokens only; records stay until you remove them)  
-- **Delete account** (Account Profile): permanently deletes your account and all of your data on this instance  
-- Ask the operator about backups or a full deployment wipe if needed  
+- Do not connect Medicare (or any source) if you do not want that import
+- **Disconnect** (Sources → Actions): clears OAuth tokens so the instance stops syncing; imported records stay until you remove them
+- **Remove data** (Sources → Actions): deletes records imported from that source on this instance
+- **Disconnect & remove data** (Sources → Actions): both, and removes the source card
+- **Revoke Privacy & Terms** (Account Profile): blocks new Medicare connects and **disconnects** Medicare-class sources (tokens only; records stay until you remove them)
+- **Delete account** (Account Profile): permanently deletes your account and all of your data on this instance
+- Ask the operator about backups or a full deployment wipe if needed
 
 **Dormant/closed accounts:** data remains on the operator’s storage until removed (including any backups). The project holds no enrollee databases.
 
@@ -118,4 +118,4 @@ We may update this policy; the date above will change. For a CMS-approved Blue B
 - Project (bugs, features — no access to anyone's records): [GitHub issues](https://github.com/jwilleke/yourphr/issues)
 - CMS Blue Button: [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov)
 
-This document deliberately names no operator. It is the same policy on every instance, and each is run by a different party — so the operator's identity comes from the instance itself, not from here.  
+This document deliberately names no operator. It is the same policy on every instance, and each is run by a different party — so the operator's identity comes from the instance itself, not from here.
