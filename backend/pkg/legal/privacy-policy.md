@@ -114,7 +114,7 @@ We may update this policy; the date above will change. For a CMS-approved Blue B
 
 **Your instance first.** Your records are held by whoever operates the instance you use — they are the people to ask about your data, to correct it, or to have it removed. Their contact details are on the **Contact** page of that instance, filled in by the operator; if they have published none, the software cannot supply one on their behalf.
 
-- Your instance: its **Contact** page — `https://<your-instance>/contact`
+- Your instance: its [**Contact** page](contact) — filled in by whoever operates it
 - Project (bugs, features — no access to anyone's records): [GitHub issues](https://github.com/jwilleke/yourphr/issues)
 - CMS Blue Button: [BlueButtonAPI@cms.hhs.gov](mailto:BlueButtonAPI@cms.hhs.gov)
 

@@ -4,6 +4,11 @@
       <span class="text-muted text-center text-sm-start d-block d-sm-inline-block">Copyright © YourPHR {{currentYear}} | {{appVersion}}
         · <a routerLink="/attributions">Attributions</a>
         · <a routerLink="/privacy">Privacy</a>
+        <!-- Terms sits beside Privacy because the Privacy Policy links to it ("rules of use,
+             warranty, license — not repeated here"), so a reader sent there needs a way back,
+             and someone deciding whether to sign up needs both. Both routes are deliberately
+             unguarded (see app-routing.module.ts). -->
+        · <a routerLink="/terms">Terms</a>
         <!-- Operator contact lives on /contact (#454) rather than inline: it is three fields, and
              a footer is the wrong place to read an address off. Always shown — the page carries
              project contacts even when this instance's operator published none. -->

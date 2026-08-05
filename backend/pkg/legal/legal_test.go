@@ -197,6 +197,16 @@ func TestRenderedDocumentIsFitForAReader(t *testing.T) {
 			require.NotContains(t, header, "<br>",
 				"trailing two-space hard breaks render as arbitrary mid-sentence line breaks")
 
+			// The Privacy Policy points a reader at their instance's Contact page. It rendered a
+			// literal "https://<your-instance>/contact" placeholder, which is not a link and not
+			// actionable — the reader is already ON the instance.
+			if kind == legal.KindPrivacyPolicy {
+				require.NotContains(t, doc.HTML, "&lt;your-instance&gt;",
+					"a placeholder hostname must not reach a reader who is already on the instance")
+				require.Contains(t, doc.HTML, `href="contact"`,
+					"the Contact page must be a working link on the served instance")
+			}
+
 			// Cross-reference must survive, just in a form that works when served.
 			require.Contains(t, doc.HTML, `href="`+map[legal.Kind]string{
 				legal.KindPrivacyPolicy: "terms", legal.KindTermsOfService: "privacy",
