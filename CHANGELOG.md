@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.1.1](https://github.com/jwilleke/yourphr/compare/v2.1.0...v2.1.1) (2026-08-05)
+
+Fixes the Privacy Policy and Terms pages your instance actually serves.
+
+### Bug Fixes
+
+- **legal:** the served `/privacy` and `/terms` pages carried three defects that only appeared in the rendered copy — the one patients read ([#463](https://github.com/jwilleke/yourphr/issues/463)):
+  - the cross-link between the two documents pointed at a `.md` filename, which works when browsing GitHub and **404s on the served page**. It is now page-relative, so it resolves correctly on an instance served under a `web.listen.basepath` prefix as well as at the root.
+  - a maintainer instruction — *"update `gh-pages` `privacy.html` when you change it"* — was being rendered to patients in the middle of a legal document. Moved to `backend/pkg/legal/README.md`.
+  - trailing two-space hard breaks rendered as `<br>`, producing arbitrary mid-sentence line breaks in the header block.
+
+### Documentation
+
+- **recovery:** a new [restore drill](https://github.com/jwilleke/yourphr/blob/main/docs/recovery/data-recovery.md). A backup you have never restored is not a backup — it is a file you hope is a backup. Covers what CI proves versus what only you can prove, a drill to run on a throwaway instance, and a success checklist that can be failed
+- **recovery:** all backup and recovery pages consolidated under `docs/recovery/`, with a hub table saying which of the three answers which question
+- **docs:** corrected two claims that had gone stale — that at-rest encryption is off by default (it has been **on** since v2.0.0), and that `app-custom-config.json` is not covered by backups (it has been since v2.1.0)
+- **docs:** fixed twelve broken relative links across the docs tree
+
+### Notes for operators
+
+**Nothing to do.** If you have opened `/privacy` or `/terms` on your instance and found the "Terms of Service" link dead, this fixes it.
+
+**Both legal-document digests changed**, because the digest hashes the Markdown and the Markdown changed. Nothing depends on that today — consent pinning is [#465](https://github.com/jwilleke/yourphr/issues/465) and still open.
+
+`Last updated` on both documents is deliberately unchanged: the wording of the policy did not change, and that date is what tells a reader whether they need to read it again.
+
 ## [2.1.0](https://github.com/jwilleke/yourphr/compare/v2.0.0...v2.1.0) (2026-08-05)
 
 A backup now contains your instance, not just its database — and the SSRF guard on user-supplied FHIR URLs actually holds.
