@@ -16,6 +16,8 @@
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
+>
+> **External reports are listed first within their band and take priority.** They are rare, cost the reporter real effort, and are the main signal anyone else is using this.
 
 ## 🔴 P0 — Security & Critical
 
@@ -23,6 +25,7 @@
 
 ## 🟠 P1
 
+- [#486](https://github.com/jwilleke/yourphr/issues/486) — Status column text unreadble depending on light/dark mode. **(external — thevoltagesource)**
 - [#463](https://github.com/jwilleke/yourphr/issues/463) — [FEATURE] Serve PP/ToS from the instance, with an operator override
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
@@ -34,6 +37,7 @@
 
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#487](https://github.com/jwilleke/yourphr/issues/487) — [CHORE] Migrating off Karma must not silently defang the contrast test (jsdom has no real cascade)
 - [#485](https://github.com/jwilleke/yourphr/issues/485) — [FEATURE] Reject obfuscated numeric hosts when a source is added, not when it syncs
 - [#482](https://github.com/jwilleke/yourphr/issues/482) — [FEATURE] Upgrade angular Angular to 22.x
 - [#475](https://github.com/jwilleke/yourphr/issues/475) — [FEATURE] display the bootstrap values
@@ -109,4 +113,4 @@
 
 ## ❓ Needs triage
 
-- [#486](https://github.com/jwilleke/yourphr/issues/486) — Status column text unreadble depending on light/dark mode.
+_None._
