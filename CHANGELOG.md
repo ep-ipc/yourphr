@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.1.2](https://github.com/jwilleke/yourphr/compare/v2.1.1...v2.1.2) (2026-08-05)
+
+Status badges are readable again, and the footer finally links the Terms it tells you to read.
+
+### Bug Fixes
+
+- **ui:** status text was unreadable in both light and dark mode, across most lists — Medical Concerns, Medications, the admin provider list ([#486](https://github.com/jwilleke/yourphr/issues/486), reported by **@thevoltagesource**). Two independent causes, both now fixed and measured:
+  - badge text is white by default, and five of the theme's seven variants were below WCAG AA behind it — `light` at **1.09:1**, effectively invisible. Every variant now uses a contrast-paired utility and lands between 4.53:1 and 19.26:1.
+  - in dark mode a blanket `!important` colour on every `span` overrode that pairing, forcing every badge to 1.02–2.17:1 regardless of its background. That rule now excludes badges.
+- **legal:** the footer linked Privacy but not **Terms**, while the Privacy Policy links *to* the Terms — so a reader sent there had no way back ([#463](https://github.com/jwilleke/yourphr/issues/463))
+- **legal:** the Privacy Policy showed a literal `https://<your-instance>/contact` placeholder to a reader who is already on the instance. Now a working link that resolves under any path prefix ([#463](https://github.com/jwilleke/yourphr/issues/463))
+
+### Tests
+
+- **ui:** contrast is now measured, not assumed. A new spec reads **computed** styles from real elements in a real browser, in **both** themes, and fails the build below WCAG AA. It caught the dark-mode bug above within minutes of being written — a check that parsed the stylesheet instead would have missed every one of these, because they come from `!important` interactions rather than from the utilities themselves ([#486](https://github.com/jwilleke/yourphr/issues/486))
+
+### Documentation
+
+- **recovery:** recorded why CodeQL's 14 `go/path-injection` alerts on the backup destination are dismissed rather than fixed, and the conditions that would make that dismissal wrong — dismissed alerts are never re-raised by a later scan, so nothing else would remind you ([#488](https://github.com/jwilleke/yourphr/issues/488))
+
+### Notes for operators
+
+**Nothing to do.** Purely visual and documentation fixes.
+
+**If you have a custom theme,** note that badge colours now come from contrast-paired utilities. Retuning a palette colour will fail the new contrast spec rather than silently shipping an unreadable badge — which is the intent.
+
 ## [2.1.1](https://github.com/jwilleke/yourphr/compare/v2.1.0...v2.1.1) (2026-08-05)
 
 Fixes the Privacy Policy and Terms pages your instance actually serves.
