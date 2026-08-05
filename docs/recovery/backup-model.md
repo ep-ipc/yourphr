@@ -40,6 +40,12 @@ Its fourth rule made this plain: *whatever destination was saved previously is a
 
 **Retained:** path hygiene — absolute, `filepath.Clean`ed, directory exists and is writable, failing with the real OS error. That is input validation, not authorization, and it is worth keeping.
 
+### CodeQL flags this, and the alerts are dismissed
+
+Removing the allowlist left 14 high `go/path-injection` alerts across `TestBackupDestination` and `WriteBackupArchive`: an admin-supplied string reaches `os.OpenFile`. The finding is **accurate**. It was dismissed as *won't fix* against this page ([#488](https://github.com/jwilleke/yourphr/issues/488)), because the exposure is an admin writing where they already could.
+
+That dismissal is the first thing to revisit if the threat model changes — more than one admin, an admin who is not the operator, a hosted or multi-tenant deployment, or a destination settable by anyone but an admin. Dismissed alerts are not re-raised by a scan, so nothing will remind you.
+
 Replacing it with a **test** asks a better question. The allowlist asked *"are you permitted here?"* — one obvious answer on a family instance. A test asks *"does this actually work?"* — which nobody knows until it is tried.
 
 ## A backup contains live credentials
