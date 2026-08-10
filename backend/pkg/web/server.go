@@ -174,6 +174,18 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				authGroup.POST("/signin", handler.AuthSignin)
 				authGroup.POST("/logout", handler.AuthLogout) // clears the session cookie (#103)
 
+				// One-click sign-in to the shared demo account on a public demo instance (#495).
+				// Refuses with 403 unless demo.enabled, so this is inert on a real install.
+				//
+				// Rate-limited separately and far more loosely than the credential endpoints
+				// above: this is not a guessable surface (there is nothing to guess — the caller
+				// supplies no input), while every visitor to a public demo behind one Cloudflare
+				// tunnel can share an apparent source IP, so the 10/minute spray limit would lock
+				// out real visitors rather than attackers.
+				demoGroup := api.Group("/auth")
+				demoGroup.Use(middleware.RateLimitMiddleware(60, time.Minute))
+				demoGroup.POST("/demo-signin", handler.AuthDemoSignin)
+
 				//whitelisted CORS PROXY
 				api.GET("/cors/:endpointId/*proxyPath", handler.CORSProxy)
 				api.POST("/cors/:endpointId/*proxyPath", handler.CORSProxy)

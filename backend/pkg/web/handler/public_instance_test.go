@@ -19,6 +19,17 @@ import (
 // deliberate is the entire point. Widening it is a security decision (#457).
 var allowedPublicInstanceKeys = []string{
 	"operator.name", "operator.contact_url", "theme.name",
+	// demo.enabled — the sign-in page decides whether to offer one-click entry to the shared demo
+	// account before anyone has logged in, so the flag has to be readable anonymously (#495). It
+	// is a boolean, and it is the only published key that is not a string; note demo.password is
+	// deliberately NOT here and is verified server-side instead.
+	"demo.enabled",
+}
+
+// publicInstanceStringKeys are the published keys whose unset value is the empty string. Kept
+// apart from the list above because demo.enabled is a boolean, so "unset" is false, not "".
+var publicInstanceStringKeys = []string{
+	"operator.name", "operator.contact_url", "theme.name",
 }
 
 func newPublicInstanceRequest(t *testing.T, configure func(config.Interface), h ...gin.HandlerFunc) *httptest.ResponseRecorder {
@@ -80,10 +91,16 @@ func TestGetPublicInstanceInfo_UnsetValuesAreEmpty(t *testing.T) {
 	recorder := newPublicInstanceRequest(t, nil)
 
 	data := decodePublicInstanceData(t, recorder)
-	for _, key := range allowedPublicInstanceKeys {
+	for _, key := range publicInstanceStringKeys {
 		require.Contains(t, data, key)
 		require.Equal(t, "", data[key], "%s should be empty when unset", key)
 	}
+
+	// The demo flag ships false, and it must arrive as a real boolean — the frontend treats
+	// anything that is not literally true as "not a demo", so a stringified "false" would be
+	// safe but a stringified "true" would not (#495).
+	require.Contains(t, data, "demo.enabled")
+	require.Equal(t, false, data["demo.enabled"], "demo mode must ship off")
 }
 
 // THE load-bearing test for #453. The merged configuration holds jwt.issuer.key, relay.secret

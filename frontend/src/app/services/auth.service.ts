@@ -130,6 +130,20 @@ export class AuthService {
     this.setAuthToken(resp.data)
   }
 
+  /**
+   * DemoSignin signs in to the shared demo account on a public demo instance (#495).
+   *
+   * Deliberately sends no credentials: the username and password are configuration
+   * (`demo.username` / `demo.password`) and are verified by the backend, so the published demo
+   * login is not sitting in this bundle. The endpoint answers 403 unless `demo.enabled`.
+   */
+  public async DemoSignin(): Promise<any> {
+    const fastenApiEndpointBase = GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)
+    const resp = await this._httpClient.post<ResponseWrapper>(`${fastenApiEndpointBase}/auth/demo-signin`, {}).toPromise()
+
+    this.setAuthToken(resp.data)
+  }
+
   public createUser(newUser: User): Observable<any> {
     const fastenApiEndpointBase = GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base);
     return this._httpClient.post<ResponseWrapper>(`${fastenApiEndpointBase}/secure/users`, newUser)

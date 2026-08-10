@@ -23,6 +23,18 @@
         </ng-template>
       </form>
 
+      <!-- Public demo instance (#495): the primary action is entering the demo, not signing in.
+           Shown only when the instance published demo.enabled. -->
+      <div *ngIf="demoEnabled && !showExternalIdP" class="pb-3">
+        <button (click)="demoSignin()" [disabled]="demoLoading" type="button" class="btn btn-az-primary w-100">
+          {{demoLoading ? "Opening the demo..." : "Explore the demo"}}
+        </button>
+        <p class="mt-2 mb-0 tx-12 tx-gray-600">
+          Public demo with synthetic records — no sign-up, nothing to enter. The data resets nightly, so anything you change here is temporary.
+        </p>
+        <hr>
+      </div>
+
       <form  *ngIf="!showExternalIdP" (ngSubmit)="signinSubmit()" #userForm="ngForm">
         <div class="mb-3">
           <label>Username</label>

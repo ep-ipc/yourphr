@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { AuthSigninComponent } from './auth-signin.component';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import {RouterTestingModule} from '@angular/router/testing';
 import {RouterModule} from '@angular/router';
 import {FormsModule} from '@angular/forms';
@@ -11,6 +11,7 @@ import { HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/
 describe('AuthSigninComponent', () => {
   let component: AuthSigninComponent;
   let fixture: ComponentFixture<AuthSigninComponent>;
+  let httpMock: HttpTestingController;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -29,10 +30,58 @@ describe('AuthSigninComponent', () => {
 
     fixture = TestBed.createComponent(AuthSigninComponent);
     component = fixture.componentInstance;
+    httpMock = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
   });
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  // The demo button gates entry to a SHARED account, so anything other than an explicit
+  // demo.enabled:true from the instance must leave it hidden (#495).
+  describe('demo mode', () => {
+    const instanceRequest = () => httpMock.expectOne((req) => req.url.endsWith('/instance/public'));
+
+    it('shows the demo button when the instance publishes demo.enabled', () => {
+      instanceRequest().flush({success: true, data: {'demo.enabled': true}});
+      fixture.detectChanges();
+
+      expect(component.demoEnabled).toBeTrue();
+    });
+
+    it('hides the demo button when demo.enabled is absent', () => {
+      instanceRequest().flush({success: true, data: {'operator.name': 'YourPHR'}});
+      fixture.detectChanges();
+
+      expect(component.demoEnabled).toBeFalse();
+    });
+
+    it('hides the demo button when demo.enabled is a truthy non-boolean', () => {
+      instanceRequest().flush({success: true, data: {'demo.enabled': 'true'}});
+      fixture.detectChanges();
+
+      expect(component.demoEnabled).toBeFalse();
+    });
+
+    it('hides the demo button when the instance endpoint fails', () => {
+      instanceRequest().error(new ProgressEvent('network error'));
+      fixture.detectChanges();
+
+      expect(component.demoEnabled).toBeFalse();
+    });
+
+    it('posts no credentials when entering the demo', () => {
+      instanceRequest().flush({success: true, data: {'demo.enabled': true}});
+      fixture.detectChanges();
+
+      component.demoSignin();
+
+      const demoRequest = httpMock.expectOne((req) => req.url.endsWith('/auth/demo-signin'));
+      expect(demoRequest.request.method).toBe('POST');
+      // The password is configuration verified server-side; it must never be in this bundle.
+      expect(JSON.stringify(demoRequest.request.body)).toBe('{}');
+      demoRequest.flush({success: true, data: 'a-session-token'});
+    });
   });
 });

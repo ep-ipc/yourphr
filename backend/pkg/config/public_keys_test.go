@@ -12,7 +12,12 @@ func TestPublicKeys_ShippedDefault(t *testing.T) {
 
 	// contact_email is deliberately NOT here (#459) — an address on an unauthenticated endpoint
 	// gets harvested. Signed-in users still get it via AuthenticatedInstanceKeys.
+	//
+	// demo.enabled is public because the sign-in page must decide whether to offer the one-click
+	// demo login before anyone has logged in (#495). demo.password is on the `secret` list and
+	// must never appear here — see TestPublicKeys_SecretsAreNotPublicByDefault.
 	require.Equal(t, []string{
+		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",
 		"theme.name",
@@ -34,6 +39,11 @@ func TestPublicKeys_SecretsAreNotPublicByDefault(t *testing.T) {
 		"relay.secret",
 		"database.encryption.key",
 		"database.location",
+		// The demo login is published on the sign-in page, so it is tempting to serve it here
+		// too. It must not be: /api/auth/demo-signin verifies it server-side precisely so the
+		// credential never reaches a browser, and publishing it would put a working password on
+		// an anonymous endpoint on every instance that enabled demo mode (#495).
+		"demo.password",
 	} {
 		require.False(t, public[secret], "%s must not be publicly served", secret)
 	}
@@ -96,6 +106,7 @@ func TestDefaultPublicKeys_ComesFromTheShippedFile(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{
+		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",
 		"theme.name",

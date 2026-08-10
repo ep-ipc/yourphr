@@ -109,6 +109,67 @@ func AuthSignin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": userFastenToken})
 }
 
+// AuthDemoSignin signs a visitor in to the shared demo account with no credential entry, for a
+// public demo instance (#495). Gated on `demo.enabled`, which ships false — on any instance
+// holding real records this endpoint does not exist as far as a caller can tell.
+//
+// The credential is configuration, not something the browser holds: `demo.password` is on the
+// `secret` list and is never served by /api/instance/public, so the published demo login cannot
+// be read out of the JS bundle. What happens here is an ORDINARY signin — the configured password
+// is verified against the stored hash — deliberately, rather than minting a token for a named
+// user outright. A "log this user in without a password" path would turn one mis-set flag into a
+// full auth bypass; this way, a flag flipped on an instance with no matching demo account and
+// password does nothing at all.
+//
+// An enabled flag with an empty `demo.password` is refused rather than treated as "no password
+// required", because the empty string is what an operator gets by accident.
+//
+// This is only half of a safe public demo. The demo account is SHARED, so it must also be barred
+// from connecting real providers (#496) — otherwise a visitor authorizes their own Medicare or
+// Epic account and the next visitor reads their records.
+func AuthDemoSignin(c *gin.Context) {
+	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
+
+	if !appConfig.GetBool("demo.enabled") {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "demo mode is not enabled on this instance"})
+		return
+	}
+
+	demoUsername := appConfig.GetString("demo.username")
+	demoPassword := config.GetSecret(appConfig, "demo.password")
+	if demoUsername == "" || !demoPassword.IsSet() {
+		// Loud on the server, generic to the caller: this is an operator mistake, and the fix
+		// (set demo.username / demo.password) is not the visitor's to make.
+		logger.Warnf("demo mode is enabled but demo.username or demo.password is empty; refusing demo sign-in")
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "demo mode is not configured on this instance"})
+		return
+	}
+
+	foundUser, err := databaseRepo.GetUserByUsername(c, demoUsername)
+	if err != nil || foundUser == nil {
+		logger.Warnf("demo mode is enabled but no account named %q exists; refusing demo sign-in", demoUsername)
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "demo mode is not configured on this instance"})
+		return
+	}
+
+	if err = foundUser.CheckPassword(demoPassword.Expose()); err != nil {
+		logger.Warnf("demo mode is enabled but demo.password does not match the %q account; refusing demo sign-in", demoUsername)
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "demo mode is not configured on this instance"})
+		return
+	}
+
+	userFastenToken, err := auth.JwtGenerateFastenTokenFromUser(*foundUser, appConfig.GetString("jwt.issuer.key"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	setSessionCookie(c, appConfig, userFastenToken)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": userFastenToken})
+}
+
 // setSessionCookie stores the session JWT as an HttpOnly/Secure/SameSite=Strict cookie for
 // browser clients (#103 / H2). The Authorization: Bearer header remains the primary transport
 // (RFC 6750 / SMART); this cookie is an optional fallback that keeps the token out of JS to

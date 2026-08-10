@@ -5,6 +5,7 @@ import {ToastService} from '../../services/toast.service';
 import {ToastNotification, ToastType} from '../../models/fasten/toast';
 import {environment} from '../../../environments/environment';
 import {AuthService} from '../../services/auth.service';
+import {FastenApiService} from '../../services/fasten-api.service';
 import {Location} from '@angular/common';
 
 @Component({
@@ -21,8 +22,14 @@ export class AuthSigninComponent implements OnInit {
   errorMsg = ""
   showExternalIdP: boolean = environment.environment_cloud
 
+  // Public demo instance: offer one-click sign-in to the shared demo account (#495). Read from
+  // the unauthenticated instance endpoint, false on every ordinary install.
+  demoEnabled = false
+  demoLoading = false
+
   constructor(
     private authService: AuthService,
+    private fastenApiService: FastenApiService,
     private router: Router,
     private route: ActivatedRoute,
     private location: Location,
@@ -30,6 +37,13 @@ export class AuthSigninComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
+
+    // An unreachable or erroring instance endpoint must leave the demo button hidden rather than
+    // showing a button that cannot work.
+    this.fastenApiService.getPublicInstanceInfo().subscribe({
+      next: (info) => this.demoEnabled = info?.demo_enabled === true,
+      error: () => this.demoEnabled = false,
+    })
 
     const idpType = this.route.snapshot.paramMap.get('idp_type')
     if(idpType){
@@ -76,6 +90,29 @@ export class AuthSigninComponent implements OnInit {
         } else{
           this.errorMsg = "an unknown error occurred during sign-in"
         }
+        const toastNotification = new ToastNotification()
+        toastNotification.type = ToastType.Error
+        toastNotification.message = this.errorMsg
+        this.toastService.show(toastNotification)
+      })
+  }
+
+  // demoSignin enters the shared demo account with no credential entry (#495). The credentials
+  // live in the instance's configuration and are checked server-side, so nothing is typed here
+  // and nothing is held in this bundle.
+  demoSignin(){
+    this.demoLoading = true
+    this.errorMsg = ""
+
+    this.authService.DemoSignin()
+      .then(() => {
+        this.demoLoading = false
+        this.router.navigateByUrl('/dashboard')
+      })
+      .catch((err)=>{
+        this.demoLoading = false
+        console.error("demo signin error:", err)
+        this.errorMsg = "the demo is not available right now"
         const toastNotification = new ToastNotification()
         toastNotification.type = ToastType.Error
         toastNotification.message = this.errorMsg

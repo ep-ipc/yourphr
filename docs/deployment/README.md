@@ -144,6 +144,9 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 | `cda_converter.enabled` | `false` | C-CDA/CCD import — needs the Metriport sidecar (opt-in). See [`FHIR/fhir-converter-local.md`](../FHIR/fhir-converter-local.md). |
 | `cda_converter.url` | `""` | Sidecar URL when enabled (internal-only — raw CCD is PHI). |
 | `cda_converter.timeout_seconds` | `60` | Conversion timeout. |
+| `demo.enabled` | `false` | **Public demo instances only.** Puts a one-click "Explore the demo" button on the sign-in page that enters a *shared* account with no credential entry ([#495](https://github.com/jwilleke/yourphr/issues/495)). Served by `/api/instance/public`, so the sign-in page can read it with no login. Never enable on an instance holding real records. |
+| `demo.username` | `demo` | Which account the demo button signs in as. Ignored unless `demo.enabled`. |
+| `demo.password` | `""` | That account's password, verified **server-side** by `POST /api/auth/demo-signin`, so the published demo login never reaches the browser. Masked in Admin → Configuration. Enabled with this empty, the endpoint refuses — an empty password is never treated as "no password needed". |
 
 ## Secrets & credentials
 

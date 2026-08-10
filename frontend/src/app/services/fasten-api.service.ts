@@ -1178,6 +1178,10 @@ export interface InstanceInfo {
   contact_email: string;
   contact_url: string;
   theme: string;
+  // Public demo instance: offer one-click sign-in to the shared demo account (#495). Absent or
+  // false on every ordinary install. Only the flag is published — the demo password is verified
+  // server-side by /auth/demo-signin and never reaches the browser.
+  demo_enabled: boolean;
 }
 
 // mapInstanceInfo translates backend config keys to short names. Both instance endpoints return
@@ -1190,5 +1194,8 @@ function mapInstanceInfo(response: ResponseWrapper): InstanceInfo {
     contact_email: str('operator.contact_email'),
     contact_url: str('operator.contact_url'),
     theme: str('theme.name'),
+    // Strictly true only. An absent key, a null, or a string must read as "not a demo" — this
+    // flag gates a shared-account login, so anything ambiguous defaults to off.
+    demo_enabled: data['demo.enabled'] === true,
   };
 }
