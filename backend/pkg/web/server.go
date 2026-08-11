@@ -166,13 +166,26 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 			if !ae.StandbyMode { // Check ae.StandbyMode for non-standby mode
 				api.Use(middleware.CacheMiddleware())
 
-				// Rate-limit the unauthenticated auth endpoints to blunt online
-				// password guessing / account spraying (#104 / H3).
+				// Rate-limit the unauthenticated CREDENTIAL endpoints to blunt online password
+				// guessing / account spraying (#104 / H3). The cap is configuration because 10 is a
+				// brute-force backstop, not a throughput setting, and it is far too low for an
+				// automated suite driving real logins — the E2E harness makes ~16 auth calls from
+				// one IP and was silently collecting 429s (#481).
+				authPerMinute := ae.Config.GetInt("web.rate_limit.auth_per_minute")
+				if authPerMinute <= 0 {
+					authPerMinute = 10
+				}
 				authGroup := api.Group("/auth")
-				authGroup.Use(middleware.RateLimitMiddleware(10, time.Minute))
+				authGroup.Use(middleware.RateLimitMiddleware(authPerMinute, time.Minute))
 				authGroup.POST("/signup", handler.AuthSignup)
 				authGroup.POST("/signin", handler.AuthSignin)
-				authGroup.POST("/logout", handler.AuthLogout) // clears the session cookie (#103)
+
+				// Logout is deliberately OUTSIDE the limiter. It presents no credential and reveals
+				// nothing, so it is not a guessing surface — but it shares the /auth prefix, so
+				// counting it burned the same per-IP budget as real sign-in attempts. Worse, the
+				// failure mode is backwards: a rate-limited logout leaves the session cookie in
+				// place, i.e. the limiter would keep someone signed in.
+				api.POST("/auth/logout", handler.AuthLogout) // clears the session cookie (#103)
 
 				// One-click sign-in to the shared demo account on a public demo instance (#495).
 				// Refuses with 403 unless demo.enabled, so this is inert on a real install.

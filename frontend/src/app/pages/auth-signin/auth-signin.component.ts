@@ -98,7 +98,13 @@ export class AuthSigninComponent implements OnInit {
       })
       .catch((err)=>{
         this.loading = false
-        if(err?.name){
+        if(err?.status === 429){
+          // The server throttles credential attempts per IP (#104). Saying "incorrect" here is
+          // actively misleading: the credential may be perfectly good, and the user retries — which
+          // extends the window they are locked out for. It also cost a real debugging session when
+          // the E2E suite hit the cap and the failure read as a login regression (#481).
+          this.errorMsg = "too many sign-in attempts — wait a minute and try again"
+        } else if(err?.name){
           this.errorMsg = "username or password is incorrect"
         } else{
           this.errorMsg = "an unknown error occurred during sign-in"

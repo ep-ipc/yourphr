@@ -50,6 +50,21 @@ export default defineConfig({
     // mkdir -p db: the db/ dir is gitignored, so it's absent on a fresh CI checkout and
     // sqlite can't create the test DB without it (no-op locally).
     command:
+      // Port preflight (#481). Two different things can go wrong when :9191 is already taken, and
+      // both used to be silent or cryptic:
+      //   1. the squatter serves /web, so Playwright's url probe succeeds and it REUSES it — the
+      //      fresh-database step below never runs. Caught in e2e/global-setup.ts.
+      //   2. the squatter does not serve /web, so the probe fails, Playwright starts this command,
+      //      and the bind fails with "Process from config.webServer was not able to start.
+      //      Exit code: 1" — which names neither the port nor the cause.
+      // This catches (2) before `go run` and says what to do. curl rather than lsof: lsof is not
+      // guaranteed on a CI runner, and a YourPHR backend on the port is the case that matters.
+      'if curl -sf -o /dev/null --max-time 2 http://localhost:9191/api/health; then ' +
+      'echo "" >&2; ' +
+      'echo "[e2e] REFUSING TO START — something is already serving on :9191." >&2; ' +
+      'echo "[e2e] This harness needs the port to itself: it deletes and re-seeds db/fasten-e2e.db." >&2; ' +
+      'echo "[e2e] Free it and re-run:  lsof -ti:9191 | xargs kill" >&2; ' +
+      'echo "" >&2; exit 1; fi && ' +
       'mkdir -p db && rm -f db/fasten-e2e.db db/fasten-e2e.db-shm db/fasten-e2e.db-wal && ' +
       // Inline env rather than a .env file: cwd is the repo root, so a developer's own .env
       // would otherwise leak into the test run. Real environment variables outrank .env, so
@@ -60,6 +75,11 @@ export default defineConfig({
       'YOURPHR_DATABASE_LOCATION=./db/fasten-e2e.db ' +
       'YOURPHR_DATABASE_ENCRYPTION_ENABLED=false ' + // default is ON; E2E needs no key prompt
       'YOURPHR_CDA_CONVERTER_ENABLED=false ' +    // no converter sidecar in CI
+      // The suite drives ~16 real logins from one IP, against a production default of 10 per
+      // minute — so it was collecting 429s mid-run, which the sign-in page rendered as "username
+      // or password is incorrect". That reads as a login regression rather than a throttle, and
+      // it is why the login spec was intermittently "flaky" only in the full suite (#481).
+      'YOURPHR_WEB_RATE_LIMIT_AUTH_PER_MINUTE=1000 ' +
       'YOURPHR_LOG_LEVEL=INFO ' +                 // per-resource import logs, for #148
       'go run backend/cmd/fasten/fasten.go start',
     cwd: '..',

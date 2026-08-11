@@ -10,7 +10,45 @@ import { API_BASE, E2E_USER, PASS_FILE, SEED_BUNDLE } from './constants';
 //  3. Seed a synthetic Synthea bundle via POST /api/secure/source/manual (Bearer-authed) so
 //     data-dependent flows have content (#131 Phase 3). RequireAuth takes the Authorization
 //     header first, which sidesteps sending the Secure session cookie over http from a non-browser.
+// assertHarnessServer refuses to run against a backend this harness did not start (#481).
+//
+// playwright.config.ts sets `reuseExistingServer: !process.env.CI`, so locally Playwright attaches
+// to ANYTHING already listening on the port — including a backend holding a completely different
+// database. The webServer command's `rm -f db/fasten-e2e.db` is what guarantees a clean seeded
+// account, and on a reused server that command never runs, so the guarantee silently does not hold.
+//
+// The resulting failure points at the application: the specs that need the seeded account fail on
+// login while the rest pass, and nothing in the output mentions reuse. That cost a "did the
+// dependency bump break authentication?" investigation before the port was suspected.
+//
+// The check is `first_run_wizard` from /api/health: the harness always starts from a deleted
+// database, so a genuine harness server has NO users and reports true. A dev backend someone left
+// running has an account and reports false. That is a cheap, unambiguous signal — it needs no new
+// endpoint and cannot be faked by a coincidence of ports.
+async function assertHarnessServer(): Promise<void> {
+  const ctx = await request.newContext();
+  try {
+    const res = await ctx.get(`${API_BASE}/health`, { timeout: 10_000 });
+    if (!res.ok()) return; // not a YourPHR backend, or not up yet — webServer will deal with it
+    const data = (await res.json())?.data ?? {};
+    if (data.first_run_wizard === false) {
+      throw new Error(
+        `\n\n[e2e] REFUSING TO RUN — the backend on ${API_BASE} already has user accounts, so it is ` +
+        `not the throwaway one this harness starts.\n` +
+        `Playwright reused an existing server (reuseExistingServer is on outside CI), so the ` +
+        `fresh-database step never ran and the seeded e2e account does not exist there.\n` +
+        `Tests would fail on login and look like an application bug.\n\n` +
+        `Free the port and re-run:  lsof -ti:9191 | xargs kill\n`
+      );
+    }
+  } finally {
+    await ctx.dispose();
+  }
+}
+
 export default async function globalSetup(_config: FullConfig) {
+  await assertHarnessServer();
+
   const pass = process.env.E2E_PASS || randomBytes(18).toString('hex');
   writeFileSync(PASS_FILE, pass, { mode: 0o600 });
 
