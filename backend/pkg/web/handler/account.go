@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -20,14 +21,27 @@ func GetCurrentUser(c *gin.Context) {
 		return
 	}
 
+	// demo_account tells the UI to render the connect affordances as disabled rather than offering
+	// actions the server will refuse (#496). Derived here rather than exposing demo.username on the
+	// public instance endpoint: the UI needs to know "am I the demo account", not who that account
+	// is, and naming it publicly would hand an attacker half of a shared credential.
+	//
+	// It is a hint for rendering, never the control — BlockForDemoAccount enforces the same rule on
+	// the routes themselves, because a disabled button is not a control.
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+	isDemoAccount := appConfig.GetBool("demo.enabled") &&
+		appConfig.GetString("demo.username") != "" &&
+		appConfig.GetString("demo.username") == currentUser.Username
+
 	// Create a sanitized user object (without password)
 	sanitizedUser := gin.H{
-		"id":        currentUser.ID,
-		"username":  currentUser.Username,
-		"full_name": currentUser.FullName,
-		"email":     currentUser.Email,
-		"picture":   currentUser.Picture,
-		"role":      currentUser.Role,
+		"id":           currentUser.ID,
+		"username":     currentUser.Username,
+		"full_name":    currentUser.FullName,
+		"email":        currentUser.Email,
+		"picture":      currentUser.Picture,
+		"role":         currentUser.Role,
+		"demo_account": isDemoAccount,
 	}
 
 	c.JSON(http.StatusOK, gin.H{

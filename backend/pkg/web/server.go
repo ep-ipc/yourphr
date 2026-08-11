@@ -244,13 +244,24 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.GET("/resources/recent", handler.GetRecentResources)
 					secure.GET("/resources/search", handler.SearchResources)
 
-					secure.POST("/source", handler.CreateReconnectSource)
+					// The routes below that bring OUTSIDE data into an account carry the demo guard
+					// (#496): on a public demo every visitor is the same shared account, so a
+					// visitor connecting their own real provider would put a stranger's records in
+					// front of the next visitor. Inert unless demo.enabled — see BlockForDemoAccount.
+					//
+					// Reading, browsing, and even deleting are deliberately NOT guarded: a visitor
+					// wrecking the demo's own synthetic data is self-healing at the next reset, and
+					// blocking it would hide how the product actually behaves.
+					secure.POST("/source", middleware.BlockForDemoAccount(), handler.CreateReconnectSource)
 					// Effective OAuth relay callback URL for this deployment — the value operators
 					// must register with their FHIR vendor (#399). Non-secret; no secret returned.
 					secure.GET("/source/relay-config", handler.GetRelayConfig)
-					secure.POST("/source/authorize", handler.AuthorizeSource)
-					secure.POST("/source/connect", handler.ConnectSource)
-					secure.POST("/source/manual", handler.CreateManualSource)
+					secure.POST("/source/authorize", middleware.BlockForDemoAccount(), handler.AuthorizeSource)
+					secure.POST("/source/connect", middleware.BlockForDemoAccount(), handler.ConnectSource)
+					// Manual upload is guarded too: it is the other way a visitor's own real export
+					// reaches the shared account. Seeding the demo is done from the operator's admin
+					// account, which this guard does not touch.
+					secure.POST("/source/manual", middleware.BlockForDemoAccount(), handler.CreateManualSource)
 					// Whether C-CDA/XML upload can actually be converted here, so the UI doesn't
 					// offer a Convert button that is guaranteed to fail (#397).
 					secure.GET("/source/cda-converter/status", handler.GetCDAConverterStatus)
@@ -263,8 +274,8 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.GET("/provider-catalog/:id", handler.GetProviderCatalogEntry)
 					secure.PUT("/provider-catalog/:id", handler.UpdateProviderCatalogEntry)
 					secure.DELETE("/provider-catalog/:id", handler.DeleteProviderCatalogEntry)
-					secure.POST("/provider-catalog/:id/authorize", handler.AuthorizeSourceFromCatalog)
-					secure.POST("/provider-catalog/:id/connect", handler.ConnectSourceFromCatalog)
+					secure.POST("/provider-catalog/:id/authorize", middleware.BlockForDemoAccount(), handler.AuthorizeSourceFromCatalog)
+					secure.POST("/provider-catalog/:id/connect", middleware.BlockForDemoAccount(), handler.ConnectSourceFromCatalog)
 
 					secure.GET("/source", handler.ListSource)
 					secure.GET("/source/:sourceId", handler.GetSource)

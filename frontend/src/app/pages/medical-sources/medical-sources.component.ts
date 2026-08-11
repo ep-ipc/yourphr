@@ -124,9 +124,25 @@ export class MedicalSourcesComponent implements OnInit {
   ) {
   }
 
+  // True when this session is the shared public-demo account (#496). Connect and upload are
+  // refused server-side for it, so the UI shows them disabled rather than offering an action that
+  // will 403 — and says why, since "disabled" with no reason reads as a broken page.
+  isDemoAccount = false
+
   ngOnInit(): void {
     this.loadConnectableProviders()
     this.loadLegalConsent()
+    this.loadDemoAccountFlag()
+  }
+
+  // A failure here leaves isDemoAccount false, which only means the UI offers actions the server
+  // may refuse — the guard still holds. Failing the other way (assuming demo on error) would
+  // disable connecting for every user whose /account/me request happened to fail.
+  private loadDemoAccountFlag(): void {
+    this.fastenApi.getCurrentUser().subscribe(
+      (user) => { this.isDemoAccount = user?.demo_account === true },
+      (err) => { console.log("could not determine demo status", err) },
+    )
   }
 
   // Loads the patient-facing provider picker (enabled catalog entries; credential-free). A failure

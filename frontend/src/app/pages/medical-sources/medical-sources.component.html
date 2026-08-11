@@ -30,16 +30,28 @@
 
       <h2 class="az-content-title mg-t-40">Medical Record Sources</h2>
 
+      <!-- Public demo (#496): the demo account is SHARED, so anything imported here would be
+           visible to the next visitor. Said plainly rather than silently hiding the controls. -->
+      <div *ngIf="isDemoAccount" class="alert alert-info mg-t-20 mg-b-20" role="status">
+        <strong>You are signed in to the public demo.</strong>
+        Connecting a provider and uploading records are disabled here, because everyone shares this
+        account — anything you imported would be visible to the next visitor. Everything else works:
+        browse the synthetic records, open a resource, explore the sections. The data resets nightly.
+      </div>
+
       <div class="az-content-label mg-b-5">Manual Upload</div>
       <p class="mg-b-20">YourPHR also supports manually uploaded electronic medical records (EMR/EHR). Click below to upload.</p>
 
       <div class="row row-sm">
         <div class="col-lg">
-          <div class="upload-dropzone" [class.drag-active]="dragActive" role="button" tabindex="0"
-               (click)="bundleInput.click()" (keydown.enter)="bundleInput.click()"
-               (dragover)="$event.preventDefault(); dragActive = true"
+          <div class="upload-dropzone" [class.drag-active]="dragActive && !isDemoAccount"
+               [class.disabled]="isDemoAccount" role="button" [attr.tabindex]="isDemoAccount ? -1 : 0"
+               [attr.aria-disabled]="isDemoAccount ? 'true' : null"
+               [title]="isDemoAccount ? 'Disabled in the public demo — the account is shared' : ''"
+               (click)="!isDemoAccount && bundleInput.click()" (keydown.enter)="!isDemoAccount && bundleInput.click()"
+               (dragover)="$event.preventDefault(); dragActive = !isDemoAccount"
                (dragleave)="dragActive = false"
-               (drop)="onBundleDrop($event)">
+               (drop)="!isDemoAccount && onBundleDrop($event)">
             <input #bundleInput type="file" class="d-none"
                    accept=".json,.phr,.ndjson,.jsonl,.xml,.ccd,.ccda,.cda"
                    (change)="onBundleInput(bundleInput)">
@@ -106,9 +118,9 @@
         <div class="row">
           <div class="col-md-6 col-lg-4 mg-b-15" *ngFor="let provider of connectableProviders">
             <button type="button" class="btn btn-outline-az-primary btn-block d-flex align-items-center justify-content-center"
-                    [disabled]="connectingProviderId || needsLegalConsent(provider)"
+                    [disabled]="connectingProviderId || needsLegalConsent(provider) || isDemoAccount"
                     (click)="connectCatalogProvider(provider)"
-                    [title]="needsLegalConsent(provider) ? 'Accept Privacy Policy and Terms on Account Profile first' : ''">
+                    [title]="isDemoAccount ? 'Disabled in the public demo — the account is shared, so imported records would be visible to everyone' : (needsLegalConsent(provider) ? 'Accept Privacy Policy and Terms on Account Profile first' : '')">
               <img *ngIf="provider.brand_logo_url" [src]="provider.brand_logo_url" alt="" height="20" class="mg-r-10" />
               <span *ngIf="connectingProviderId === provider.id"><i class="fas fa-spinner fa-spin mg-r-5"></i> Connecting…</span>
               <span *ngIf="connectingProviderId !== provider.id"><i class="fas fa-plug mg-r-5"></i> {{provider.display}}</span>
