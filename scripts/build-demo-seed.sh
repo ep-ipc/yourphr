@@ -29,7 +29,11 @@ WORKDIR="${SEED_WORKDIR:-$(mktemp -d)}"
 OUT="${SEED_OUT:-./dist-seed/fasten.seed.db}"
 BUNDLE="${SEED_BUNDLE:-backend/pkg/database/testdata/Britt177_Blick895_ad0f0573-f8c7-4704-9eef-50342d37ef50.json}"
 DEMO_USER="${SEED_DEMO_USER:-demo}"
-DEMO_PASS="${SEED_DEMO_PASS:-demo123}"
+# Eight characters minimum, because the sign-in form enforces minlength="8" and the SIGNUP API does
+# not — so `demo123` (seven) built cleanly here and then could not be typed into our own login form.
+# The one-click button posts no credentials and would have worked, which is exactly why nothing
+# caught it. A published demo password has to be typeable.
+DEMO_PASS="${SEED_DEMO_PASS:-demo1234}"
 API="http://localhost:${PORT}/api"
 
 # A throwaway name that is not on the repository's reserved list and cannot collide with the demo
@@ -41,6 +45,10 @@ log() { printf '[seed] %s\n' "$*"; }
 fail() { printf '[seed] FAILED: %s\n' "$*" >&2; exit 1; }
 
 [ -f "$BUNDLE" ] || fail "bundle not found: $BUNDLE (run from the repository root)"
+
+# The sign-in form requires 8 characters and the signup API requires none, so a short password sails
+# through this script and then fails for a human at the login form. Refuse it here.
+[ "${#DEMO_PASS}" -ge 8 ] || fail "SEED_DEMO_PASS must be at least 8 characters (the sign-in form enforces minlength=8); got ${#DEMO_PASS}"
 
 SERVER_PID=""
 cleanup() {
