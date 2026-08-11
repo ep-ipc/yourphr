@@ -35,10 +35,38 @@ func GetPublicInstanceInfo(c *gin.Context) {
 		if value == nil {
 			value = ""
 		}
-		data[key] = value
+		data[key] = coercePublicValue(appConfig, key, value)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
+}
+
+// coercePublicValue serves a value with the TYPE its shipped default declares, rather than whatever
+// the layer it came from happened to store.
+//
+// Environment variables are strings, so an operator setting YOURPHR_DEMO_ENABLED=true made this
+// endpoint emit "demo.enabled": "true" — a string. The backend was unaffected (GetBool coerces), but
+// clients compare against real booleans, and both directions of that mismatch are silent and wrong:
+// a demo instance would never render its one-click sign-in ("true" is not true), and worse, an
+// instance with signup CLOSED still advertised the sign-up link, because "false" is not false.
+//
+// Found by configuring a real instance entirely through the environment; no unit test would have,
+// because they set values through a typed config object.
+func coercePublicValue(appConfig config.Interface, key string, value interface{}) interface{} {
+	if _, alreadyBool := value.(bool); alreadyBool {
+		return value
+	}
+
+	defaults, err := config.DefaultConfigValues()
+	if err != nil {
+		// Serve the raw value rather than failing the request: this endpoint is on the first-paint
+		// path, and a theme or an operator name is worth more than strict typing.
+		return value
+	}
+	if _, isBool := defaults[key].(bool); isBool {
+		return appConfig.GetBool(key)
+	}
+	return value
 }
 
 // GetInstanceInfoForUser serves instance identity to a signed-in user: everything public, plus

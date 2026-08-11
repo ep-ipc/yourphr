@@ -59,6 +59,12 @@ COPY --from=backend-build  /opt/fasten/ /opt/fasten/
 COPY --from=frontend-build /usr/src/fastenhealth/dist /opt/fasten/web
 COPY --from=backend-build /go/bin/fasten /opt/fasten/fasten
 COPY LICENSE.md /opt/fasten/LICENSE.md
+# Demo seed database (#505). Built by scripts/build-demo-seed.sh into seed/ before the image build;
+# the directory is committed with only a README so this COPY also succeeds in a local build that has
+# not produced one. Inert unless a deployment sets YOURPHR_BOOTSTRAP_SEED_RESTORE — a normal install
+# never touches it. Contains synthetic records and NO admin account: the image is public, so a baked
+# admin credential would be a published one, identical on every deployment.
+COPY seed/ /opt/fasten/seed/
 RUN ["/opt/fasten/fasten", "--help"]
 # No --config: defaults are embedded in the binary, an instance overrides them in
 # <data>/config/app-custom-config.json, and the environment overrides that (yourphr#470).

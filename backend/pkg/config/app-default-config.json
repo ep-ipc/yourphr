@@ -81,6 +81,10 @@
   "bootstrap.admin.enabled": false,
   "bootstrap.admin.username": "",
 
+  "_comment_bootstrap_seed": "Install the demo database baked into the release image when this instance has no database yet (#505), so a public demo comes up already populated and a reset is 'delete the file and restart'. OFF by default and DEMO-ONLY: a normal install must never come up holding synthetic patient records. The seed contains the shared demo account and NO admin — the image is public, so a baked admin credential would be a published one, identical on every deployment — which is why restoring REFUSES unless bootstrap.admin.enabled is also set: otherwise the instance would start populated, reachable, and administrable by nobody, with the first-run wizard suppressed because users exist. Restore happens before the database is opened and never over an existing database. Bootstrap, so set it in the environment (#472).",
+  "bootstrap.seed.restore": false,
+  "bootstrap.seed.path": "/opt/fasten/seed/fasten.seed.db",
+
   "_comment_rate_limit":"Per-IP fixed-window cap on the UNAUTHENTICATED credential endpoints (signup, signin), to blunt online password guessing (#104). 10/minute is a brute-force backstop, not a throughput setting — bcrypt already makes each attempt expensive. Catalogued because 10 is too low for an automated suite driving real logins: the E2E harness makes ~16 auth calls from one IP and was silently getting 429s that the UI rendered as 'username or password is incorrect', which read as a login regression (#481). Raise it for a test instance; leave it alone in production. NOTE the limiter keys on c.ClientIP(), which honours X-Forwarded-For — behind a proxy without trusted-proxy config, every client shares one bucket.",
   "web.rate_limit.auth_per_minute": 10,
 

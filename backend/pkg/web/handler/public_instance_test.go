@@ -188,3 +188,23 @@ func TestGetInstanceInfoForUser_StillExcludesSecrets(t *testing.T) {
 	require.NotContains(t, body, "super-secret-signing-key")
 	require.NotContains(t, body, "super-secret-relay-secret")
 }
+
+// Boolean public keys must arrive as booleans however they were set. Environment variables are
+// strings, so before this was coerced an env-configured instance served "true"/"false" and every
+// client comparing against a real boolean got the wrong answer — silently, and in the dangerous
+// direction for signup.enabled: "false" is not false, so a closed instance still advertised
+// sign-up. Reproduced here by setting the string form the way viper receives it from the
+// environment (#505).
+func TestGetPublicInstanceInfo_BooleansStayBooleans(t *testing.T) {
+	recorder := newPublicInstanceRequest(t, func(c config.Interface) {
+		c.Set("demo.enabled", "true")
+		c.Set("signup.enabled", "false")
+	})
+
+	data := decodePublicInstanceData(t, recorder)
+
+	require.Equal(t, true, data["demo.enabled"],
+		`a demo instance configured via the environment must still render its one-click sign-in`)
+	require.Equal(t, false, data["signup.enabled"],
+		`an instance with signup closed must not advertise sign-up; "false" as a string reads as truthy`)
+}

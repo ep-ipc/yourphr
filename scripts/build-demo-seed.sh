@@ -52,6 +52,20 @@ trap cleanup EXIT
 log "workdir $WORKDIR"
 rm -f "$WORKDIR"/fasten.db*
 
+# Refuse to run against a server this script did not start. Without this the script silently seeds
+# whatever is already on the port — which happened during development, because `go run` spawns a
+# child and killing the wrapper leaves the real process listening. The seed then came from another
+# instance's database, and the only symptom was a confusing "duplicate username" further down. Same
+# failure mode as yourphr#481.
+if curl -sf -o /dev/null --max-time 2 "$API/health"; then
+  fail "something is already serving on :$PORT — free it first (lsof -ti:$PORT | xargs kill), or set SEED_PORT"
+fi
+
+# Build the binary and run IT, rather than `go run`. `go run` execs a child, so $! is the wrapper and
+# killing it orphans the server; a direct binary means the PID we hold is the process we can stop.
+log "compiling"
+go build -o "$WORKDIR/fasten-seed" ./backend/cmd/fasten/ || fail "could not build the backend"
+
 # Deliberately NOT setting YOURPHR_BOOTSTRAP_ADMIN_*: the seed must contain no admin.
 YOURPHR_WEB_LISTEN_PORT="$PORT" \
 YOURPHR_STORAGE_DATA_DIR="$WORKDIR" \
@@ -60,7 +74,7 @@ YOURPHR_DATABASE_ENCRYPTION_ENABLED=false \
 YOURPHR_CDA_CONVERTER_ENABLED=false \
 YOURPHR_WEB_RATE_LIMIT_AUTH_PER_MINUTE=1000 \
 YOURPHR_LOG_LEVEL=WARN \
-  go run backend/cmd/fasten/fasten.go start >"$WORKDIR/server.log" 2>&1 &
+  "$WORKDIR/fasten-seed" start >"$WORKDIR/server.log" 2>&1 &
 SERVER_PID=$!
 
 log "waiting for the backend on :$PORT"
@@ -70,16 +84,34 @@ for _ in $(seq 1 60); do
 done
 curl -sf -o /dev/null --max-time 2 "$API/health" || fail "backend never became ready; see $WORKDIR/server.log"
 
+# signup POSTs and echoes the session token. Status and body are captured explicitly rather than
+# relying on `curl -f`: under `set -e` a failing curl inside a command substitution kills the script
+# before any diagnostic can print, which is exactly how this failed silently the first time.
+signup() {
+  local username="$1" password="$2" body status
+  body="$(mktemp)"
+  status="$(curl -s -o "$body" -w '%{http_code}' -X POST "$API/auth/signup" \
+    -H 'Content-Type: application/json' \
+    -d "{\"username\":\"$username\",\"password\":\"$password\"}" || true)"
+  if [ "$status" != "200" ]; then
+    printf '[seed] signup %s -> HTTP %s: %s\n' "$username" "$status" "$(head -c 400 "$body")" >&2
+    rm -f "$body"
+    return 1
+  fi
+  sed -n 's/.*"data":"\([^"]*\)".*/\1/p' "$body"
+  rm -f "$body"
+}
+
 # 1. Throwaway admin (first account on an empty database is forced to admin).
-admin_token="$(curl -sf -X POST "$API/auth/signup" -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$BOOTSTRAP_USER\",\"password\":\"$BOOTSTRAP_PASS\"}" | sed -n 's/.*"data":"\([^"]*\)".*/\1/p')"
-[ -n "$admin_token" ] || fail "could not create the throwaway admin"
+admin_token="$(signup "$BOOTSTRAP_USER" "$BOOTSTRAP_PASS")" \
+  || fail "could not create the throwaway admin (see the status above)"
+[ -n "$admin_token" ] || fail "throwaway admin signup returned no token"
 log "throwaway admin created"
 
 # 2. The demo account — second, so it is an ordinary user.
-demo_token="$(curl -sf -X POST "$API/auth/signup" -H 'Content-Type: application/json' \
-  -d "{\"username\":\"$DEMO_USER\",\"password\":\"$DEMO_PASS\"}" | sed -n 's/.*"data":"\([^"]*\)".*/\1/p')"
-[ -n "$demo_token" ] || fail "could not create the $DEMO_USER account"
+demo_token="$(signup "$DEMO_USER" "$DEMO_PASS")" \
+  || fail "could not create the $DEMO_USER account (see the status above)"
+[ -n "$demo_token" ] || fail "$DEMO_USER signup returned no token"
 log "$DEMO_USER created"
 
 # 3. Synthetic records, as the demo account, through the ordinary manual-upload path.

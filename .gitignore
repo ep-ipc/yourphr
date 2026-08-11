@@ -144,3 +144,7 @@ secrets.*
 private/
 .claude/settings.local.json
 .claude/worktrees/
+seed/*.db
+seed/*.db-shm
+seed/*.db-wal
+dist-seed/

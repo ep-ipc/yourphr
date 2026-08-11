@@ -63,6 +63,38 @@ jobs:
       - name: Populate frontend version information
         run: cd frontend && ./git.version.sh
 
+      # Build the demo seed database and leave it in seed/ for the Dockerfile to COPY (#505).
+      #
+      # WHY PER RELEASE. A hand-made seed drifts from the schema and has to be refreshed by hand;
+      # built here it always matches the release it ships in, and it lives in the registry rather
+      # than on one node's local disk.
+      #
+      # NOT FATAL, deliberately. The seed matters only to demo instances, which set
+      # YOURPHR_BOOTSTRAP_SEED_RESTORE; an ordinary install never touches it. A release that ships
+      # without a seed is a working release, whereas failing the build here would make a demo
+      # convenience able to block a security fix from shipping. The step is loud, and the runtime
+      # error names the missing path if a demo is pointed at an image built without one.
+      - name: Set up Go (for the demo seed build)
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false # this job's cache is Docker's; a Go module cache here would not be reused
+
+      - name: Build the demo seed database
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          SEED_OUT=seed/fasten.seed.db ./scripts/build-demo-seed.sh 2>&1 | tee seed-build.log
+          ls -lh seed/
+
+      - name: Report whether a seed was produced
+        run: |
+          if [ -f seed/fasten.seed.db ]; then
+            echo "::notice title=Demo seed::Built $(du -h seed/fasten.seed.db | cut -f1) — baked into this image"
+          else
+            echo "::warning title=Demo seed missing::The seed build failed; this image will not be able to self-seed a demo instance. See the 'Build the demo seed database' step. Ordinary installs are unaffected."
+          fi
+
       - name: Log into registry ${{ env.REGISTRY }}
         uses: docker/login-action@v4
         with:

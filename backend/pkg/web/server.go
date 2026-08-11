@@ -727,6 +727,13 @@ func (ae *AppEngine) initializeDatabase() error {
 		ae.Logger.Info("Database encryption is disabled. Initializing database without encryption.")
 	}
 
+	// Install the bundled demo seed if this instance has no database yet (#505). Before the staged
+	// restore, so an operator's explicit restore still wins over the seed, and before the DB is
+	// opened for the same reason as below. No-op unless bootstrap.seed.restore is set.
+	if err := ae.RestoreSeedDatabaseIfMissing(); err != nil {
+		return err
+	}
+
 	// Apply a staged restore (#362) BEFORE opening the DB — never swap a live, open file. Backs the
 	// current DB aside first; if it fails we abort startup rather than open a half-restored DB.
 	if applied, rErr := database.ApplyPendingRestore(ae.Config); rErr != nil {
