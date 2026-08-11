@@ -105,3 +105,53 @@ func TestBlockForDemoAccount(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code)
 	})
 }
+
+// The guard covers two distinct classes of route, and conflating them was the bug in #514: the
+// routes that bring outside data IN (connect, upload) were guarded from the start, while the routes
+// that alter the ACCOUNT ITSELF were not. Wrecking the demo's records heals at the next reset;
+// changing the demo password or deleting the account locks every visitor out until an operator
+// intervenes, because /auth/demo-signin is the only advertised way in.
+//
+// This asserts the middleware is applied by route rather than by handler, so a future route added
+// beside these inherits nothing by accident.
+func TestBlockForDemoAccount_CoversAccountMutations(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, route := range []struct {
+		name, method, path string
+	}{
+		{"change password", http.MethodPost, "/secure/account/password"},
+		{"delete account", http.MethodDelete, "/secure/account/me"},
+	} {
+		t.Run(route.name+" is refused for the demo account", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			cfg := mock_config.NewMockInterface(ctrl)
+			db := mock_database.NewMockDatabaseRepository(ctrl)
+			cfg.EXPECT().GetBool("demo.enabled").Return(true)
+			cfg.EXPECT().GetString("demo.username").Return("demo")
+			db.EXPECT().GetCurrentUser(gomock.Any()).Return(&models.User{Username: "demo"}, nil)
+
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set(pkg.ContextKeyTypeConfig, cfg)
+				c.Set(pkg.ContextKeyTypeDatabase, db)
+				c.Set(pkg.ContextKeyTypeLogger, logrus.WithField("test", t.Name()))
+				c.Next()
+			})
+			handled := false
+			r.Handle(route.method, route.path, middleware.BlockForDemoAccount(), func(c *gin.Context) {
+				handled = true
+				c.JSON(http.StatusOK, gin.H{"success": true})
+			})
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(route.method, route.path, nil))
+
+			require.Equal(t, http.StatusForbidden, w.Code)
+			require.False(t, handled, "the handler must not run — a demo visitor must not be able to lock everyone out")
+			require.Contains(t, w.Body.String(), middleware.DemoErrorCode)
+		})
+	}
+}

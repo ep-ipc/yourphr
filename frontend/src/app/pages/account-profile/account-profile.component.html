@@ -110,6 +110,14 @@
               </div>
               <div class="card-body">
                 <p class="tx-gray-500 mg-b-15">Update the password for this YourPHR account.</p>
+                <!-- Public demo (#514): this account is SHARED and its password is published, so
+                     changing it here would lock every other visitor out of the demo. Said plainly
+                     and left visible, rather than hidden, so a visitor still sees the real flow. -->
+                <div *ngIf="user?.demo_account" class="alert alert-info tx-13" role="status">
+                  <strong>Disabled in the public demo.</strong>
+                  Everyone shares this account and its password is published, so changing it would
+                  lock out every other visitor.
+                </div>
                 <div *ngIf="pwSuccess" class="alert alert-success tx-13">Your password has been changed.</div>
                 <div *ngIf="pwError" class="alert alert-danger tx-13">{{ pwError }}</div>
                 <form (ngSubmit)="changePassword()" #pwForm="ngForm" autocomplete="off">
@@ -125,7 +133,8 @@
                     <label class="tx-12 tx-uppercase tx-gray-500" for="pw-confirm">Confirm new password</label>
                     <input id="pw-confirm" name="pw-confirm" type="password" class="form-control" [(ngModel)]="pw.confirm" autocomplete="new-password" required>
                   </div>
-                  <button type="submit" class="btn btn-az-primary" [disabled]="pwSubmitting">
+                  <button type="submit" class="btn btn-az-primary" [disabled]="pwSubmitting || user?.demo_account"
+                          [title]="user?.demo_account ? 'Disabled in the public demo — the account is shared' : ''">
                     <span *ngIf="pwSubmitting" class="spinner-border spinner-border-sm mg-r-5" role="status" aria-hidden="true"></span>
                     <i *ngIf="!pwSubmitting" class="fas fa-save mg-r-5"></i>
                     Change password
@@ -212,7 +221,15 @@
                 <p class="tx-gray-500 mg-b-15">
                   Permanently delete your YourPHR account and all personal and medical data on this instance. This cannot be undone.
                 </p>
-                <button (click)="openDeleteModal(deleteModalRef)" type="button" class="btn btn-outline-danger">
+                <!-- Public demo (#514): deleting the shared account leaves the one-click sign-in
+                     with nothing to sign in to, for everyone, until an operator resets it. -->
+                <div *ngIf="user?.demo_account" class="alert alert-info tx-13" role="status">
+                  <strong>Disabled in the public demo.</strong>
+                  This account is shared — deleting it would take the demo down for everyone.
+                </div>
+                <button (click)="openDeleteModal(deleteModalRef)" type="button" class="btn btn-outline-danger"
+                        [disabled]="user?.demo_account"
+                        [title]="user?.demo_account ? 'Disabled in the public demo — the account is shared' : ''">
                   <i class="fas fa-trash mg-r-5"></i> Delete Account
                 </button>
               </div>

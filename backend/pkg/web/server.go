@@ -222,8 +222,18 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				secure := api.Group("/secure").Use(middleware.RequireAuth())
 				{
 					secure.GET("/account/me", handler.GetCurrentUser)
-					secure.DELETE("/account/me", handler.DeleteAccount)
-					secure.POST("/account/password", handler.ChangePassword)
+					// Guarded for the shared demo account (#514). These two are the only routes a
+					// visitor can use to lock EVERYONE out: changing the password leaves
+					// demo.password no longer matching the stored hash, so /auth/demo-signin —
+					// the only advertised way in — starts refusing every visitor; deleting the
+					// account leaves nothing for it to sign in to. Neither is self-healing, both
+					// need an operator, and until then the demo is a sign-in page with nothing
+					// behind it.
+					//
+					// Contrast with wrecking the demo's RECORDS, which is deliberately allowed
+					// (#496): that heals at the next reset and shows the product working.
+					secure.DELETE("/account/me", middleware.BlockForDemoAccount(), handler.DeleteAccount)
+					secure.POST("/account/password", middleware.BlockForDemoAccount(), handler.ChangePassword)
 
 					secure.GET("/summary", handler.GetSummary)
 					secure.GET("/summary/ips", handler.GetIPSSummary)
