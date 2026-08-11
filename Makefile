@@ -170,7 +170,11 @@ test-frontend-coverage-ci: dep-frontend
 
 .PHONY: lint-frontend
 lint-frontend: dep-frontend
-	cd frontend && npx ng lint
-	# Bootstrap 4 badge classes render as invisible white-on-white in light mode and look
-	# correct in dark mode, so review misses them — grep instead of eyes (#486).
-	cd frontend && node scripts/check-badge-classes.mjs
+	# ONE `cd`, chained with &&: .ONESHELL (line 1) runs this whole recipe in a single shell, so a
+	# second `cd frontend` would land in frontend/frontend. macOS ships GNU Make 3.81, which
+	# predates .ONESHELL and gives each line its own shell — so that mistake passes locally and
+	# fails only in CI (#486).
+	#
+	# The badge check greps for Bootstrap 4 badge classes, which render invisible white-on-white in
+	# light mode and look correct in dark mode, so review does not catch them.
+	cd frontend && npx ng lint && node scripts/check-badge-classes.mjs
