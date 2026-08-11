@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.2.0](https://github.com/jwilleke/yourphr/compare/v2.1.2...v2.2.0) (2026-08-11)
+
+An instance can now close self-service signup, and the status-badge fix from 2.1.2 finally reaches the screens it was reported against.
+
+### Bug Fixes
+
+- **ui:** status text was **still** unreadable in light mode after 2.1.2 — on Medical Concerns, Medications, Allergies, Immunizations, Procedures, the provider catalog and the admin pages ([#486](https://github.com/jwilleke/yourphr/issues/486), reported and re-tested by **@thevoltagesource**). The 2.1.2 fix repaired the shared badge *component*; every screen in the report writes its badges by hand and was untouched. Those templates used `badge-secondary` and friends — **Bootstrap 4 class names that Bootstrap 5 removed** — and a bare `.badge` is white text with *no background*, so it vanished on a white page and looked correct on a dark one. 52 sites across 18 files now use contrast-paired `text-bg-*` utilities.
+
+### Features
+
+- **auth:** `signup.enabled` closes self-service account creation on an internet-facing instance ([#498](https://github.com/jwilleke/yourphr/issues/498)). Default `true`, so nothing changes unless you set it. **The first run is always exempt** — with an empty user table, registration proceeds regardless and that account becomes the instance owner and admin, which is the only way an admin ever comes into existence. An operator still adds people from Admin → Users, so this removes self-service, not multi-user support.
+- **demo:** `demo.enabled` puts a one-click "Explore the demo" button on the sign-in page of a public demo instance ([#495](https://github.com/jwilleke/yourphr/issues/495)). Off by default. The demo password is configuration verified server-side by `POST /api/auth/demo-signin`, so it never reaches the browser, and the endpoint stays an ordinary sign-in rather than a password-less bypass. **Not yet safe to publish on a shared account** — a visitor could still connect a real provider to it; that guard is [#496](https://github.com/jwilleke/yourphr/issues/496).
+
+### Tests
+
+- **ui:** the badge contrast spec now measures the `text-bg-*` utilities in **both** colour modes rather than light only ([#486](https://github.com/jwilleke/yourphr/issues/486)). A colour that passes in one mode and fails in the other is exactly how this shipped twice.
+- **ci:** `make lint-frontend` now fails the build on any Bootstrap 4 badge class anywhere in the frontend, naming the replacement. Type checkers, linters and code review are all blind to colour, and a reviewer in dark mode cannot see this class of bug at all — so it is checked by grep rather than by eyes.
+
+### Documentation
+
+- **deployment:** a new section states plainly that **the first account created owns the instance**: it becomes the admin, it is the only route to an admin, and there is no password-reset flow. Also spelled out in the README's Logging In section, with the consequence that matters on a public host — register immediately, because the app decides by counting users, not by who you are.
+
+### Notes for operators
+
+**Nothing to do.** Both new settings default to today's behaviour: `signup.enabled` is `true`, `demo.enabled` is `false`.
+
+**If your instance is reachable from the internet,** consider setting `signup.enabled` to `false` in Admin → Configuration. Anyone who can reach the sign-in page can currently create an account.
+
+**@thevoltagesource:** the badge fix is in this release — please re-check **in light mode**.
+
 ## [2.1.2](https://github.com/jwilleke/yourphr/compare/v2.1.1...v2.1.2) (2026-08-05)
 
 Status badges are readable again, and the footer finally links the Terms it tells you to read.
