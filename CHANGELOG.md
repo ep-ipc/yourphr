@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.3.0](https://github.com/jwilleke/yourphr/compare/v2.2.1...v2.3.0) (2026-08-11)
+
+An internet-facing instance can now own itself from the first second, instead of racing whoever loads the page first.
+
+### Features
+
+- **bootstrap:** an instance can **provision its own admin at startup**, so a deployment needs nobody at a keyboard ([#504](https://github.com/jwilleke/yourphr/issues/504)). Set `YOURPHR_BOOTSTRAP_ADMIN_ENABLED=true` and `YOURPHR_BOOTSTRAP_ADMIN_USERNAME=owner`; **you do not supply a password.** The app generates one, writes it `0600` to `<data root>/.admin_bootstrap_password`, and logs the path — never the value. Read it once with `docker compose exec … cat` or `kubectl exec … cat`, store it, and it deletes itself the moment that admin first signs in.
+
+  This closes a real hole rather than a theoretical one. The first account on an empty database becomes the admin, and the app decides that by **counting users** — it cannot tell the operator from a stranger. On any host reachable before you have signed up, whoever arrives first owns the instance. Off by default, so a stock install still shows the first-run wizard and the human still becomes owner.
+
+- **demo:** the shared public-demo account is now **barred from connecting providers or uploading records** ([#496](https://github.com/jwilleke/yourphr/issues/496)). Every visitor to a demo shares one login, and connecting is an ordinary user action — so without this, a visitor could authorize their own real Medicare or Epic account into that shared login and the next visitor would read their claims. Enforced server-side on all six routes that bring outside data in, because a disabled button is not a control. The Sources page explains why the controls are greyed rather than hiding them.
+
+### Notes for operators
+
+**Nothing to do.** Both features are off by default and no existing behaviour changed.
+
+**If your instance is reachable from the internet,** bootstrap provisioning is worth adopting: it removes the window in which an anonymous visitor can claim ownership of a fresh install. See the first-run section of [`docs/deployment/README.md`](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/README.md).
+
+**Pick a username that is not reserved.** `admin`, `administrator`, `root`, `system`, `support`, `api` and similar are refused to blunt phishing and confusion attacks; provisioning tells you so at startup instead of failing obscurely.
+
+**One caveat worth knowing:** the generated-password file lives in the data root, which is exactly what a backup contains. It deletes itself on first sign-in, so only a backup taken before you ever log in can carry it.
+
 ## [2.2.1](https://github.com/jwilleke/yourphr/compare/v2.2.0...v2.2.1) (2026-08-11)
 
 A throttled sign-in no longer claims your password is wrong.
