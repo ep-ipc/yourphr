@@ -1,25 +1,23 @@
 # TODO
 
 <!-- RESUME:START -->
-## ▶ Resume here — 2026-08-05
+## ▶ Resume here — 2026-08-11
 
-- Last worked on: **three releases today** — [v2.1.0](https://github.com/jwilleke/yourphr/releases/tag/v2.1.0) (whole-data-root backups #467, destination testing #468, SSRF guard fixed at dial time #484, credentials wrapped in `config.Secret` #477), [v2.1.1](https://github.com/jwilleke/yourphr/releases/tag/v2.1.1) (served PP/ToS: dead link, maintainer text, stray `<br>`), [v2.1.2](https://github.com/jwilleke/yourphr/releases/tag/v2.1.2) (status-badge contrast #486 + a contrast test, footer Terms link, Contact placeholder). All three verified live on demo; the badge fix confirmed present in the shipped CSS bundle, not just by version number.
-- Branch / state: `main` clean, everything pushed, no stashes. `mj-infra-flux` `master` clean and pushed (the 2 untracked files there pre-date this session).
-- Running / in-flight: **none.** No dev servers, no background watchers, port 9191 free, all CI green.
-- Parked / half-done: none.
+- Last worked on: **two releases** — [v2.3.0](https://github.com/jwilleke/yourphr/releases/tag/v2.3.0) (bootstrap admin [#504](https://github.com/jwilleke/yourphr/issues/504), demo connect guard [#496](https://github.com/jwilleke/yourphr/issues/496)) and [v2.4.0](https://github.com/jwilleke/yourphr/releases/tag/v2.4.0) (CI-built demo seed [#505](https://github.com/jwilleke/yourphr/issues/505), env-boolean API fix). Then closed the demo lockout hole [#514](https://github.com/jwilleke/yourphr/issues/514) and decided all ten items on [#507](https://github.com/jwilleke/yourphr/issues/507).
+- Branch / state: `main` clean, everything pushed, no stashes. All CI green.
+- Running / in-flight: **none.** No dev servers, no background agents, ports 9090/9191/9195-9197 free, temp dirs cleaned. One local artifact: `seed/fasten.seed.db` (1.4M, gitignored) from local seed builds — harmless, delete if it bothers you.
+- Parked / half-done: none committed-but-unfinished. `#514` is `in-review` and unreleased.
 - Next steps:
-  - **[#481](https://github.com/jwilleke/yourphr/issues/481) — the only P0.** E2E silently attaches to a stale backend on `:9191` and reports application failures for environmental reasons. Cost a false "did the Angular bump break auth?" investigation today.
-  - **11 items `in-review`** awaiting a close/keep decision, including [#486](https://github.com/jwilleke/yourphr/issues/486) (external), [#463](https://github.com/jwilleke/yourphr/issues/463), [#466](https://github.com/jwilleke/yourphr/issues/466), [#476](https://github.com/jwilleke/yourphr/issues/476), [#484](https://github.com/jwilleke/yourphr/issues/484).
-  - **Eyeball a status badge on demo in both modes** — [#486](https://github.com/jwilleke/yourphr/issues/486). Claude was confident and wrong about this twice; measured contrast passing is not the same as it reading well, and the reporter deserves a human confirmation.
-  - **Rotate the Cloudflare API token** — still live, and it was pasted into a session transcript (`rm ~/.config/cloudflare/token`, then delete at <https://dash.cloudflare.com/profile/api-tokens>).
-  - **Demo Instance card** — needs an admin session: `operator.name` = "Jim Willeke, DBA services.willeke.biz", `operator.contact_email` = `admin@yourphr.org`, clear `operator.contact_url`.
-  - **Run the restore drill** on a throwaway container — [`docs/recovery/data-recovery.md`](docs/recovery/data-recovery.md). v2.1.0 changed the archive format and what restore replaces, and that page argues you should not trust a backup you have never restored. That currently includes yours.
+  - **Configure the demo host** — `private/demo-setup.md` has the current three-step procedure. Three env vars in `mj-infra-flux`, then `rm` the database + `rollout restart`, then read the generated admin password with `kubectl exec … cat`. **Step 2 destroys the SMART Health IT data on that volume** and is the one irreversible action; it needs your go-ahead.
+  - **[#506](https://github.com/jwilleke/yourphr/issues/506) password policy** — values already agreed: `username.min.length=3`, `password.min.length=8`, `password.max.length=69` (enforced in BYTES, since bcrypt's ceiling is 72 bytes and UTF-8 is variable width). Note it conflicts with `demo1234`, which contains the username; recommendation is to republish the demo password as `explore2026` rather than exempt the demo account.
+  - **[#508](https://github.com/jwilleke/yourphr/issues/508) session revocation** — build before [#510](https://github.com/jwilleke/yourphr/issues/510)/[#511](https://github.com/jwilleke/yourphr/issues/511), which should both bump `token_generation` so a reset actually ends the sessions it is meant to end.
+  - **Release** so [#514](https://github.com/jwilleke/yourphr/issues/514) reaches the live demo — it is a P1 fix sitting unreleased.
+  - **[#486](https://github.com/jwilleke/yourphr/issues/486)** still wants a human look in **light mode**; nobody has seen the badge fix render. The reporter has been right three times.
 - Blockers / significant notes:
-  - **Both scanners are at zero.** 12 Dependabot alerts cleared; 14 high CodeQL `go/path-injection` alerts **dismissed** as won't fix per [#488](https://github.com/jwilleke/yourphr/issues/488), citing [#466](https://github.com/jwilleke/yourphr/issues/466). Dismissed alerts are never re-raised by a later scan — `docs/recovery/backup-model.md` records the conditions that would make that dismissal wrong (more than one admin, a hosted/multi-tenant deployment, a destination settable by a non-admin).
-  - **Check code scanning, not just Dependabot, before releasing.** Those 14 alerts were introduced in v2.1.0 and shipped in two releases because only Dependabot was being checked.
-  - **Verify tooling output before concluding from an absence.** A regex that matched nothing was read as proof a CSS rule did not exist; it had simply truncated. That produced a public wrong root cause on [#486](https://github.com/jwilleke/yourphr/issues/486).
-  - **Rollout timing is unpredictable.** The `Docker (YourPHR)` arm64 leg has ranged 12–44 minutes this week. Watch the run; do not estimate from the tag. Also: docs-only commits are path-filtered and produce **no** `CI` run — "no run" and "passed" look identical if you only glance at the list.
-  - New standing rule in memory: **external issues/PRs always get thanks + encouragement and a priority bump.** `TODO.md` now ranks them first within their band.
+  - **Three bugs this session were caught only by running real instances**, never by unit tests: a double-hashed password (the test verified the wrong artifact), `admin` being a reserved username (recommended in my own docs), and `/api/instance/public` serving env-set booleans as **strings** — which made `signup.enabled=false` still advertise the sign-up link. For anything configured by environment, test **through** the environment.
+  - **Local `make` cannot validate multi-line Makefile targets.** `.ONESHELL` is line 1 and macOS ships GNU Make 3.81, which predates it — so a `cd`-per-line target passes locally and fails in CI. Cost one red release build. Check CI before tagging, every time.
+  - **Chrome automation drives the browser on `jmac`**, not this machine, and `list_connected_browsers` reports `isLocal: true` for both. HackerOne report drafted at `private/reports/2026-08-11-claude-in-chrome-silent-remote-browser-control.md` — **not submitted**.
+  - **Demo host is 2.4.0 and unconfigured**: `demo.enabled` false, signup still open, old admin password still lost. Expected, not broken.
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
