@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
@@ -266,5 +268,70 @@ func TestAuthSignup_SignupEnabledGate(t *testing.T) {
 		handler.AuthSignup(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+// The generated bootstrap password sits in a 0600 file inside the data root, which is by definition
+// what a backup contains (#466/#504). Signin deletes it once the provisioned admin has actually
+// logged in, so the credential stops riding along in every later archive. These cases pin that it
+// happens for that account and ONLY that account.
+func TestAuthSignin_ClearsBootstrapPasswordFile(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	signin := func(t *testing.T, dataDir, bootstrapUsername string, user *models.User) *httptest.ResponseRecorder {
+		t.Helper()
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+		mockConfig := mock_config.NewMockInterface(mockCtrl)
+		mockDB.EXPECT().GetUserByUsername(gomock.Any(), user.Username).Return(user, nil)
+		mockConfig.EXPECT().GetString("bootstrap.admin.username").Return(bootstrapUsername).AnyTimes()
+		mockConfig.EXPECT().GetString("storage.data_dir").Return(dataDir).AnyTimes()
+		mockConfig.EXPECT().GetString("database.location").Return(filepath.Join(dataDir, "fasten.db")).AnyTimes()
+		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
+		mockConfig.EXPECT().GetInt(gomock.Any()).Return(60).AnyTimes()
+		mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(pkg.ContextKeyTypeDatabase, mockDB)
+		c.Set(pkg.ContextKeyTypeConfig, mockConfig)
+		c.Set(pkg.ContextKeyTypeLogger, logrus.WithField("test", t.Name()))
+		body, _ := json.Marshal(models.User{Username: user.Username, Password: "correct-horse"})
+		c.Request, _ = http.NewRequest(http.MethodPost, "/auth/signin", bytes.NewBuffer(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.AuthSignin(c)
+		return w
+	}
+
+	adminUser := func(t *testing.T, username string) *models.User {
+		u := &models.User{Username: username, Role: pkg.UserRoleAdmin}
+		require.NoError(t, u.HashPassword("correct-horse"))
+		return u
+	}
+
+	t.Run("removes the file when the provisioned admin signs in", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, handler.BootstrapAdminPasswordFile)
+		require.NoError(t, os.WriteFile(path, []byte("generated"), 0o600))
+
+		w := signin(t, dir, "admindemo", adminUser(t, "admindemo"))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		_, err := os.Stat(path)
+		assert.True(t, os.IsNotExist(err), "the credential should not outlive its first use")
+	})
+
+	t.Run("leaves it alone for a different admin", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, handler.BootstrapAdminPasswordFile)
+		require.NoError(t, os.WriteFile(path, []byte("generated"), 0o600))
+
+		w := signin(t, dir, "admindemo", adminUser(t, "someone-else"))
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		_, err := os.Stat(path)
+		assert.NoError(t, err, "another admin signing in must not consume the provisioned account's password")
 	})
 }

@@ -1,0 +1,190 @@
+package web
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/fastenhealth/fasten-onprem/backend/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
+)
+
+// BootstrapAdminPasswordFile is the name, inside the data root, of the file holding the generated
+// password. Exported so the delete-after-first-login path and the tests name the same thing.
+const BootstrapAdminPasswordFile = ".admin_bootstrap_password"
+
+// bootstrapAdminPasswordBytes is the entropy of the generated password. 24 random bytes is 192
+// bits; base64 makes it 32 printable characters, which is short enough to paste out of a terminal
+// and long enough that the bcrypt cost is the least of an attacker's problems.
+const bootstrapAdminPasswordBytes = 24
+
+// ProvisionBootstrapAdmin creates the instance's admin account at startup, with a password this
+// process generates and nobody chose (#504).
+//
+// WHY. The first account created on an empty database becomes the owner and admin
+// (handler.AuthSignup), and it is the only way an admin comes into existence — no seeded admin, no
+// CLI user-create, no password reset. On a LAN that is fine. On a public host it is a race: the
+// first-run wizard is offered to whoever arrives first, so an anonymous visitor can claim
+// ownership of the instance in the window between "reachable" and "the operator signed up". The
+// demo host has exactly that shape, and its runbook could only say "register immediately", which
+// is advice rather than a mechanism.
+//
+// WHY GENERATED RATHER THAN SUPPLIED. A supplied password lives in a cluster secret, a .env, or a
+// CI log, and gets reused across instances; baked into a release image it would be a published
+// credential, identical on every deployment of that image. Generated here it is unique per
+// instance, rotates whenever the database is rebuilt, and exists in exactly one place: a 0600 file
+// in the data root, which the operator reads once.
+//
+// OFF BY DEFAULT, deliberately. A stock install must still show the first-run wizard and let the
+// human become owner — replacing that with "read a password out of a file" is worse for someone
+// running docker-compose at home. This is for deployments that are provisioned rather than
+// clicked through.
+//
+// Provisioning is ONE-WAY and only ever acts on an empty user table: it never re-provisions, never
+// overwrites an account, and never changes an existing password. Same rule as the sandbox
+// credential seeding, which stops as soon as a client_id exists. That matters because the flag
+// stays set for the life of the deployment — every restart re-runs this, and every restart after
+// the first must do nothing.
+func (ae *AppEngine) ProvisionBootstrapAdmin() error {
+	if !ae.Config.GetBool("bootstrap.admin.enabled") {
+		return nil
+	}
+
+	username := ae.Config.GetString("bootstrap.admin.username")
+	if username == "" {
+		// Enabled but unnamed is an operator mistake, and guessing a username would create an
+		// account they do not know about. Loud, and not fatal: the instance still starts and still
+		// offers the first-run wizard.
+		ae.Logger.Warnf("bootstrap.admin.enabled is set but bootstrap.admin.username is empty; no admin was provisioned")
+		return nil
+	}
+
+	// The repository refuses a list of reserved names — "admin", "administrator", "root", "system"
+	// and others — to blunt phishing and confusion attacks (gorm_common.go isReservedUsername).
+	// "admin" is the obvious thing an operator will try, so catch it here with a message that names
+	// the problem, rather than letting CreateUser fail at startup with a database-layer error.
+	if isReservedBootstrapUsername(username) {
+		return fmt.Errorf("bootstrap admin: %q is a reserved username and cannot be created; "+
+			"pick something else for YOURPHR_BOOTSTRAP_ADMIN_USERNAME (e.g. \"owner\")", username)
+	}
+
+	userCount, err := ae.deviceRepo.GetUserCount(context.Background())
+	if err != nil {
+		return fmt.Errorf("bootstrap admin: could not count users: %w", err)
+	}
+	if userCount > 0 {
+		// The normal path on every restart after the first. Not worth a log line above debug.
+		ae.Logger.Debugf("bootstrap admin: %d user(s) already exist; nothing to provision", userCount)
+		return nil
+	}
+
+	password, err := generateBootstrapPassword()
+	if err != nil {
+		return fmt.Errorf("bootstrap admin: could not generate a password: %w", err)
+	}
+
+	// PLAINTEXT here, deliberately: GormRepository.CreateUser calls HashPassword on the value it is
+	// given (gorm_common.go:47). Pre-hashing produces a hash OF a hash, and the account then cannot
+	// be signed into at all — verified the hard way against a running instance, after unit tests that
+	// checked the hash this function produced rather than what the repository stored.
+	user := &models.User{Username: username, Password: password, Role: pkg.UserRoleAdmin}
+
+	// Write the password BEFORE creating the account. If the write fails, an account exists whose
+	// password nobody knows and which blocks the first-run wizard (userCount > 0) — an instance
+	// nobody can administer. Failing before the account is created leaves the wizard available.
+	passwordPath := BootstrapAdminPasswordPath(ae.Config)
+	if err := writeBootstrapPassword(passwordPath, password); err != nil {
+		return fmt.Errorf("bootstrap admin: could not write %s: %w", passwordPath, err)
+	}
+
+	if err := ae.deviceRepo.CreateUser(context.Background(), user); err != nil {
+		// Best-effort cleanup: leaving a password file for an account that does not exist would
+		// send the operator to a credential that cannot work.
+		_ = os.Remove(passwordPath)
+		return fmt.Errorf("bootstrap admin: could not create the %q account: %w", username, err)
+	}
+
+	// The path, never the value. This line is the whole discovery mechanism, so it is INFO.
+	ae.Logger.Infof("bootstrap admin: created %q; its generated password is in %s (delete that file once you have stored the password)", username, passwordPath)
+	return nil
+}
+
+// BootstrapAdminPasswordPath is where the generated password is written. Inside the data root
+// because that is the one directory an operator can always reach — and note it is therefore inside
+// the backup boundary (#466), which is why the file is meant to be short-lived.
+func BootstrapAdminPasswordPath(appConfig config.Interface) string {
+	return filepath.Join(config.DataDir(appConfig), BootstrapAdminPasswordFile)
+}
+
+// reservedBootstrapUsernames mirrors the repository's own deny-list (gorm_common.go). Duplicated
+// rather than exported from there so this check can run before any database call and fail with a
+// message that tells the operator what to change; TestReservedBootstrapUsernamesMatchRepository
+// fails if the two drift.
+var reservedBootstrapUsernames = map[string]bool{
+	"admin": true, "administrator": true, "api": true, "contact": true, "fasten": true,
+	"help": true, "info": true, "login": true, "mail": true, "noreply": true,
+	"postmaster": true, "root": true, "security": true, "support": true, "system": true,
+	"webmaster": true, "www": true,
+}
+
+func isReservedBootstrapUsername(username string) bool {
+	return reservedBootstrapUsernames[strings.ToLower(strings.TrimSpace(username))]
+}
+
+// generateBootstrapPassword returns a URL-safe random string. crypto/rand, not math/rand: this is
+// the instance's administrative credential.
+func generateBootstrapPassword() (string, error) {
+	buf := make([]byte, bootstrapAdminPasswordBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// writeBootstrapPassword writes the password 0600, creating it exclusively so an existing file is
+// never silently overwritten (that file could be the credential for the account we are about to
+// decline to replace). No trailing newline: the operator pipes this value around, and a stray
+// newline in a password is a support ticket.
+func writeBootstrapPassword(path, password string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(password); err != nil {
+		return err
+	}
+	return f.Chmod(0o600)
+}
+
+// ClearBootstrapAdminPassword removes the password file once it has served its purpose — the admin
+// has signed in, so the credential is in their hands and no longer needs to sit on disk. Called
+// from the signin path.
+//
+// The data root is by definition what a backup contains (#466), so a file left here would ride
+// inside every backup archive taken afterwards. Deleting it on first use bounds that exposure to
+// the window before the operator ever logs in.
+//
+// Silent about a missing file: not finding it is the expected case on every login after the first.
+func ClearBootstrapAdminPassword(appConfig config.Interface) error {
+	err := os.Remove(BootstrapAdminPasswordPath(appConfig))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// Compile-time check that the repository we are handed still exposes what provisioning needs.
+var _ interface {
+	GetUserCount(context.Context) (int, error)
+	CreateUser(context.Context, *models.User) error
+} = (database.DatabaseRepository)(nil)

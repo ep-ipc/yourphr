@@ -616,6 +616,17 @@ func (ae *AppEngine) Start() error {
 		if err != nil {
 			ae.Logger.Panicf("panic occurred:%v", err)
 		}
+
+		// Provision the admin account BEFORE the listener accepts anything (#504). The whole point
+		// is to close the window in which an anonymous visitor could claim the first-run wizard, so
+		// doing this after startServer would leave that window open — narrower, but open.
+		//
+		// A failure here is fatal on purpose: the alternative is an instance that starts up
+		// reachable and unowned, which is the exact state this exists to prevent. No-op unless
+		// bootstrap.admin.enabled, so a stock install cannot fail here.
+		if err := ae.ProvisionBootstrapAdmin(); err != nil {
+			ae.Logger.Panicf("could not provision the bootstrap admin: %v", err)
+		}
 	} else {
 		ae.Logger.Warn("Skipping SetupInstallationRegistration because in StandbyMode")
 	}

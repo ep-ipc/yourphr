@@ -58,6 +58,34 @@ Two consequences that matter more than they look:
 
 `signup.enabled` (below) can close self-service registration, but it **never blocks the first account** — a flag able to do that would leave a fresh deployment with no way in at all ([#498](https://github.com/jwilleke/yourphr/issues/498)).
 
+#### Provisioning the admin instead of claiming it (recommended when internet-facing)
+
+The race above is a race because the app decides ownership by counting users; it cannot tell you from a stranger. On a host that is reachable before you have signed up, let the instance provision its own admin instead ([#504](https://github.com/jwilleke/yourphr/issues/504)):
+
+```bash
+YOURPHR_BOOTSTRAP_ADMIN_ENABLED=true
+YOURPHR_BOOTSTRAP_ADMIN_USERNAME=owner
+```
+
+**Not `admin`.** That name — along with `administrator`, `root`, `system`, `support`, `api` and others — is reserved to blunt phishing and confusion attacks, so provisioning refuses it and says so at startup rather than failing obscurely.
+
+**You do not supply a password.** At first start with an empty user table, the app generates one, creates the admin, and writes the value to `<data root>/.admin_bootstrap_password` (mode `0600`). Startup logs the path, never the value. Read it once:
+
+```bash
+# docker compose
+docker compose exec yourphr cat /opt/fasten/db/.admin_bootstrap_password
+# kubernetes
+kubectl exec deploy/<name> -n <namespace> -- cat /opt/fasten/db/.admin_bootstrap_password
+```
+
+Generated rather than supplied on purpose: a password you set ends up in a secret store, a `.env`, or a CI log, and tends to be reused across instances. A generated one is unique per instance, rotates whenever the database is rebuilt, and lives in exactly one place.
+
+**The file deletes itself** after that admin's first successful sign-in — the data root is exactly what a backup contains, so a credential left there would ride inside every later archive. Store the password in your password manager when you read it; a backup taken before your first login is the only one that carries it.
+
+Provisioning only ever acts on an **empty** user table. It never re-provisions, never overwrites an account, and never changes an existing password — so leaving the variables set is safe, and every restart after the first does nothing.
+
+These are **bootstrap** variables and belong in the environment, not in the configuration store: they have to work before any admin exists to open Admin → Configuration.
+
 ## Deployment options
 
 ### A. docker-compose (easy home-server path)
@@ -154,6 +182,8 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 | `cda_converter.enabled` | `false` | C-CDA/CCD import — needs the Metriport sidecar (opt-in). See [`FHIR/fhir-converter-local.md`](../FHIR/fhir-converter-local.md). |
 | `cda_converter.url` | `""` | Sidecar URL when enabled (internal-only — raw CCD is PHI). |
 | `cda_converter.timeout_seconds` | `60` | Conversion timeout. |
+| `bootstrap.admin.enabled` | `false` | Provision the admin at first start with a generated password instead of claiming it through the first-run wizard ([#504](https://github.com/jwilleke/yourphr/issues/504)). **Bootstrap — set in the environment, not here.** See the first-run section above. |
+| `bootstrap.admin.username` | `""` | Which account to provision. Ignored unless the above is on; enabled-with-no-username warns and provisions nothing rather than guessing. |
 | `signup.enabled` | `true` | Self-service account creation ([#498](https://github.com/jwilleke/yourphr/issues/498)). Set `false` on an internet-facing instance so strangers cannot register; an operator still adds people from Admin → Users, so this removes self-service, not multi-user support. **The first run ignores this** — with an empty user table, registration always proceeds and that account becomes the owner/admin (see above). Published via `/api/instance/public` so the sign-in page hides "Create an Account" instead of offering a link that fails. |
 | `demo.enabled` | `false` | **Public demo instances only.** Puts a one-click "Explore the demo" button on the sign-in page that enters a *shared* account with no credential entry ([#495](https://github.com/jwilleke/yourphr/issues/495)). Served by `/api/instance/public`, so the sign-in page can read it with no login. Never enable on an instance holding real records. |
 | `demo.username` | `demo` | Which account the demo button signs in as. Ignored unless `demo.enabled`. |

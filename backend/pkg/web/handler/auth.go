@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/auth"
@@ -117,9 +119,40 @@ func AuthSignin(c *gin.Context) {
 		return
 	}
 
+	// A bootstrap-provisioned admin has its generated password sitting in a 0600 file in the data
+	// root (#504). Once that admin has actually signed in, the credential is in their hands and the
+	// file is only exposure — the data root is by definition what a backup contains (#466), so
+	// every archive taken afterwards would carry a working admin password. Delete it on the first
+	// successful sign-in by that account.
+	//
+	// Failure to delete is logged, never fatal: the operator is holding a valid session and
+	// refusing it would be a worse outcome than a file that outlives its purpose.
+	if foundUser.Role == pkg.UserRoleAdmin && foundUser.Username == appConfig.GetString("bootstrap.admin.username") {
+		if err := clearBootstrapPassword(appConfig); err != nil {
+			logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
+			logger.Warnf("could not remove the bootstrap admin password file after first sign-in: %v", err)
+		}
+	}
+
 	setSessionCookie(c, appConfig, userFastenToken)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": userFastenToken})
 }
+
+// clearBootstrapPassword removes the generated-password file. Declared here rather than calling
+// into pkg/web to avoid an import cycle (pkg/web already imports this package); the path is derived
+// from the same two constants, and a test pins that they agree.
+func clearBootstrapPassword(appConfig config.Interface) error {
+	err := os.Remove(filepath.Join(config.DataDir(appConfig), BootstrapAdminPasswordFile))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// BootstrapAdminPasswordFile is the data-root-relative name of the generated-password file (#504).
+// Duplicated from pkg/web for the import-cycle reason above; TestBootstrapPasswordFileNamesAgree
+// fails if the two ever drift.
+const BootstrapAdminPasswordFile = ".admin_bootstrap_password"
 
 // AuthDemoSignin signs a visitor in to the shared demo account with no credential entry, for a
 // public demo instance (#495). Gated on `demo.enabled`, which ships false — on any instance
