@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.4.0](https://github.com/jwilleke/yourphr/compare/v2.3.0...v2.4.0) (2026-08-11)
+
+A demo instance can now rebuild itself from the image — and a bug is fixed that made two published settings read backwards for anyone configuring by environment.
+
+### Features
+
+- **demo:** the release image can carry a **pre-built demo database**, which an instance installs on first start when its data directory is empty ([#505](https://github.com/jwilleke/yourphr/issues/505)). Resetting a demo becomes "delete the database, restart"; a fresh volume, or a rebuilt namespace, self-seeds with nobody at a keyboard. Off by default and demo-only — `YOURPHR_BOOTSTRAP_SEED_RESTORE=true` — because an ordinary install must never come up holding synthetic patient records.
+
+  The seed is rebuilt **on every release**, so it always matches that release's schema, and it lives in the container registry rather than on one node's local disk. It contains the shared demo account and **no admin**: the image is public, so a baked admin credential would be a published one, identical on every deployment. Restoring therefore **refuses** unless admin provisioning is also configured, rather than producing an instance that is populated, reachable, and administrable by nobody.
+
+### Bug Fixes
+
+- **api:** `/api/instance/public` served booleans as **strings** when they came from the environment, because environment variables are strings. Both directions failed silently: a demo configured that way never rendered its one-click sign-in (`"true"` is not `true`), and — the one that matters — an instance with **signup closed still advertised the sign-up link**, because `"false"` is not `false`. Values now arrive with the type their shipped default declares. Found by configuring a real instance entirely through the environment; no unit test would have caught it, because they set values through a typed config object.
+- **bootstrap:** admin provisioning ([#504](https://github.com/jwilleke/yourphr/issues/504), new in 2.3.0) triggered on "no users" and therefore never fired on an instance whose database already held a non-admin account — leaving it with users, no administrator, and the first-run wizard suppressed precisely because users exist. It now triggers on the absence of an **admin**, so it is the answer to that state rather than a bystander to it. It also refuses to adopt an existing account that happens to share the configured name, which would otherwise be a privilege-escalation path dressed as convenience.
+
+### Notes for operators
+
+**Nothing to do.** Both new settings default to off, and the seed the image carries is inert unless a deployment asks for it.
+
+**If you configure by environment and publish settings,** the API fix is worth knowing about: an instance with `YOURPHR_SIGNUP_ENABLED=false` was still showing "Create an Account" on the sign-in page before this release. The gate itself was always enforced server-side, so no account could actually be created — the link simply lied.
+
 ## [2.3.0](https://github.com/jwilleke/yourphr/compare/v2.2.1...v2.3.0) (2026-08-11)
 
 An internet-facing instance can now own itself from the first second, instead of racing whoever loads the page first.
