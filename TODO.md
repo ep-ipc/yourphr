@@ -30,8 +30,6 @@
 
 ## 🟠 P1
 
-- PR: [#493](https://github.com/jwilleke/yourphr/pull/493) — chore(deps): bump hono from 4.12.32 to 4.13.1 in /frontend in the npm_and_yarn group across 1 directory _(ready)_ — likely [#503](https://github.com/jwilleke/yourphr/issues/503)
-- [#503](https://github.com/jwilleke/yourphr/issues/503) — [security] hono — SSR memo() cross-request leak, language-middleware DoS, proxy header leak (2 medium, 1 low) — PR open: [#493](https://github.com/jwilleke/yourphr/pull/493)
 - [#496](https://github.com/jwilleke/yourphr/issues/496) — [FEATURE] Public demo: block provider connect in demo mode (keep real PHI off the shared account)
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
@@ -107,6 +105,7 @@
 
 Work complete and pushed — awaiting your decision to close.
 
+- [#503](https://github.com/jwilleke/yourphr/issues/503) — [security] hono — SSR memo() cross-request leak, language-middleware DoS, proxy header leak (2 medium, 1 low)
 - [#498](https://github.com/jwilleke/yourphr/issues/498) — [FEATURE] signup.enabled: let an operator close self-service account creation (first run always exempt)
 - [#484](https://github.com/jwilleke/yourphr/issues/484) — [BUG] SSRF guard is bypassed by any non-dotted-quad IP form — decimal, hex or short — reaching loopback and cloud metadata
 - [#483](https://github.com/jwilleke/yourphr/issues/483) — [security] Build-tree dependency sweep — ip-address, fast-uri, socket.io-parser, undici (3 high, 3 medium)
@@ -135,4 +134,4 @@ Work complete and pushed — awaiting your decision to close.
 
 ## ❓ Needs triage
 
-_None — all 85 open issues and 7 open PRs carry a placement label._
+_None — all 85 open issues and 6 open PRs carry a placement label._
