@@ -24,6 +24,9 @@ var allowedPublicInstanceKeys = []string{
 	// is a boolean, and it is the only published key that is not a string; note demo.password is
 	// deliberately NOT here and is verified server-side instead.
 	"demo.enabled",
+	// signup.enabled — the sign-in page decides whether to offer "Create an Account" before login
+	// (#498). Also a boolean. The backend enforces the gate regardless of what the UI shows.
+	"signup.enabled",
 }
 
 // publicInstanceStringKeys are the published keys whose unset value is the empty string. Kept
@@ -101,6 +104,11 @@ func TestGetPublicInstanceInfo_UnsetValuesAreEmpty(t *testing.T) {
 	// safe but a stringified "true" would not (#495).
 	require.Contains(t, data, "demo.enabled")
 	require.Equal(t, false, data["demo.enabled"], "demo mode must ship off")
+
+	// Opposite default, for the opposite reason: signup has always been open, and shipping it
+	// closed would change behaviour for every existing install on upgrade (#498).
+	require.Contains(t, data, "signup.enabled")
+	require.Equal(t, true, data["signup.enabled"], "signup must ship open")
 }
 
 // THE load-bearing test for #453. The merged configuration holds jwt.issuer.key, relay.secret

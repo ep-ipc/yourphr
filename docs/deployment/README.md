@@ -46,7 +46,17 @@ Open `http://localhost:8080` and complete the first-run setup. On first run Your
 
 - The **JWT signing key auto-generates** and is persisted (0600) at `<db-dir>/.jwt_issuer_key` — zero config ([#102](https://github.com/jwilleke/yourphr/issues/102)). There is no default key. Upstream Fasten's *known public placeholder* is still recognised and rejected, because older deployment guides hand it to you.
 - The **database-encryption key** is set during first-run setup (the setup wizard prompts for it) — or you can supply it ahead of time via `YOURPHR_DATABASE_ENCRYPTION_KEY` (see below). DB encryption is **on by default**.
-- The **first user to register becomes the admin**.
+
+### The first account is the owner of the instance
+
+**Whoever registers first on an empty database becomes the owner and the admin.** They get `UserRoleAdmin`; everyone who registers afterwards is an ordinary user. This decides who controls Admin → Configuration, Admin → Database (backup, restore, download), Admin → Users, the provider catalog, and the server logs.
+
+Two consequences that matter more than they look:
+
+- **Register immediately after you expose the instance.** The app decides this purely by counting users (`GetUserCount() == 0`), not by network location or any invite. On a host reachable from the internet, whoever gets there first — including a stranger or a bot — becomes the admin. If you wipe or restore an empty database on a public host, that race reopens.
+- **This is the only way an admin ever comes into existence.** There is no seeded admin account, no CLI user-create, and **no password-reset flow**. Lose the owner's password and the only recovery is editing the database directly or starting from an empty one, so record the credential somewhere durable before you do anything else.
+
+`signup.enabled` (below) can close self-service registration, but it **never blocks the first account** — a flag able to do that would leave a fresh deployment with no way in at all ([#498](https://github.com/jwilleke/yourphr/issues/498)).
 
 ## Deployment options
 
@@ -144,6 +154,7 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 | `cda_converter.enabled` | `false` | C-CDA/CCD import — needs the Metriport sidecar (opt-in). See [`FHIR/fhir-converter-local.md`](../FHIR/fhir-converter-local.md). |
 | `cda_converter.url` | `""` | Sidecar URL when enabled (internal-only — raw CCD is PHI). |
 | `cda_converter.timeout_seconds` | `60` | Conversion timeout. |
+| `signup.enabled` | `true` | Self-service account creation ([#498](https://github.com/jwilleke/yourphr/issues/498)). Set `false` on an internet-facing instance so strangers cannot register; an operator still adds people from Admin → Users, so this removes self-service, not multi-user support. **The first run ignores this** — with an empty user table, registration always proceeds and that account becomes the owner/admin (see above). Published via `/api/instance/public` so the sign-in page hides "Create an Account" instead of offering a link that fails. |
 | `demo.enabled` | `false` | **Public demo instances only.** Puts a one-click "Explore the demo" button on the sign-in page that enters a *shared* account with no credential entry ([#495](https://github.com/jwilleke/yourphr/issues/495)). Served by `/api/instance/public`, so the sign-in page can read it with no login. Never enable on an instance holding real records. |
 | `demo.username` | `demo` | Which account the demo button signs in as. Ignored unless `demo.enabled`. |
 | `demo.password` | `""` | That account's password, verified **server-side** by `POST /api/auth/demo-signin`, so the published demo login never reaches the browser. Masked in Admin → Configuration. Enabled with this empty, the endpoint refuses — an empty password is never treated as "no password needed". |

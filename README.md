@@ -231,6 +231,13 @@ It can be as simple as
 - **Username:** `testuser`
 - **Password:** `testuser`
 
+> [!IMPORTANT]
+> **The first account you create owns the instance.** Whoever registers first on an empty database becomes the **owner and admin** — everyone after them is an ordinary user. That account controls configuration, the database (backup, restore, download), users, the provider catalog and the logs.
+>
+> There is **no password-reset flow** and no seeded admin account, so record that password somewhere durable. If you lose it, the only ways back in are editing the database directly or starting over with an empty one.
+>
+> The app decides this by counting users, not by who you are or where you connect from. On an instance reachable from the internet, register **immediately** — otherwise whoever arrives first, including a bot, becomes your admin. Closing self-service signup afterwards is a setting (`signup.enabled`), and it deliberately never blocks that first account. See [`docs/deployment/README.md`](docs/deployment/README.md).
+
 ## Using with multiple people
 
 > [!NOTE]

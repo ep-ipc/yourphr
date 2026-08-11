@@ -69,6 +69,7 @@ func TestAuthSignup(t *testing.T) {
 		mockConfig := mock_config.NewMockInterface(mockCtrl)
 
 		mockDB.EXPECT().GetUserCount(gomock.Any()).Return(1, nil)
+		mockConfig.EXPECT().GetBool("signup.enabled").Return(true) // #498
 		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Do(func(_ interface{}, user *models.User) {
 			assert.Equal(t, pkg.UserRoleUser, user.Role)
 		}).Return(nil)
@@ -208,5 +209,62 @@ func TestAuthDemoSignin(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.True(t, response["success"].(bool))
 		assert.NotEmpty(t, response["data"])
+	})
+}
+
+// TestAuthSignup_SignupEnabledGate covers #498. The gate itself is one line; the exemption below
+// it is the part that must never regress, so it gets its own case with an explicit explanation.
+func TestAuthSignup_SignupEnabledGate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	newSignupRequest := func(mockDB *mock_database.MockDatabaseRepository, mockConfig *mock_config.MockInterface, username string) (*httptest.ResponseRecorder, *gin.Context) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(pkg.ContextKeyTypeDatabase, mockDB)
+		c.Set(pkg.ContextKeyTypeConfig, mockConfig)
+		body, _ := json.Marshal(handler.UserWizard{User: &models.User{Username: username, Password: "testpass"}})
+		c.Request, _ = http.NewRequest(http.MethodPost, "/signup", bytes.NewBuffer(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		return w, c
+	}
+
+	t.Run("refuses a new account when signup is closed and users already exist", func(t *testing.T) {
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+		mockConfig := mock_config.NewMockInterface(mockCtrl)
+		mockDB.EXPECT().GetUserCount(gomock.Any()).Return(1, nil)
+		mockConfig.EXPECT().GetBool("signup.enabled").Return(false)
+		// The refusal must happen before any account is written.
+		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+
+		w, c := newSignupRequest(mockDB, mockConfig, "stranger")
+		handler.AuthSignup(c)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	// THE exemption. The first account on an empty database is the instance owner and the only
+	// path to an admin — no seeded admin, no CLI user-create, no password reset. If this test
+	// fails, a fresh deployment shipping with signup closed cannot be administered at all, and the
+	// only way in is editing the database by hand. Deleting the userCount check in AuthSignup is
+	// what this catches.
+	t.Run("allows the FIRST user even when signup is closed, and makes them admin", func(t *testing.T) {
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+		mockConfig := mock_config.NewMockInterface(mockCtrl)
+		mockDB.EXPECT().GetUserCount(gomock.Any()).Return(0, nil)
+		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Do(func(_ interface{}, user *models.User) {
+			assert.Equal(t, pkg.UserRoleAdmin, user.Role, "the first user owns the instance")
+		}).Return(nil)
+		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
+		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_absolute_hours").Return(12).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_renew_if_remaining_minutes").Return(30).AnyTimes()
+		mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false)
+
+		w, c := newSignupRequest(mockDB, mockConfig, "owner")
+		handler.AuthSignup(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }

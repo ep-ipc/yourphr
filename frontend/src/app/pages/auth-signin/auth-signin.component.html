@@ -72,7 +72,10 @@
     </div><!-- az-signin-header -->
     <div *ngIf="!showExternalIdP" class="az-signin-footer">
       <p><a ngbTooltip="not yet implemented">Forgot password?</a></p>
-      <p>Don't have an account? <a routerLink="/auth/signup">Create an Account</a></p>
+      <!-- Hidden when the instance closed self-service signup (#498). The backend refuses either
+           way; this stops us offering a link that fails. -->
+      <p *ngIf="signupEnabled">Don't have an account? <a routerLink="/auth/signup">Create an Account</a></p>
+      <p *ngIf="!signupEnabled" class="tx-12 tx-gray-600">This instance does not offer self-service accounts. Ask its operator for one.</p>
     </div><!-- az-signin-footer -->
   </div><!-- az-card-signin -->
 </div><!-- az-signin-wrapper -->

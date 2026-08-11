@@ -27,6 +27,11 @@ export class AuthSigninComponent implements OnInit {
   demoEnabled = false
   demoLoading = false
 
+  // Whether to offer "Create an Account" (#498). Starts true: signup has always been open, so an
+  // instance that never published the key must keep behaving as it did. The backend is the real
+  // gate — this just avoids offering a link that would 403.
+  signupEnabled = true
+
   constructor(
     private authService: AuthService,
     private fastenApiService: FastenApiService,
@@ -41,8 +46,16 @@ export class AuthSigninComponent implements OnInit {
     // An unreachable or erroring instance endpoint must leave the demo button hidden rather than
     // showing a button that cannot work.
     this.fastenApiService.getPublicInstanceInfo().subscribe({
-      next: (info) => this.demoEnabled = info?.demo_enabled === true,
-      error: () => this.demoEnabled = false,
+      next: (info) => {
+        this.demoEnabled = info?.demo_enabled === true
+        this.signupEnabled = info?.signup_enabled !== false
+      },
+      error: () => {
+        this.demoEnabled = false
+        // Leave signup offered on error: hiding it would strand someone on a reachable instance
+        // whose only problem was one failed request.
+        this.signupEnabled = true
+      },
     })
 
     const idpType = this.route.snapshot.paramMap.get('idp_type')

@@ -71,6 +71,29 @@ describe('AuthSigninComponent', () => {
       expect(component.demoEnabled).toBeFalse();
     });
 
+    // #498. Opposite default to demo mode: signup has always been open, so only an explicit false
+    // may hide the link — an absent key or a failed request must leave it offered.
+    it('offers signup when the instance says nothing about it', () => {
+      instanceRequest().flush({success: true, data: {'operator.name': 'YourPHR'}});
+      fixture.detectChanges();
+
+      expect(component.signupEnabled).toBeTrue();
+    });
+
+    it('hides signup only when the instance explicitly closed it', () => {
+      instanceRequest().flush({success: true, data: {'signup.enabled': false}});
+      fixture.detectChanges();
+
+      expect(component.signupEnabled).toBeFalse();
+    });
+
+    it('still offers signup when the instance endpoint fails', () => {
+      instanceRequest().error(new ProgressEvent('network error'));
+      fixture.detectChanges();
+
+      expect(component.signupEnabled).toBeTrue();
+    });
+
     it('posts no credentials when entering the demo', () => {
       instanceRequest().flush({success: true, data: {'demo.enabled': true}});
       fixture.detectChanges();

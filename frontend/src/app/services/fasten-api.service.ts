@@ -1182,6 +1182,11 @@ export interface InstanceInfo {
   // false on every ordinary install. Only the flag is published — the demo password is verified
   // server-side by /auth/demo-signin and never reaches the browser.
   demo_enabled: boolean;
+  // Whether self-service account creation is open (#498). Default true, so an instance that does
+  // not publish the key behaves exactly as it always has. The backend enforces it regardless;
+  // this only decides whether the UI offers the link. Note the FIRST account on an empty
+  // instance is always allowed and becomes the owner/admin, whatever this says.
+  signup_enabled: boolean;
 }
 
 // mapInstanceInfo translates backend config keys to short names. Both instance endpoints return
@@ -1197,5 +1202,9 @@ function mapInstanceInfo(response: ResponseWrapper): InstanceInfo {
     // Strictly true only. An absent key, a null, or a string must read as "not a demo" — this
     // flag gates a shared-account login, so anything ambiguous defaults to off.
     demo_enabled: data['demo.enabled'] === true,
+    // Opposite default to demo_enabled, deliberately: signup has always been open, so an absent
+    // key must not silently hide the link on an instance that never set it. Only an explicit
+    // false closes it (#498).
+    signup_enabled: data['signup.enabled'] !== false,
   };
 }

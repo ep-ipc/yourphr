@@ -47,6 +47,18 @@ func AuthSignup(c *gin.Context) {
 		return
 	}
 
+	// THE FIRST USER IS THE OWNER OF THIS INSTANCE, AND THE ONLY WAY AN ADMIN COMES INTO
+	// EXISTENCE. There is no seeded admin, no CLI user-create, and no password-reset flow, so an
+	// empty user table means nobody can administer this install yet — and signing up is the fix.
+	//
+	// That is why the first run ignores signup.enabled (#498): a flag able to block it would turn
+	// a fresh deployment into an instance nobody can get into, recoverable only by editing the
+	// database. Ordering matters here — the count is read BEFORE the gate, not after.
+	if userCount > 0 && !appConfig.GetBool("signup.enabled") {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "self-service account creation is closed on this instance"})
+		return
+	}
+
 	if userCount == 0 {
 		userWizard.User.Role = pkg.UserRoleAdmin
 	} else {

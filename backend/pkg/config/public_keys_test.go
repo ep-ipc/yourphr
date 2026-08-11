@@ -20,6 +20,7 @@ func TestPublicKeys_ShippedDefault(t *testing.T) {
 		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",
+		"signup.enabled",
 		"theme.name",
 	}, config.PublicKeys(c))
 	require.NotContains(t, config.PublicKeys(c), "operator.contact_email")
@@ -109,6 +110,7 @@ func TestDefaultPublicKeys_ComesFromTheShippedFile(t *testing.T) {
 		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",
+		"signup.enabled",
 		"theme.name",
 	}, shipped)
 }
