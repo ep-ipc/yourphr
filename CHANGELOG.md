@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.2.1](https://github.com/jwilleke/yourphr/compare/v2.2.0...v2.2.1) (2026-08-11)
+
+A throttled sign-in no longer claims your password is wrong.
+
+### Bug Fixes
+
+- **auth:** hitting the sign-in rate limit was reported as **"username or password is incorrect"** ([#481](https://github.com/jwilleke/yourphr/issues/481)). The credential may be perfectly good, so the user retries — which extends the window they are locked out for. Now: *"too many sign-in attempts — wait a minute and try again"*.
+- **auth:** `POST /api/auth/logout` no longer counts against that limit. It carries no credential and reveals nothing, so it was never a guessing surface, and its failure mode was backwards — a rate-limited logout leaves the session cookie in place, i.e. the limiter kept you signed in.
+- **e2e:** the test harness silently attached to any backend already listening on `:9191`, including one holding an unrelated database, so its clean-database guarantee quietly did not hold and the resulting failures pointed at the application ([#481](https://github.com/jwilleke/yourphr/issues/481)). It now refuses, names the port, and says how to free it. The same investigation found that the suite's intermittent login failure was **the rate limiter, not a flake** — ~16 auth calls from one IP against a cap of 10.
+- **deps:** hono `4.12.32` → `4.13.1`, clearing three Dependabot advisories in the frontend build chain ([#503](https://github.com/jwilleke/yourphr/issues/503)). Build tooling only — it never reaches a running instance.
+
+### Notes for operators
+
+**Nothing to do.** The rate limit still defaults to 10 attempts per minute per IP; only the message and the logout exemption changed.
+
+**New setting, only if you need it:** `web.rate_limit.auth_per_minute` (default `10`) now makes that cap configurable in Admin → Configuration. It is a brute-force backstop rather than a throughput setting — raise it for an instance driven by an automated suite, and leave it alone in production. Note the limiter keys on the client IP as reported by `X-Forwarded-For`, so behind a reverse proxy without trusted-proxy configuration, every client can share a single bucket.
+
 ## [2.2.0](https://github.com/jwilleke/yourphr/compare/v2.1.2...v2.2.0) (2026-08-11)
 
 An instance can now close self-service signup, and the status-badge fix from 2.1.2 finally reaches the screens it was reported against.
