@@ -43,7 +43,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 	t.Run("does nothing when disabled", func(t *testing.T) {
 		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(false)
-			db.EXPECT().GetUserCount(gomock.Any()).Times(0)
+			db.EXPECT().GetUsers(gomock.Any()).Times(0)
 			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 
@@ -57,7 +57,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
-			db.EXPECT().GetUserCount(gomock.Any()).Return(0, nil)
+			db.EXPECT().GetUsers(gomock.Any()).Return(nil, nil)
 			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, u *models.User) error { created = u; return nil })
 		})
@@ -92,7 +92,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admin")
-			db.EXPECT().GetUserCount(gomock.Any()).Times(0)
+			db.EXPECT().GetUsers(gomock.Any()).Times(0)
 			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 
@@ -107,11 +107,11 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 
 	// Every restart re-runs provisioning, so this is the common path, and getting it wrong would
 	// either reset an operator's password or create duplicate admins.
-	t.Run("does nothing when users already exist", func(t *testing.T) {
+	t.Run("does nothing when an admin already exists", func(t *testing.T) {
 		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
-			db.EXPECT().GetUserCount(gomock.Any()).Return(3, nil)
+			db.EXPECT().GetUsers(gomock.Any()).Return([]models.User{{Username: "someone", Role: pkg.UserRoleAdmin}}, nil)
 			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 
@@ -124,7 +124,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 		ae, _ := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("")
-			db.EXPECT().GetUserCount(gomock.Any()).Times(0)
+			db.EXPECT().GetUsers(gomock.Any()).Times(0)
 			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 		require.NoError(t, ae.ProvisionBootstrapAdmin(), "a misconfiguration must not stop the instance starting")
@@ -137,7 +137,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
-			db.EXPECT().GetUserCount(gomock.Any()).Return(0, nil)
+			db.EXPECT().GetUsers(gomock.Any()).Return(nil, nil)
 			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Return(errors.New("boom"))
 		})
 
@@ -145,6 +145,44 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 		_, err := os.Stat(filepath.Join(dataDir, BootstrapAdminPasswordFile))
 		require.True(t, os.IsNotExist(err),
 			"a password file for an account that does not exist sends the operator to a dead credential")
+	})
+
+	// THE case that #505 depends on. A pre-seeded database contains the demo user, so the original
+	// "no users" trigger would never fire and the instance would come up administrable by nobody,
+	// with the first-run wizard suppressed because users exist. Provisioning must treat "users but no
+	// admin" as the state it exists to fix.
+	t.Run("provisions when users exist but none is an admin", func(t *testing.T) {
+		var created *models.User
+		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
+			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
+			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
+			db.EXPECT().GetUsers(gomock.Any()).Return([]models.User{{Username: "demo", Role: pkg.UserRoleUser}}, nil)
+			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, u *models.User) error { created = u; return nil })
+		})
+
+		require.NoError(t, ae.ProvisionBootstrapAdmin())
+		require.NotNil(t, created, "a seeded instance with no admin must get one")
+		require.Equal(t, pkg.UserRoleAdmin, created.Role)
+		_, err := os.Stat(filepath.Join(dataDir, BootstrapAdminPasswordFile))
+		require.NoError(t, err, "and its password must be readable")
+	})
+
+	// Adopting an existing account by resetting its password would be a privilege-escalation path
+	// dressed up as convenience: point the variable at a real user, restart, read their new password.
+	t.Run("refuses to adopt an existing non-admin account with the same name", func(t *testing.T) {
+		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
+			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
+			cfg.EXPECT().GetString("bootstrap.admin.username").Return("demo")
+			db.EXPECT().GetUsers(gomock.Any()).Return([]models.User{{Username: "demo", Role: pkg.UserRoleUser}}, nil)
+			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+		})
+
+		err := ae.ProvisionBootstrapAdmin()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "already exists")
+		_, statErr := os.Stat(filepath.Join(dataDir, BootstrapAdminPasswordFile))
+		require.True(t, os.IsNotExist(statErr), "no password file for an account we declined to touch")
 	})
 
 	t.Run("generates a different password every time", func(t *testing.T) {

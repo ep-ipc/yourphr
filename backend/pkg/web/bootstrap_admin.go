@@ -46,8 +46,8 @@ const bootstrapAdminPasswordBytes = 24
 // running docker-compose at home. This is for deployments that are provisioned rather than
 // clicked through.
 //
-// Provisioning is ONE-WAY and only ever acts on an empty user table: it never re-provisions, never
-// overwrites an account, and never changes an existing password. Same rule as the sandbox
+// Provisioning is ONE-WAY and only ever acts on an instance with NO admin: it never re-provisions,
+// never overwrites an account, and never changes an existing password. Same rule as the sandbox
 // credential seeding, which stops as soon as a client_id exists. That matters because the flag
 // stays set for the life of the deployment — every restart re-runs this, and every restart after
 // the first must do nothing.
@@ -74,14 +74,42 @@ func (ae *AppEngine) ProvisionBootstrapAdmin() error {
 			"pick something else for YOURPHR_BOOTSTRAP_ADMIN_USERNAME (e.g. \"owner\")", username)
 	}
 
-	userCount, err := ae.deviceRepo.GetUserCount(context.Background())
+	// Trigger on "this instance has no ADMIN", not "this instance has no users".
+	//
+	// The first version keyed on GetUserCount() == 0, which cannot support a pre-seeded database
+	// (#505): a seed contains the demo user, so userCount is already 1, provisioning would never
+	// fire, and the instance would come up with users and NO admin — administrable by nobody, and
+	// with the first-run wizard suppressed because userCount > 0. The same state is reachable today
+	// if the only admin deletes their own account.
+	//
+	// Keying on the absence of an admin makes provisioning the answer to that state rather than a
+	// bystander to it. It stays a no-op on every ordinary restart, because an admin exists.
+	users, err := ae.deviceRepo.GetUsers(context.Background())
 	if err != nil {
-		return fmt.Errorf("bootstrap admin: could not count users: %w", err)
+		return fmt.Errorf("bootstrap admin: could not list users: %w", err)
 	}
-	if userCount > 0 {
-		// The normal path on every restart after the first. Not worth a log line above debug.
-		ae.Logger.Debugf("bootstrap admin: %d user(s) already exist; nothing to provision", userCount)
-		return nil
+	for _, user := range users {
+		if user.Role == pkg.UserRoleAdmin {
+			// The normal path on every restart after the first. Not worth a log line above debug.
+			ae.Logger.Debugf("bootstrap admin: %q is already an admin; nothing to provision", user.Username)
+			return nil
+		}
+	}
+
+	// Never collide with an existing account. Creating would fail on the unique index anyway, but a
+	// clear warning beats a database error — and silently "adopting" someone else's account by
+	// resetting its password is exactly what this must not do.
+	for _, user := range users {
+		if strings.EqualFold(user.Username, username) {
+			return fmt.Errorf("bootstrap admin: %q already exists but is not an admin; "+
+				"refusing to touch it — set YOURPHR_BOOTSTRAP_ADMIN_USERNAME to a different name", username)
+		}
+	}
+
+	if len(users) > 0 {
+		// Worth INFO: an instance with users but no admin is unusual, and this is the line that
+		// explains where the new account came from.
+		ae.Logger.Infof("bootstrap admin: %d user(s) exist but none is an admin; provisioning %q", len(users), username)
 	}
 
 	password, err := generateBootstrapPassword()
@@ -96,7 +124,7 @@ func (ae *AppEngine) ProvisionBootstrapAdmin() error {
 	user := &models.User{Username: username, Password: password, Role: pkg.UserRoleAdmin}
 
 	// Write the password BEFORE creating the account. If the write fails, an account exists whose
-	// password nobody knows and which blocks the first-run wizard (userCount > 0) — an instance
+	// password nobody knows and which suppresses the first-run wizard — an instance
 	// nobody can administer. Failing before the account is created leaves the wizard available.
 	passwordPath := BootstrapAdminPasswordPath(ae.Config)
 	if err := writeBootstrapPassword(passwordPath, password); err != nil {
@@ -185,6 +213,6 @@ func ClearBootstrapAdminPassword(appConfig config.Interface) error {
 
 // Compile-time check that the repository we are handed still exposes what provisioning needs.
 var _ interface {
-	GetUserCount(context.Context) (int, error)
+	GetUsers(context.Context) ([]models.User, error)
 	CreateUser(context.Context, *models.User) error
 } = (database.DatabaseRepository)(nil)
