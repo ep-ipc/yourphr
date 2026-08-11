@@ -93,7 +93,7 @@ describe('CurrentMedicationsComponent', () => {
     fixture.detectChanges();
 
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('.med-row .badge-info')?.textContent).toContain('Self-reported');
+    expect(el.querySelector('.med-row .text-bg-info')?.textContent).toContain('Self-reported');
     expect(el.textContent).toContain('Reported by');
   });
 
@@ -106,7 +106,7 @@ describe('CurrentMedicationsComponent', () => {
     fixture.detectChanges();
 
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('.med-row .badge-info')).toBeNull();
+    expect(el.querySelector('.med-row .text-bg-info')).toBeNull();
     expect(el.textContent).toContain('Dr. McKinley');
   });
 });

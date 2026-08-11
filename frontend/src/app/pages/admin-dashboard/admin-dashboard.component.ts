@@ -120,10 +120,10 @@ export class AdminDashboardComponent implements OnInit {
 
   outcomeBadgeClass(outcome: string | undefined): string {
     switch (outcome) {
-      case 'success': return 'badge-success';
-      case 'partial': return 'badge-warning';
-      case 'failed': return 'badge-danger';
-      default: return 'badge-secondary';
+      case 'success': return 'text-bg-success';
+      case 'partial': return 'text-bg-warning';
+      case 'failed': return 'text-bg-danger';
+      default: return 'text-bg-secondary';
     }
   }
 
@@ -174,10 +174,10 @@ export class AdminDashboardComponent implements OnInit {
   // Badge colour: green only when the value came from explicit configuration.
   sourceBadgeClass(v: RelayResolvedValue | undefined): string {
     switch (v?.source) {
-      case 'configured': return 'badge-success';
-      case 'inherited':  return 'badge-info';
-      case 'default':    return 'badge-warning';
-      default:           return 'badge-danger';
+      case 'configured': return 'text-bg-success';
+      case 'inherited':  return 'text-bg-info';
+      case 'default':    return 'text-bg-warning';
+      default:           return 'text-bg-danger';
     }
   }
 }

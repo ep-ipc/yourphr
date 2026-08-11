@@ -36,8 +36,8 @@
             <td><i class="fas" [ngClass]="expanded[key(a)] ? 'fa-chevron-down' : 'fa-chevron-right'"></i></td>
             <td>
               <strong>{{ a.title }}</strong>
-              <span *ngIf="a.noKnown" class="badge badge-success mg-l-5" title="A 'no known allergy' note — the record states the absence of an allergy.">No known</span>
-              <span *ngIf="a.selfReported" class="badge badge-info mg-l-5" title="You reported this; it was not stated by a clinician in your records.">Self-reported</span>
+              <span *ngIf="a.noKnown" class="badge text-bg-success mg-l-5" title="A 'no known allergy' note — the record states the absence of an allergy.">No known</span>
+              <span *ngIf="a.selfReported" class="badge text-bg-info mg-l-5" title="You reported this; it was not stated by a clinician in your records.">Self-reported</span>
               <span *ngIf="a.occurrences > 1" class="tx-gray-400 tx-12 mg-l-5">×{{ a.occurrences }}</span>
             </td>
             <td><span *ngIf="reactionSummary(a) as rs; else noRx">{{ rs }}</span><ng-template #noRx><span class="tx-gray-400">—</span></ng-template></td>

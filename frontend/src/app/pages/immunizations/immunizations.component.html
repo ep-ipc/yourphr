@@ -31,7 +31,7 @@
             <td><i class="fas" [ngClass]="expanded[key(im)] ? 'fa-chevron-down' : 'fa-chevron-right'"></i></td>
             <td>
               <strong>{{ im.title }}</strong>
-              <span *ngIf="im.source === 'Reported'" class="badge badge-info mg-l-5" title="Reported by a secondary source (registry/recall), not a primary provider record.">Reported</span>
+              <span *ngIf="im.source === 'Reported'" class="badge text-bg-info mg-l-5" title="Reported by a secondary source (registry/recall), not a primary provider record.">Reported</span>
             </td>
             <td><span *ngIf="im.doses">{{ im.doses }}</span><span *ngIf="!im.doses" class="tx-gray-400">—</span></td>
             <td><span class="badge" [ngClass]="stateBadgeClass(im.state)">{{ im.state }}</span></td>

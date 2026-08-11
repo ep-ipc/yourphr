@@ -138,10 +138,10 @@ export class MedicalConcernsComponent implements OnInit {
 
   stateBadgeClass(state: string): string {
     switch (state) {
-      case 'Active': return 'badge-danger';
-      case 'Remission': return 'badge-warning';
-      case 'Resolved': return 'badge-secondary';
-      default: return 'badge-light'; // Unknown
+      case 'Active': return 'text-bg-danger';
+      case 'Remission': return 'text-bg-warning';
+      case 'Resolved': return 'text-bg-secondary';
+      default: return 'text-bg-light'; // Unknown
     }
   }
 }

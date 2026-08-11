@@ -129,7 +129,7 @@
                   <tr *ngFor="let item of profileItems">
                     <td>
                       <strong>{{ item.title }}</strong>
-                      <span *ngIf="item.selfReported" class="badge badge-info mg-l-5" title="You reported this; it was not stated by a clinician in your records.">Self-reported</span>
+                      <span *ngIf="item.selfReported" class="badge text-bg-info mg-l-5" title="You reported this; it was not stated by a clinician in your records.">Self-reported</span>
                       <div *ngIf="item.note" class="tx-gray-500 tx-12 mg-t-3">{{ item.note }}</div>
                     </td>
                     <td>{{ item.state }}</td>

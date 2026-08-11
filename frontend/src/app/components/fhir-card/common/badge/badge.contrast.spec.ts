@@ -141,23 +141,30 @@ describe('BadgeComponent contrast (yourphr#486)', () => {
   // The theme owns the palette, so a designer retuning $secondary or $light can reintroduce this
   // without touching a single line of TypeScript. This checks the utilities themselves, so the
   // failure lands on whoever changed the colour rather than on the next person to read a badge.
-  it('every text-bg-* utility in the theme meets AA', () => {
+  // Both themes, not just light. The page lists use these utilities directly rather than through
+  // the component — `text-bg-light` is what "Unknown" and "RuledOut" resolve to on Allergies,
+  // Medical Concerns, Medications and Procedures after the #486 follow-up — and the entire failure
+  // mode of that bug was a colour that reads fine in one theme and not the other. Checking one
+  // theme is how it shipped twice.
+  it('every text-bg-* utility in the theme meets AA, in both themes', () => {
     const variants = ['primary', 'secondary', 'success', 'danger', 'warning', 'info', 'light', 'dark'];
-    useTheme('light');
     const probe = document.createElement('span');
     probe.className = 'badge';
     probe.textContent = 'probe';
     document.body.appendChild(probe);
 
     const failures: string[] = [];
-    for (const variant of variants) {
-      probe.className = `badge text-bg-${variant}`;
-      const fg = parseRgb(getComputedStyle(probe).color);
-      const bg = effectiveBackground(probe);
-      if (!fg) continue;
-      const ratio = contrastRatio(fg, bg);
-      if (ratio < WCAG_AA_NORMAL_TEXT) {
-        failures.push(`text-bg-${variant}: rgb(${fg.r},${fg.g},${fg.b}) on rgb(${bg.r},${bg.g},${bg.b}) = ${ratio.toFixed(2)}:1`);
+    for (const mode of ['light', 'dark'] as const) {
+      useTheme(mode);
+      for (const variant of variants) {
+        probe.className = `badge text-bg-${variant}`;
+        const fg = parseRgb(getComputedStyle(probe).color);
+        const bg = effectiveBackground(probe);
+        if (!fg) continue;
+        const ratio = contrastRatio(fg, bg);
+        if (ratio < WCAG_AA_NORMAL_TEXT) {
+          failures.push(`${mode}: text-bg-${variant}: rgb(${fg.r},${fg.g},${fg.b}) on rgb(${bg.r},${bg.g},${bg.b}) = ${ratio.toFixed(2)}:1`);
+        }
       }
     }
     probe.remove();

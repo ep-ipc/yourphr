@@ -109,11 +109,11 @@ export class AllergiesComponent implements OnInit {
 
   stateBadgeClass(state: string): string {
     switch (state) {
-      case 'Active': return 'badge-danger';
-      case 'Inactive': return 'badge-secondary';
-      case 'Resolved': return 'badge-secondary';
-      case 'RuledOut': return 'badge-light';
-      default: return 'badge-light';
+      case 'Active': return 'text-bg-danger';
+      case 'Inactive': return 'text-bg-secondary';
+      case 'Resolved': return 'text-bg-secondary';
+      case 'RuledOut': return 'text-bg-light';
+      default: return 'text-bg-light';
     }
   }
 }

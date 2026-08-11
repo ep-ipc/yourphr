@@ -30,7 +30,7 @@
             <td><strong>{{ name(p) }}</strong></td>
             <td>{{ categoryLabel(p) }}</td>
             <td><span *ngIf="date(p) as d; else noDate">{{ d | date }}</span><ng-template #noDate><span class="tx-gray-400">—</span></ng-template></td>
-            <td><span class="badge badge-light">{{ p.status || '—' }}</span></td>
+            <td><span class="badge text-bg-light">{{ p.status || '—' }}</span></td>
           </tr>
           <tr *ngIf="expanded[rowKey(p)]" class="procedure-detail">
             <td></td>

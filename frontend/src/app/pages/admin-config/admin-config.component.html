@@ -32,7 +32,7 @@
       </li>
       <li class="nav-item">
         <a class="nav-link cursor-pointer" [class.active]="activeTab === 'custom'"
-           (click)="activeTab = 'custom'">Your overrides <span class="badge badge-warning">{{ customCount }}</span></a>
+           (click)="activeTab = 'custom'">Your overrides <span class="badge text-bg-warning">{{ customCount }}</span></a>
       </li>
       <li class="nav-item">
         <a class="nav-link cursor-pointer" [class.active]="activeTab === 'defaults'"
@@ -62,11 +62,11 @@
           <tr *ngFor="let entry of entries">
             <td class="align-middle">
               <code>{{ entry.key }}</code>
-              <span class="badge badge-info mg-l-5" *ngIf="entry.public"
+              <span class="badge text-bg-info mg-l-5" *ngIf="entry.public"
                     title="Readable without a login via /api/instance/public">public</span>
-              <span class="badge badge-warning mg-l-5" *ngIf="entry.promoted"
+              <span class="badge text-bg-warning mg-l-5" *ngIf="entry.promoted"
                     title="This instance added it to the public list">promoted</span>
-              <span class="badge badge-dark mg-l-5" *ngIf="entry.from_env"
+              <span class="badge text-bg-dark mg-l-5" *ngIf="entry.from_env"
                     [title]="'Set by ' + entry.env_var + ', which takes precedence over this screen'">environment</span>
             </td>
 
@@ -101,9 +101,9 @@
             </td>
 
             <td class="align-middle">
-              <span class="badge" [class.badge-warning]="entry.source === 'custom'"
-                    [class.badge-dark]="entry.source === 'environment'"
-                    [class.badge-secondary]="entry.source === 'default'">{{ entry.source }}</span>
+              <span class="badge" [class.text-bg-warning]="entry.source === 'custom'"
+                    [class.text-bg-dark]="entry.source === 'environment'"
+                    [class.text-bg-secondary]="entry.source === 'default'">{{ entry.source }}</span>
             </td>
 
             <td class="align-middle text-right text-nowrap">

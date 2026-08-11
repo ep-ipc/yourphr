@@ -34,7 +34,7 @@
             <td><i class="fas" [ngClass]="expanded[rowKey(c)] ? 'fa-chevron-down' : 'fa-chevron-right'"></i></td>
             <td>
               <strong>{{ c.title }}</strong>
-              <span *ngIf="c.selfReported" class="badge badge-info mg-l-5" title="You reported this; it was not stated by a clinician in your records.">Self-reported</span>
+              <span *ngIf="c.selfReported" class="badge text-bg-info mg-l-5" title="You reported this; it was not stated by a clinician in your records.">Self-reported</span>
             </td>
             <td><span class="badge" [ngClass]="stateBadgeClass(c.state)">{{ c.state }}</span></td>
             <td><span *ngIf="c.recorded; else noDate">{{ c.recorded | date }}</span><ng-template #noDate><span class="tx-gray-400">—</span></ng-template></td>

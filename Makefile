@@ -171,3 +171,6 @@ test-frontend-coverage-ci: dep-frontend
 .PHONY: lint-frontend
 lint-frontend: dep-frontend
 	cd frontend && npx ng lint
+	# Bootstrap 4 badge classes render as invisible white-on-white in light mode and look
+	# correct in dark mode, so review misses them — grep instead of eyes (#486).
+	cd frontend && node scripts/check-badge-classes.mjs

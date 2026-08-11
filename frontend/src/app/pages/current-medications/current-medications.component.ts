@@ -134,10 +134,10 @@ export class CurrentMedicationsComponent implements OnInit {
 
   stateBadgeClass(state: string): string {
     switch (state) {
-      case 'Active': return 'badge-success';
-      case 'Suspended': return 'badge-warning';
-      case 'Past': return 'badge-secondary';
-      default: return 'badge-light';
+      case 'Active': return 'text-bg-success';
+      case 'Suspended': return 'text-bg-warning';
+      case 'Past': return 'text-bg-secondary';
+      default: return 'text-bg-light';
     }
   }
 }

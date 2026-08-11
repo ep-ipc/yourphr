@@ -67,7 +67,7 @@ describe('MedicalConcernsComponent', () => {
     fixture.detectChanges();
 
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('.concern-row .badge-info')?.textContent).toContain('Self-reported');
+    expect(el.querySelector('.concern-row .text-bg-info')?.textContent).toContain('Self-reported');
     expect(el.textContent).toContain('Reported by');
   });
 

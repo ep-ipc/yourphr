@@ -51,11 +51,11 @@
           <h6 class="card-title mg-b-0"><i class="fas fa-database"></i>&nbsp; Database</h6>
           <span *ngIf="!dbLoading && backupHealth"
                 class="badge"
-                [ngClass]="backupHealth.ok ? 'badge-success' : 'badge-danger'"
+                [ngClass]="backupHealth.ok ? 'text-bg-success' : 'text-bg-danger'"
                 [title]="backupHealth.last_error || backupHealth.summary">
             {{ backupHealth.summary }}
           </span>
-          <span *ngIf="dbLoading" class="badge badge-secondary">…</span>
+          <span *ngIf="dbLoading" class="badge text-bg-secondary">…</span>
         </div>
         <div class="card-body">
           <p class="tx-gray-500 mg-b-15">Database details (location, encryption, size, integrity) and an on-demand backup. Admin-only — a backup contains all users' records.</p>
@@ -87,11 +87,11 @@
           <h6 class="card-title mg-b-0"><i class="fas fa-chart-line"></i>&nbsp; Metrics</h6>
           <span *ngIf="!metricsLoading && metrics"
                 class="badge"
-                [ngClass]="metrics.scrape_enabled ? 'badge-success' : 'badge-secondary'"
+                [ngClass]="metrics.scrape_enabled ? 'text-bg-success' : 'text-bg-secondary'"
                 [title]="metrics.scrape_note">
             {{ metrics.scrape_enabled ? 'Scrape on' : 'Scrape off' }}
           </span>
-          <span *ngIf="metricsLoading" class="badge badge-secondary">…</span>
+          <span *ngIf="metricsLoading" class="badge text-bg-secondary">…</span>
         </div>
         <div class="card-body">
           <p class="tx-gray-500 mg-b-15">
@@ -213,7 +213,7 @@
             <i class="fas" [ngClass]="relayExpanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>&nbsp;
             <i class="fas fa-exchange-alt"></i>&nbsp; SMART OAuth Relay
           </h6>
-          <span *ngIf="relayConfig" class="badge" [ngClass]="relayConfig.ready ? 'badge-success' : 'badge-danger'">
+          <span *ngIf="relayConfig" class="badge" [ngClass]="relayConfig.ready ? 'text-bg-success' : 'text-bg-danger'">
             {{ relayConfig.ready ? 'Ready' : 'Not ready' }}
           </span>
         </div>

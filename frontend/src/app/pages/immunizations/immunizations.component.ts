@@ -86,9 +86,9 @@ export class ImmunizationsComponent implements OnInit {
 
   stateBadgeClass(state: string): string {
     switch (state) {
-      case 'Completed': return 'badge-success';
-      case 'NotDone': return 'badge-warning';
-      default: return 'badge-light';
+      case 'Completed': return 'text-bg-success';
+      case 'NotDone': return 'text-bg-warning';
+      default: return 'text-bg-light';
     }
   }
 }
