@@ -26,11 +26,18 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#481](https://github.com/jwilleke/yourphr/issues/481) — [BUG] E2E silently runs against a stale backend when one is already on :9191
+_None._
 
 ## 🟠 P1
 
-- [#496](https://github.com/jwilleke/yourphr/issues/496) — [FEATURE] Public demo: block provider connect in demo mode (keep real PHI off the shared account)
+- [#514](https://github.com/jwilleke/yourphr/issues/514) — [BUG] A demo visitor can lock everyone out of the demo by changing its password or deleting the account
+- [#510](https://github.com/jwilleke/yourphr/issues/510) — [FEATURE] fasten reset-password CLI — recover an instance when nobody can sign in
+- [#509](https://github.com/jwilleke/yourphr/issues/509) — [FEATURE] Throttle sign-ins per account, not only per IP (both limits configurable)
+- [#508](https://github.com/jwilleke/yourphr/issues/508) — [BUG] A stolen session survives a password change — session JWTs cannot be revoked
+- [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
+- [#504](https://github.com/jwilleke/yourphr/issues/504) — [FEATURE] Bootstrap admin: provision the first admin at start with a per-instance random password
+- [#511](https://github.com/jwilleke/yourphr/issues/511) — [FEATURE] Admin can set another user's password from Admin → Users
+- [#505](https://github.com/jwilleke/yourphr/issues/505) — [FEATURE] Build the demo's seeded database in CI, bake it into the image, restore it in the pod
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
@@ -44,9 +51,12 @@
 - PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready, CI red)_ — no linked issue
 - PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend _(ready)_ — no linked issue
 - PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 _(ready)_ — no linked issue
+- [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#497](https://github.com/jwilleke/yourphr/issues/497) — [FEATURE] Public demo: signup abuse protection on demo.yourphr.org
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#513](https://github.com/jwilleke/yourphr/issues/513) — [FEATURE] Admin → Users: search, summary cards, useful columns, row actions
+- [#512](https://github.com/jwilleke/yourphr/issues/512) — [FEATURE] Track last_login and login_count per user (no IPs)
 - [#502](https://github.com/jwilleke/yourphr/issues/502) — [ARCH] Evaluate moving Azia's hand-rolled dark stylesheet onto Bootstrap 5.3 colour modes (data-bs-theme)
 - [#501](https://github.com/jwilleke/yourphr/issues/501) — [CHORE] Terminology: colour scheme vs colour mode vs theme — settle it and document it
 - [#500](https://github.com/jwilleke/yourphr/issues/500) — [FEATURE] ui.theme-name: theme.name is published but wired to nothing — wire it up or remove it
@@ -105,19 +115,9 @@
 
 Work complete and pushed — awaiting your decision to close.
 
-- [#503](https://github.com/jwilleke/yourphr/issues/503) — [security] hono — SSR memo() cross-request leak, language-middleware DoS, proxy header leak (2 medium, 1 low)
-- [#498](https://github.com/jwilleke/yourphr/issues/498) — [FEATURE] signup.enabled: let an operator close self-service account creation (first run always exempt)
-- [#484](https://github.com/jwilleke/yourphr/issues/484) — [BUG] SSRF guard is bypassed by any non-dotted-quad IP form — decimal, hex or short — reaching loopback and cloud metadata
-- [#483](https://github.com/jwilleke/yourphr/issues/483) — [security] Build-tree dependency sweep — ip-address, fast-uri, socket.io-parser, undici (3 high, 3 medium)
-- [#480](https://github.com/jwilleke/yourphr/issues/480) — [security] postcss — arbitrary .map file read via attacker-controlled sourceMappingURL
-- [#479](https://github.com/jwilleke/yourphr/issues/479) — [security] ip-address — SSRF/trust-boundary bypass via CIDR suffix and IPv4-mapped IPv6 (2 medium alerts)
+- [#496](https://github.com/jwilleke/yourphr/issues/496) — [FEATURE] Public demo: block provider connect in demo mode (keep real PHI off the shared account)
 - [#495](https://github.com/jwilleke/yourphr/issues/495) — [FEATURE] Public demo: demo-mode flag + one-click "Explore the demo" signin
 - [#486](https://github.com/jwilleke/yourphr/issues/486) — Status column text unreadble depending on light/dark mode.
-- [#476](https://github.com/jwilleke/yourphr/issues/476) — [BUG] Six live call sites invoke always-erroring fasten-sources stubs; "unsupported" is indistinguishable from "broken"
-- [#466](https://github.com/jwilleke/yourphr/issues/466) — [ARCH] Backup model: the data root is exactly what gets backed up
-- [#463](https://github.com/jwilleke/yourphr/issues/463) — [FEATURE] Serve PP/ToS from the instance, with an operator override
-- [#437](https://github.com/jwilleke/yourphr/issues/437) — [FEATURE] Split source Disconnect vs Remove data into separate actions
-- [#435](https://github.com/jwilleke/yourphr/issues/435) — [BUG] Log level set to error. New lines at this level appear as the server logs activity.
 - [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
 
 ## ⏸ Deferred
@@ -134,4 +134,4 @@ Work complete and pushed — awaiting your decision to close.
 
 ## ❓ Needs triage
 
-_None — all 85 open issues and 6 open PRs carry a placement label._
+_None — all 84 open issues and 6 open PRs carry a placement label._
