@@ -20,6 +20,42 @@ export class UserListComponent implements OnInit {
   resetResult: {username: string, password: string} | null = null;
   copied = false;
   errorMsg = '';
+  notice = '';
+
+  // #513. Filtering is client-side over the already-loaded list: this is a family instance, and a
+  // server-side query for a household's worth of users would be machinery with nothing to do.
+  search = '';
+  quickFilter: 'total' | 'admin' = 'total';
+  filteredUsers: User[] = [];
+
+  get adminCount(): number {
+    return this.users.filter(u => u.role === 'admin').length;
+  }
+
+  applyFilters(): void {
+    const needle = this.search.trim().toLowerCase();
+    this.filteredUsers = this.users.filter(user => {
+      if (this.quickFilter === 'admin' && user.role !== 'admin') { return false; }
+      if (!needle) { return true; }
+      // Name, username and email — the three things an admin actually knows about the person they
+      // are looking for.
+      return [user.full_name, user.username, user.email]
+        .some(field => (field || '').toLowerCase().includes(needle));
+    });
+  }
+
+  setQuickFilter(filter: 'total' | 'admin'): void {
+    // Clicking the active card clears it, so the cards behave like toggles rather than a one-way
+    // trip that needs the Clear button to escape.
+    this.quickFilter = this.quickFilter === filter ? 'total' : filter;
+    this.applyFilters();
+  }
+
+  clearFilters(): void {
+    this.search = '';
+    this.quickFilter = 'total';
+    this.applyFilters();
+  }
 
   constructor(
     private fastenApi: FastenApiService,
@@ -36,6 +72,7 @@ export class UserListComponent implements OnInit {
       next: (result) => {
         this.resettingUserId = null;
         this.resetResult = result;
+        this.notice = `Password reset for ${result.username}. Their other sessions have been signed out.`;
         this.modalService.open(modal, {ariaLabelledBy: 'reset-password-title'})
           // Drop the value as soon as the dialog goes away, however it was closed, so it does not
           // linger in component state behind whatever the admin does next.
@@ -61,6 +98,7 @@ export class UserListComponent implements OnInit {
     this.loading = true;
     this.fastenApi.getAllUsers().subscribe((users: User[]) => {
       this.users = users;
+      this.applyFilters();
       this.loading = false;
     },
       error => {
