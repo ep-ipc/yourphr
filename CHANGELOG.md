@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.6.0](https://github.com/jwilleke/yourphr/compare/v2.5.2...v2.6.0) (2026-08-12)
+
+Account security, end to end: a password change now actually ends a stolen session, passwords have rules the server enforces, sign-ins are throttled per account as well as per address, and there are two ways to recover an account nobody can get into.
+
+### Features
+
+- **auth: a password policy that lives in configuration and is enforced by the server** ([#506](https://github.com/jwilleke/yourphr/issues/506)). The only backend check was previously "not blank", so a one-character password was accepted through the API while three browser forms enforced three different rules that also contradicted their own error messages. Minimum and maximum length, a breached-password check, and a rule against containing your own username are now settings, applied at sign-up, admin user-create and change-password — and published so the sign-up form validates exactly what the server accepts.
+
+  Not applied at sign-in, deliberately: an account created before the policy existed must still be able to get in. No composition rules ("one uppercase, one digit") — NIST SP 800-63B advises against them.
+
+- **auth: session tokens can be revoked** ([#508](https://github.com/jwilleke/yourphr/issues/508)). Session JWTs were stateless, so changing your password after a session was stolen left the thief signed in until their token expired — the one action a user takes after a compromise did nothing. A per-user counter, carried as a claim, now makes a password change end every other session, and adds **Sign out everywhere** to Account Profile. Deploying this signs nobody out.
+
+- **auth: sign-ins are throttled per account, not only per IP address** ([#509](https://github.com/jwilleke/yourphr/issues/509)). Per-address limiting never sees a slow distributed attempt against one account, and makes a household throttle itself when everyone shares one connection. Only failures count, so a busy account is never throttled for being busy.
+
+- **cli: `fasten reset-password`** ([#510](https://github.com/jwilleke/yourphr/issues/510)), for when nobody can sign in at all. There is no password-reset flow in this product — no reset route, no email — so recovery previously meant generating a bcrypt hash by hand and editing the database. The command generates a password, writes it to a file only the operator can read, and prints the path rather than the value.
+
+- **users: an admin can set another user's password** ([#511](https://github.com/jwilleke/yourphr/issues/511)) from Admin → Users — the family case, where somebody simply forgot theirs. Generated rather than typed by the admin, shown once, and it ends that account's existing sessions.
+
+- **users: `last_login` and `login_count`** ([#512](https://github.com/jwilleke/yourphr/issues/512)), so an admin can tell a live account from an abandoned one and a patient can answer "has anyone else been in my record?". **No IP address and no user-agent are recorded** — on a product whose premise is that nobody else holds your data, keeping a log of your household's own addresses would need a retention policy and a privacy decision of its own.
+
+- **admin: Admin → Users becomes usable** ([#513](https://github.com/jwilleke/yourphr/issues/513)) — search, summary cards, real columns, an empty state, and per-row actions. It was a four-column read-only table with no actions of any kind.
+
+### Bug Fixes
+
+- **ui: being refused an action no longer ends your session** ([#520](https://github.com/jwilleke/yourphr/issues/520)). A `403` was treated exactly like a `401`, so pressing a button you were not entitled to press destroyed a perfectly valid session and returned you to the sign-in page. Reported from the live demo.
+- **auth: sign-up says why it refused a username** instead of "an unknown error occurred". A reserved name answered `500`, so the one failure with a clear explanation was the one nobody was told about — and `admin` is what most people type first.
+- **auth: a reserved username is allowed for an account the instance PROVISIONS** ([#519](https://github.com/jwilleke/yourphr/issues/519)). The deny-list guards self-service registration, where a stranger picks the name; it was also refusing `admin` for accounts an operator configures, so no deployment could have an admin called `admin`.
+
+### Notes for operators
+
+**Nothing to do.** Every new setting ships with a working default, no session is invalidated by upgrading, and no configuration becomes required.
+
+**If you run an internet-facing instance,** the two worth knowing about are `password.min_length` (raise it if you want) and `web.rate_limit.auth_per_account_per_minute`. Both are documented in [`docs/deployment/README.md`](docs/deployment/README.md).
+
+**If you have ever been locked out,** `fasten reset-password --username <name>` is now the answer, and it needs no database surgery.
+
 ## [2.5.2](https://github.com/jwilleke/yourphr/compare/v2.5.1...v2.5.2) (2026-08-12)
 
 Being refused an action no longer ends your session.
