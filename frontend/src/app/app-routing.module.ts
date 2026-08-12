@@ -7,6 +7,7 @@ import { IsAdminAuthGuard } from './auth-guards/is-admin-auth-guard';
 import { IsAuthenticatedAuthGuard } from './auth-guards/is-authenticated-auth-guard';
 import { EncryptionStatusGuard } from './auth-guards/encryption-status.guard';
 import { AuthSigninComponent } from './pages/auth-signin/auth-signin.component';
+import { DemoEntryComponent } from './pages/demo-entry/demo-entry.component';
 import { AuthSignupWizardComponent } from './pages/auth-signup-wizard/auth-signup-wizard.component';
 import { AuthSignupComponent } from './pages/auth-signup/auth-signup.component';
 import { BackgroundJobsComponent } from './pages/background-jobs/background-jobs.component';
@@ -49,6 +50,12 @@ import { SetupEncryptionKeyComponent } from './pages/setup-encryption-key/setup-
 
 const routes: Routes = [
   { path: 'auth/signup/wizard', component: AuthSignupWizardComponent },
+
+  // Deep-link demo entrances (#517). No auth guard: signing in is what they DO. Inert on an
+  // ordinary install — the endpoints refuse unless demo mode is on, and the visitor lands on the
+  // sign-in page.
+  { path: 'demo', component: DemoEntryComponent, data: { asAdmin: false } },
+  { path: 'demo-admin', component: DemoEntryComponent, data: { asAdmin: true } },
 
   { path: 'auth/signin', component: AuthSigninComponent, canActivate: [ EncryptionStatusGuard ] },
   { path: 'auth/signin/callback/:idp_type', component: AuthSigninComponent },

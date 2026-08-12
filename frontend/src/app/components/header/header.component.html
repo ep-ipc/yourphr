@@ -94,6 +94,14 @@
   </div><!-- container -->
 </div><!-- az-header -->
 
+<!-- Read-only demo admin (#516). Persistent and above the content, because the honest thing to tell
+     someone touring an admin screen is that nothing they press will take effect — the API refuses
+     every change from this account, whatever the buttons look like. -->
+<div *ngIf="isReadOnlyDemoAdmin" class="alert alert-warning rounded-0 mb-0 py-2 text-center" role="status">
+  <strong>Read-only demo.</strong>
+  You are signed in as the demo's admin account, so you can see how this instance is configured — nothing you change here is saved.
+</div>
+
 
 <ng-template #content let-modal>
   <div class="modal-header">

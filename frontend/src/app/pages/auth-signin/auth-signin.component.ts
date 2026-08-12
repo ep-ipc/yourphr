@@ -25,6 +25,9 @@ export class AuthSigninComponent implements OnInit {
   // Public demo instance: offer one-click sign-in to the shared demo account (#495). Read from
   // the unauthenticated instance endpoint, false on every ordinary install.
   demoEnabled = false
+  // Whether this demo also offers the read-only admin tour (#516). Independent of demoEnabled in
+  // the config, but useless without it — the backend requires both.
+  demoAdminEnabled = false
   demoLoading = false
 
   // Whether to offer "Create an Account" (#498). Starts true: signup has always been open, so an
@@ -48,10 +51,12 @@ export class AuthSigninComponent implements OnInit {
     this.fastenApiService.getPublicInstanceInfo().subscribe({
       next: (info) => {
         this.demoEnabled = info?.demo_enabled === true
+        this.demoAdminEnabled = this.demoEnabled && info?.demo_admin_enabled === true
         this.signupEnabled = info?.signup_enabled !== false
       },
       error: () => {
         this.demoEnabled = false
+        this.demoAdminEnabled = false
         // Leave signup offered on error: hiding it would strand someone on a reachable instance
         // whose only problem was one failed request.
         this.signupEnabled = true
@@ -120,13 +125,25 @@ export class AuthSigninComponent implements OnInit {
   // live in the instance's configuration and are checked server-side, so nothing is typed here
   // and nothing is held in this bundle.
   demoSignin(){
+    this.enterDemo(this.authService.DemoSignin(), '/dashboard')
+  }
+
+  // demoAdminSignin enters the READ-ONLY demo admin (#516) — the "what is it like to run one?"
+  // tour. Read-only is enforced by the API, not by this button.
+  demoAdminSignin(){
+    this.enterDemo(this.authService.DemoAdminSignin(), '/admin')
+  }
+
+  // Shared by both entrances so a failure looks the same either way, and so neither can drift into
+  // reporting a refusal differently from the other.
+  private enterDemo(signin: Promise<any>, destination: string){
     this.demoLoading = true
     this.errorMsg = ""
 
-    this.authService.DemoSignin()
+    signin
       .then(() => {
         this.demoLoading = false
-        this.router.navigateByUrl('/dashboard')
+        this.router.navigateByUrl(destination)
       })
       .catch((err)=>{
         this.demoLoading = false

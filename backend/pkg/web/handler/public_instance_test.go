@@ -24,6 +24,11 @@ var allowedPublicInstanceKeys = []string{
 	// is a boolean, and it is the only published key that is not a string; note demo.password is
 	// deliberately NOT here and is verified server-side instead.
 	"demo.enabled",
+	// demo.admin.enabled — the sign-in page offers the read-only admin tour beside the patient one
+	// (#516), and that decision is made before anyone has logged in. Also a boolean. Publishing it
+	// reveals only that the tour exists: the account's credential is generated and verified
+	// server-side like demo.password, and the account itself cannot change anything.
+	"demo.admin.enabled",
 	// signup.enabled — the sign-in page decides whether to offer "Create an Account" before login
 	// (#498). Also a boolean. The backend enforces the gate regardless of what the UI shows.
 	"signup.enabled",

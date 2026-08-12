@@ -46,6 +46,9 @@ export class HeaderComponent implements OnInit, OnDestroy {
   is_environment_desktop: boolean = environment.environment_desktop
 
   isAdmin = false;
+
+  // True only for the public demo's read-only admin (#516). Drives the banner below the header.
+  isReadOnlyDemoAdmin = false;
   isDarkMode = false;
 
   constructor(
@@ -63,6 +66,13 @@ export class HeaderComponent implements OnInit, OnDestroy {
       .catch(() => this.current_user_claims = new UserRegisteredClaims())
 
     this.authService.IsAdmin().then((isAdmin) => this.isAdmin = isAdmin);
+
+    // Say on every screen that this session cannot change anything (#516), rather than letting a
+    // visitor find out by pressing Save and reading a 403. Presentation only — the API enforces it.
+    this.fastenApi.getInstanceInfo().subscribe({
+      next: (info) => this.isReadOnlyDemoAdmin = info?.demo_admin_session === true,
+      error: () => this.isReadOnlyDemoAdmin = false,
+    })
 
     this.fastenApi.getBackgroundJobs().subscribe((data) => {
       this.backgroundJobs = data.filter((job) => {

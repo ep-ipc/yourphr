@@ -1182,6 +1182,14 @@ export interface InstanceInfo {
   // false on every ordinary install. Only the flag is published — the demo password is verified
   // server-side by /auth/demo-signin and never reaches the browser.
   demo_enabled: boolean;
+  // Whether this demo also offers the READ-ONLY admin tour (#516). Same rules as demo_enabled:
+  // absent or false everywhere else, and the flag alone opens nothing — the backend refuses unless
+  // both it and demo mode are on, and the account it signs in cannot change anything.
+  demo_admin_enabled: boolean;
+  // Whether THIS session is the read-only demo admin (#516). Only ever true from the authenticated
+  // endpoint, and only for that one account — every other user, including the operator's own admin
+  // on the same instance, gets false. Presentation only: the API refuses the writes regardless.
+  demo_admin_session: boolean;
   // Whether self-service account creation is open (#498). Default true, so an instance that does
   // not publish the key behaves exactly as it always has. The backend enforces it regardless;
   // this only decides whether the UI offers the link. Note the FIRST account on an empty
@@ -1202,6 +1210,8 @@ function mapInstanceInfo(response: ResponseWrapper): InstanceInfo {
     // Strictly true only. An absent key, a null, or a string must read as "not a demo" — this
     // flag gates a shared-account login, so anything ambiguous defaults to off.
     demo_enabled: data['demo.enabled'] === true,
+    demo_admin_enabled: data['demo.admin.enabled'] === true,
+    demo_admin_session: data['demo.admin.session'] === true,
     // Opposite default to demo_enabled, deliberately: signup has always been open, so an absent
     // key must not silently hide the link on an instance that never set it. Only an explicit
     // false closes it (#498).

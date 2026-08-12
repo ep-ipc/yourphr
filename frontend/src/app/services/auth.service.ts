@@ -144,6 +144,21 @@ export class AuthService {
     this.setAuthToken(resp.data)
   }
 
+  /**
+   * DemoAdminSignin enters the READ-ONLY demo admin on a public demo instance (#516), so a visitor
+   * can see how the instance is administered without an operator handing out a real credential.
+   *
+   * Sends no credentials, same as DemoSignin. Read-only is enforced by the API, not here: the
+   * session it returns is an ordinary admin session that the backend refuses to let change
+   * anything, so hiding buttons is presentation rather than protection.
+   */
+  public async DemoAdminSignin(): Promise<any> {
+    const fastenApiEndpointBase = GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)
+    const resp = await this._httpClient.post<ResponseWrapper>(`${fastenApiEndpointBase}/auth/demo-signin/admin`, {}).toPromise()
+
+    this.setAuthToken(resp.data)
+  }
+
   public createUser(newUser: User): Observable<any> {
     const fastenApiEndpointBase = GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base);
     return this._httpClient.post<ResponseWrapper>(`${fastenApiEndpointBase}/secure/users`, newUser)

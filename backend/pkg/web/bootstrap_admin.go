@@ -88,12 +88,20 @@ func (ae *AppEngine) ProvisionBootstrapAdmin() error {
 	if err != nil {
 		return fmt.Errorf("bootstrap admin: could not list users: %w", err)
 	}
+	// The read-only demo admin (#516) does not count. It is a public entrance that cannot change
+	// anything, so an instance holding only that account still has no administrator — and counting it
+	// would suppress provisioning and leave the operator with no way in at all.
+	demoAdmin := strings.TrimSpace(ae.Config.GetString("demo.admin.username"))
 	for _, user := range users {
-		if user.Role == pkg.UserRoleAdmin {
-			// The normal path on every restart after the first. Not worth a log line above debug.
-			ae.Logger.Debugf("bootstrap admin: %q is already an admin; nothing to provision", user.Username)
-			return nil
+		if user.Role != pkg.UserRoleAdmin {
+			continue
 		}
+		if demoAdmin != "" && strings.EqualFold(user.Username, demoAdmin) {
+			continue
+		}
+		// The normal path on every restart after the first. Not worth a log line above debug.
+		ae.Logger.Debugf("bootstrap admin: %q is already an admin; nothing to provision", user.Username)
+		return nil
 	}
 
 	// Never collide with an existing account. Creating would fail on the unique index anyway, but a

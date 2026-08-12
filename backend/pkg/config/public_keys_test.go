@@ -17,6 +17,7 @@ func TestPublicKeys_ShippedDefault(t *testing.T) {
 	// demo login before anyone has logged in (#495). demo.password is on the `secret` list and
 	// must never appear here — see TestPublicKeys_SecretsAreNotPublicByDefault.
 	require.Equal(t, []string{
+		"demo.admin.enabled",
 		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",
@@ -107,6 +108,7 @@ func TestDefaultPublicKeys_ComesFromTheShippedFile(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{
+		"demo.admin.enabled",
 		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",

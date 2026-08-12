@@ -2,9 +2,11 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/gin-gonic/gin"
 )
 
@@ -88,5 +90,30 @@ func GetInstanceInfoForUser(c *gin.Context) {
 		data[key] = value
 	}
 
+	// Whether THIS session is the read-only demo admin (#516), so the UI can say so on every screen
+	// rather than letting a visitor discover it by clicking Save and getting a 403.
+	//
+	// Computed here rather than published as a username: demo.admin.username is not on the public
+	// list, and answering "is this session restricted" is the only question a client needs. It is
+	// presentation only — the restriction itself is middleware.RestrictDemoAdmin, and it does not
+	// care what the UI believes.
+	data["demo.admin.session"] = isDemoAdminSession(c, appConfig)
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
+}
+
+func isDemoAdminSession(c *gin.Context, appConfig config.Interface) bool {
+	if !appConfig.GetBool("demo.enabled") || !appConfig.GetBool("demo.admin.enabled") {
+		return false
+	}
+	demoAdmin := strings.TrimSpace(appConfig.GetString("demo.admin.username"))
+	if demoAdmin == "" {
+		return false
+	}
+	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+	currentUser, err := databaseRepo.GetCurrentUser(c)
+	if err != nil || currentUser == nil {
+		return false
+	}
+	return strings.EqualFold(currentUser.Username, demoAdmin)
 }
