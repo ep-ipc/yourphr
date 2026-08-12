@@ -4,6 +4,8 @@ import {Router} from '@angular/router';
 import {Observable, of, throwError} from 'rxjs';
 import {catchError} from 'rxjs/operators';
 import {AuthService} from './auth.service';
+import {ToastService} from './toast.service';
+import {ToastNotification, ToastType} from '../models/fasten/toast';
 import {GetEndpointAbsolutePath} from '../../lib/utils/endpoint_absolute_path';
 import {environment} from '../../environments/environment';
 
@@ -14,17 +16,39 @@ import {environment} from '../../environments/environment';
 // based on https://stackoverflow.com/questions/46017245/how-to-handle-unauthorized-requestsstatus-with-401-or-403-with-new-httpclient
 export class AuthInterceptorService implements HttpInterceptor {
 
-  constructor(private authService: AuthService, private router: Router) { }
+  constructor(private authService: AuthService, private router: Router, private toastService: ToastService) { }
 
+  // 401 and 403 are different answers, and treating them alike destroyed valid sessions (#520).
+  //
+  // 401 means the session is missing or invalid — the only thing the backend returns when it cannot
+  // identify the caller (middleware/require_auth.go). Signing out and returning to the sign-in page
+  // is the correct response, because there is nothing to go back to.
+  //
+  // 403 means "we know who you are, and no". The demo guards (#496, #514, #516), the admin-role
+  // checks, and the sign-up gate all answer 403 to a perfectly valid session. Logging the user out
+  // for pressing a button they are not entitled to press is a bug: as the read-only demo admin,
+  // clicking Connect on the sandbox page ended the session and bounced to sign-in.
+  //
+  // Rethrowing rather than swallowing matters too. `of(err.message)` completed the stream as a
+  // SUCCESS, so the caller's error handler never ran and the component could not report the reason
+  // even if it wanted to.
   private handleAuthError(err: HttpErrorResponse): Observable<any> {
-    //handle your auth error or rethrow
-    if (err.status === 401 || err.status === 403) {
-      //navigate /delete cookies or whatever
+    if (err.status === 401) {
       this.authService.Logout()
       this.router.navigateByUrl(`/auth/signin`);
-      // if you've caught / handled the error, you don't want to rethrow it unless you also want downstream consumers to have to handle it as well.
-      return of(err.message); // or EMPTY may be appropriate here
+      return of(err.message);
     }
+
+    // Nothing handles the demo refusal today, and a silent no-op is its own kind of confusing — so
+    // say it here. Keyed on the machine-readable code rather than the sentence, which is free to
+    // change. Other 403s are left to their caller, which avoids double-reporting.
+    if (err.status === 403 && err.error?.code === 'demo_account_restricted') {
+      const toastNotification = new ToastNotification()
+      toastNotification.type = ToastType.Error
+      toastNotification.message = err.error?.error || "this action is disabled in the public demo"
+      this.toastService.show(toastNotification)
+    }
+
     return throwError(err);
   }
 
