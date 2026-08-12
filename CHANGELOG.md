@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.5.1](https://github.com/jwilleke/yourphr/compare/v2.5.0...v2.5.1) (2026-08-12)
+
+You can call your admin account `admin`, and sign-up finally tells you when it refuses a username.
+
+### Changes
+
+- **auth: a reserved username is now allowed for an account the instance PROVISIONS** ([#519](https://github.com/jwilleke/yourphr/issues/519)). `admin`, `administrator`, `root`, `system` and a dozen others were refused for *every* account, so no deployment could have an admin called `admin` — the first name every operator tries. The deny-list is documented as protecting **user registration** from phishing and confusion attacks (a stranger registering `admin` and then messaging other users as though they were staff), and that needs the attacker to choose the name. `bootstrap.admin.username` and `demo.admin.username` are set by the operator, so the list was costing something and buying nothing there.
+
+  Self-service sign-up is **unchanged** — registering as `admin` is still refused, as is creating one from Admin → Users. Only provisioning is exempt, through a separate repository entry point, so a user-creating path added later inherits the guard rather than silently skipping it.
+
+### Bug Fixes
+
+- **auth: sign-up answered `500` when it refused a username**, which the sign-up page renders as "an unknown error occurred during sign-up" — so the one failure with a clear explanation was the one nobody was told about, and `admin` is what most people type first. It now answers `400` with the reason, and both sign-up screens display what the server said.
+
+### Notes for operators
+
+**Nothing to do.** If you already run an instance, no account changes and no name becomes invalid.
+
+**If you are provisioning a new instance,** `YOURPHR_BOOTSTRAP_ADMIN_USERNAME=admin` now works. Provisioning a reserved name is logged at INFO, so it appears in the record rather than happening quietly.
+
 ## [2.5.0](https://github.com/jwilleke/yourphr/compare/v2.4.0...v2.5.0) (2026-08-12)
 
 A public demo now runs itself: no password anybody knows, an admin tour a stranger can take without being able to break anything, and a reset that is a restart.
