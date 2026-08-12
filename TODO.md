@@ -28,16 +28,19 @@ _None._
 
 ## 🟠 P1
 
+- [#525](https://github.com/jwilleke/yourphr/issues/525) — [BUG] practitioners (Count Error)
+- [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (https://demo.yourphr.org/web/)
+- [#523](https://github.com/jwilleke/yourphr/issues/523) — [FEATURE] /web/medical-history  "Save Report"
 - [#522](https://github.com/jwilleke/yourphr/issues/522) — [FEATURE] ExplanationOfBenefit Display
 - [#521](https://github.com/jwilleke/yourphr/issues/521) — [FEATURE] Claim - display this resource type
 - [#511](https://github.com/jwilleke/yourphr/issues/511) — [FEATURE] Admin can set another user's password from Admin → Users
-- [#510](https://github.com/jwilleke/yourphr/issues/510) — [FEATURE] fasten reset-password CLI — recover an instance when nobody can sign in
 - [#508](https://github.com/jwilleke/yourphr/issues/508) — [BUG] A stolen session survives a password change — session JWTs cannot be revoked
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
+- [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 
@@ -67,7 +70,6 @@ _None._
 - [#407](https://github.com/jwilleke/yourphr/issues/407) — [FEATURE] Decide fate of BYO SMART Path B (/source/authorize + /source/connect)
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
-- [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#385](https://github.com/jwilleke/yourphr/issues/385) — [EPIC] Realistic test-data corpus + golden-test harness
 - [#370](https://github.com/jwilleke/yourphr/issues/370) — [FEATURE] Add VA Clinical Health (FHIR) as a SMART provider
 - [#369](https://github.com/jwilleke/yourphr/issues/369) — [FEATURE] /medical-history — server-side grouping endpoint (counts + paged detail) for scale
@@ -103,6 +105,7 @@ _None._
 
 ## 🔵 In review — shipped, awaiting verification
 
+- [#510](https://github.com/jwilleke/yourphr/issues/510) — [FEATURE] fasten reset-password CLI — recover an instance when nobody can sign in
 - [#509](https://github.com/jwilleke/yourphr/issues/509) — [FEATURE] Throttle sign-ins per account, not only per IP (both limits configurable)
 
 ## ⚪ Needs triage
