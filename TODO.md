@@ -11,7 +11,7 @@
   - **Decide the demo admin password story** — every reset rotates `.admin_bootstrap_password`, so no stored credential is possible for that host. A sops-supplied `bootstrap.admin.password` there would fix it without weakening [#504](https://github.com/jwilleke/yourphr/issues/504)'s reasoning, which was about public images.
   - **[#506](https://github.com/jwilleke/yourphr/issues/506) password policy** — values agreed (`username.min.length=3`, `password.min.length=8`, `password.max.length=69` in BYTES). The demo-password conflict is gone: there is no published demo password left to reject.
   - **[#508](https://github.com/jwilleke/yourphr/issues/508) session revocation** — build before [#510](https://github.com/jwilleke/yourphr/issues/510)/[#511](https://github.com/jwilleke/yourphr/issues/511), which should both bump `token_generation`.
-  - **[#486](https://github.com/jwilleke/yourphr/issues/486)** still wants a human look in **light mode**; nobody has seen the badge fix render.
+  - **[#486](https://github.com/jwilleke/yourphr/issues/486) is confirmed done by the reporter** (2026-08-11, screenshots in both modes) — no longer waiting on a human look.
 - Blockers / significant notes:
   - **The AOT build is the only thing that catches NG6008.** A new page component failed the production build while `tsc --noEmit` and the Karma suite passed — Angular defaults components to standalone, and every page here is declared in `AppModule`. Run the real build before pushing frontend work.
   - **`demo.reset_on_restart` is the one code path that deliberately destroys a live database.** Three settings arm it and it still refuses unless every account in the database is the demo, the demo admin, or the bootstrap admin. Do not weaken that check.
