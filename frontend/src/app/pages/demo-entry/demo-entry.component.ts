@@ -16,8 +16,11 @@ import {AuthService} from '../../services/auth.service';
  * same message any other failure produces, and nothing here reveals whether demo mode exists.
  */
 @Component({
-  selector: 'app-demo-entry',
-  templateUrl: './demo-entry.component.html',
+    selector: 'app-demo-entry',
+    templateUrl: './demo-entry.component.html',
+    // Declared in AppModule like every other page here. Angular now defaults components to
+    // standalone, and the AOT build fails with NG6008 without this.
+    standalone: false
 })
 export class DemoEntryComponent implements OnInit {
   // Set from the route's data, so the two entrances share one component rather than one duplicating
