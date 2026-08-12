@@ -15,6 +15,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/demo"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/event_bus"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/metrics"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
@@ -198,6 +199,10 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				demoGroup := api.Group("/auth")
 				demoGroup.Use(middleware.RateLimitMiddleware(60, time.Minute))
 				demoGroup.POST("/demo-signin", handler.AuthDemoSignin)
+				// The read-only demo admin entrance (#516). Same shape, same limiter, and gated on
+				// demo.admin.enabled as well — so it is inert on a demo that only offers the patient
+				// tour, and doubly inert on a real install.
+				demoGroup.POST("/demo-signin/admin", handler.AuthDemoAdminSignin)
 
 				//whitelisted CORS PROXY
 				api.GET("/cors/:endpointId/*proxyPath", handler.CORSProxy)
@@ -219,7 +224,13 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				api.POST("/support/request", handler.SupportRequest)
 				api.POST("/support/healthsystem", handler.HealthSystemRequest)
 
-				secure := api.Group("/secure").Use(middleware.RequireAuth())
+				// RestrictDemoAdmin applies to the WHOLE authenticated API, deliberately (#516). The
+			// read-only demo admin is a public entrance to an admin session, and guarding it by
+			// naming dangerous routes is exactly what produced #514 — so everything is refused for
+			// that one account unless it is a read, and a route added below inherits the block
+			// instead of inheriting nothing. Inert for every other user and on every non-demo
+			// instance.
+			secure := api.Group("/secure").Use(middleware.RequireAuth(), middleware.RestrictDemoAdmin())
 				{
 					secure.GET("/account/me", handler.GetCurrentUser)
 					// Guarded for the shared demo account (#514). These two are the only routes a
@@ -636,6 +647,24 @@ func (ae *AppEngine) Start() error {
 		// bootstrap.admin.enabled, so a stock install cannot fail here.
 		if err := ae.ProvisionBootstrapAdmin(); err != nil {
 			ae.Logger.Panicf("could not provision the bootstrap admin: %v", err)
+		}
+
+		// Give the demo account a password this process generated and nobody knows (#515). No-op
+		// unless demo.enabled, and a no-op on every restart after the first because the stored
+		// password already verifies. It runs here rather than earlier because a freshly restored
+		// seed (#505) carries the throwaway hash the seed builder used, and this is what replaces
+		// it — so the demo works with no operator step and a reset stays "delete the file, restart".
+		//
+		// Warn rather than panic: a demo with no way in deserves a loud line, not a refusal to
+		// start. Turning demo mode on later from Admin -> Configuration provisions there instead.
+		if err := demo.ProvisionCredential(context.Background(), ae.Config, ae.deviceRepo, ae.Logger); err != nil {
+			ae.Logger.Warnf("could not provision the demo credential: %v", err)
+		}
+
+		// The read-only demo admin (#516), after the operator's own admin so the check above sees a
+		// real one rather than this. No-op unless demo.enabled AND demo.admin.enabled.
+		if err := demo.ProvisionAdmin(context.Background(), ae.Config, ae.deviceRepo, ae.Logger); err != nil {
+			ae.Logger.Warnf("could not provision the demo admin: %v", err)
 		}
 	} else {
 		ae.Logger.Warn("Skipping SetupInstallationRegistration because in StandbyMode")

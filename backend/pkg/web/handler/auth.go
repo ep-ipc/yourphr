@@ -159,12 +159,15 @@ const BootstrapAdminPasswordFile = ".admin_bootstrap_password"
 // holding real records this endpoint does not exist as far as a caller can tell.
 //
 // The credential is configuration, not something the browser holds: `demo.password` is on the
-// `secret` list and is never served by /api/instance/public, so the published demo login cannot
-// be read out of the JS bundle. What happens here is an ORDINARY signin — the configured password
-// is verified against the stored hash — deliberately, rather than minting a token for a named
-// user outright. A "log this user in without a password" path would turn one mis-set flag into a
-// full auth bypass; this way, a flag flipped on an instance with no matching demo account and
-// password does nothing at all.
+// `secret` list and is never served by /api/instance/public, so it cannot be read out of the JS
+// bundle. Since #515 nobody knows it either — it is generated per instance at startup and rotated
+// whenever it drifts from the stored hash (pkg/demo.ProvisionCredential).
+//
+// What happens here is an ORDINARY signin — the configured password is verified against the stored
+// hash — deliberately, rather than minting a token for a named user outright. A "log this user in
+// without a password" path would turn one mis-set flag into a full auth bypass; this way, a flag
+// flipped on an instance with no matching demo account and password does nothing at all. That is
+// also why provisioning is a separate step: the flag alone must never be enough.
 //
 // An enabled flag with an empty `demo.password` is refused rather than treated as "no password
 // required", because the empty string is what an operator gets by accident.
@@ -173,6 +176,32 @@ const BootstrapAdminPasswordFile = ".admin_bootstrap_password"
 // from connecting real providers (#496) — otherwise a visitor authorizes their own Medicare or
 // Epic account and the next visitor reads their records.
 func AuthDemoSignin(c *gin.Context) {
+	demoSignin(c, "demo.username", "demo.password")
+}
+
+// AuthDemoAdminSignin is the second one-click entrance: the READ-ONLY demo admin (#516), so a
+// reviewer can see Configuration, Users, Database and Logs without an operator handing out a real
+// admin credential.
+//
+// Identical mechanics to AuthDemoSignin — generated credential, verified server-side — and gated on
+// demo.admin.enabled ON TOP of demo.enabled, because an admin account a stranger can enter is not
+// something a single flag should be able to open.
+//
+// Nothing here makes the session read-only. That is middleware.RestrictDemoAdmin, on the API,
+// default-deny: a hidden button is not a control, and these routes answer curl.
+func AuthDemoAdminSignin(c *gin.Context) {
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+	if !appConfig.GetBool("demo.admin.enabled") {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "the demo admin is not enabled on this instance"})
+		return
+	}
+	demoSignin(c, "demo.admin.username", "demo.admin.password")
+}
+
+// demoSignin is the shared body of both entrances: look up the configured account, verify the
+// configured password against its stored hash, mint a token. Parameterised by config key rather than
+// duplicated, so the two entrances cannot drift on the check that matters.
+func demoSignin(c *gin.Context, usernameKey, passwordKey string) {
 	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
 	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
 	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
@@ -182,12 +211,16 @@ func AuthDemoSignin(c *gin.Context) {
 		return
 	}
 
-	demoUsername := appConfig.GetString("demo.username")
-	demoPassword := config.GetSecret(appConfig, "demo.password")
+	demoUsername := appConfig.GetString(usernameKey)
+	demoPassword := config.GetSecret(appConfig, passwordKey)
 	if demoUsername == "" || !demoPassword.IsSet() {
-		// Loud on the server, generic to the caller: this is an operator mistake, and the fix
-		// (set demo.username / demo.password) is not the visitor's to make.
-		logger.Warnf("demo mode is enabled but demo.username or demo.password is empty; refusing demo sign-in")
+		// Loud on the server, generic to the caller: this is an operator mistake, and the fix is not
+		// the visitor's to make. Since #515 the fix is no longer "type a password" — provisioning
+		// generates one at startup, so an empty value here means the demo account did not exist when
+		// this instance last started.
+		logger.Warnf("demo mode is enabled but %s or %s is empty; refusing demo sign-in "+
+			"(the credential is provisioned at startup — create the account and restart, or toggle demo.enabled to provision now)",
+			usernameKey, passwordKey)
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "demo mode is not configured on this instance"})
 		return
 	}
@@ -200,7 +233,7 @@ func AuthDemoSignin(c *gin.Context) {
 	}
 
 	if err = foundUser.CheckPassword(demoPassword.Expose()); err != nil {
-		logger.Warnf("demo mode is enabled but demo.password does not match the %q account; refusing demo sign-in", demoUsername)
+		logger.Warnf("demo mode is enabled but %s does not match the %q account; refusing demo sign-in", passwordKey, demoUsername)
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "demo mode is not configured on this instance"})
 		return
 	}

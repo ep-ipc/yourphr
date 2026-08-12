@@ -8,6 +8,8 @@ import (
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/demo"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -255,6 +257,20 @@ func SetAdminConfigValue(c *gin.Context) {
 
 	// Config changes are security-relevant — an admin can publish a key or repoint the relay.
 	logger.Infof("admin set configuration key %q", key)
+
+	// Turning demo mode on from this screen has to provision the demo credential here and now
+	// (#515). The alternative is a restart, and the symptom of forgetting it is a demo button that
+	// refuses every visitor with "demo mode is not configured" — a setting that looks applied and
+	// is not. Failure is logged, not returned: the config change itself succeeded.
+	if strings.HasPrefix(key, "demo.") {
+		databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+		if err := demo.ProvisionCredential(c, appConfig, databaseRepo, logger); err != nil {
+			logger.Warnf("could not provision the demo credential after setting %q: %v", key, err)
+		}
+		if err := demo.ProvisionAdmin(c, appConfig, databaseRepo, logger); err != nil {
+			logger.Warnf("could not provision the demo admin after setting %q: %v", key, err)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"key": key}})
 }

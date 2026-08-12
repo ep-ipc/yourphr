@@ -29,11 +29,17 @@ WORKDIR="${SEED_WORKDIR:-$(mktemp -d)}"
 OUT="${SEED_OUT:-./dist-seed/fasten.seed.db}"
 BUNDLE="${SEED_BUNDLE:-backend/pkg/database/testdata/Britt177_Blick895_ad0f0573-f8c7-4704-9eef-50342d37ef50.json}"
 DEMO_USER="${SEED_DEMO_USER:-demo}"
-# Eight characters minimum, because the sign-in form enforces minlength="8" and the SIGNUP API does
-# not — so `demo123` (seven) built cleanly here and then could not be typed into our own login form.
-# The one-click button posts no credentials and would have worked, which is exactly why nothing
-# caught it. A published demo password has to be typeable.
-DEMO_PASS="${SEED_DEMO_PASS:-demo1234}"
+# A THROWAWAY, not a credential (#515). The signup API needs some password to create the account,
+# and the instance replaces it at startup with one it generates itself — so whatever is baked here is
+# never signed in with, never published, and never typed. Random by default so a copy of the image
+# yields nothing: the seed ships inside a PUBLIC image, and every fixed value we have put here has
+# eventually been treated as the demo credential by someone.
+#
+# This is what killed the old `demo123`/`demo1234` problem at the root. That value was published, so
+# it had to satisfy the sign-in form's minlength="8" — which the signup API does not enforce, so a
+# seven-character password built cleanly here and then could not be typed into our own login form.
+# Nothing types this one, so there is nothing to satisfy.
+DEMO_PASS="${SEED_DEMO_PASS:-$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)}"
 API="http://localhost:${PORT}/api"
 
 # A throwaway name that is not on the repository's reserved list and cannot collide with the demo
@@ -46,9 +52,10 @@ fail() { printf '[seed] FAILED: %s\n' "$*" >&2; exit 1; }
 
 [ -f "$BUNDLE" ] || fail "bundle not found: $BUNDLE (run from the repository root)"
 
-# The sign-in form requires 8 characters and the signup API requires none, so a short password sails
-# through this script and then fails for a human at the login form. Refuse it here.
-[ "${#DEMO_PASS}" -ge 8 ] || fail "SEED_DEMO_PASS must be at least 8 characters (the sign-in form enforces minlength=8); got ${#DEMO_PASS}"
+# Still refuse a trivially short value. Nothing types it, so the sign-in form's minlength no longer
+# applies — but an 8-character floor costs nothing and this hash does sit in a public image until the
+# instance rotates it.
+[ "${#DEMO_PASS}" -ge 8 ] || fail "SEED_DEMO_PASS must be at least 8 characters; got ${#DEMO_PASS}"
 
 SERVER_PID=""
 cleanup() {

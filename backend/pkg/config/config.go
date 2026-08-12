@@ -50,6 +50,13 @@ const DefaultJWTIssuerKey = "thisismysupersecuressessionsecretlength"
 // in the runtime data directory (alongside the SQLite DB) with 0600 permissions.
 const jwtKeyFileName = ".jwt_issuer_key"
 
+// JWTIssuerKeyPath is where a generated signing key is persisted. Exported so the demo reset
+// (#518) can delete it by name instead of duplicating the basename: a reset that leaves the key
+// behind leaves tokens that still verify against user IDs the reset destroyed.
+func JWTIssuerKeyPath(dataDir string) string {
+	return filepath.Join(dataDir, jwtKeyFileName)
+}
+
 // ResolveJWTIssuerKey returns the effective JWT signing key, secure-by-default with
 // zero configuration (issue #102). JWTs are signed/verified with HS256 (a symmetric
 // key), so this is the root of trust for all auth and per-user data isolation —
