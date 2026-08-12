@@ -5,6 +5,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/auth"
@@ -12,6 +16,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/utils"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/web/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -113,6 +118,28 @@ func AuthSignup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": userFastenToken})
 }
 
+// signinAccountLimiter throttles FAILED sign-ins per username (#509).
+//
+// Package-level so the counter survives across requests. It is created once, lazily, from the
+// instance's configuration — a limiter rebuilt per request would count to one and forget.
+//
+// WHY NOT MIDDLEWARE, where the per-IP limit lives: the username is in the JSON body, so a
+// middleware would have to read and restore the body before the handler parses it. AuthSignin
+// already has it.
+var (
+	signinAccountLimiter     *middleware.FixedWindowLimiter
+	signinAccountLimiterOnce sync.Once
+)
+
+func accountLimiter(appConfig config.Interface) *middleware.FixedWindowLimiter {
+	signinAccountLimiterOnce.Do(func() {
+		perAccount := appConfig.GetInt("web.rate_limit.auth_per_account_per_minute")
+		windowSeconds := appConfig.GetInt("web.rate_limit.auth_window_seconds")
+		signinAccountLimiter = middleware.NewFixedWindowLimiter(perAccount, time.Duration(windowSeconds)*time.Second)
+	})
+	return signinAccountLimiter
+}
+
 func AuthSignin(c *gin.Context) {
 	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
 	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
@@ -120,6 +147,22 @@ func AuthSignin(c *gin.Context) {
 	var user models.User
 	if err := c.ShouldBindJSON(&user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// Per-ACCOUNT throttle, on top of the per-IP one in middleware (#509). The per-IP limit alone
+	// never sees a slow distributed attempt — a few tries from each of many addresses stays under
+	// every bucket while hammering one username indefinitely.
+	//
+	// Keyed on the lowercased username so `Demo` and `demo` share a budget; an attacker changing the
+	// case of a name is not making a different guess.
+	limiter := accountLimiter(appConfig)
+	accountKey := strings.ToLower(strings.TrimSpace(user.Username))
+	if allowed, retryAfter := limiter.Allow(accountKey); !allowed {
+		// Deliberately identical to the per-IP refusal, and identical whether or not the account
+		// exists: "this account is being throttled" is itself enumeration (#104).
+		c.Header("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "too many requests, please try again later"})
 		return
 	}
 
@@ -135,6 +178,12 @@ func AuthSignin(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid username or password"})
 		return
 	}
+
+	// Only FAILURES consume the budget. Clearing on success means somebody who fumbled their password
+	// twice and then got it right does not carry those attempts for the rest of the window — and a
+	// legitimately busy account is never throttled for being busy. A success-COUNTING limiter is what
+	// made the E2E suite look like a login regression in #481.
+	limiter.Reset(accountKey)
 
 	//TODO: we can derive the encryption key and the hash'ed user from the responseData sub. For now the Sub will be the user id prepended with hello.
 	userFastenToken, err := auth.JwtGenerateFastenTokenFromUser(*foundUser, appConfig.GetString("jwt.issuer.key"))

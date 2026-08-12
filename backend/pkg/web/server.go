@@ -172,12 +172,26 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				// brute-force backstop, not a throughput setting, and it is far too low for an
 				// automated suite driving real logins — the E2E harness makes ~16 auth calls from
 				// one IP and was silently collecting 429s (#481).
-				authPerMinute := ae.Config.GetInt("web.rate_limit.auth_per_minute")
-				if authPerMinute <= 0 {
-					authPerMinute = 10
+				// The WINDOW is configuration too (#509). It was a hardcoded time.Minute here while
+				// the limit beside it was a setting, so the key's name was only accidentally true —
+				// and the per-account limiter has to measure over the same window or the two drift.
+				// A non-positive window falls back to the shipped 60s: an unusable window is a typo,
+				// and reading it as "disable the brute-force backstop" is the wrong direction to
+				// guess in. Disabling is what the LIMIT keys are for.
+				authWindow := time.Duration(ae.Config.GetInt("web.rate_limit.auth_window_seconds")) * time.Second
+				if authWindow <= 0 {
+					authWindow = time.Minute
 				}
+
 				authGroup := api.Group("/auth")
-				authGroup.Use(middleware.RateLimitMiddleware(authPerMinute, time.Minute))
+				// A limit of 0 or less disables the per-IP throttle, deliberately and documented: an
+				// automated suite driving real logins from one address is the case that needs it
+				// (#481). The per-ACCOUNT limit in AuthSignin is independent and still applies.
+				if authPerMinute := ae.Config.GetInt("web.rate_limit.auth_per_minute"); authPerMinute > 0 {
+					authGroup.Use(middleware.RateLimitMiddleware(authPerMinute, authWindow))
+				} else {
+					ae.Logger.Warnf("web.rate_limit.auth_per_minute is %d — the per-IP sign-in throttle is OFF on this instance", authPerMinute)
+				}
 				authGroup.POST("/signup", handler.AuthSignup)
 				authGroup.POST("/signin", handler.AuthSignin)
 
