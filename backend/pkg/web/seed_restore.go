@@ -32,9 +32,23 @@ func (ae *AppEngine) RestoreSeedDatabaseIfMissing() error {
 	dbPath := ae.Config.GetString("database.location")
 	if _, err := os.Stat(dbPath); err == nil {
 		// The normal path on every restart. Restoring over a live database would destroy whatever a
-		// visitor or an operator has done since.
-		ae.Logger.Debugf("seed restore: %s already exists; nothing to restore", dbPath)
-		return nil
+		// visitor or an operator has done since — unless this instance is a demo that has explicitly
+		// asked for exactly that (#518).
+		if reset, resetErr := ae.demoResetArmed(dbPath); resetErr != nil {
+			// Refused, not failed: an instance that cannot prove it is a demo keeps its database and
+			// starts normally. Fatal here would mean a misconfigured flag takes the instance down.
+			ae.Logger.Errorf("demo reset: refusing to reset %s: %v", dbPath, resetErr)
+			return nil
+		} else if !reset {
+			ae.Logger.Debugf("seed restore: %s already exists; nothing to restore", dbPath)
+			return nil
+		}
+
+		ae.Logger.Warnf("demo reset: replacing %s with the bundled demo database — every account and "+
+			"record in it is being discarded (demo.reset_on_restart)", dbPath)
+		if err := ae.discardDerivedState(); err != nil {
+			return fmt.Errorf("demo reset: %w", err)
+		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("seed restore: could not check %s: %w", dbPath, err)
 	}

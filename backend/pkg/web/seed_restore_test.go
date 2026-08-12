@@ -23,6 +23,8 @@ func seedEngine(t *testing.T, restore bool, bootstrapAdmin bool, seedPath, dbPat
 	cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(bootstrapAdmin).AnyTimes()
 	cfg.EXPECT().GetString("bootstrap.seed.path").Return(seedPath).AnyTimes()
 	cfg.EXPECT().GetString("database.location").Return(dbPath).AnyTimes()
+	// Restore and reset (#518) share this entry point; these tests are about restore.
+	cfg.EXPECT().GetBool("demo.reset_on_restart").Return(false).AnyTimes()
 
 	return &AppEngine{Config: cfg, Logger: logrus.WithField("test", t.Name())}
 }
