@@ -813,6 +813,20 @@ func (mr *MockDatabaseRepositoryMockRecorder) QueryResources(ctx, query interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryResources", reflect.TypeOf((*MockDatabaseRepository)(nil).QueryResources), ctx, query)
 }
 
+// RecordSuccessfulLogin mocks base method.
+func (m *MockDatabaseRepository) RecordSuccessfulLogin(ctx context.Context, username string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordSuccessfulLogin", ctx, username)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RecordSuccessfulLogin indicates an expected call of RecordSuccessfulLogin.
+func (mr *MockDatabaseRepositoryMockRecorder) RecordSuccessfulLogin(ctx, username interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordSuccessfulLogin", reflect.TypeOf((*MockDatabaseRepository)(nil).RecordSuccessfulLogin), ctx, username)
+}
+
 // RemoveBulkResourceAssociations mocks base method.
 func (m *MockDatabaseRepository) RemoveBulkResourceAssociations(ctx context.Context, associationsToDelete []models.RelatedResource) (int64, error) {
 	m.ctrl.T.Helper()

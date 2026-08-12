@@ -15,6 +15,8 @@
             <th>Username</th>
             <th>Email</th>
             <th>Role</th>
+            <th>Last sign-in</th>
+            <th>Sign-ins</th>
             <th class="text-end">Actions</th>
           </tr>
         </thead>
@@ -24,6 +26,10 @@
             <td>{{ user.username }}</td>
             <td>{{ user.email }}</td>
             <td><span class="badge bg-primary">{{ user.role }}</span></td>
+            <!-- #512: tells a live account from an abandoned one, which is the difference between
+                 "the kids use this" and "nobody has touched it since I made it". -->
+            <td>{{ user.last_login ? (user.last_login | date:'short') : 'Never' }}</td>
+            <td>{{ user.login_count || 0 }}</td>
             <td class="text-end">
               <!-- #511: the family case — somebody forgot their password. The value is GENERATED and
                    shown once; an admin choosing one picks something they use elsewhere, and that

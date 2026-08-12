@@ -9,4 +9,7 @@ export class User {
   email?: string
   password?: string
   role?: string
+  // #512 — shown on the admin users list; absent until the first sign-in ("Never").
+  last_login?: string
+  login_count?: number
 }

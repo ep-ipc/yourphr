@@ -13,6 +13,7 @@ import (
 	_20240813222836 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20240813222836"
 	_20250730100000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20250730100000"
 	_20260812120000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20260812120000"
+	_20260812160000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20260812160000"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	databaseModel "github.com/fastenhealth/fasten-onprem/backend/pkg/models/database"
 	sourceCatalog "github.com/fastenhealth/fasten-sources/catalog"
@@ -241,6 +242,15 @@ func (gr *GormRepository) Migrate() error {
 			ID: "20260812120000", // add users.token_generation for session revocation (#508)
 			Migrate: func(tx *gorm.DB) error {
 				return tx.AutoMigrate(&_20260812120000.User{})
+			},
+		},
+		{
+			// Records USE, so an admin can tell a live account from an abandoned one and a patient can
+			// answer "has anyone else been in my record?" (#512). No IP, no user-agent — see the model
+			// comment. Existing rows migrate with NULL/0 and read as "Never".
+			ID: "20260812160000", // add users.last_login and users.login_count (#512)
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&_20260812160000.User{})
 			},
 		},
 		{

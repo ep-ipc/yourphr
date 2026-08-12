@@ -43,6 +43,11 @@ func GetCurrentUser(c *gin.Context) {
 		"picture":      currentUser.Picture,
 		"role":         currentUser.Role,
 		"demo_account": isDemoAccount,
+		// #512: so a patient can answer "has anyone else been in my record?" without an admin. No IP
+		// and no user-agent are recorded anywhere — see the model comment for why that is the point
+		// rather than an omission.
+		"last_login":  currentUser.LastLogin,
+		"login_count": currentUser.LoginCount,
 	}
 
 	c.JSON(http.StatusOK, gin.H{

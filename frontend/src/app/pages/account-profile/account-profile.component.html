@@ -42,6 +42,16 @@
                       <th class="tx-gray-500 tx-medium" scope="row">Email</th>
                       <td>{{ user.email || '—' }}</td>
                     </tr>
+                    <!-- #512: so you can answer "has anyone else been in my record?" without asking
+                         an admin. No address or device is recorded — only when, and how many times. -->
+                    <tr>
+                      <th class="tx-gray-500 tx-medium" scope="row">Last sign-in</th>
+                      <td>{{ user.last_login ? (user.last_login | date:'medium') : 'Never' }}</td>
+                    </tr>
+                    <tr>
+                      <th class="tx-gray-500 tx-medium" scope="row">Sign-ins</th>
+                      <td>{{ user.login_count || 0 }}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>

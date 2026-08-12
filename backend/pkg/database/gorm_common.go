@@ -187,6 +187,32 @@ func (gr *GormRepository) GetUserByID(ctx context.Context, userID string) (*mode
 	return &user, nil
 }
 
+// RecordSuccessfulLogin stamps last_login and increments login_count (#512).
+//
+// SUCCESSES ONLY. A failure counter on the user row is the first half of account lockout, which #507
+// rejected: lockout is a denial-of-service weapon against the account owner. Brute force is handled
+// by throttling instead (#509).
+//
+// Two columns in one UPDATE, so it cannot interleave with a concurrent sign-in and record a count
+// without its timestamp.
+func (gr *GormRepository) RecordSuccessfulLogin(ctx context.Context, username string) error {
+	result := gr.GormClient.
+		WithContext(ctx).
+		Model(&models.User{}).
+		Where("username = ?", username).
+		UpdateColumns(map[string]interface{}{
+			"last_login":  time.Now().UTC(),
+			"login_count": gorm.Expr("login_count + 1"),
+		})
+	if result.Error != nil {
+		return fmt.Errorf("could not record sign-in for %q: %v", username, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("could not record sign-in: no user named %q", username)
+	}
+	return nil
+}
+
 // BumpUserTokenGeneration invalidates every session token already issued to a user (#508).
 //
 // Session JWTs are stateless, so this counter is the only way to end one before it expires. Called

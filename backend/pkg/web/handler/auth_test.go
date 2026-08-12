@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -269,6 +270,9 @@ func TestAuthSignin_PerAccountThrottle(t *testing.T) {
 
 		if found != nil {
 			mockDB.EXPECT().GetUserByUsername(gomock.Any(), username).Return(found, nil).AnyTimes()
+			// #512: a successful attempt records the sign-in. AnyTimes because these subtests drive
+			// both outcomes through the same helper.
+			mockDB.EXPECT().RecordSuccessfulLogin(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		} else {
 			mockDB.EXPECT().GetUserByUsername(gomock.Any(), username).Return(nil, errors.New("record not found")).AnyTimes()
 		}
@@ -358,6 +362,82 @@ func userWithHashedPassword(t *testing.T, username, plaintext string) *models.Us
 	u := &models.User{Username: username, Role: pkg.UserRoleUser}
 	require.NoError(t, u.HashPassword(plaintext))
 	return u
+}
+
+// last_login / login_count (#512). The acceptance criteria are about WHEN it is written, so these
+// assert the negative cases as hard as the positive one: a failed attempt must record nothing, and a
+// recording failure must not cost the user their session.
+func TestAuthSignin_RecordsSuccessfulLogins(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	signin := func(t *testing.T, mockCtrl *gomock.Controller, configure func(*mock_database.MockDatabaseRepository), password string) *httptest.ResponseRecorder {
+		t.Helper()
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+		configure(mockDB)
+
+		appConfig, err := config.Create()
+		require.NoError(t, err)
+		require.NoError(t, appConfig.Init())
+		appConfig.Set("jwt.issuer.key", "test-signing-key-that-is-long-enough")
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(pkg.ContextKeyTypeDatabase, mockDB)
+		c.Set(pkg.ContextKeyTypeConfig, appConfig)
+		c.Set(pkg.ContextKeyTypeLogger, logrus.WithField("test", t.Name()))
+		body, _ := json.Marshal(models.User{Username: "record-me", Password: password})
+		c.Request, _ = http.NewRequest(http.MethodPost, "/signin", bytes.NewBuffer(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.AuthSignin(c)
+		return w
+	}
+
+	t.Run("records a successful sign-in", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+
+		var recordedFor string
+		w := signin(t, mockCtrl, func(db *mock_database.MockDatabaseRepository) {
+			db.EXPECT().GetUserByUsername(gomock.Any(), "record-me").
+				Return(userWithHashedPassword(t, "record-me", "correct-horse-battery"), nil)
+			db.EXPECT().RecordSuccessfulLogin(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, username string) error { recordedFor = username; return nil })
+		}, "correct-horse-battery")
+
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, "record-me", recordedFor)
+	})
+
+	// Failed attempts are deliberately NOT counted: a failure counter on the user row is the first
+	// half of account lockout, which #507 rejected. Throttling handles brute force (#509).
+	t.Run("records nothing for a failed sign-in", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+
+		w := signin(t, mockCtrl, func(db *mock_database.MockDatabaseRepository) {
+			db.EXPECT().GetUserByUsername(gomock.Any(), "record-me").
+				Return(userWithHashedPassword(t, "record-me", "correct-horse-battery"), nil)
+			db.EXPECT().RecordSuccessfulLogin(gomock.Any(), gomock.Any()).Times(0)
+		}, "the-wrong-password")
+
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	// A session is worth more than a statistic. Failing the login because a counter could not be
+	// written would turn a bookkeeping problem into a lockout.
+	t.Run("a recording failure does not cost the user their session", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+
+		w := signin(t, mockCtrl, func(db *mock_database.MockDatabaseRepository) {
+			db.EXPECT().GetUserByUsername(gomock.Any(), "record-me").
+				Return(userWithHashedPassword(t, "record-me", "correct-horse-battery"), nil)
+			db.EXPECT().RecordSuccessfulLogin(gomock.Any(), gomock.Any()).Return(errors.New("database is locked"))
+		}, "correct-horse-battery")
+
+		require.Equal(t, http.StatusOK, w.Code, "the sign-in must still succeed")
+	})
 }
 
 // TestAuthDemoSignin covers the gate, not the happy path alone: the whole value of this endpoint
@@ -557,6 +637,8 @@ func TestAuthSignin_ClearsBootstrapPasswordFile(t *testing.T) {
 		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
 		mockConfig := mock_config.NewMockInterface(mockCtrl)
 		mockDB.EXPECT().GetUserByUsername(gomock.Any(), user.Username).Return(user, nil)
+		// #512: every successful sign-in records last_login / login_count.
+		mockDB.EXPECT().RecordSuccessfulLogin(gomock.Any(), user.Username).Return(nil)
 		mockConfig.EXPECT().GetString("bootstrap.admin.username").Return(bootstrapUsername).AnyTimes()
 		mockConfig.EXPECT().GetString("storage.data_dir").Return(dataDir).AnyTimes()
 		mockConfig.EXPECT().GetString("database.location").Return(filepath.Join(dataDir, "fasten.db")).AnyTimes()

@@ -15,4 +15,15 @@ export interface AccountUser {
    * disabled button is not a control.
    */
   demo_account?: boolean;
+  /**
+   * When this account last signed in, and how many times it has (#512). Absent until the first
+   * sign-in, which the UI renders as "Never" rather than inventing a date.
+   *
+   * Deliberately no IP address and no user-agent anywhere in this: on a product whose pitch is that
+   * nobody else holds your data, keeping a log of your household's own addresses would need a
+   * retention policy and a privacy decision (#507). A timestamp and a counter answer "has anyone
+   * else been in my record?" without building that.
+   */
+  last_login?: string;
+  login_count?: number;
 }

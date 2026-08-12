@@ -185,6 +185,14 @@ func AuthSignin(c *gin.Context) {
 	// made the E2E suite look like a login regression in #481.
 	limiter.Reset(accountKey)
 
+	// Record the sign-in (#512). NEVER fatal: a session is worth more than a statistic, and failing
+	// the login because a counter could not be written would turn a bookkeeping problem into a
+	// lockout. Logged so it is visible rather than silent.
+	if err := databaseRepo.RecordSuccessfulLogin(c, foundUser.Username); err != nil {
+		logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
+		logger.Warnf("could not record the sign-in for %q: %v", foundUser.Username, err)
+	}
+
 	//TODO: we can derive the encryption key and the hash'ed user from the responseData sub. For now the Sub will be the user id prepended with hello.
 	userFastenToken, err := auth.JwtGenerateFastenTokenFromUser(*foundUser, appConfig.GetString("jwt.issuer.key"))
 	if err != nil {

@@ -226,6 +226,14 @@ Any config key can be set as an env var: prefix **`YOURPHR_`**, uppercase the ke
 | `demo.admin.username` | `demoadmin` | Which account the admin tour signs in as. Provisioned automatically with a generated password (`demo.admin.password`) the same way `demo.password` is. Does **not** count as an admin for `bootstrap.admin.enabled`, so an operator admin is still provisioned. |
 | `demo.reset_on_restart` | `false` | Reinstall the demo database baked into the image on **every** start ([#518](https://github.com/jwilleke/yourphr/issues/518)), so resetting a public demo is a restart. Requires `demo.enabled` and `bootstrap.seed.restore` as well, refuses on an encrypted database, and before overwriting anything it checks that every account in the existing database is the demo, the demo admin, or the bootstrap admin — anything else and it refuses and starts normally. Also drops the cache and the generated JWT signing key, so pre-reset sessions end cleanly. The instance's custom config file is kept. |
 
+### What is recorded about sign-ins
+
+Each successful sign-in updates two fields on the account: **when** it happened and **how many** there have been ([#512](https://github.com/jwilleke/yourphr/issues/512)). Both are shown on Account Profile and on Admin → Users, so a patient can answer "has anyone else been in my record?" and an admin can tell a live account from an abandoned one.
+
+**No IP address and no user-agent are stored anywhere by this.** That is deliberate, not an oversight: on a product whose premise is that nobody else holds your data, keeping a log of your own household's addresses would need a retention policy and a privacy decision of its own ([#507](https://github.com/jwilleke/yourphr/issues/507)). Failed attempts are not counted either — brute force is handled by throttling ([#509](https://github.com/jwilleke/yourphr/issues/509)), and a failure counter on the account is the first half of account lockout, which is a denial-of-service weapon against the account owner.
+
+There is nothing to configure. No retention window, because nothing accumulates: two fields, overwritten.
+
 ## Secrets & credentials
 
 There are **two distinct kinds** — don't conflate them:

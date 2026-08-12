@@ -30,6 +30,9 @@ type DatabaseRepository interface {
 	// BumpUserTokenGeneration ends every session already issued to this user (#508). Session JWTs
 	// are stateless, so without it a stolen session survives a password change.
 	BumpUserTokenGeneration(ctx context.Context, username string) error
+	// RecordSuccessfulLogin stamps last_login and increments login_count (#512). Successes only —
+	// a failure counter on the user row is the first half of account lockout, which #507 rejected.
+	RecordSuccessfulLogin(ctx context.Context, username string) error
 	GetUsers(ctx context.Context) ([]models.User, error)
 
 	//get a count of every resource type
