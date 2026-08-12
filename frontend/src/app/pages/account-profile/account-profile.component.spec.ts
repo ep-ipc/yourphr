@@ -6,18 +6,26 @@ import {RouterTestingModule} from '@angular/router/testing';
 
 import {AccountProfileComponent} from './account-profile.component';
 import {FastenApiService} from '../../services/fasten-api.service';
+import {AuthService} from '../../services/auth.service';
 import {ReportHeaderComponent} from 'src/app/components/report-header/report-header.component';
 
 describe('AccountProfileComponent', () => {
   let component: AccountProfileComponent;
   let fixture: ComponentFixture<AccountProfileComponent>;
   let api: jasmine.SpyObj<FastenApiService>;
+  let auth: jasmine.SpyObj<AuthService>;
 
   beforeEach(async () => {
     api = jasmine.createSpyObj('FastenApiService', [
       'getCurrentUser', 'deleteAccount', 'getSummary', 'getResources', 'changePassword',
-      'getLegalConsent', 'grantLegalConsent', 'revokeLegalConsent',
+      'getLegalConsent', 'grantLegalConsent', 'revokeLegalConsent', 'signOutEverywhere',
     ]);
+    api.signOutEverywhere.and.returnValue(of(true));
+    // "Sign out everywhere" (#508) clears the local token after the server revokes it, so the
+    // component now depends on AuthService. Stubbed rather than real — the real one wants an HTTP
+    // client token that this TestBed does not provide.
+    auth = jasmine.createSpyObj('AuthService', ['Logout']);
+    auth.Logout.and.returnValue(Promise.resolve());
     api.getCurrentUser.and.returnValue(of({username: 'jim', full_name: 'Jim Willeke', email: 'jim@example.com', role: 'admin'}));
     api.deleteAccount.and.returnValue(of(true));
     api.changePassword.and.returnValue(of(true));
@@ -45,7 +53,10 @@ describe('AccountProfileComponent', () => {
     await TestBed.configureTestingModule({
       declarations: [AccountProfileComponent, ReportHeaderComponent],
       imports: [CommonModule, FormsModule, RouterTestingModule],
-      providers: [{provide: FastenApiService, useValue: api}],
+      providers: [
+        {provide: FastenApiService, useValue: api},
+        {provide: AuthService, useValue: auth},
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(AccountProfileComponent);
@@ -62,6 +73,25 @@ describe('AccountProfileComponent', () => {
 
   it('computes initials from the full name', () => {
     expect(component.initials).toBe('JW');
+  });
+
+  // #508: the server has already invalidated this browser's token, so the component must clear the
+  // local copy and get out of the way — otherwise the next request 401s instead of showing sign-in.
+  it('signs out locally after revoking every session', async () => {
+    component.signOutEverywhere();
+    await Promise.resolve();
+
+    expect(api.signOutEverywhere).toHaveBeenCalled();
+    expect(auth.Logout).toHaveBeenCalled();
+  });
+
+  it('reports a failure to revoke rather than pretending it worked', () => {
+    api.signOutEverywhere.and.returnValue(throwError(() => ({error: {error: 'could not sign out other sessions'}})));
+
+    component.signOutEverywhere();
+
+    expect(component.signOutError).toContain('could not sign out');
+    expect(auth.Logout).not.toHaveBeenCalled();
   });
 
   it('falls back to the first two letters when there is only one name part', () => {

@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/auth"
 	mock_config "github.com/fastenhealth/fasten-onprem/backend/pkg/config/mock"
+	mock_database "github.com/fastenhealth/fasten-onprem/backend/pkg/database/mock"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/web/middleware"
 	"github.com/gin-gonic/gin"
@@ -36,9 +38,18 @@ func runRequireAuth(t *testing.T, build func(req *http.Request)) (*gin.Context, 
 	mockConfig.EXPECT().GetInt("jwt.session_renew_if_remaining_minutes").Return(30).AnyTimes()
 	mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false).AnyTimes()
 
+	// Session tokens are checked against the user's revocation counter since #508, so the middleware
+	// now reads the repository on this path too. Generation 0 both sides = nothing revoked.
+	mockDB := mock_database.NewMockDatabaseRepository(ctrl)
+	mockDB.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, username string) (*models.User, error) {
+			return &models.User{Username: username}, nil
+		}).AnyTimes()
+
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Set(pkg.ContextKeyTypeConfig, mockConfig)
+	c.Set(pkg.ContextKeyTypeDatabase, mockDB)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api/secure/x", nil)
 	build(c.Request)
 

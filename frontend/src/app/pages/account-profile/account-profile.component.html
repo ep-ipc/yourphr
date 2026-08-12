@@ -139,7 +139,29 @@
                     <i *ngIf="!pwSubmitting" class="fas fa-save mg-r-5"></i>
                     Change password
                   </button>
+                  <p class="tx-11 tx-gray-500 mg-t-10 mg-b-0">
+                    Changing your password also signs out every other device — so if somebody else has
+                    your session, this ends it.
+                  </p>
                 </form>
+
+                <!-- Sign out everywhere (#508). Separate from the password form on purpose: it is
+                     useful WITHOUT changing a password (a laptop left signed in at a clinic), and it
+                     signs THIS browser out too, which the confirm step makes explicit. -->
+                <hr class="mg-y-20">
+                <h6 class="tx-13 tx-semibold mg-b-5">Sign out everywhere</h6>
+                <p class="tx-gray-500 tx-13 mg-b-10">
+                  Ends every signed-in session for this account, including this one. You will need to
+                  sign in again.
+                </p>
+                <div *ngIf="signOutError" class="alert alert-danger tx-13">{{ signOutError }}</div>
+                <button type="button" class="btn btn-outline-danger btn-sm" [disabled]="signOutSubmitting || user?.demo_account"
+                        [title]="user?.demo_account ? 'Disabled in the public demo — the account is shared' : ''"
+                        (click)="signOutEverywhere()">
+                  <span *ngIf="signOutSubmitting" class="spinner-border spinner-border-sm mg-r-5" role="status" aria-hidden="true"></span>
+                  <i *ngIf="!signOutSubmitting" class="fas fa-sign-out-alt mg-r-5"></i>
+                  Sign out everywhere
+                </button>
               </div>
             </div>
           </div>

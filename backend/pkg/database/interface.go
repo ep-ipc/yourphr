@@ -25,6 +25,9 @@ type DatabaseRepository interface {
 	GetCurrentUser(ctx context.Context) (*models.User, error)
 	DeleteCurrentUser(ctx context.Context) error
 	UpdateUserPassword(ctx context.Context, hashedPassword string) error
+	// BumpUserTokenGeneration ends every session already issued to this user (#508). Session JWTs
+	// are stateless, so without it a stolen session survives a password change.
+	BumpUserTokenGeneration(ctx context.Context, username string) error
 	GetUsers(ctx context.Context) ([]models.User, error)
 
 	//get a count of every resource type

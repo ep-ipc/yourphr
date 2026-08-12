@@ -12,6 +12,7 @@ import (
 	_20240208112210 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20240208112210"
 	_20240813222836 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20240813222836"
 	_20250730100000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20250730100000"
+	_20260812120000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20260812120000"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	databaseModel "github.com/fastenhealth/fasten-onprem/backend/pkg/models/database"
 	sourceCatalog "github.com/fastenhealth/fasten-sources/catalog"
@@ -230,6 +231,16 @@ func (gr *GormRepository) Migrate() error {
 			ID: "20250730100000",
 			Migrate: func(tx *gorm.DB) error {
 				return tx.AutoMigrate(&_20250730100000.Favorite{})
+			},
+		},
+		{
+			// Session JWTs are stateless, so a stolen one survived a password change until it expired
+			// (#508). This counter is what lets a password change, an admin reset, or "sign out
+			// everywhere" actually end sessions. Existing rows default to 0 and pre-#508 tokens carry
+			// no claim, which also reads as 0 — so applying this migration logs nobody out.
+			ID: "20260812120000", // add users.token_generation for session revocation (#508)
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&_20260812120000.User{})
 			},
 		},
 		{

@@ -151,6 +151,14 @@ export class FastenApiService {
     );
   }
 
+  // Ends every session for the current user, this browser included (#508). The server bumps the
+  // user's token generation, which invalidates every JWT already issued — the only way to evict a
+  // stolen session, since session tokens are otherwise stateless.
+  signOutEverywhere(): Observable<boolean> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/sign-out-everywhere`, {})
+      .pipe(map((response: ResponseWrapper) => response.success));
+  }
+
   //TODO: Any significant API changes here should also be reflected in EventBusService
 
   getDashboards(): Observable<DashboardConfig[]> {

@@ -3,11 +3,13 @@ package handler_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/auth"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	mock_config "github.com/fastenhealth/fasten-onprem/backend/pkg/config/mock"
 	mock_database "github.com/fastenhealth/fasten-onprem/backend/pkg/database/mock"
@@ -31,6 +33,9 @@ func changePasswordContext(t *testing.T, mockDB *mock_database.MockDatabaseRepos
 	appConfig, err := config.Create()
 	require.NoError(t, err)
 	require.NoError(t, appConfig.Init())
+	// A real signing key: ChangePassword re-issues the caller's session after bumping the generation
+	// (#508), and without a key that re-issue silently fails to the no-token branch.
+	appConfig.Set("jwt.issuer.key", "test-signing-key-that-is-long-enough")
 	c.Set(pkg.ContextKeyTypeConfig, appConfig)
 	jsonData, _ := json.Marshal(body)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/account/password", bytes.NewBuffer(jsonData))
@@ -56,12 +61,106 @@ func TestChangePassword(t *testing.T) {
 
 		mockDB.EXPECT().GetCurrentUser(gomock.Any()).Return(userWithPassword(t, "oldpass"), nil)
 		mockDB.EXPECT().UpdateUserPassword(gomock.Any(), gomock.Any()).Return(nil)
+		// #508: changing a password must end every other session, or a stolen one survives the very
+		// action taken to evict it.
+		mockDB.EXPECT().BumpUserTokenGeneration(gomock.Any(), "testuser").Return(nil)
 
 		c, w := changePasswordContext(t, mockDB, gin.H{"current_password": "oldpass", "new_password": "newpass123"})
 		handler.ChangePassword(c)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
+
+	// The caller who just changed their own password must NOT be signed out by their own action, so a
+	// fresh token at the new generation is issued back.
+	t.Run("re-issues a session for the caller at the new generation", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+
+		user := userWithPassword(t, "oldpass")
+		user.TokenGeneration = 4
+		mockDB.EXPECT().GetCurrentUser(gomock.Any()).Return(user, nil)
+		mockDB.EXPECT().UpdateUserPassword(gomock.Any(), gomock.Any()).Return(nil)
+		mockDB.EXPECT().BumpUserTokenGeneration(gomock.Any(), "testuser").Return(nil)
+
+		c, w := changePasswordContext(t, mockDB, gin.H{"current_password": "oldpass", "new_password": "newpass123"})
+		handler.ChangePassword(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var body struct {
+			Data string `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		require.NotEmpty(t, body.Data, "a replacement session token must come back")
+
+		claims, err := auth.JwtValidateFastenToken(c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface).GetString("jwt.issuer.key"), body.Data)
+		require.NoError(t, err)
+		assert.Equal(t, 5, claims.TokenGeneration,
+			"the new token must carry the BUMPED generation, or the caller's own session is stale immediately")
+	})
+
+	// The password is already changed by this point, so the request did not fail — but leaving other
+	// sessions alive is exactly what the user was trying to prevent, so it must not report success.
+	t.Run("reports failure when sessions cannot be revoked", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+
+		mockDB.EXPECT().GetCurrentUser(gomock.Any()).Return(userWithPassword(t, "oldpass"), nil)
+		mockDB.EXPECT().UpdateUserPassword(gomock.Any(), gomock.Any()).Return(nil)
+		mockDB.EXPECT().BumpUserTokenGeneration(gomock.Any(), "testuser").Return(errors.New("database is locked"))
+
+		c, w := changePasswordContext(t, mockDB, gin.H{"current_password": "oldpass", "new_password": "newpass123"})
+		handler.ChangePassword(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "sign out everywhere",
+			"the user must be told what to do about the sessions that are still alive")
+	})
+}
+
+// SignOutEverywhere ends the caller's own session too — that is what "everywhere" means to somebody
+// who believes their sessions are not trustworthy.
+func TestSignOutEverywhere(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("bumps the generation and clears the cookie", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+
+		mockDB.EXPECT().GetCurrentUser(gomock.Any()).Return(userWithPassword(t, "oldpass"), nil)
+		mockDB.EXPECT().BumpUserTokenGeneration(gomock.Any(), "testuser").Return(nil)
+
+		c, w := changePasswordContext(t, mockDB, gin.H{})
+		handler.SignOutEverywhere(c)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Header().Get("Set-Cookie"), pkg.SessionCookieName)
+		assert.Contains(t, w.Header().Get("Set-Cookie"), "Max-Age=0",
+			"the caller's own cookie is cleared — they asked to be signed out everywhere")
+	})
+
+	t.Run("reports failure when the bump fails", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+
+		mockDB.EXPECT().GetCurrentUser(gomock.Any()).Return(userWithPassword(t, "oldpass"), nil)
+		mockDB.EXPECT().BumpUserTokenGeneration(gomock.Any(), "testuser").Return(errors.New("boom"))
+
+		c, w := changePasswordContext(t, mockDB, gin.H{})
+		handler.SignOutEverywhere(c)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+}
+
+// The remaining change-password cases: current-password verification and the empty-password guard.
+func TestChangePassword_Rejections(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
 	t.Run("rejects an incorrect current password (no DB write)", func(t *testing.T) {
 		mockCtrl := gomock.NewController(t)

@@ -30,6 +30,8 @@ func generateToken(user models.User, issuerSigningKey string, expiresAt time.Tim
 			Role:     user.Role,
 		},
 		TokenType: tokenType,
+		// Stamped from the user record at issue time (#508). A later bump makes this token stale.
+		TokenGeneration: user.TokenGeneration,
 	}
 	if sessionStart != nil {
 		claims.SessionStart = jwt.NewNumericDate(*sessionStart)

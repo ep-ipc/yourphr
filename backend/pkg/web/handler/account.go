@@ -100,6 +100,63 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
+	// End every OTHER session (#508). Session JWTs are stateless, so without this a stolen session
+	// survives the password change made to evict it — which turns the one action a user takes after
+	// a compromise into false comfort.
+	//
+	// Bump first, then re-issue for THIS caller, so the person who just changed their password is not
+	// signed out by their own action.
+	if err := databaseRepo.BumpUserTokenGeneration(c, currentUser.Username); err != nil {
+		// The password HAS changed at this point, so this is not a failure of the request — but it
+		// leaves other sessions alive, which is precisely what the user was trying to prevent. Loud.
+		logger.Errorf("password changed for %q but existing sessions could not be revoked: %v", currentUser.Username, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false,
+			"error": "your password was changed, but other signed-in sessions could not be ended — sign out everywhere from Account Profile"})
+		return
+	}
+
+	appConfig = c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+	refreshed := *currentUser
+	refreshed.TokenGeneration++
+	if token, err := auth.JwtGenerateFastenTokenFromUser(refreshed, appConfig.GetString("jwt.issuer.key")); err == nil {
+		setSessionCookie(c, appConfig, token)
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": token})
+		return
+	}
+
+	// The token could not be re-issued, so this caller is signed out too. Correct rather than
+	// convenient: the alternative is leaving a session alive that the new generation should refuse.
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// SignOutEverywhere ends every session for the current user, including this one (#508).
+//
+// The deliberate difference from ChangePassword: no token is re-issued. Somebody pressing this has
+// decided their sessions are not trustworthy, and the caller's own browser is one of them — signing
+// it out too is the honest reading of "everywhere".
+func SignOutEverywhere(c *gin.Context) {
+	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
+	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+
+	currentUser, err := databaseRepo.GetCurrentUser(c)
+	if err != nil {
+		logger.Errorf("Failed to get current user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not sign out other sessions"})
+		return
+	}
+
+	if err := databaseRepo.BumpUserTokenGeneration(c, currentUser.Username); err != nil {
+		logger.Errorf("could not revoke sessions for %q: %v", currentUser.Username, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not sign out other sessions"})
+		return
+	}
+
+	logger.Infof("signed out every session for %q", currentUser.Username)
+	// Same clearing AuthLogout does — the cookie is dead to the server either way now, but leaving a
+	// stale one in the browser means the next request 401s instead of showing the sign-in page.
+	c.SetSameSite(http.SameSiteStrictMode)
+	c.SetCookie(pkg.SessionCookieName, "", -1, "/", "", appConfig.GetBool("web.listen.https.enabled"), true)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

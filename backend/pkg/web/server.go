@@ -245,6 +245,10 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					// (#496): that heals at the next reset and shows the product working.
 					secure.DELETE("/account/me", middleware.BlockForDemoAccount(), handler.DeleteAccount)
 					secure.POST("/account/password", middleware.BlockForDemoAccount(), handler.ChangePassword)
+					// "Sign out everywhere" (#508). Guarded for the same reason as the two above: the
+					// demo account is shared, so one visitor pressing it would sign out every other
+					// visitor — recoverable, unlike #514, but still a stranger ending your session.
+					secure.POST("/account/sign-out-everywhere", middleware.BlockForDemoAccount(), handler.SignOutEverywhere)
 
 					secure.GET("/summary", handler.GetSummary)
 					secure.GET("/summary/ips", handler.GetIPSSummary)

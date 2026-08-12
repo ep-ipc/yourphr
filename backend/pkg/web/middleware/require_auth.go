@@ -57,14 +57,49 @@ func RequireAuth() gin.HandlerFunc {
 				return
 			}
 		} else {
-			// Browser session JWT: sliding renew when near expiry (#445 Option A).
-			// Absolute max from session_start is enforced inside JwtMaybeRenewSession.
+			// Browser session JWT. Stateless by design, which is why a stolen one used to survive a
+			// password change (#508): nothing could evict it. The user's token_generation is the
+			// revocation point — a token minted before a bump is refused here.
+			//
+			// One database read per authenticated request, the same cost the access-token path above
+			// has always paid. The alternative (a jti denylist) needs storage proportional to
+			// revocations plus a sweeper, to answer a question one integer answers.
+			// c.Get, not MustGet: a missing repository is a wiring mistake, and panicking inside auth
+			// middleware turns that into a 500 on every request with a stack trace in the log. Fail
+			// closed instead — refusing is the safe direction when we cannot check revocation.
+			repo, ok := c.Get(pkg.ContextKeyTypeDatabase)
+			databaseRepo, repoOk := repo.(database.DatabaseRepository)
+			if !ok || !repoOk {
+				c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "request does not contain a valid token"})
+				c.Abort()
+				return
+			}
+			currentUser, err := databaseRepo.GetUserByUsername(c, claims.Subject)
+			if err != nil || currentUser == nil {
+				// The account is gone, or unreadable. Either way this session no longer refers to
+				// anybody — which is exactly the state a demo reset leaves old tokens in (#518).
+				c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "request does not contain a valid token"})
+				c.Abort()
+				return
+			}
+			if claims.TokenGeneration < currentUser.TokenGeneration {
+				// Deliberately the same generic message as any other invalid token: "your session was
+				// revoked" tells someone holding a stolen token that the owner noticed.
+				c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "request does not contain a valid token"})
+				c.Abort()
+				return
+			}
+
+			// Sliding renew when near expiry (#445 Option A). Absolute max from session_start is
+			// enforced inside JwtMaybeRenewSession. Renewal carries the CURRENT generation forward,
+			// so a renewed session cannot outlive a revocation.
 			policy := auth.SessionPolicyFromConfig(appConfig)
 			user := models.User{
-				Username: claims.Subject,
-				FullName: claims.FullName,
-				Email:    claims.Email,
-				Role:     claims.Role,
+				Username:        claims.Subject,
+				FullName:        claims.FullName,
+				Email:           claims.Email,
+				Role:            claims.Role,
+				TokenGeneration: currentUser.TokenGeneration,
 			}
 			if newTok, renewed, rerr := auth.JwtMaybeRenewSession(claims, user, signingKey, policy); rerr == nil && renewed {
 				tokenString = newTok

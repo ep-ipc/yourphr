@@ -93,6 +93,20 @@ func (mr *MockDatabaseRepositoryMockRecorder) BackgroundJobCheckpoint(ctx, check
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BackgroundJobCheckpoint", reflect.TypeOf((*MockDatabaseRepository)(nil).BackgroundJobCheckpoint), ctx, checkpointData, errorData)
 }
 
+// BumpUserTokenGeneration mocks base method.
+func (m *MockDatabaseRepository) BumpUserTokenGeneration(ctx context.Context, username string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BumpUserTokenGeneration", ctx, username)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BumpUserTokenGeneration indicates an expected call of BumpUserTokenGeneration.
+func (mr *MockDatabaseRepositoryMockRecorder) BumpUserTokenGeneration(ctx, username interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BumpUserTokenGeneration", reflect.TypeOf((*MockDatabaseRepository)(nil).BumpUserTokenGeneration), ctx, username)
+}
+
 // CheckFavoriteExists mocks base method.
 func (m *MockDatabaseRepository) CheckFavoriteExists(ctx context.Context, userId, sourceId, resourceType, resourceId string) (bool, error) {
 	m.ctrl.T.Helper()

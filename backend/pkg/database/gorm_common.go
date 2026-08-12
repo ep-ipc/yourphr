@@ -175,6 +175,29 @@ func (gr *GormRepository) UpdateUserPassword(ctx context.Context, hashedPassword
 	return nil
 }
 
+// BumpUserTokenGeneration invalidates every session token already issued to a user (#508).
+//
+// Session JWTs are stateless, so this counter is the only way to end one before it expires. Called
+// on password change, admin-initiated reset, CLI reset, and an explicit "sign out everywhere" — each
+// of which is meaningless without it: changing a password after a session is stolen has to evict the
+// thief, or the advice we give users is false comfort.
+//
+// A single UPDATE on one column, so it cannot race with a concurrent password write.
+func (gr *GormRepository) BumpUserTokenGeneration(ctx context.Context, username string) error {
+	result := gr.GormClient.
+		WithContext(ctx).
+		Model(&models.User{}).
+		Where("username = ?", username).
+		UpdateColumn("token_generation", gorm.Expr("token_generation + 1"))
+	if result.Error != nil {
+		return fmt.Errorf("could not revoke sessions for %q: %v", username, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("could not revoke sessions: no user named %q", username)
+	}
+	return nil
+}
+
 // SECURITY: this should only be called after the user has confirmed they want to delete their account.
 func (gr *GormRepository) DeleteCurrentUser(ctx context.Context) error {
 	currentUser, err := gr.GetCurrentUser(ctx)

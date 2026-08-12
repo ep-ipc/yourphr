@@ -19,6 +19,21 @@ type User struct {
 	Picture string       `json:"picture"`
 	Email   string       `json:"email"`
 	Role    pkg.UserRole `json:"role"`
+
+	// TokenGeneration makes session JWTs revocable (#508). Session tokens are stateless, so before
+	// this a stolen one stayed valid until it expired — changing your password evicted nobody, which
+	// made the one action a user takes after a compromise into false comfort.
+	//
+	// Every session token carries the value current when it was issued; RequireAuth refuses a token
+	// whose generation is BELOW the user's. Bumping it therefore ends every existing session at once,
+	// which is what a password change, an admin reset, a CLI reset, and "sign out everywhere" all
+	// need to mean.
+	//
+	// Zero by default and absent from older tokens, which read as 0 — so deploying this logs nobody
+	// out. Sessions only die once something deliberately bumps the value.
+	//
+	// Not serialized to JSON: it is internal bookkeeping, and no client has a use for it.
+	TokenGeneration int `json:"-"`
 }
 
 func (user *User) HashPassword(password string) error {

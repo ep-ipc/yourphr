@@ -1,5 +1,7 @@
 import {Component, OnInit, TemplateRef} from '@angular/core';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
+import {Router} from '@angular/router';
+import {AuthService} from '../../services/auth.service';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {AccountUser} from '../../models/fasten/account-user';
 import {LegalConsentStatus} from '../../models/fasten/legal-consent';
@@ -34,6 +36,8 @@ export class AccountProfileComponent implements OnInit {
   constructor(
     private fastenApi: FastenApiService,
     private modalService: NgbModal,
+    private authService: AuthService,
+    private router: Router,
   ) {}
 
   ngOnInit(): void {
@@ -123,6 +127,9 @@ export class AccountProfileComponent implements OnInit {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
+  signOutSubmitting = false;
+  signOutError = '';
+
   changePassword(): void {
     this.pwError = '';
     this.pwSuccess = false;
@@ -144,6 +151,25 @@ export class AccountProfileComponent implements OnInit {
       error: (err) => {
         this.pwSubmitting = false;
         this.pwError = err?.error?.error || 'Could not change your password. Please try again.';
+      },
+    });
+  }
+
+  // #508. Ends every session for this account, this browser included — so the only sensible thing
+  // afterwards is to send the user to the sign-in page.
+  signOutEverywhere(): void {
+    this.signOutError = '';
+    this.signOutSubmitting = true;
+    this.fastenApi.signOutEverywhere().subscribe({
+      next: () => {
+        this.signOutSubmitting = false;
+        // Clear the local token too: the server has already invalidated it, and leaving it in place
+        // means the next request 401s instead of showing the sign-in page.
+        this.authService.Logout().finally(() => this.router.navigateByUrl('/auth/signin'));
+      },
+      error: (err) => {
+        this.signOutSubmitting = false;
+        this.signOutError = err?.error?.error || 'Could not sign out your other sessions. Please try again.';
       },
     });
   }
