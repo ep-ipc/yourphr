@@ -3,19 +3,20 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-12
 
-- Last worked on: **v2.5.0 — demo mode reshaped**. Generated demo credential [#515](https://github.com/jwilleke/yourphr/issues/515), read-only demo admin [#516](https://github.com/jwilleke/yourphr/issues/516), deep links [#517](https://github.com/jwilleke/yourphr/issues/517), app-owned reset [#518](https://github.com/jwilleke/yourphr/issues/518). All four verified against a running instance, not only in unit tests.
-- Branch / state: `main`, everything pushed. Release commit + tag pending CI on the AOT fix.
-- Running / in-flight: nothing left running; ports free. Local artifacts (gitignored): `seed/fasten.seed.db`.
+- Last worked on: **demo.yourphr.org is LIVE and verified** — golden database carrying Jim's own admin (`jwilleke`), the generated demo credentials, and the synthetic patient. Plus **v2.5.1** ([#519](https://github.com/jwilleke/yourphr/issues/519) reserved-username fix + the sign-up 500→400 fix), tagged once CI is green.
+- Branch / state: `main`, pushed. Release commit in; tag pending CI on `dc1985d7`.
+- Running / in-flight: nothing. Local pristine instance stopped; golden pair kept in the session scratchpad.
 - Next steps:
-  - **Configure the demo host on 2.5.0** — `private/demo-setup.md` has the current procedure. Three env vars in `mj-infra-flux`, the irreversible database delete (**authorised, not yet run** — it destroys the SMART Health IT data on that volume), then four config values. There is no demo password to type any more.
-  - **Decide the demo admin password story** — every reset rotates `.admin_bootstrap_password`, so no stored credential is possible for that host. A sops-supplied `bootstrap.admin.password` there would fix it without weakening [#504](https://github.com/jwilleke/yourphr/issues/504)'s reasoning, which was about public images.
-  - **[#506](https://github.com/jwilleke/yourphr/issues/506) password policy** — values agreed (`username.min.length=3`, `password.min.length=8`, `password.max.length=69` in BYTES). The demo-password conflict is gone: there is no published demo password left to reject.
-  - **[#508](https://github.com/jwilleke/yourphr/issues/508) session revocation** — build before [#510](https://github.com/jwilleke/yourphr/issues/510)/[#511](https://github.com/jwilleke/yourphr/issues/511), which should both bump `token_generation`.
-  - **[#486](https://github.com/jwilleke/yourphr/issues/486) is confirmed done by the reporter** (2026-08-11, screenshots in both modes) — no longer waiting on a human look.
+  - **Rescue the pre-golden database** — `/tmp/demo-fasten-pre-golden.db` on `deby` holds the old demo accounts and the SMART Health IT patient. It is in `/tmp`, so it dies on reboot. Move it or decide to lose it.
+  - **File the `deployment.yaml` cleanup** — that file still carries a dozen inline `YOURPHR_*` entries from before the settings-in-config rule. None conflict with the live config, but they contradict the rule.
+  - **Close [#494](https://github.com/jwilleke/yourphr/issues/494)** — obsolete; its manual runbook is exactly what the golden-DB + reset flow replaced.
+  - **[#506](https://github.com/jwilleke/yourphr/issues/506) password policy** — values agreed; the demo-password conflict is gone entirely now.
+  - **[#508](https://github.com/jwilleke/yourphr/issues/508) session revocation** — build before [#510](https://github.com/jwilleke/yourphr/issues/510)/[#511](https://github.com/jwilleke/yourphr/issues/511).
 - Blockers / significant notes:
-  - **The AOT build is the only thing that catches NG6008.** A new page component failed the production build while `tsc --noEmit` and the Karma suite passed — Angular defaults components to standalone, and every page here is declared in `AppModule`. Run the real build before pushing frontend work.
-  - **`demo.reset_on_restart` is the one code path that deliberately destroys a live database.** Three settings arm it and it still refuses unless every account in the database is the demo, the demo admin, or the bootstrap admin. Do not weaken that check.
-  - **Local `make` cannot validate multi-line Makefile targets** (GNU Make 3.81 on macOS predates `.ONESHELL`). Check CI before tagging, every time.
+  - **No yaml for settings, ever.** `LoadCustomConfig` runs before the database opens and before provisioning, so `bootstrap.*` and `demo.*` work from `<data>/config/app-custom-config.json`. The live host was configured with **zero** yaml edits.
+  - **The golden database and its config file are a PAIR.** The config holds the plaintext demo passwords matching the hashes in the database; move one without the other and the demo buttons refuse.
+  - **Seed the demo account with demo mode OFF** — the connect guard ([#496](https://github.com/jwilleke/yourphr/issues/496)) refuses upload for that account once demo mode is on.
+  - **The AOT build (`npx ng build`) is the only thing that catches NG6008.** `tsc --noEmit` and Karma both pass. Note `--configuration production` is not a target in this workspace.
   - **Chrome automation drives the browser on `jmac`**, not this machine. HackerOne report drafted at `private/reports/2026-08-11-claude-in-chrome-silent-remote-browser-control.md` — **not submitted**.
 <!-- RESUME:END -->
 
