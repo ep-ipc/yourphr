@@ -32,7 +32,8 @@ _None._
 - [#521](https://github.com/jwilleke/yourphr/issues/521) — [FEATURE] Claim - display this resource type
 - [#511](https://github.com/jwilleke/yourphr/issues/511) — [FEATURE] Admin can set another user's password from Admin → Users
 - [#510](https://github.com/jwilleke/yourphr/issues/510) — [FEATURE] fasten reset-password CLI — recover an instance when nobody can sign in
-- [#509](https://github.com/jwilleke/yourphr/issues/509) — [FEATURE] Throttle sign-ins per account, not only per IP (both limits configurable)
+- [#508](https://github.com/jwilleke/yourphr/issues/508) — [BUG] A stolen session survives a password change — session JWTs cannot be revoked
+- [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
@@ -102,8 +103,7 @@ _None._
 
 ## 🔵 In review — shipped, awaiting verification
 
-- [#508](https://github.com/jwilleke/yourphr/issues/508) — [BUG] A stolen session survives a password change — session JWTs cannot be revoked
-- [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
+- [#509](https://github.com/jwilleke/yourphr/issues/509) — [FEATURE] Throttle sign-ins per account, not only per IP (both limits configurable)
 
 ## ⚪ Needs triage
 
