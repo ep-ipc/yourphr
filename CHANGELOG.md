@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.5.2](https://github.com/jwilleke/yourphr/compare/v2.5.1...v2.5.2) (2026-08-12)
+
+Being refused an action no longer ends your session.
+
+### Bug Fixes
+
+- **ui: a `403` logged you out and returned you to the sign-in page** ([#520](https://github.com/jwilleke/yourphr/issues/520)). The HTTP interceptor treated `403` exactly like `401`, but they are different answers: the backend returns `401` only when it cannot identify the caller, and `403` when it can and the answer is still no. So a valid session was destroyed for pressing a button the account was not entitled to press — pressing **Connect** as the public demo's read-only admin ended the session, and any non-admin reaching an admin-gated route had the same experience.
+
+  It also swallowed the error in a way that completed the request as a *success*, so the calling screen's error handler never ran and could not report the reason. That is why it looked like a flash of something rather than a message.
+
+  `401` still signs you out. `403` now leaves you where you are, reaches the calling screen so it can react, and — for the public demo's refusals — shows what the server actually said.
+
+### Notes for operators
+
+**Nothing to do.** No configuration or API change; a session that was valid before is still valid.
+
 ## [2.5.1](https://github.com/jwilleke/yourphr/compare/v2.5.0...v2.5.1) (2026-08-12)
 
 You can call your admin account `admin`, and sign-up finally tells you when it refuses a username.
