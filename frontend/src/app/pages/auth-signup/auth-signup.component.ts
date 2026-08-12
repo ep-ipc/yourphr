@@ -44,6 +44,11 @@ export class AuthSignupComponent implements OnInit {
         } else if (err.name === 'forbidden') {
           // invalid username
           this.errorMsg = "invalid username"
+        } else if (err.status === 400 && err.error?.error) {
+          // The server rejected the INPUT and said why — a reserved username, most often, because
+          // `admin` is the first thing anyone tries. Showing its sentence beats "unknown error",
+          // which is what this used to say for the one case that has a clear explanation.
+          this.errorMsg = err.error.error
         } else {
           this.errorMsg = "an unknown error occurred during sign-up"
         }

@@ -3,6 +3,7 @@ package handler_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	mock_config "github.com/fastenhealth/fasten-onprem/backend/pkg/config/mock"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	mock_database "github.com/fastenhealth/fasten-onprem/backend/pkg/database/mock"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/web/handler"
@@ -104,6 +106,37 @@ func TestAuthSignup(t *testing.T) {
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.True(t, response["success"].(bool))
+	})
+
+	// A reserved name is the CALLER's input being wrong. This answered 500, which the sign-up page
+	// renders as "an unknown error occurred during sign-up" — so the one case with a clear
+	// explanation was the one case nobody got told about, and `admin` is what everybody types first.
+	t.Run("A reserved username is a 400 that says why, not a 500", func(t *testing.T) {
+		mockDB := mock_database.NewMockDatabaseRepository(mockCtrl)
+		mockConfig := mock_config.NewMockInterface(mockCtrl)
+
+		mockDB.EXPECT().GetUserCount(gomock.Any()).Return(0, nil)
+		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).
+			Return(fmt.Errorf("%w: %q", database.ErrReservedUsername, "admin"))
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(pkg.ContextKeyTypeDatabase, mockDB)
+		c.Set(pkg.ContextKeyTypeConfig, mockConfig)
+
+		jsonData, _ := json.Marshal(handler.UserWizard{
+			User: &models.User{Username: "admin", Password: "testpass"},
+		})
+		c.Request, _ = http.NewRequest(http.MethodPost, "/signup", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.AuthSignup(c)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		var response map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		assert.False(t, response["success"].(bool))
+		assert.Contains(t, response["error"], "reserved", "the response must carry the reason, not just a status")
 	})
 }
 

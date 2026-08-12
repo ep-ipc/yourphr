@@ -42,6 +42,12 @@ func (gr *GormRepository) Close() error {
 // User
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// ErrReservedUsername is returned when self-service registration asks for a name on the deny-list.
+// A sentinel rather than a bare string, so the handler can answer 400 with the reason instead of a
+// 500 the UI renders as "an unknown error occurred during sign-up" — which is what someone typing
+// the obvious first choice, `admin`, used to see.
+var ErrReservedUsername = errors.New("that username is reserved and cannot be used")
+
 // <editor-fold desc="User">
 func (gr *GormRepository) CreateUser(ctx context.Context, user *models.User) error {
 	// SECURITY: disallow reserved usernames that could be used for phishing or
@@ -53,7 +59,7 @@ func (gr *GormRepository) CreateUser(ctx context.Context, user *models.User) err
 	// CreateProvisionedUser instead (#519), because the name there is not attacker-controlled and
 	// "admin" is what every operator reaches for first.
 	if isReservedUsername(user.Username) {
-		return fmt.Errorf("username '%s' is reserved and cannot be used", user.Username)
+		return fmt.Errorf("%w: %q", ErrReservedUsername, user.Username)
 	}
 	return gr.createUser(ctx, user)
 }

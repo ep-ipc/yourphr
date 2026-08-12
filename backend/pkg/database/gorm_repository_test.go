@@ -173,7 +173,9 @@ func (suite *RepositoryTestSuite) TestCreateUser_ReservedUsername_ShouldFail() {
 	})
 
 	require.Error(suite.T(), err)
-	require.Contains(suite.T(), err.Error(), "reserved")
+	// A sentinel, not a string match: the signup handler answers 400 instead of 500 on this
+	// specific error, and a rewording must not silently turn that back into "unknown error".
+	require.ErrorIs(suite.T(), err, ErrReservedUsername)
 }
 
 // The other half: an account the INSTANCE provisions from its own configuration may hold a reserved

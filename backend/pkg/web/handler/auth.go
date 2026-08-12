@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -68,6 +69,15 @@ func AuthSignup(c *gin.Context) {
 	}
 	err = databaseRepo.CreateUser(c, userWizard.User)
 	if err != nil {
+		// A reserved name is the caller's input being wrong, not the server failing. It answered 500
+		// before, which the sign-up page renders as "an unknown error occurred during sign-up" — so
+		// someone typing the obvious first choice, `admin`, got a dead end instead of the one
+		// sentence that explains it. The name is already in their address bar; echoing it back
+		// discloses nothing.
+		if errors.Is(err, database.ErrReservedUsername) {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
 		return
 	}
