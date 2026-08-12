@@ -3,20 +3,20 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-12
 
-- Last worked on: **demo.yourphr.org is LIVE and verified** — golden database carrying Jim's own admin (`jwilleke`), the generated demo credentials, and the synthetic patient. Plus **v2.5.1** ([#519](https://github.com/jwilleke/yourphr/issues/519) reserved-username fix + the sign-up 500→400 fix), tagged once CI is green.
-- Branch / state: `main`, pushed. Release commit in; tag pending CI on `dc1985d7`.
-- Running / in-flight: nothing. Local pristine instance stopped; golden pair kept in the session scratchpad.
+- Last worked on: **v2.6.0 released and verified live**. The whole auth batch shipped — password policy [#506](https://github.com/jwilleke/yourphr/issues/506), session revocation [#508](https://github.com/jwilleke/yourphr/issues/508), per-account throttle [#509](https://github.com/jwilleke/yourphr/issues/509), CLI reset [#510](https://github.com/jwilleke/yourphr/issues/510), admin reset [#511](https://github.com/jwilleke/yourphr/issues/511), login stats [#512](https://github.com/jwilleke/yourphr/issues/512), Admin → Users [#513](https://github.com/jwilleke/yourphr/issues/513) — plus [#519](https://github.com/jwilleke/yourphr/issues/519), [#520](https://github.com/jwilleke/yourphr/issues/520), cross-repo label consolidation, and template adoption from `mjs-project-template`.
+- Branch / state: `main`, clean, everything pushed, no stashes. All CI green on `d998cee2`; both release images built.
+- Running / in-flight: **none.** A leftover local test instance from the [#510](https://github.com/jwilleke/yourphr/issues/510) verification was stopped during `/wrap`; ports 9195–9199 free.
+- Parked / half-done: none.
 - Next steps:
-  - **Rescue the pre-golden database** — `/tmp/demo-fasten-pre-golden.db` on `deby` holds the old demo accounts and the SMART Health IT patient. It is in `/tmp`, so it dies on reboot. Move it or decide to lose it.
-  - **File the `deployment.yaml` cleanup** — that file still carries a dozen inline `YOURPHR_*` entries from before the settings-in-config rule. None conflict with the live config, but they contradict the rule.
-  - **Close [#494](https://github.com/jwilleke/yourphr/issues/494)** — obsolete; its manual runbook is exactly what the golden-DB + reset flow replaced.
-  - **[#506](https://github.com/jwilleke/yourphr/issues/506) password policy** — values agreed; the demo-password conflict is gone entirely now.
-  - **[#508](https://github.com/jwilleke/yourphr/issues/508) session revocation** — build before [#510](https://github.com/jwilleke/yourphr/issues/510)/[#511](https://github.com/jwilleke/yourphr/issues/511).
+  - **Click-test [#520](https://github.com/jwilleke/yourphr/issues/520) on the live demo** — press Connect on the sandbox page as `demoadmin`. It is a frontend fix, so only a browser proves it: you should stay on `/web/admin` with a toast instead of being bounced to sign-in.
+  - **Decide the demo login-stat gap** — [#512](https://github.com/jwilleke/yourphr/issues/512) records only in `AuthSignin`, so the demo's one-click entrances never move `last_login`/`login_count`. Every account on the demo will read "Never" forever. Either document it or record demo sign-ins too.
+  - **Verify the in-review batch** — [#509](https://github.com/jwilleke/yourphr/issues/509)–[#513](https://github.com/jwilleke/yourphr/issues/513) are all shipped and awaiting your decision to close.
+  - **Six Dependabot PRs** are open and untouched this session ([#492](https://github.com/jwilleke/yourphr/pull/492), [#491](https://github.com/jwilleke/yourphr/pull/491), [#490](https://github.com/jwilleke/yourphr/pull/490), [#489](https://github.com/jwilleke/yourphr/pull/489), [#424](https://github.com/jwilleke/yourphr/pull/424), [#378](https://github.com/jwilleke/yourphr/pull/378)).
 - Blockers / significant notes:
-  - **No yaml for settings, ever.** `LoadCustomConfig` runs before the database opens and before provisioning, so `bootstrap.*` and `demo.*` work from `<data>/config/app-custom-config.json`. The live host was configured with **zero** yaml edits.
-  - **The golden database and its config file are a PAIR.** The config holds the plaintext demo passwords matching the hashes in the database; move one without the other and the demo buttons refuse.
-  - **Seed the demo account with demo mode OFF** — the connect guard ([#496](https://github.com/jwilleke/yourphr/issues/496)) refuses upload for that account once demo mode is on.
-  - **The AOT build (`npx ng build`) is the only thing that catches NG6008.** `tsc --noEmit` and Karma both pass. Note `--configuration production` is not a target in this workspace.
+  - **A bare URL in an issue title turns CI red.** [#524](https://github.com/jwilleke/yourphr/issues/524)'s title contains one, `TODO.md` is generated from titles, and MD034 rejects it — `/pstatus` and `/session-commit` now say to wrap URLs from title text in angle brackets. When reproducing a Markdown Lint failure locally, lint `git ls-files '*.md'`: a plain glob surfaces ~87 errors in gitignored files CI never sees.
+  - **The demo runs from a golden database**, not the public seed — `bootstrap.seed.path` points at `/opt/fasten/db/golden/fasten.golden.db`, which carries your own `jwilleke` admin. It survived two schema migrations on the 2.6.0 rollout.
+  - **`gh issue create --template` cannot use YAML forms**, which is why both bug templates exist; do not "tidy up" by deleting the markdown one.
+  - **The AOT build (`npx ng build`) is the only real frontend gate.** `tsc --noEmit` and Karma both pass on template errors that break the production build.
   - **Chrome automation drives the browser on `jmac`**, not this machine. HackerOne report drafted at `private/reports/2026-08-11-claude-in-chrome-silent-remote-browser-control.md` — **not submitted**.
 <!-- RESUME:END -->
 
