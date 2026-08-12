@@ -28,14 +28,13 @@ _None._
 
 ## 🟠 P1
 
-- [#514](https://github.com/jwilleke/yourphr/issues/514) — [BUG] A demo visitor can lock everyone out of the demo by changing its password or deleting the account
+- [#522](https://github.com/jwilleke/yourphr/issues/522) — [FEATURE] ExplanationOfBenefit Display
+- [#521](https://github.com/jwilleke/yourphr/issues/521) — [FEATURE] Claim - display this resource type
+- [#511](https://github.com/jwilleke/yourphr/issues/511) — [FEATURE] Admin can set another user's password from Admin → Users
 - [#510](https://github.com/jwilleke/yourphr/issues/510) — [FEATURE] fasten reset-password CLI — recover an instance when nobody can sign in
 - [#509](https://github.com/jwilleke/yourphr/issues/509) — [FEATURE] Throttle sign-ins per account, not only per IP (both limits configurable)
 - [#508](https://github.com/jwilleke/yourphr/issues/508) — [BUG] A stolen session survives a password change — session JWTs cannot be revoked
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
-- [#504](https://github.com/jwilleke/yourphr/issues/504) — [FEATURE] Bootstrap admin: provision the first admin at start with a per-instance random password
-- [#511](https://github.com/jwilleke/yourphr/issues/511) — [FEATURE] Admin can set another user's password from Admin → Users
-- [#505](https://github.com/jwilleke/yourphr/issues/505) — [FEATURE] Build the demo's seeded database in CI, bake it into the image, restore it in the pod
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
@@ -45,18 +44,10 @@ _None._
 
 ## 🟡 P2
 
-- PR: [#492](https://github.com/jwilleke/yourphr/pull/492) — chore(deps): bump ng2-charts from 6.0.1 to 9.0.0 in /frontend _(ready)_ — no linked issue
-- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready, CI red)_ — no linked issue
-- PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend _(ready)_ — no linked issue
-- PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 _(ready)_ — no linked issue
-- [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
-- [#497](https://github.com/jwilleke/yourphr/issues/497) — [FEATURE] Public demo: signup abuse protection on demo.yourphr.org
-- [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
-- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#513](https://github.com/jwilleke/yourphr/issues/513) — [FEATURE] Admin → Users: search, summary cards, useful columns, row actions
 - [#512](https://github.com/jwilleke/yourphr/issues/512) — [FEATURE] Track last_login and login_count per user (no IPs)
+- [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#502](https://github.com/jwilleke/yourphr/issues/502) — [ARCH] Evaluate moving Azia's hand-rolled dark stylesheet onto Bootstrap 5.3 colour modes (data-bs-theme)
-- [#501](https://github.com/jwilleke/yourphr/issues/501) — [CHORE] Terminology: colour scheme vs colour mode vs theme — settle it and document it
 - [#500](https://github.com/jwilleke/yourphr/issues/500) — [FEATURE] ui.theme-name: theme.name is published but wired to nothing — wire it up or remove it
 - [#499](https://github.com/jwilleke/yourphr/issues/499) — [FEATURE] ui.color-mode: instance default for light/dark (user's own choice still wins)
 - [#487](https://github.com/jwilleke/yourphr/issues/487) — [CHORE] Migrating off Karma must not silently defang the contrast test (jsdom has no real cascade)
@@ -69,6 +60,7 @@ _None._
 - [#469](https://github.com/jwilleke/yourphr/issues/469) — [CHORE] Remove AllowedBackupRoots, keep path hygiene
 - [#465](https://github.com/jwilleke/yourphr/issues/465) — [FEATURE] Record the document digest on the consent record
 - [#462](https://github.com/jwilleke/yourphr/issues/462) — [FEATURE] Share records as a SMART Health Link (shlink)
+- [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
 - [#455](https://github.com/jwilleke/yourphr/issues/455) — [CHORE] Route all config reads through config.Interface (retire direct os.Getenv and ad-hoc settings files)
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
@@ -86,6 +78,7 @@ _None._
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
+- [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
 - [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
@@ -109,27 +102,29 @@ _None._
 - [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 - [#14](https://github.com/jwilleke/yourphr/issues/14) — [FEATURE] User Profile Update
 
-## 🔵 In review
+## 🔵 In review — shipped, awaiting verification
 
-Work complete and pushed — awaiting your decision to close.
+_None._
 
-- [#496](https://github.com/jwilleke/yourphr/issues/496) — [FEATURE] Public demo: block provider connect in demo mode (keep real PHI off the shared account)
-- [#495](https://github.com/jwilleke/yourphr/issues/495) — [FEATURE] Public demo: demo-mode flag + one-click "Explore the demo" signin
-- [#486](https://github.com/jwilleke/yourphr/issues/486) — Status column text unreadble depending on light/dark mode.
-- [#433](https://github.com/jwilleke/yourphr/issues/433) — [FEATURE] Blue Button prod: CMS application, form, and demo runbook
+## ⚪ Needs triage
+
+_None._
 
 ## ⏸ Deferred
 
-- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(ready, CI red, stale — open 12d)_ — no linked issue
-- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(ready, CI red, stale — open 47d)_ — no linked issue
-- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
+- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
 - [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
 
-## ❓ Needs triage
+## 🔀 Open pull requests
 
-_None — all 84 open issues and 6 open PRs carry a placement label._
+- PR: [#492](https://github.com/jwilleke/yourphr/pull/492) — chore(deps): bump ng2-charts from 6.0.1 to 9.0.0 in /frontend _(ready)_
+- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready, CI red)_
+- PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend _(ready)_
+- PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 _(ready)_
+- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(ready, CI red)_
+- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(ready, CI red)_
