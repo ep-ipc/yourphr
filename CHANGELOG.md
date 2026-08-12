@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.5.0](https://github.com/jwilleke/yourphr/compare/v2.4.0...v2.5.0) (2026-08-12)
+
+A public demo now runs itself: no password anybody knows, an admin tour a stranger can take without being able to break anything, and a reset that is a restart.
+
+### Features
+
+- **demo:** the demo sign-in credential is **generated per instance** and known to nobody ([#515](https://github.com/jwilleke/yourphr/issues/515)). `POST /api/auth/demo-signin` never accepted credentials from the browser — the server verifies them — so the only thing a human-chosen password ever bought was the ability to type it at the login form, and it kept costing: a seed built with a seven-character password that our own form rejected, a collision with the password policy in [#506](https://github.com/jwilleke/yourphr/issues/506), and a credential published inside a public image. It is now generated at startup, rotated whenever it drifts from the stored hash, and never printed anywhere. A restored seed therefore heals itself with no operator step.
+
+  The password **check** deliberately stays: minting a token for whoever `demo.username` names would turn one mis-set flag into an auth bypass on any instance holding a user called `demo`.
+
+- **demo:** a **read-only demo admin** ([#516](https://github.com/jwilleke/yourphr/issues/516)) — a second one-click entrance that can see Configuration, Users, Database and Logs and change nothing, so someone evaluating YourPHR can answer "what is it like to run one?" without an operator handing out a real credential. Read-only is enforced by the API and **default-deny**: reads are allowed, everything else is refused, and a route added in a future release is blocked by inheritance rather than by somebody remembering. Revealing a configured secret and browsing the server's directories are refused too — read-only is not the same as harmless. Off by default, and it requires demo mode as well.
+
+- **demo:** **deep links** ([#517](https://github.com/jwilleke/yourphr/issues/517)). `/demo` and `/demo-admin` sign a visitor in and land them inside the product, so a demo can be shared as one link rather than as a login page with instructions. Inert on any instance that is not a demo.
+
+- **demo:** `demo.reset_on_restart` ([#518](https://github.com/jwilleke/yourphr/issues/518)) — the app reinstalls the demo database baked into its own image at startup, so resetting a public demo is a restart instead of a shell and an `rm`. This is the only code path in the product that deliberately destroys a live database, so it is armed by three settings together and then still has to **prove** the database belongs to a demo: every account in it must be the demo, the demo admin, or the bootstrap admin, or the reset is refused and the instance starts normally with its data intact. Encrypted databases are refused outright. A reset also clears the cache and the generated JWT signing key, so sessions from before it end cleanly rather than pointing at users that no longer exist.
+
+### Notes for operators
+
+**Nothing to do.** Every new setting defaults to off, and none of this runs on an instance that has not opted into demo mode.
+
+**If you run a demo instance:** stop setting `demo.password` — it is provisioned for you now, and any value you set is replaced the first time the account and the configuration disagree. The demo admin and the reset are separate opt-ins (`demo.admin.enabled`, `demo.reset_on_restart`); see [`docs/deployment/README.md`](docs/deployment/README.md).
+
 ## [2.4.0](https://github.com/jwilleke/yourphr/compare/v2.3.0...v2.4.0) (2026-08-11)
 
 A demo instance can now rebuild itself from the image — and a bug is fixed that made two published settings read backwards for anyone configuring by environment.

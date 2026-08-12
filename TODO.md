@@ -1,23 +1,22 @@
 # TODO
 
 <!-- RESUME:START -->
-## ▶ Resume here — 2026-08-11
+## ▶ Resume here — 2026-08-12
 
-- Last worked on: **two releases** — [v2.3.0](https://github.com/jwilleke/yourphr/releases/tag/v2.3.0) (bootstrap admin [#504](https://github.com/jwilleke/yourphr/issues/504), demo connect guard [#496](https://github.com/jwilleke/yourphr/issues/496)) and [v2.4.0](https://github.com/jwilleke/yourphr/releases/tag/v2.4.0) (CI-built demo seed [#505](https://github.com/jwilleke/yourphr/issues/505), env-boolean API fix). Then closed the demo lockout hole [#514](https://github.com/jwilleke/yourphr/issues/514) and decided all ten items on [#507](https://github.com/jwilleke/yourphr/issues/507).
-- Branch / state: `main` clean, everything pushed, no stashes. All CI green.
-- Running / in-flight: **none.** No dev servers, no background agents, ports 9090/9191/9195-9197 free, temp dirs cleaned. One local artifact: `seed/fasten.seed.db` (1.4M, gitignored) from local seed builds — harmless, delete if it bothers you.
-- Parked / half-done: none committed-but-unfinished. `#514` is `in-review` and unreleased.
+- Last worked on: **v2.5.0 — demo mode reshaped**. Generated demo credential [#515](https://github.com/jwilleke/yourphr/issues/515), read-only demo admin [#516](https://github.com/jwilleke/yourphr/issues/516), deep links [#517](https://github.com/jwilleke/yourphr/issues/517), app-owned reset [#518](https://github.com/jwilleke/yourphr/issues/518). All four verified against a running instance, not only in unit tests.
+- Branch / state: `main`, everything pushed. Release commit + tag pending CI on the AOT fix.
+- Running / in-flight: nothing left running; ports free. Local artifacts (gitignored): `seed/fasten.seed.db`.
 - Next steps:
-  - **Configure the demo host** — `private/demo-setup.md` has the current three-step procedure. Three env vars in `mj-infra-flux`, then `rm` the database + `rollout restart`, then read the generated admin password with `kubectl exec … cat`. **Step 2 destroys the SMART Health IT data on that volume** and is the one irreversible action; it needs your go-ahead.
-  - **[#506](https://github.com/jwilleke/yourphr/issues/506) password policy** — values already agreed: `username.min.length=3`, `password.min.length=8`, `password.max.length=69` (enforced in BYTES, since bcrypt's ceiling is 72 bytes and UTF-8 is variable width). Note it conflicts with `demo1234`, which contains the username; recommendation is to republish the demo password as `explore2026` rather than exempt the demo account.
-  - **[#508](https://github.com/jwilleke/yourphr/issues/508) session revocation** — build before [#510](https://github.com/jwilleke/yourphr/issues/510)/[#511](https://github.com/jwilleke/yourphr/issues/511), which should both bump `token_generation` so a reset actually ends the sessions it is meant to end.
-  - **Release** so [#514](https://github.com/jwilleke/yourphr/issues/514) reaches the live demo — it is a P1 fix sitting unreleased.
-  - **[#486](https://github.com/jwilleke/yourphr/issues/486)** still wants a human look in **light mode**; nobody has seen the badge fix render. The reporter has been right three times.
+  - **Configure the demo host on 2.5.0** — `private/demo-setup.md` has the current procedure. Three env vars in `mj-infra-flux`, the irreversible database delete (**authorised, not yet run** — it destroys the SMART Health IT data on that volume), then four config values. There is no demo password to type any more.
+  - **Decide the demo admin password story** — every reset rotates `.admin_bootstrap_password`, so no stored credential is possible for that host. A sops-supplied `bootstrap.admin.password` there would fix it without weakening [#504](https://github.com/jwilleke/yourphr/issues/504)'s reasoning, which was about public images.
+  - **[#506](https://github.com/jwilleke/yourphr/issues/506) password policy** — values agreed (`username.min.length=3`, `password.min.length=8`, `password.max.length=69` in BYTES). The demo-password conflict is gone: there is no published demo password left to reject.
+  - **[#508](https://github.com/jwilleke/yourphr/issues/508) session revocation** — build before [#510](https://github.com/jwilleke/yourphr/issues/510)/[#511](https://github.com/jwilleke/yourphr/issues/511), which should both bump `token_generation`.
+  - **[#486](https://github.com/jwilleke/yourphr/issues/486)** still wants a human look in **light mode**; nobody has seen the badge fix render.
 - Blockers / significant notes:
-  - **Three bugs this session were caught only by running real instances**, never by unit tests: a double-hashed password (the test verified the wrong artifact), `admin` being a reserved username (recommended in my own docs), and `/api/instance/public` serving env-set booleans as **strings** — which made `signup.enabled=false` still advertise the sign-up link. For anything configured by environment, test **through** the environment.
-  - **Local `make` cannot validate multi-line Makefile targets.** `.ONESHELL` is line 1 and macOS ships GNU Make 3.81, which predates it — so a `cd`-per-line target passes locally and fails in CI. Cost one red release build. Check CI before tagging, every time.
-  - **Chrome automation drives the browser on `jmac`**, not this machine, and `list_connected_browsers` reports `isLocal: true` for both. HackerOne report drafted at `private/reports/2026-08-11-claude-in-chrome-silent-remote-browser-control.md` — **not submitted**.
-  - **Demo host is 2.4.0 and unconfigured**: `demo.enabled` false, signup still open, old admin password still lost. Expected, not broken.
+  - **The AOT build is the only thing that catches NG6008.** A new page component failed the production build while `tsc --noEmit` and the Karma suite passed — Angular defaults components to standalone, and every page here is declared in `AppModule`. Run the real build before pushing frontend work.
+  - **`demo.reset_on_restart` is the one code path that deliberately destroys a live database.** Three settings arm it and it still refuses unless every account in the database is the demo, the demo admin, or the bootstrap admin. Do not weaken that check.
+  - **Local `make` cannot validate multi-line Makefile targets** (GNU Make 3.81 on macOS predates `.ONESHELL`). Check CI before tagging, every time.
+  - **Chrome automation drives the browser on `jmac`**, not this machine. HackerOne report drafted at `private/reports/2026-08-11-claude-in-chrome-silent-remote-browser-control.md` — **not submitted**.
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
