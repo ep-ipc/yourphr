@@ -33,6 +33,10 @@ func engineFor(t *testing.T, configure func(*mock_config.MockInterface, *mock_da
 	cfg.EXPECT().GetString("storage.data_dir").Return(dataDir).AnyTimes()
 	cfg.EXPECT().GetString("database.location").Return(filepath.Join(dataDir, "fasten.db")).AnyTimes()
 	configure(cfg, db)
+	// Read when scanning for an existing admin: the read-only demo admin (#516) does not count as
+	// one. Registered AFTER configure so a test that names a demo admin wins — gomock matches
+	// expectations in declaration order, and a default declared first would swallow the override.
+	cfg.EXPECT().GetString("demo.admin.username").Return("").AnyTimes()
 
 	return &AppEngine{Config: cfg, Logger: logrus.WithField("test", t.Name()), deviceRepo: db}, dataDir
 }
@@ -118,6 +122,31 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 		require.NoError(t, ae.ProvisionBootstrapAdmin())
 		_, err := os.Stat(filepath.Join(dataDir, BootstrapAdminPasswordFile))
 		require.True(t, os.IsNotExist(err), "an existing install must not get a new password file")
+	})
+
+	// The read-only demo admin (#516) is a PUBLIC entrance that cannot change anything, so an
+	// instance holding only that account still has no administrator. Counting it would suppress
+	// provisioning and leave the operator with no way in at all — on a host whose whole point is
+	// that strangers can sign in.
+	t.Run("does not count the read-only demo admin as an admin", func(t *testing.T) {
+		var created *models.User
+		ae, _ := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
+			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
+			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
+			db.EXPECT().GetUsers(gomock.Any()).Return([]models.User{
+				{Username: "demo", Role: pkg.UserRoleUser},
+				{Username: "demoadmin", Role: pkg.UserRoleAdmin},
+			}, nil)
+			cfg.EXPECT().GetString("demo.admin.username").Return("demoadmin").AnyTimes()
+			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, user *models.User) error {
+				created = user
+				return nil
+			})
+		})
+
+		require.NoError(t, ae.ProvisionBootstrapAdmin())
+		require.NotNil(t, created, "the operator's own admin must still be provisioned")
+		require.Equal(t, "admindemo", created.Username)
 	})
 
 	t.Run("warns rather than guessing when the username is empty", func(t *testing.T) {
