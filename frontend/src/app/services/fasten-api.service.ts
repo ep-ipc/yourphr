@@ -159,6 +159,13 @@ export class FastenApiService {
       .pipe(map((response: ResponseWrapper) => response.success));
   }
 
+  // An admin sets another user's password (#511). The generated value comes back exactly once — the
+  // server stores only the hash — so the caller must show it immediately or reset again.
+  adminResetUserPassword(userId: string): Observable<{username: string, password: string}> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/users/${userId}/password`, {})
+      .pipe(map((response: ResponseWrapper) => response.data as {username: string, password: string}));
+  }
+
   //TODO: Any significant API changes here should also be reflected in EventBusService
 
   getDashboards(): Observable<DashboardConfig[]> {

@@ -620,6 +620,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) GetUserAccessTokens(ctx interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserAccessTokens", reflect.TypeOf((*MockDatabaseRepository)(nil).GetUserAccessTokens), ctx)
 }
 
+// GetUserByID mocks base method.
+func (m *MockDatabaseRepository) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserByID", ctx, userID)
+	ret0, _ := ret[0].(*models.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserByID indicates an expected call of GetUserByID.
+func (mr *MockDatabaseRepositoryMockRecorder) GetUserByID(ctx, userID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByID", reflect.TypeOf((*MockDatabaseRepository)(nil).GetUserByID), ctx, userID)
+}
+
 // GetUserByUsername mocks base method.
 func (m *MockDatabaseRepository) GetUserByUsername(arg0 context.Context, arg1 string) (*models.User, error) {
 	m.ctrl.T.Helper()

@@ -15,6 +15,7 @@
             <th>Username</th>
             <th>Email</th>
             <th>Role</th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -23,10 +24,50 @@
             <td>{{ user.username }}</td>
             <td>{{ user.email }}</td>
             <td><span class="badge bg-primary">{{ user.role }}</span></td>
+            <td class="text-end">
+              <!-- #511: the family case — somebody forgot their password. The value is GENERATED and
+                   shown once; an admin choosing one picks something they use elsewhere, and that
+                   value would now be attached to another person's health record. -->
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      [disabled]="resettingUserId === user.id"
+                      (click)="resetPassword(user, resetPasswordModal)">
+                <span *ngIf="resettingUserId === user.id" class="spinner-border spinner-border-sm mg-r-5" role="status" aria-hidden="true"></span>
+                Reset password
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
+      <div *ngIf="errorMsg" class="alert alert-danger mt-3">{{ errorMsg }}</div>
       <button class="btn btn-az-primary mt-3" routerLink="/users/new">Create New User</button>
     </div>
   </div>
 </div>
+
+<!-- Shown once, and only once: the server does not store the plaintext, so closing this without
+     copying it means resetting again. Said plainly rather than discovered. -->
+<ng-template #resetPasswordModal let-modal>
+  <div class="modal-header">
+    <h5 class="modal-title" id="reset-password-title">New password for {{ resetResult?.username }}</h5>
+    <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss()"></button>
+  </div>
+  <div class="modal-body">
+    <p class="tx-13 tx-gray-600">
+      This is shown <strong>once</strong>. It is not stored anywhere in readable form, so copy it now
+      — if you lose it, reset again.
+    </p>
+    <div class="input-group">
+      <input type="text" class="form-control tx-monospace" [value]="resetResult?.password" readonly aria-label="Generated password">
+      <button class="btn btn-outline-secondary" type="button" (click)="copyPassword()">
+        {{ copied ? 'Copied' : 'Copy' }}
+      </button>
+    </div>
+    <p class="tx-12 tx-gray-500 mg-t-10 mg-b-0">
+      Every session that account already had has been signed out, so an old device cannot keep using
+      the previous password.
+    </p>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-az-primary" (click)="modal.close()">Done</button>
+  </div>
+</ng-template>

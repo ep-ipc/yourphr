@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -108,4 +110,40 @@ func (p PasswordPolicy) ValidateUsername(username string) error {
 		return fmt.Errorf("username must be at least %d characters long", p.UsernameMinLength)
 	}
 	return nil
+}
+
+// compliantAttempts bounds the retry loop below: a generated password can fail the instance's own
+// policy — most plausibly because a short username happens to appear inside random base64 — and a
+// handful of attempts makes that vanishingly unlikely without risking an unbounded loop if an
+// operator has configured a policy nothing random can satisfy.
+const compliantAttempts = 8
+
+// GenerateCompliantPassword returns a random password that satisfies this instance's policy (#506).
+//
+// Shared by the CLI reset (#510) and the admin reset (#511) so neither can hand out a credential the
+// change-password screen would then refuse — the same class of mistake as the demo seed built with a
+// password our own sign-in form rejected (#505).
+func GenerateCompliantPassword(cfg config.Interface, username string) (string, error) {
+	policy := PasswordPolicyFromConfig(cfg)
+	for attempt := 0; attempt < compliantAttempts; attempt++ {
+		candidate, err := generateRandomPassword()
+		if err != nil {
+			return "", fmt.Errorf("could not generate a password: %w", err)
+		}
+		if policy.ValidatePassword(username, candidate) == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("could not generate a password satisfying this instance's password policy after %d attempts — check password.min_length and password.max_length", compliantAttempts)
+}
+
+// generateRandomPassword returns a URL-safe random string. 24 bytes is 192 bits, base64 to 32
+// printable characters: short enough to read down a phone, long enough that bcrypt's cost is the
+// least of an attacker's problems. crypto/rand, not math/rand — this is a credential.
+func generateRandomPassword() (string, error) {
+	buf := make([]byte, 24)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }

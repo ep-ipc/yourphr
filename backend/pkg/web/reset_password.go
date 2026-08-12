@@ -13,12 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// policyAttempts bounds the retry loop below. A generated password can fail the instance's own
-// policy — most plausibly because a short username happens to appear inside random base64 — and a
-// handful of attempts makes that vanishingly unlikely without risking an unbounded loop if an
-// operator has configured a policy nothing random can satisfy.
-const policyAttempts = 8
-
 // ResetUserPassword sets a generated password for one account, for the case where nobody can sign in
 // at all (#510).
 //
@@ -53,23 +47,13 @@ func ResetUserPassword(appConfig config.Interface, repo database.DatabaseReposit
 		return "", fmt.Errorf("no user named %q on this instance", username)
 	}
 
-	// The generated value must satisfy the instance's OWN policy (#506). Otherwise this command could
-	// hand out a password that the change-password screen would then refuse, which is the same class
-	// of mistake as the demo seed built with a password our sign-in form rejected (#505).
-	policy := auth.PasswordPolicyFromConfig(appConfig)
-	var password string
-	for attempt := 0; attempt < policyAttempts; attempt++ {
-		candidate, genErr := generateBootstrapPassword()
-		if genErr != nil {
-			return "", fmt.Errorf("could not generate a password: %w", genErr)
-		}
-		if policy.ValidatePassword(username, candidate) == nil {
-			password = candidate
-			break
-		}
-	}
-	if password == "" {
-		return "", fmt.Errorf("could not generate a password satisfying this instance's password policy after %d attempts — check password.min_length and password.max_length", policyAttempts)
+	// The generated value must satisfy the instance's OWN policy (#506), or this command could hand
+	// out a password the change-password screen would then refuse — the same class of mistake as the
+	// demo seed built with a password our sign-in form rejected (#505). Shared with the admin reset
+	// (#511) so the two cannot drift.
+	password, err := auth.GenerateCompliantPassword(appConfig, username)
+	if err != nil {
+		return "", err
 	}
 
 	// HashPassword writes into the model, so hash on a throwaway: UpdateUserPassword takes an

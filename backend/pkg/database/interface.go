@@ -22,6 +22,8 @@ type DatabaseRepository interface {
 	CreateProvisionedUser(context.Context, *models.User) error
 	GetUserCount(context.Context) (int, error)
 	GetUserByUsername(context.Context, string) (*models.User, error)
+	// GetUserByID returns the row unsanitized (the password hash intact), for paths that update it.
+	GetUserByID(ctx context.Context, userID string) (*models.User, error)
 	GetCurrentUser(ctx context.Context) (*models.User, error)
 	DeleteCurrentUser(ctx context.Context) error
 	UpdateUserPassword(ctx context.Context, hashedPassword string) error

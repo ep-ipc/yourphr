@@ -175,6 +175,18 @@ func (gr *GormRepository) UpdateUserPassword(ctx context.Context, hashedPassword
 	return nil
 }
 
+// GetUserByID looks up one account by its primary key, WITHOUT clearing the password hash the way
+// GetUsers does (#511). The admin reset path needs the real row so it can update it; callers that
+// serialize a user to a client must still sanitize.
+func (gr *GormRepository) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
+	var user models.User
+	result := gr.GormClient.WithContext(ctx).Where("id = ?", userID).First(&user)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &user, nil
+}
+
 // BumpUserTokenGeneration invalidates every session token already issued to a user (#508).
 //
 // Session JWTs are stateless, so this counter is the only way to end one before it expires. Called

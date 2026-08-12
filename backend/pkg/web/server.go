@@ -348,6 +348,12 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 
 					secure.GET("/users", handler.GetUsers)
 					secure.POST("/users", handler.CreateUser)
+					// An admin sets another user's password (#511) — the family case: somebody forgot
+					// theirs. Admin-gated inside the handler, like every other /users route. Guarded
+					// for the demo account as well: the demo admin is read-only (#516), and on a
+					// shared instance one visitor resetting another account's password is the #514
+					// lockout in a different costume.
+					secure.POST("/users/:id/password", middleware.BlockForDemoAccount(), handler.AdminResetUserPassword)
 
 					//admin dashboard (#170) — handlers self-gate on the admin role
 					secure.GET("/admin/logs", handler.GetServerLogs)
