@@ -4,11 +4,14 @@
     "frontend"
   ],
   "markdownlint.config": {
-    "extends": ".markdownlint.json"
+    "extends": ".markdownlint.jsonc"
   },
+  "markdownlint.enable": true,
   "[markdown]": {
     "editor.wordWrap": "on",
-    "rewrap.wrappingColumn": 0
+    "rewrap.wrappingColumn": 0,
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": null
   },
   "makefile.configureOnOpen": false
 }

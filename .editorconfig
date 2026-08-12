@@ -1,0 +1,52 @@
+# EditorConfig is awesome: https://EditorConfig.org
+# Adopted from jwilleke/mjs-project-template, with the Go and Angular sections this repo needs.
+
+# top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+trim_trailing_whitespace = true
+
+# Go is gofmt's business: tabs, and a formatter that will not negotiate. Spelled out so an editor
+# configured for the frontend does not quietly reformat backend files on save.
+[*.go]
+indent_style = tab
+
+[go.mod]
+indent_style = tab
+
+# TypeScript/JavaScript files
+[*.{ts,tsx,js,jsx,json}]
+indent_style = space
+indent_size = 2
+
+# Angular templates and styles follow the same two-space convention as the TypeScript beside them.
+[*.{html,scss,css}]
+indent_style = space
+indent_size = 2
+
+# Markdown files.
+#
+# trim_trailing_whitespace is OFF because two trailing spaces are a hard line break in Markdown —
+# trimming them silently changes rendered output.
+#
+# NOTE this repo does NOT wrap Markdown at a column: long lines are correct, and any editor setting
+# that reflows them is wrong. See .vscode/settings.json, which disables format-on-save for Markdown
+# for the same reason.
+[*.md]
+trim_trailing_whitespace = false
+indent_style = space
+indent_size = 2
+
+# YAML files
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Makefiles require real tabs — a space-indented recipe fails with "missing separator".
+[Makefile]
+indent_style = tab
