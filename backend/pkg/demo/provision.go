@@ -116,10 +116,13 @@ func ProvisionAdmin(ctx context.Context, appConfig config.Interface, repo databa
 		return fmt.Errorf("demo admin: could not generate a password: %w", err)
 	}
 
-	// PLAINTEXT: CreateUser hashes what it is given (gorm_common.go:47). Pre-hashing here would
+	// CreateProvisionedUser, not CreateUser: this name comes from demo.admin.username, which only an
+	// operator can set, so it may be one the reserved list refuses for self-service signup (#519).
+	//
+	// PLAINTEXT: the repository hashes what it is given (gorm_common.go). Pre-hashing here would
 	// store a hash of a hash and produce an account nobody can sign into — the way #504 shipped
 	// broken the first time.
-	if err := repo.CreateUser(ctx, &models.User{
+	if err := repo.CreateProvisionedUser(ctx, &models.User{
 		Username: username,
 		Password: password,
 		Role:     pkg.UserRoleAdmin,

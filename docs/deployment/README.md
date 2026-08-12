@@ -64,10 +64,10 @@ The race above is a race because the app decides ownership by counting users; it
 
 ```bash
 YOURPHR_BOOTSTRAP_ADMIN_ENABLED=true
-YOURPHR_BOOTSTRAP_ADMIN_USERNAME=owner
+YOURPHR_BOOTSTRAP_ADMIN_USERNAME=admin
 ```
 
-**Not `admin`.** That name — along with `administrator`, `root`, `system`, `support`, `api` and others — is reserved to blunt phishing and confusion attacks, so provisioning refuses it and says so at startup rather than failing obscurely.
+**`admin` is allowed here** ([#519](https://github.com/jwilleke/yourphr/issues/519)). That name — along with `administrator`, `root`, `system`, `support`, `api` and others — is reserved against **self-service registration**, where a stranger could pick it and message other users as though they were staff. A name you put in your own configuration is not attacker-chosen, so provisioning accepts it and logs that it did. Signing up as `admin` is still refused.
 
 **You do not supply a password.** At first start with an empty user table, the app generates one, creates the admin, and writes the value to `<data root>/.admin_bootstrap_password` (mode `0600`). Startup logs the path, never the value. Read it once:
 

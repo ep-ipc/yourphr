@@ -48,7 +48,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(false)
 			db.EXPECT().GetUsers(gomock.Any()).Times(0)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 
 		require.NoError(t, ae.ProvisionBootstrapAdmin())
@@ -62,7 +62,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
 			db.EXPECT().GetUsers(gomock.Any()).Return(nil, nil)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, u *models.User) error { created = u; return nil })
 		})
 
@@ -92,21 +92,28 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 			"CreateUser hashes what it is given; handing it a hash makes the account unusable")
 	})
 
-	t.Run("refuses a reserved username instead of failing in the database layer", func(t *testing.T) {
+	// "admin" is on the repository's deny-list and is the first thing every operator tries. Since
+	// #519 that list guards self-service SIGNUP, where a stranger picks the name — not an account
+	// provisioned from the operator's own configuration. So this must succeed, and it must go
+	// through the provisioning entry point rather than the one that still refuses reserved names.
+	t.Run("provisions a reserved username, because the operator configured it", func(t *testing.T) {
+		var created *models.User
 		ae, dataDir := engineFor(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admin")
-			db.EXPECT().GetUsers(gomock.Any()).Times(0)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().GetUsers(gomock.Any()).Return(nil, nil)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, u *models.User) error { created = u; return nil })
 		})
 
-		err := ae.ProvisionBootstrapAdmin()
-		require.Error(t, err, `"admin" is on the repository's reserved list, and it is the first thing an operator tries`)
-		require.Contains(t, err.Error(), "reserved")
-		require.Contains(t, err.Error(), "YOURPHR_BOOTSTRAP_ADMIN_USERNAME", "the error must name what to change")
+		require.NoError(t, ae.ProvisionBootstrapAdmin())
+		require.NotNil(t, created)
+		require.Equal(t, "admin", created.Username)
+		require.Equal(t, pkg.UserRoleAdmin, created.Role)
 
 		_, statErr := os.Stat(filepath.Join(dataDir, BootstrapAdminPasswordFile))
-		require.True(t, os.IsNotExist(statErr))
+		require.NoError(t, statErr, "the generated password must still be written")
 	})
 
 	// Every restart re-runs provisioning, so this is the common path, and getting it wrong would
@@ -116,7 +123,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
 			db.EXPECT().GetUsers(gomock.Any()).Return([]models.User{{Username: "someone", Role: pkg.UserRoleAdmin}}, nil)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 
 		require.NoError(t, ae.ProvisionBootstrapAdmin())
@@ -138,7 +145,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 				{Username: "demoadmin", Role: pkg.UserRoleAdmin},
 			}, nil)
 			cfg.EXPECT().GetString("demo.admin.username").Return("demoadmin").AnyTimes()
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, user *models.User) error {
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, user *models.User) error {
 				created = user
 				return nil
 			})
@@ -154,7 +161,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("")
 			db.EXPECT().GetUsers(gomock.Any()).Times(0)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 		require.NoError(t, ae.ProvisionBootstrapAdmin(), "a misconfiguration must not stop the instance starting")
 	})
@@ -167,7 +174,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
 			db.EXPECT().GetUsers(gomock.Any()).Return(nil, nil)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Return(errors.New("boom"))
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Return(errors.New("boom"))
 		})
 
 		require.Error(t, ae.ProvisionBootstrapAdmin())
@@ -186,7 +193,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("admindemo")
 			db.EXPECT().GetUsers(gomock.Any()).Return([]models.User{{Username: "demo", Role: pkg.UserRoleUser}}, nil)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, u *models.User) error { created = u; return nil })
 		})
 
@@ -204,7 +211,7 @@ func TestProvisionBootstrapAdmin(t *testing.T) {
 			cfg.EXPECT().GetBool("bootstrap.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("bootstrap.admin.username").Return("demo")
 			db.EXPECT().GetUsers(gomock.Any()).Return([]models.User{{Username: "demo", Role: pkg.UserRoleUser}}, nil)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 
 		err := ae.ProvisionBootstrapAdmin()
@@ -262,7 +269,7 @@ func TestReservedBootstrapUsernamesMatchRepository(t *testing.T) {
 	for _, m := range names {
 		name := string(m[1])
 		require.Truef(t, isReservedBootstrapUsername(name),
-			"the repository reserves %q but bootstrap provisioning does not, so it would fail at CreateUser "+
+			"the repository reserves %q but bootstrap provisioning does not, so provisioning it would not be logged "+
 				"with a database error instead of a message naming the variable to change", name)
 	}
 }

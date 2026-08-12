@@ -164,6 +164,34 @@ func (mr *MockDatabaseRepositoryMockRecorder) CreateGlossaryEntry(ctx, glossaryE
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGlossaryEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).CreateGlossaryEntry), ctx, glossaryEntry)
 }
 
+// CreateProviderCatalogEntry mocks base method.
+func (m *MockDatabaseRepository) CreateProviderCatalogEntry(ctx context.Context, entry *models.ProviderCatalogEntry) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateProviderCatalogEntry", ctx, entry)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateProviderCatalogEntry indicates an expected call of CreateProviderCatalogEntry.
+func (mr *MockDatabaseRepositoryMockRecorder) CreateProviderCatalogEntry(ctx, entry interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).CreateProviderCatalogEntry), ctx, entry)
+}
+
+// CreateProvisionedUser mocks base method.
+func (m *MockDatabaseRepository) CreateProvisionedUser(arg0 context.Context, arg1 *models.User) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateProvisionedUser", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateProvisionedUser indicates an expected call of CreateProvisionedUser.
+func (mr *MockDatabaseRepositoryMockRecorder) CreateProvisionedUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateProvisionedUser", reflect.TypeOf((*MockDatabaseRepository)(nil).CreateProvisionedUser), arg0, arg1)
+}
+
 // CreateSource mocks base method.
 func (m *MockDatabaseRepository) CreateSource(arg0 context.Context, arg1 *models.SourceCredential) error {
 	m.ctrl.T.Helper()
@@ -220,18 +248,19 @@ func (mr *MockDatabaseRepositoryMockRecorder) DeleteCurrentUser(ctx interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCurrentUser", reflect.TypeOf((*MockDatabaseRepository)(nil).DeleteCurrentUser), ctx)
 }
 
-// UpdateUserPassword mocks base method.
-func (m *MockDatabaseRepository) UpdateUserPassword(ctx context.Context, hashedPassword string) error {
+// DeleteProviderCatalogEntry mocks base method.
+func (m *MockDatabaseRepository) DeleteProviderCatalogEntry(ctx context.Context, id string) (int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateUserPassword", ctx, hashedPassword)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "DeleteProviderCatalogEntry", ctx, id)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// UpdateUserPassword indicates an expected call of UpdateUserPassword.
-func (mr *MockDatabaseRepositoryMockRecorder) UpdateUserPassword(ctx, hashedPassword interface{}) *gomock.Call {
+// DeleteProviderCatalogEntry indicates an expected call of DeleteProviderCatalogEntry.
+func (mr *MockDatabaseRepositoryMockRecorder) DeleteProviderCatalogEntry(ctx, id interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserPassword", reflect.TypeOf((*MockDatabaseRepository)(nil).UpdateUserPassword), ctx, hashedPassword)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).DeleteProviderCatalogEntry), ctx, id)
 }
 
 // DeleteResourceByTypeAndId mocks base method.
@@ -275,108 +304,6 @@ func (m *MockDatabaseRepository) DisconnectSource(ctx context.Context, sourceId 
 func (mr *MockDatabaseRepositoryMockRecorder) DisconnectSource(ctx, sourceId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisconnectSource", reflect.TypeOf((*MockDatabaseRepository)(nil).DisconnectSource), ctx, sourceId)
-}
-
-// RemoveSourceData mocks base method.
-func (m *MockDatabaseRepository) RemoveSourceData(ctx context.Context, sourceId string) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveSourceData", ctx, sourceId)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// RemoveSourceData indicates an expected call of RemoveSourceData.
-func (mr *MockDatabaseRepositoryMockRecorder) RemoveSourceData(ctx, sourceId interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveSourceData", reflect.TypeOf((*MockDatabaseRepository)(nil).RemoveSourceData), ctx, sourceId)
-}
-
-// CreateProviderCatalogEntry mocks base method.
-func (m *MockDatabaseRepository) CreateProviderCatalogEntry(ctx context.Context, entry *models.ProviderCatalogEntry) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateProviderCatalogEntry", ctx, entry)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateProviderCatalogEntry indicates an expected call of CreateProviderCatalogEntry.
-func (mr *MockDatabaseRepositoryMockRecorder) CreateProviderCatalogEntry(ctx, entry interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).CreateProviderCatalogEntry), ctx, entry)
-}
-
-// GetProviderCatalogEntry mocks base method.
-func (m *MockDatabaseRepository) GetProviderCatalogEntry(ctx context.Context, id string) (*models.ProviderCatalogEntry, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProviderCatalogEntry", ctx, id)
-	ret0, _ := ret[0].(*models.ProviderCatalogEntry)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetProviderCatalogEntry indicates an expected call of GetProviderCatalogEntry.
-func (mr *MockDatabaseRepositoryMockRecorder) GetProviderCatalogEntry(ctx, id interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).GetProviderCatalogEntry), ctx, id)
-}
-
-// ListProviderCatalogEntries mocks base method.
-func (m *MockDatabaseRepository) ListProviderCatalogEntries(ctx context.Context, enabledOnly bool) ([]models.ProviderCatalogEntry, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListProviderCatalogEntries", ctx, enabledOnly)
-	ret0, _ := ret[0].([]models.ProviderCatalogEntry)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListProviderCatalogEntries indicates an expected call of ListProviderCatalogEntries.
-func (mr *MockDatabaseRepositoryMockRecorder) ListProviderCatalogEntries(ctx, enabledOnly interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListProviderCatalogEntries", reflect.TypeOf((*MockDatabaseRepository)(nil).ListProviderCatalogEntries), ctx, enabledOnly)
-}
-
-// UpdateProviderCatalogEntry mocks base method.
-func (m *MockDatabaseRepository) UpdateProviderCatalogEntry(ctx context.Context, entry *models.ProviderCatalogEntry) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateProviderCatalogEntry", ctx, entry)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateProviderCatalogEntry indicates an expected call of UpdateProviderCatalogEntry.
-func (mr *MockDatabaseRepositoryMockRecorder) UpdateProviderCatalogEntry(ctx, entry interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).UpdateProviderCatalogEntry), ctx, entry)
-}
-
-// DeleteProviderCatalogEntry mocks base method.
-func (m *MockDatabaseRepository) DeleteProviderCatalogEntry(ctx context.Context, id string) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteProviderCatalogEntry", ctx, id)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// DeleteProviderCatalogEntry indicates an expected call of DeleteProviderCatalogEntry.
-func (mr *MockDatabaseRepositoryMockRecorder) DeleteProviderCatalogEntry(ctx, id interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).DeleteProviderCatalogEntry), ctx, id)
-}
-
-// UpsertProviderCatalogEntryByDisplay mocks base method.
-func (m *MockDatabaseRepository) UpsertProviderCatalogEntryByDisplay(ctx context.Context, entry *models.ProviderCatalogEntry) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpsertProviderCatalogEntryByDisplay", ctx, entry)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpsertProviderCatalogEntryByDisplay indicates an expected call of UpsertProviderCatalogEntryByDisplay.
-func (mr *MockDatabaseRepositoryMockRecorder) UpsertProviderCatalogEntryByDisplay(ctx, entry interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertProviderCatalogEntryByDisplay", reflect.TypeOf((*MockDatabaseRepository)(nil).UpsertProviderCatalogEntryByDisplay), ctx, entry)
 }
 
 // FindAllResourceAssociations mocks base method.
@@ -529,6 +456,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) GetInternationalPatientSummaryExpo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInternationalPatientSummaryExport", reflect.TypeOf((*MockDatabaseRepository)(nil).GetInternationalPatientSummaryExport), ctx)
 }
 
+// GetLegalConsentAcceptedAt mocks base method.
+func (m *MockDatabaseRepository) GetLegalConsentAcceptedAt(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLegalConsentAcceptedAt", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLegalConsentAcceptedAt indicates an expected call of GetLegalConsentAcceptedAt.
+func (mr *MockDatabaseRepositoryMockRecorder) GetLegalConsentAcceptedAt(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLegalConsentAcceptedAt", reflect.TypeOf((*MockDatabaseRepository)(nil).GetLegalConsentAcceptedAt), ctx)
+}
+
 // GetPatientForSources mocks base method.
 func (m *MockDatabaseRepository) GetPatientForSources(ctx context.Context) ([]models.ResourceBase, error) {
 	m.ctrl.T.Helper()
@@ -542,6 +484,21 @@ func (m *MockDatabaseRepository) GetPatientForSources(ctx context.Context) ([]mo
 func (mr *MockDatabaseRepositoryMockRecorder) GetPatientForSources(ctx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPatientForSources", reflect.TypeOf((*MockDatabaseRepository)(nil).GetPatientForSources), ctx)
+}
+
+// GetProviderCatalogEntry mocks base method.
+func (m *MockDatabaseRepository) GetProviderCatalogEntry(ctx context.Context, id string) (*models.ProviderCatalogEntry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProviderCatalogEntry", ctx, id)
+	ret0, _ := ret[0].(*models.ProviderCatalogEntry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProviderCatalogEntry indicates an expected call of GetProviderCatalogEntry.
+func (mr *MockDatabaseRepositoryMockRecorder) GetProviderCatalogEntry(ctx, id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).GetProviderCatalogEntry), ctx, id)
 }
 
 // GetResourceByResourceTypeAndId mocks base method.
@@ -724,6 +681,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) ListBackgroundJobs(ctx, queryOptio
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBackgroundJobs", reflect.TypeOf((*MockDatabaseRepository)(nil).ListBackgroundJobs), ctx, queryOptions)
 }
 
+// ListProviderCatalogEntries mocks base method.
+func (m *MockDatabaseRepository) ListProviderCatalogEntries(ctx context.Context, enabledOnly bool) ([]models.ProviderCatalogEntry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListProviderCatalogEntries", ctx, enabledOnly)
+	ret0, _ := ret[0].([]models.ProviderCatalogEntry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListProviderCatalogEntries indicates an expected call of ListProviderCatalogEntries.
+func (mr *MockDatabaseRepositoryMockRecorder) ListProviderCatalogEntries(ctx, enabledOnly interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListProviderCatalogEntries", reflect.TypeOf((*MockDatabaseRepository)(nil).ListProviderCatalogEntries), ctx, enabledOnly)
+}
+
 // ListResources mocks base method.
 func (m *MockDatabaseRepository) ListResources(arg0 context.Context, arg1 models.ListResourceQueryOptions) ([]models.ResourceBase, error) {
 	m.ctrl.T.Helper()
@@ -855,6 +827,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) RemoveResourceAssociation(ctx, sou
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveResourceAssociation", reflect.TypeOf((*MockDatabaseRepository)(nil).RemoveResourceAssociation), ctx, source, resourceType, resourceId, relatedSource, relatedResourceType, relatedResourceId)
 }
 
+// RemoveSourceData mocks base method.
+func (m *MockDatabaseRepository) RemoveSourceData(ctx context.Context, sourceId string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveSourceData", ctx, sourceId)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveSourceData indicates an expected call of RemoveSourceData.
+func (mr *MockDatabaseRepositoryMockRecorder) RemoveSourceData(ctx, sourceId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveSourceData", reflect.TypeOf((*MockDatabaseRepository)(nil).RemoveSourceData), ctx, sourceId)
+}
+
 // SaveSystemSettings mocks base method.
 func (m *MockDatabaseRepository) SaveSystemSettings(ctx context.Context, newSettings *models.SystemSettings) error {
 	m.ctrl.T.Helper()
@@ -883,21 +870,6 @@ func (mr *MockDatabaseRepositoryMockRecorder) SaveUserSettings(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveUserSettings", reflect.TypeOf((*MockDatabaseRepository)(nil).SaveUserSettings), arg0, arg1)
 }
 
-// GetLegalConsentAcceptedAt mocks base method.
-func (m *MockDatabaseRepository) GetLegalConsentAcceptedAt(ctx context.Context) (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLegalConsentAcceptedAt", ctx)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLegalConsentAcceptedAt indicates an expected call of GetLegalConsentAcceptedAt.
-func (mr *MockDatabaseRepositoryMockRecorder) GetLegalConsentAcceptedAt(ctx interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLegalConsentAcceptedAt", reflect.TypeOf((*MockDatabaseRepository)(nil).GetLegalConsentAcceptedAt), ctx)
-}
-
 // SetLegalConsentAcceptedAt mocks base method.
 func (m *MockDatabaseRepository) SetLegalConsentAcceptedAt(ctx context.Context, acceptedAt string) error {
 	m.ctrl.T.Helper()
@@ -911,7 +883,6 @@ func (mr *MockDatabaseRepositoryMockRecorder) SetLegalConsentAcceptedAt(ctx, acc
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLegalConsentAcceptedAt", reflect.TypeOf((*MockDatabaseRepository)(nil).SetLegalConsentAcceptedAt), ctx, acceptedAt)
 }
-
 
 // UnlinkResourceWithSharedNeighbors mocks base method.
 func (m *MockDatabaseRepository) UnlinkResourceWithSharedNeighbors(ctx context.Context, resourceType, resourceId, relatedResourceType, relatedResourceId string) (int64, error) {
@@ -942,6 +913,20 @@ func (mr *MockDatabaseRepositoryMockRecorder) UpdateBackgroundJob(ctx, backgroun
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBackgroundJob", reflect.TypeOf((*MockDatabaseRepository)(nil).UpdateBackgroundJob), ctx, backgroundJob)
 }
 
+// UpdateProviderCatalogEntry mocks base method.
+func (m *MockDatabaseRepository) UpdateProviderCatalogEntry(ctx context.Context, entry *models.ProviderCatalogEntry) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateProviderCatalogEntry", ctx, entry)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateProviderCatalogEntry indicates an expected call of UpdateProviderCatalogEntry.
+func (mr *MockDatabaseRepositoryMockRecorder) UpdateProviderCatalogEntry(ctx, entry interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProviderCatalogEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).UpdateProviderCatalogEntry), ctx, entry)
+}
+
 // UpdateSource mocks base method.
 func (m *MockDatabaseRepository) UpdateSource(ctx context.Context, sourceCreds *models.SourceCredential) error {
 	m.ctrl.T.Helper()
@@ -954,6 +939,34 @@ func (m *MockDatabaseRepository) UpdateSource(ctx context.Context, sourceCreds *
 func (mr *MockDatabaseRepositoryMockRecorder) UpdateSource(ctx, sourceCreds interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSource", reflect.TypeOf((*MockDatabaseRepository)(nil).UpdateSource), ctx, sourceCreds)
+}
+
+// UpdateUserPassword mocks base method.
+func (m *MockDatabaseRepository) UpdateUserPassword(ctx context.Context, hashedPassword string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateUserPassword", ctx, hashedPassword)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateUserPassword indicates an expected call of UpdateUserPassword.
+func (mr *MockDatabaseRepositoryMockRecorder) UpdateUserPassword(ctx, hashedPassword interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserPassword", reflect.TypeOf((*MockDatabaseRepository)(nil).UpdateUserPassword), ctx, hashedPassword)
+}
+
+// UpsertProviderCatalogEntryByDisplay mocks base method.
+func (m *MockDatabaseRepository) UpsertProviderCatalogEntryByDisplay(ctx context.Context, entry *models.ProviderCatalogEntry) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertProviderCatalogEntryByDisplay", ctx, entry)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertProviderCatalogEntryByDisplay indicates an expected call of UpsertProviderCatalogEntryByDisplay.
+func (mr *MockDatabaseRepositoryMockRecorder) UpsertProviderCatalogEntryByDisplay(ctx, entry interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertProviderCatalogEntryByDisplay", reflect.TypeOf((*MockDatabaseRepository)(nil).UpsertProviderCatalogEntryByDisplay), ctx, entry)
 }
 
 // UpsertRawResource mocks base method.

@@ -195,7 +195,7 @@ func TestProvisionAdmin(t *testing.T) {
 			cfg, db, logger, _ := harness(t, func(cfg *mock_config.MockInterface, db *mock_database.MockDatabaseRepository) {
 				cfg.EXPECT().GetBool("demo.enabled").Return(flags.demo).AnyTimes()
 				cfg.EXPECT().GetBool("demo.admin.enabled").Return(flags.admin).AnyTimes()
-				db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+				db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
 				db.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Times(0)
 			})
 			require.NoError(t, ProvisionAdmin(context.Background(), cfg, db, logger))
@@ -209,7 +209,7 @@ func TestProvisionAdmin(t *testing.T) {
 			cfg.EXPECT().GetBool("demo.admin.enabled").Return(true)
 			cfg.EXPECT().GetString("demo.admin.username").Return("demoadmin")
 			db.EXPECT().GetUserByUsername(gomock.Any(), "demoadmin").Return(nil, errors.New("record not found"))
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, user *models.User) error {
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, user *models.User) error {
 				created = user
 				return nil
 			})
@@ -225,7 +225,7 @@ func TestProvisionAdmin(t *testing.T) {
 		password, ok := values["demo.admin.password"].(string)
 		require.True(t, ok)
 		require.Len(t, password, 32)
-		// CreateUser hashes what it is handed, so this must be the plaintext — pre-hashing here
+		// The repository hashes what it is handed, so this must be the plaintext — pre-hashing here
 		// would store a hash of a hash and lock the account nobody could then sign into.
 		require.Equal(t, password, created.Password)
 	})
@@ -239,7 +239,7 @@ func TestProvisionAdmin(t *testing.T) {
 			cfg.EXPECT().GetString("demo.admin.password").Return("from-the-previous-database")
 			db.EXPECT().GetUserByUsername(gomock.Any(), "demoadmin").Return(userWithPassword(t, "demoadmin", "something-else"), nil)
 			db.EXPECT().UpdateUserPassword(gomock.Any(), gomock.Any()).Return(nil)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
 			cfg.EXPECT().Set("demo.admin.password", gomock.Any()).Times(1)
 		})
 
@@ -255,7 +255,7 @@ func TestProvisionAdmin(t *testing.T) {
 			cfg.EXPECT().GetString("demo.admin.password").Return("already-provisioned")
 			db.EXPECT().GetUserByUsername(gomock.Any(), "demoadmin").Return(userWithPassword(t, "demoadmin", "already-provisioned"), nil)
 			db.EXPECT().UpdateUserPassword(gomock.Any(), gomock.Any()).Times(0)
-			db.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+			db.EXPECT().CreateProvisionedUser(gomock.Any(), gomock.Any()).Times(0)
 		})
 
 		require.NoError(t, ProvisionAdmin(context.Background(), cfg, db, logger))

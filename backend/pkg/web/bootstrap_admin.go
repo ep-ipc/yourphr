@@ -65,13 +65,14 @@ func (ae *AppEngine) ProvisionBootstrapAdmin() error {
 		return nil
 	}
 
-	// The repository refuses a list of reserved names — "admin", "administrator", "root", "system"
-	// and others — to blunt phishing and confusion attacks (gorm_common.go isReservedUsername).
-	// "admin" is the obvious thing an operator will try, so catch it here with a message that names
-	// the problem, rather than letting CreateUser fail at startup with a database-layer error.
+	// A reserved name is ALLOWED here (#519). The deny-list protects self-service registration from
+	// someone choosing `admin` and messaging other users as if they were staff; this name comes from
+	// the operator's own configuration, so that threat does not apply — and "admin" is the first
+	// thing every operator tries. Logged rather than silent, because it is worth seeing in the
+	// record that this instance's administrator holds a name the deny-list would otherwise refuse.
 	if isReservedBootstrapUsername(username) {
-		return fmt.Errorf("bootstrap admin: %q is a reserved username and cannot be created; "+
-			"pick something else for YOURPHR_BOOTSTRAP_ADMIN_USERNAME (e.g. \"owner\")", username)
+		ae.Logger.Infof("bootstrap admin: provisioning %q, a name reserved against self-service signup — "+
+			"allowed because it was configured by the operator", username)
 	}
 
 	// Trigger on "this instance has no ADMIN", not "this instance has no users".
@@ -125,7 +126,7 @@ func (ae *AppEngine) ProvisionBootstrapAdmin() error {
 		return fmt.Errorf("bootstrap admin: could not generate a password: %w", err)
 	}
 
-	// PLAINTEXT here, deliberately: GormRepository.CreateUser calls HashPassword on the value it is
+	// PLAINTEXT here, deliberately: the repository calls HashPassword on the value it is
 	// given (gorm_common.go:47). Pre-hashing produces a hash OF a hash, and the account then cannot
 	// be signed into at all — verified the hard way against a running instance, after unit tests that
 	// checked the hash this function produced rather than what the repository stored.
@@ -145,7 +146,9 @@ func (ae *AppEngine) ProvisionBootstrapAdmin() error {
 		return fmt.Errorf("bootstrap admin: could not write %s: %w", bootstrapFile, err)
 	}
 
-	if err := ae.deviceRepo.CreateUser(context.Background(), user); err != nil {
+	// CreateProvisionedUser, not CreateUser: this name came from the operator's configuration, so it
+	// may be one the reserved list refuses for self-service signup (#519).
+	if err := ae.deviceRepo.CreateProvisionedUser(context.Background(), user); err != nil {
 		// Best-effort cleanup: leaving a password file for an account that does not exist would
 		// send the operator to a credential that cannot work.
 		_ = os.Remove(bootstrapFile)
@@ -164,10 +167,10 @@ func BootstrapAdminPasswordPath(appConfig config.Interface) string {
 	return filepath.Join(config.DataDir(appConfig), BootstrapAdminPasswordFile)
 }
 
-// reservedBootstrapUsernames mirrors the repository's own deny-list (gorm_common.go). Duplicated
-// rather than exported from there so this check can run before any database call and fail with a
-// message that tells the operator what to change; TestReservedBootstrapUsernamesMatchRepository
-// fails if the two drift.
+// reservedBootstrapUsernames mirrors the repository's own deny-list (gorm_common.go). Since #519 a
+// reserved name here is allowed rather than refused, so this exists only to LOG that it happened.
+// Duplicated rather than exported from there so the check needs no database call;
+// TestReservedBootstrapUsernamesMatchRepository fails if the two drift.
 var reservedBootstrapUsernames = map[string]bool{
 	"admin": true, "administrator": true, "api": true, "contact": true, "fasten": true,
 	"help": true, "info": true, "login": true, "mail": true, "noreply": true,
@@ -228,5 +231,5 @@ func ClearBootstrapAdminPassword(appConfig config.Interface) error {
 // Compile-time check that the repository we are handed still exposes what provisioning needs.
 var _ interface {
 	GetUsers(context.Context) ([]models.User, error)
-	CreateUser(context.Context, *models.User) error
+	CreateProvisionedUser(context.Context, *models.User) error
 } = (database.DatabaseRepository)(nil)

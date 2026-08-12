@@ -44,14 +44,42 @@ func (gr *GormRepository) Close() error {
 
 // <editor-fold desc="User">
 func (gr *GormRepository) CreateUser(ctx context.Context, user *models.User) error {
-	if err := user.HashPassword(user.Password); err != nil {
-		return err
-	}
-
 	// SECURITY: disallow reserved usernames that could be used for phishing or
-	// confusion attacks (e.g., "admin", "support", "system").
+	// confusion attacks (e.g., "admin", "support", "system"). Checked BEFORE hashing, so a
+	// refused request does no bcrypt work.
+	//
+	// This is the path where the CALLER supplies the name — self-service signup, and an admin
+	// filling in a form. An account the operator provisions from configuration goes through
+	// CreateProvisionedUser instead (#519), because the name there is not attacker-controlled and
+	// "admin" is what every operator reaches for first.
 	if isReservedUsername(user.Username) {
 		return fmt.Errorf("username '%s' is reserved and cannot be used", user.Username)
+	}
+	return gr.createUser(ctx, user)
+}
+
+// CreateProvisionedUser creates an account the INSTANCE provisions from its own configuration —
+// the bootstrap admin (#504) and the read-only demo admin (#516) — and is the only path that may
+// use a reserved username (#519).
+//
+// WHY THIS EXISTS. The reserved list is documented as protecting "user registration" from phishing
+// and confusion attacks: a stranger registering `admin` on a shared instance and then messaging
+// other users as though they were staff. That threat needs an attacker to choose the name. Here the
+// name comes from bootstrap.admin.username or demo.admin.username, which only an operator can set —
+// so the list was costing every deployment the one name operators actually want, and buying nothing.
+//
+// A SEPARATE METHOD rather than a boolean argument, deliberately: CreateUser keeps refusing
+// reserved names, so a caller added later inherits the guard unless it asks for this by name. The
+// alternative — moving the check up into the two handlers — would mean any new user-creating path
+// silently skips it, which is the shape of mistake that produced #514.
+func (gr *GormRepository) CreateProvisionedUser(ctx context.Context, user *models.User) error {
+	return gr.createUser(ctx, user)
+}
+
+// createUser is the shared body. The reserved-name decision belongs to the caller above.
+func (gr *GormRepository) createUser(ctx context.Context, user *models.User) error {
+	if err := user.HashPassword(user.Password); err != nil {
+		return err
 	}
 
 	record := gr.GormClient.Create(user)

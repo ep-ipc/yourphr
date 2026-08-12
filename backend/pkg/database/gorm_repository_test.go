@@ -91,6 +91,21 @@ func (suite *RepositoryTestSuite) TestNewRepository() {
 	require.NoError(suite.T(), err)
 }
 
+// repositoryForTest builds a repository against the suite's temp database with the config every
+// test here wires identically.
+func (suite *RepositoryTestSuite) repositoryForTest() DatabaseRepository {
+	fakeConfig := mock_config.NewMockInterface(suite.MockCtrl)
+	fakeConfig.EXPECT().GetString("database.location").Return(suite.TestDatabase.Name()).AnyTimes()
+	fakeConfig.EXPECT().GetString("database.type").Return("sqlite").AnyTimes()
+	fakeConfig.EXPECT().IsSet("database.encryption.key").Return(false).AnyTimes()
+	fakeConfig.EXPECT().GetString("log.level").Return("INFO").AnyTimes()
+	fakeConfig.EXPECT().GetBool("database.validation_mode").Return(false).AnyTimes()
+	fakeConfig.EXPECT().GetBool("database.encryption.enabled").Return(false).AnyTimes()
+	dbRepo, err := NewRepository(fakeConfig, logrus.WithField("test", suite.T().Name()), event_bus.NewNoopEventBusServer())
+	require.NoError(suite.T(), err)
+	return dbRepo
+}
+
 func (suite *RepositoryTestSuite) TestCreateUser() {
 	//setup
 	fakeConfig := mock_config.NewMockInterface(suite.MockCtrl)
@@ -144,6 +159,44 @@ func (suite *RepositoryTestSuite) TestCreateUser_WithExitingUser_ShouldFail() {
 	err = dbRepo.CreateUser(context.Background(), userModel2)
 	//assert
 	require.Error(suite.T(), err)
+}
+
+// The deny-list guards SELF-SERVICE registration, where a stranger picks the name and could sign up
+// as "admin" to message other users as though they were staff (#519). Both halves matter, so both
+// are asserted here rather than trusting one path to imply the other.
+func (suite *RepositoryTestSuite) TestCreateUser_ReservedUsername_ShouldFail() {
+	dbRepo := suite.repositoryForTest()
+
+	err := dbRepo.CreateUser(context.Background(), &models.User{
+		Username: "admin",
+		Password: "testpassword",
+	})
+
+	require.Error(suite.T(), err)
+	require.Contains(suite.T(), err.Error(), "reserved")
+}
+
+// The other half: an account the INSTANCE provisions from its own configuration may hold a reserved
+// name, because the operator chose it and no attacker can. Without this, no deployment could have an
+// admin called "admin" — which is the first name every operator tries.
+func (suite *RepositoryTestSuite) TestCreateProvisionedUser_AllowsAReservedUsername() {
+	dbRepo := suite.repositoryForTest()
+
+	userModel := &models.User{
+		Username: "admin",
+		Password: "testpassword",
+		Role:     pkg.UserRoleAdmin,
+	}
+	err := dbRepo.CreateProvisionedUser(context.Background(), userModel)
+
+	require.NoError(suite.T(), err)
+	require.NotEmpty(suite.T(), userModel.ID)
+
+	// The account has to be usable, not merely created: the password must be the hash of what was
+	// handed in, not a hash of a hash (#504 shipped that way once).
+	found, err := dbRepo.GetUserByUsername(context.Background(), "admin")
+	require.NoError(suite.T(), err)
+	require.NoError(suite.T(), found.CheckPassword("testpassword"))
 }
 
 // TODO: ensure user's cannot specify the ID when creating a user.

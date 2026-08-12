@@ -16,6 +16,10 @@ type DatabaseRepository interface {
 	Migrate() error
 
 	CreateUser(context.Context, *models.User) error
+	// CreateProvisionedUser creates an account the instance provisions from its own configuration
+	// (bootstrap admin, demo admin). Same as CreateUser except it accepts a reserved username,
+	// because that name comes from an operator's configuration rather than from a caller (#519).
+	CreateProvisionedUser(context.Context, *models.User) error
 	GetUserCount(context.Context) (int, error)
 	GetUserByUsername(context.Context, string) (*models.User, error)
 	GetCurrentUser(ctx context.Context) (*models.User, error)
