@@ -120,17 +120,21 @@ Add `Method` to the session claims. That is what makes step-up re-auth possible 
 | Password | exists | Moves onto the interface unchanged. Policy work is [#506](https://github.com/jwilleke/yourphr/issues/506) |
 | Access token | exists | Already a distinct credential; `Scopes` earns its place here. Feeds revocation ([#508](https://github.com/jwilleke/yourphr/issues/508)) |
 | Demo | exists | Already effectively a provider: config-gated, verifies server-side, mints nothing itself |
-| WebAuthn / passkeys | proposed | Phishing-resistant, no shared secret. The one method that materially *improves* security rather than adding another door |
+| WebAuthn / passkeys | proposed | **This is what "webconnect" meant** (confirmed 2026-08-12). Phishing-resistant, no shared secret. The one method that materially *improves* security rather than adding another door |
 | OIDC identity | proposed | Must be named apart from SMART source-connect |
 | Magic link / OTP | proposed | Needs `ChallengeStore`, SMTP, the confirm-page step, and the risk decision above |
 
+## Settled so far
+
+- **Scope is authentication only** (2026-08-12). Authorization is separate work.
+- **"webconnect" means WebAuthn / passkeys** (2026-08-12).
+
 ## Open questions
 
-1. **"webconnect" — is that WebAuthn/passkeys?** Assumed yes throughout. Confirm before phase 5 is planned in detail.
-2. **Multi-factor.** Does the manager track partial-authentication state, or do we stay single-factor and say so? ngdpbase declares `required-factors` and implements one factor; that half-state is worth avoiding.
-3. **Account linking policy.** Who may add an identity to an existing account, and what proves it is the same person? Email-match alone is an account-takeover path if any provider's email is unverified.
-4. **Is demo a provider, or a configuration of the password provider?** It is a password check against a generated credential, so it may not need its own provider at all.
-5. **Self-hosted reality.** Every external provider (OIDC, SMS) adds a dependency a self-hoster must run or trust. Which of these are we willing to make available but off by default, and which do we decline outright?
+1. **Multi-factor.** Does the manager track partial-authentication state, or do we stay single-factor and say so? ngdpbase declares `required-factors` and implements one factor; that half-state is worth avoiding.
+2. **Account linking policy.** Who may add an identity to an existing account, and what proves it is the same person? Email-match alone is an account-takeover path if any provider's email is unverified.
+3. **Is demo a provider, or a configuration of the password provider?** It is a password check against a generated credential, so it may not need its own provider at all.
+4. **Self-hosted reality.** Every external provider (OIDC, SMS) adds a dependency a self-hoster must run or trust. Which of these are we willing to make available but off by default, and which do we decline outright?
 
 ## Sequencing
 
