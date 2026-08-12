@@ -29,7 +29,7 @@ _None._
 ## 🟠 P1
 
 - [#525](https://github.com/jwilleke/yourphr/issues/525) — [BUG] practitioners (Count Error)
-- [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (https://demo.yourphr.org/web/)
+- [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (<https://demo.yourphr.org/web/>)
 - [#523](https://github.com/jwilleke/yourphr/issues/523) — [FEATURE] /web/medical-history  "Save Report"
 - [#522](https://github.com/jwilleke/yourphr/issues/522) — [FEATURE] ExplanationOfBenefit Display
 - [#521](https://github.com/jwilleke/yourphr/issues/521) — [FEATURE] Claim - display this resource type

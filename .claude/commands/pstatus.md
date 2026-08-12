@@ -63,6 +63,12 @@ Regenerate the **priority-band section** of `TODO.md` from open issues/PRs. Do *
 3. If there is no resume block, omit it (bands-only is fine until `/wrap` writes one).
 4. **Never** delete or rewrite the resume markers or body. Only `/wrap` updates resume content.
 
+**Escape bare URLs taken from issue titles.** Titles are copied verbatim into `TODO.md`, so a title
+containing a URL — e.g. `[FEATURE] Send to Email (https://demo.yourphr.org/web/)` — emits a bare URL
+and fails markdownlint MD034, which is a red CI run for a file nobody hand-edited. Wrap any `http(s)`
+URL appearing in the **title text** in angle brackets (`<https://…>`); never touch the link target of
+the `[#N](…)` reference itself.
+
 `/wrap` owns the handoff text; `/pstatus` only refreshes ranked work so multi-machine continuity
 survives mid-session status runs. See [yourphr#410](https://github.com/jwilleke/yourphr/issues/410).
 

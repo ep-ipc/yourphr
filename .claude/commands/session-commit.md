@@ -24,6 +24,8 @@ related GitHub issues. The personal log is **never committed**.
   P0 / P1 / P2 / Deferred / Needs triage / In review / Open PRs). **Preserve** any
   `<!-- RESUME:START -->` … `<!-- RESUME:END -->` block exactly — only `/wrap` updates resume
   content. If `/pstatus` was just run, bands are already current.
+- **Escape bare URLs copied from issue titles** — wrap them in angle brackets (`<https://…>`).
+  A title containing a URL otherwise fails markdownlint MD034 on a file nobody hand-edited.
 - Stage and commit `TODO.md` if it changed: `docs: refresh TODO from issue labels`.
 
 ### Step 4: Journal the session (local only — NOT committed)
