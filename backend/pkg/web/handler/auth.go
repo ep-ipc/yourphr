@@ -200,15 +200,37 @@ func AuthSignin(c *gin.Context) {
 	//
 	// Failure to delete is logged, never fatal: the operator is holding a valid session and
 	// refusing it would be a worse outcome than a file that outlives its purpose.
-	if foundUser.Role == pkg.UserRoleAdmin && foundUser.Username == appConfig.GetString("bootstrap.admin.username") {
+	// Keyed on the VALUE, not on the username. It used to fire only for bootstrap.admin.username,
+	// which meant the file written by `fasten reset-password` (#510) — for any account, on an
+	// instance that may never have used bootstrap provisioning — sat there forever, and the command
+	// told the operator otherwise. Comparing what was just typed against the file's contents deletes
+	// it exactly when the credential has demonstrably reached its owner, whichever path wrote it.
+	if bootstrapPasswordMatches(appConfig, user.Password) {
 		if err := clearBootstrapPassword(appConfig); err != nil {
 			logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
-			logger.Warnf("could not remove the bootstrap admin password file after first sign-in: %v", err)
+			logger.Warnf("could not remove the generated password file after first sign-in: %v", err)
 		}
 	}
 
 	setSessionCookie(c, appConfig, userFastenToken)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": userFastenToken})
+}
+
+// bootstrapPasswordMatches reports whether the presented password is the one sitting in the
+// generated-password file. Used to decide whether that file has served its purpose (#504, #510).
+//
+// A missing file is the normal case on every sign-in, so this is a cheap stat-and-compare rather
+// than anything cleverer. Constant-time comparison is not needed: the caller has ALREADY
+// authenticated successfully with this value, so there is no secret left to leak by comparing it.
+func bootstrapPasswordMatches(appConfig config.Interface, presented string) bool {
+	if presented == "" {
+		return false
+	}
+	raw, err := os.ReadFile(filepath.Join(config.DataDir(appConfig), BootstrapAdminPasswordFile))
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(raw)) == presented
 }
 
 // clearBootstrapPassword removes the generated-password file. Declared here rather than calling

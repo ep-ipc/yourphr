@@ -16,6 +16,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -182,6 +183,82 @@ func main() {
 					return err
 				},
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "config",
+						Usage: "REMOVED. Configuration comes from .env and YOURPHR_* environment variables",
+					},
+					&cli.BoolFlag{
+						Name:    "debug",
+						Usage:   "Enable debug logging",
+						EnvVars: []string{"DEBUG"},
+					},
+				},
+			},
+			{
+				// The recovery path for "nobody can sign in at all" (#510). There is no password
+				// reset in the product — no route, no SMTP, and "Forgot password?" is a link with no
+				// target — so before this, recovery meant generating a bcrypt hash outside the app
+				// and running an UPDATE by hand. That has been done twice, and it is why the demo
+				// host's admin account was unreachable for a whole release cycle.
+				//
+				// The ADMIN-initiated reset (#511) does not cover this case: it needs a session, and
+				// what keeps happening is that the only admin is locked out.
+				Name:      "reset-password",
+				Usage:     "Set a generated password for an account, for when nobody can sign in",
+				ArgsUsage: "--username <name>",
+				Action: func(c *cli.Context) error {
+					if err := rejectRemovedConfigFlag(c); err != nil {
+						return err
+					}
+
+					username := strings.TrimSpace(c.String("username"))
+					if username == "" {
+						return fmt.Errorf("--username is required, e.g. fasten reset-password --username owner")
+					}
+
+					if c.Bool("debug") {
+						appconfig.Set("log.level", "DEBUG")
+					}
+
+					appLogger, logFile, err := CreateLogger(appconfig)
+					if logFile != nil {
+						defer logFile.Close()
+					}
+					if err != nil {
+						return err
+					}
+
+					defer func() {
+						if err := recover(); err != nil {
+							appLogger.Panic("panic occurred:", err)
+						}
+					}()
+
+					// Same initialisation as `migrate`: this runs against a stopped instance, or
+					// alongside a running one, and needs the database opened the ordinary way so
+					// migrations and encryption settings are honoured.
+					deviceRepo, err := database.NewRepository(appconfig, appLogger, event_bus.NewNoopEventBusServer())
+					if err != nil {
+						return err
+					}
+
+					path, err := web.ResetUserPassword(appconfig, deviceRepo, appLogger, username)
+					if err != nil {
+						return err
+					}
+
+					// The PATH, never the value — so the password stays out of shell history, CI
+					// logs and screen recordings. The file self-deletes on that account's first
+					// sign-in (#504/#466), because the data root is what a backup contains.
+					fmt.Printf("Password for %q has been reset.\nThe new password is in: %s\nIt is deleted automatically the first time that account signs in.\n", username, path)
+					return nil
+				},
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "username",
+						Usage:    "The account to reset",
+						Required: true,
+					},
 					&cli.StringFlag{
 						Name:  "config",
 						Usage: "REMOVED. Configuration comes from .env and YOURPHR_* environment variables",

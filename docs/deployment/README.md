@@ -69,6 +69,32 @@ YOURPHR_BOOTSTRAP_ADMIN_USERNAME=admin
 
 **`admin` is allowed here** ([#519](https://github.com/jwilleke/yourphr/issues/519)). That name — along with `administrator`, `root`, `system`, `support`, `api` and others — is reserved against **self-service registration**, where a stranger could pick it and message other users as though they were staff. A name you put in your own configuration is not attacker-chosen, so provisioning accepts it and logs that it did. Signing up as `admin` is still refused.
 
+#### Recovering when nobody can sign in
+
+There is no password-reset flow in the app — no reset route, no email, and "Forgot password?" on the sign-in page is not wired to anything. If the only admin is locked out, use the CLI ([#510](https://github.com/jwilleke/yourphr/issues/510)):
+
+```bash
+# docker compose
+docker compose exec yourphr /opt/fasten/fasten reset-password --username owner
+# kubernetes
+kubectl exec deploy/<name> -n <namespace> -- /opt/fasten/fasten reset-password --username owner
+# bare metal
+./fasten reset-password --username owner
+```
+
+It generates a password, applies it, and writes the value to `<data root>/.admin_bootstrap_password` (`0600`) — the same file and lifecycle as the provisioned admin above, so it **deletes itself the first time that account signs in**. The command prints the path, never the value, so the password stays out of shell history, CI logs and screen recordings. Read it the same way:
+
+```bash
+kubectl exec deploy/<name> -n <namespace> -- cat /opt/fasten/db/.admin_bootstrap_password
+```
+
+Two things it does deliberately:
+
+- **It ends that account's existing sessions** ([#508](https://github.com/jwilleke/yourphr/issues/508)). A reset is usually a response to losing control of an account, so leaving the old sessions alive would defeat the point.
+- **The generated password satisfies this instance's own policy** ([#506](https://github.com/jwilleke/yourphr/issues/506)), so it cannot hand you a credential the change-password screen would then refuse.
+
+It works against a stopped instance or a running one, and refuses a username that does not exist rather than writing a password file for an account that is not there.
+
 **You do not supply a password.** At first start with an empty user table, the app generates one, creates the admin, and writes the value to `<data root>/.admin_bootstrap_password` (mode `0600`). Startup logs the path, never the value. Read it once:
 
 ```bash

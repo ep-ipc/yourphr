@@ -538,10 +538,15 @@ func TestAuthSignup_SignupEnabledGate(t *testing.T) {
 	})
 }
 
-// The generated bootstrap password sits in a 0600 file inside the data root, which is by definition
-// what a backup contains (#466/#504). Signin deletes it once the provisioned admin has actually
-// logged in, so the credential stops riding along in every later archive. These cases pin that it
-// happens for that account and ONLY that account.
+// The generated password sits in a 0600 file inside the data root, which is by definition what a
+// backup contains (#466/#504). Signin deletes it once the credential has actually been used, so it
+// stops riding along in every later archive.
+//
+// KEYED ON THE VALUE, not the username (#510). It used to fire only for bootstrap.admin.username,
+// which meant the file written by `fasten reset-password` — for any account, on an instance that may
+// never have used bootstrap provisioning — sat there forever while the command claimed otherwise.
+// Comparing what was typed against the file deletes it exactly when the credential demonstrably
+// reached its owner, whichever path wrote it.
 func TestAuthSignin_ClearsBootstrapPasswordFile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mockCtrl := gomock.NewController(t)
@@ -585,10 +590,10 @@ func TestAuthSignin_ClearsBootstrapPasswordFile(t *testing.T) {
 		return u
 	}
 
-	t.Run("removes the file when the provisioned admin signs in", func(t *testing.T) {
+	t.Run("removes the file when the provisioned admin signs in with it", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, handler.BootstrapAdminPasswordFile)
-		require.NoError(t, os.WriteFile(path, []byte("generated"), 0o600))
+		require.NoError(t, os.WriteFile(path, []byte("correct-horse"), 0o600))
 
 		w := signin(t, dir, "admindemo", adminUser(t, "admindemo"))
 
@@ -597,15 +602,35 @@ func TestAuthSignin_ClearsBootstrapPasswordFile(t *testing.T) {
 		assert.True(t, os.IsNotExist(err), "the credential should not outlive its first use")
 	})
 
-	t.Run("leaves it alone for a different admin", func(t *testing.T) {
+	// The #510 case: `fasten reset-password --username jim` writes the same file for an ordinary
+	// account on an instance where bootstrap.admin.username is empty. Under the old username-keyed
+	// rule the file survived forever and the command's own output was wrong about it.
+	t.Run("removes the file after a CLI reset, for a non-admin with no bootstrap admin configured", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, handler.BootstrapAdminPasswordFile)
-		require.NoError(t, os.WriteFile(path, []byte("generated"), 0o600))
+		require.NoError(t, os.WriteFile(path, []byte("correct-horse"), 0o600))
+
+		ordinary := &models.User{Username: "jim", Role: pkg.UserRoleUser}
+		require.NoError(t, ordinary.HashPassword("correct-horse"))
+
+		w := signin(t, dir, "", ordinary)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		_, err := os.Stat(path)
+		assert.True(t, os.IsNotExist(err), "a reset credential must not outlive its first use either")
+	})
+
+	// Somebody else signing in with their OWN password must not consume a credential written for a
+	// different account — the file is still waiting for the person it was generated for.
+	t.Run("leaves it alone when a different password is used", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, handler.BootstrapAdminPasswordFile)
+		require.NoError(t, os.WriteFile(path, []byte("a-different-generated-value"), 0o600))
 
 		w := signin(t, dir, "admindemo", adminUser(t, "someone-else"))
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		_, err := os.Stat(path)
-		assert.NoError(t, err, "another admin signing in must not consume the provisioned account's password")
+		assert.NoError(t, err, "the file belongs to whoever it was generated for, not to the next person who signs in")
 	})
 }
