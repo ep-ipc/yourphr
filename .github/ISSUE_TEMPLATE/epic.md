@@ -2,7 +2,7 @@
 name: Epic
 about: A large initiative that spans multiple issues / PRs
 title: "[EPIC] "
-labels: ["epic"]
+labels: ["epic", "needs-triage"]
 assignees: []
 ---
 

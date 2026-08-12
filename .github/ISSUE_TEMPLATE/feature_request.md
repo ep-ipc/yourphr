@@ -2,7 +2,7 @@
 name: Feature Request
 about: Suggest a new feature or enhancement for Fasten OnPrem
 title: "[FEATURE] "
-labels: ["enhancement"]
+labels: ["enhancement", "needs-triage"]
 assignees: []
 ---
 

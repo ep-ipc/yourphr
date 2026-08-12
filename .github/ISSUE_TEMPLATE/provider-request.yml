@@ -1,7 +1,7 @@
 name: Provider Request
 description: Request a new institution/clinic/insurance provider to be added to Fasten
 title: "[Provider Request]: "
-labels: ["provider", "enhancement"]
+labels: ["provider", "enhancement", "needs-triage"]
 projects: ["fastenhealth/fasten-onprem"]
 assignees:
   - AnalogJ

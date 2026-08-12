@@ -1,7 +1,7 @@
-name: Bug Report
-description: File a bug report
+name: Bug Report (guided form)
+description: File a bug report with guided fields — the recommended route from a browser
 title: "[BUG] "
-labels: ["bug"]
+labels: ["bug", "needs-triage"]
 assignees:
   - jwilleke
 body:

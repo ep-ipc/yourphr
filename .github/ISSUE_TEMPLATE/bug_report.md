@@ -1,6 +1,7 @@
 ---
-name: Bug Report
-about: Report a bug or unexpected behavior
+name: Bug Report (plain)
+about: Report a bug — plain markdown, and the template the `gh` CLI can use
+title: "[BUG] "
 labels: ["bug", "needs-triage"]
 ---
 
