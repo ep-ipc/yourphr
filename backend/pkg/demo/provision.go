@@ -13,6 +13,7 @@ import (
 	"fmt"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/auth"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
@@ -70,6 +71,14 @@ func ProvisionCredential(ctx context.Context, appConfig config.Interface, repo d
 
 	if existing := config.GetSecret(appConfig, "demo.password"); existing.IsSet() {
 		if user.CheckPassword(existing.Expose()) == nil {
+			// Say so at boot if the working credential would not satisfy this instance's own policy
+			// (#506). Generated credentials always do; a hand-set one from an older release may not,
+			// and the alternative is a visitor discovering it. Warn rather than rotate: the demo
+			// works, and silently changing a credential an operator chose is worse than saying so.
+			if err := auth.PasswordPolicyFromConfig(appConfig).ValidatePassword(username, existing.Expose()); err != nil {
+				logger.Warnf("demo credential: %q is in use but does not satisfy this instance's password policy (%v); "+
+					"clear demo.password to have one generated", username, err)
+			}
 			logger.Debugf("demo credential: %q already matches demo.password; nothing to provision", username)
 			return nil
 		}

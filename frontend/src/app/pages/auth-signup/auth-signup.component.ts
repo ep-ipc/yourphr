@@ -4,6 +4,8 @@ import {Router} from '@angular/router';
 import {ToastNotification, ToastType} from '../../models/fasten/toast';
 import {ToastService} from '../../services/toast.service';
 import {AuthService} from '../../services/auth.service';
+import {FastenApiService} from '../../services/fasten-api.service';
+import {DEFAULT_PASSWORD_POLICY, PasswordPolicy} from '../../models/fasten/password-policy';
 
 @Component({
     selector: 'app-auth-signup',
@@ -18,13 +20,30 @@ export class AuthSignupComponent implements OnInit {
   newUser: User = new User()
   errorMsg = ""
 
+  // Read from the instance rather than hardcoded (#506), so this form validates exactly what the
+  // server enforces. Starts at the shipped defaults so the form is usable before the request lands.
+  policy: PasswordPolicy = {...DEFAULT_PASSWORD_POLICY}
+
   constructor(
     private authService: AuthService,
     private router: Router,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private fastenApi: FastenApiService
   ) { }
 
   ngOnInit(): void {
+    // On error keep the shipped defaults: a form that cannot reach the instance should still be
+    // usable, and the server is the real check either way.
+    this.fastenApi.getPublicInstanceInfo().subscribe({
+      next: (info) => this.policy = {
+        password_min_length: info?.password_min_length ?? DEFAULT_PASSWORD_POLICY.password_min_length,
+        password_max_length: info?.password_max_length ?? DEFAULT_PASSWORD_POLICY.password_max_length,
+        password_deny_common: info?.password_deny_common !== false,
+        password_deny_username: info?.password_deny_username !== false,
+        username_min_length: info?.username_min_length ?? DEFAULT_PASSWORD_POLICY.username_min_length,
+      },
+      error: () => this.policy = {...DEFAULT_PASSWORD_POLICY},
+    })
   }
 
   signupSubmit(){

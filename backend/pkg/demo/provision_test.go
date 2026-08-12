@@ -102,6 +102,13 @@ func TestProvisionCredential(t *testing.T) {
 			cfg.EXPECT().GetBool("demo.enabled").Return(true)
 			cfg.EXPECT().GetString("demo.username").Return("demo")
 			cfg.EXPECT().GetString("demo.password").Return("already-provisioned")
+			// #506: a working credential is checked against the policy so the operator hears about a
+			// non-compliant one at boot rather than from a visitor.
+			cfg.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+			cfg.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+			cfg.EXPECT().GetBool("password.deny_common").Return(true).AnyTimes()
+			cfg.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+			cfg.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
 			db.EXPECT().GetUserByUsername(gomock.Any(), "demo").Return(userWithPassword(t, "demo", "already-provisioned"), nil)
 			db.EXPECT().UpdateUserPassword(gomock.Any(), gomock.Any()).Times(0)
 		})

@@ -62,6 +62,20 @@ func AuthSignup(c *gin.Context) {
 		return
 	}
 
+	// The policy is enforced HERE, on the server, not only in the browser (#506). Before this the
+	// only backend check was "not blank", so a one-character password was accepted through the API
+	// while three different forms enforced three different rules — and the demo seed was built with
+	// a password our own sign-in form then refused (#505).
+	policy := auth.PasswordPolicyFromConfig(appConfig)
+	if err := policy.ValidateUsername(userWizard.User.Username); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if err := policy.ValidatePassword(userWizard.User.Username, userWizard.User.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
 	if userCount == 0 {
 		userWizard.User.Role = pkg.UserRoleAdmin
 	} else {

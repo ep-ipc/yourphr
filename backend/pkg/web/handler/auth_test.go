@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
@@ -37,6 +38,13 @@ func TestAuthSignup(t *testing.T) {
 		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Do(func(_ interface{}, user *models.User) {
 			assert.Equal(t, pkg.UserRoleAdmin, user.Role)
 		}).Return(nil)
+		// #506: the policy is read on every signup. Shipped values, so the tests exercise what an
+		// instance actually enforces.
+		mockConfig.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+		mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_common").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
 		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
 		// setSessionCookie → SessionPolicyFromConfig (#445)
 		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
@@ -52,7 +60,7 @@ func TestAuthSignup(t *testing.T) {
 		userWizard := handler.UserWizard{
 			User: &models.User{
 				Username: "testuser",
-				Password: "testpass",
+				Password: "correct-horse-battery",
 			},
 		}
 		jsonData, _ := json.Marshal(userWizard)
@@ -77,6 +85,13 @@ func TestAuthSignup(t *testing.T) {
 		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Do(func(_ interface{}, user *models.User) {
 			assert.Equal(t, pkg.UserRoleUser, user.Role)
 		}).Return(nil)
+		// #506: the policy is read on every signup. Shipped values, so the tests exercise what an
+		// instance actually enforces.
+		mockConfig.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+		mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_common").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
 		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
 		// setSessionCookie → SessionPolicyFromConfig (#445)
 		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
@@ -92,7 +107,7 @@ func TestAuthSignup(t *testing.T) {
 		userWizard := handler.UserWizard{
 			User: &models.User{
 				Username: "testuser2",
-				Password: "testpass2",
+				Password: "correct-horse-battery-2",
 			},
 		}
 		jsonData, _ := json.Marshal(userWizard)
@@ -116,6 +131,13 @@ func TestAuthSignup(t *testing.T) {
 		mockConfig := mock_config.NewMockInterface(mockCtrl)
 
 		mockDB.EXPECT().GetUserCount(gomock.Any()).Return(0, nil)
+		// #506 policy is read before CreateUser; "admin" satisfies it, so the reserved-name refusal
+		// from the repository is what this test is actually about.
+		mockConfig.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+		mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_common").Return(false).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
 		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).
 			Return(fmt.Errorf("%w: %q", database.ErrReservedUsername, "admin"))
 
@@ -125,7 +147,7 @@ func TestAuthSignup(t *testing.T) {
 		c.Set(pkg.ContextKeyTypeConfig, mockConfig)
 
 		jsonData, _ := json.Marshal(handler.UserWizard{
-			User: &models.User{Username: "admin", Password: "testpass"},
+			User: &models.User{Username: "admin", Password: "correct-horse-battery"},
 		})
 		c.Request, _ = http.NewRequest(http.MethodPost, "/signup", bytes.NewBuffer(jsonData))
 		c.Request.Header.Set("Content-Type", "application/json")
@@ -137,6 +159,92 @@ func TestAuthSignup(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 		assert.False(t, response["success"].(bool))
 		assert.Contains(t, response["error"], "reserved", "the response must carry the reason, not just a status")
+	})
+
+	// THE point of #506: the rule is enforced by the API, not only by the browser. A form-only policy
+	// is one the rest of the system can violate — which is exactly how the demo seed ended up with a
+	// password our own sign-in page refused (#505).
+	t.Run("rejects a password the policy refuses, at the API", func(t *testing.T) {
+		for _, tc := range []struct{ name, username, password, wants string }{
+			{"too short", "testuser", "short1", "at least 8"},
+			{"contains the username", "testuser", "testuser-phrase", "username"},
+			{"commonly breached", "someone", "password123", "commonly used"},
+			{"over the byte ceiling", "someone", strings.Repeat("a", 100), "bytes or fewer"},
+			{"username too short", "ab", "correct-horse-battery", "at least 3"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+
+				mockDB := mock_database.NewMockDatabaseRepository(ctrl)
+				mockConfig := mock_config.NewMockInterface(ctrl)
+
+				mockConfig.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+				mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+				mockConfig.EXPECT().GetBool("password.deny_common").Return(true).AnyTimes()
+				mockConfig.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+				mockConfig.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
+				mockDB.EXPECT().GetUserCount(gomock.Any()).Return(0, nil)
+				// The account must never be created — a 400 that still writes the user would be worse
+				// than no policy at all.
+				mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(0)
+
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				c.Set(pkg.ContextKeyTypeDatabase, mockDB)
+				c.Set(pkg.ContextKeyTypeConfig, mockConfig)
+
+				jsonData, _ := json.Marshal(handler.UserWizard{
+					User: &models.User{Username: tc.username, Password: tc.password},
+				})
+				c.Request, _ = http.NewRequest(http.MethodPost, "/signup", bytes.NewBuffer(jsonData))
+				c.Request.Header.Set("Content-Type", "application/json")
+
+				handler.AuthSignup(c)
+
+				assert.Equal(t, http.StatusBadRequest, w.Code)
+				var response map[string]interface{}
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+				assert.Contains(t, response["error"], tc.wants, "the message must name the rule that was broken")
+			})
+		}
+	})
+
+	// An operator who lowers the minimum gets what they configured — nothing is hardcoded.
+	t.Run("honours a policy the operator relaxed", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockDB := mock_database.NewMockDatabaseRepository(ctrl)
+		mockConfig := mock_config.NewMockInterface(ctrl)
+
+		mockConfig.EXPECT().GetInt("password.min_length").Return(4).AnyTimes()
+		mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_common").Return(false).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_username").Return(false).AnyTimes()
+		mockConfig.EXPECT().GetInt("username.min_length").Return(2).AnyTimes()
+		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
+		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_absolute_hours").Return(12).AnyTimes()
+		mockConfig.EXPECT().GetInt("jwt.session_renew_if_remaining_minutes").Return(30).AnyTimes()
+		mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false)
+		mockDB.EXPECT().GetUserCount(gomock.Any()).Return(0, nil)
+		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Return(nil)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(pkg.ContextKeyTypeDatabase, mockDB)
+		c.Set(pkg.ContextKeyTypeConfig, mockConfig)
+
+		jsonData, _ := json.Marshal(handler.UserWizard{
+			User: &models.User{Username: "ab", Password: "abcd"},
+		})
+		c.Request, _ = http.NewRequest(http.MethodPost, "/signup", bytes.NewBuffer(jsonData))
+		c.Request.Header.Set("Content-Type", "application/json")
+
+		handler.AuthSignup(c)
+
+		assert.Equal(t, http.StatusOK, w.Code, "a shorter minimum is the operator's call to make")
 	})
 }
 
@@ -230,6 +338,13 @@ func TestAuthDemoSignin(t *testing.T) {
 		mockConfig.EXPECT().GetString("demo.username").Return("demo")
 		mockConfig.EXPECT().GetString("demo.password").Return("demo123")
 		mockDB.EXPECT().GetUserByUsername(gomock.Any(), "demo").Return(demoUser(t, "demo", "demo123"), nil)
+		// #506: the policy is read on every signup. Shipped values, so the tests exercise what an
+		// instance actually enforces.
+		mockConfig.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+		mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_common").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
 		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
 		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
 		mockConfig.EXPECT().GetInt("jwt.session_absolute_hours").Return(12).AnyTimes()
@@ -291,6 +406,13 @@ func TestAuthSignup_SignupEnabledGate(t *testing.T) {
 		mockDB.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Do(func(_ interface{}, user *models.User) {
 			assert.Equal(t, pkg.UserRoleAdmin, user.Role, "the first user owns the instance")
 		}).Return(nil)
+		// #506: the policy is read on every signup. Shipped values, so the tests exercise what an
+		// instance actually enforces.
+		mockConfig.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+		mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_common").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
 		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
 		mockConfig.EXPECT().GetInt("jwt.session_ttl_minutes").Return(60).AnyTimes()
 		mockConfig.EXPECT().GetInt("jwt.session_absolute_hours").Return(12).AnyTimes()
@@ -321,6 +443,13 @@ func TestAuthSignin_ClearsBootstrapPasswordFile(t *testing.T) {
 		mockConfig.EXPECT().GetString("bootstrap.admin.username").Return(bootstrapUsername).AnyTimes()
 		mockConfig.EXPECT().GetString("storage.data_dir").Return(dataDir).AnyTimes()
 		mockConfig.EXPECT().GetString("database.location").Return(filepath.Join(dataDir, "fasten.db")).AnyTimes()
+		// #506: the policy is read on every signup. Shipped values, so the tests exercise what an
+		// instance actually enforces.
+		mockConfig.EXPECT().GetInt("password.min_length").Return(8).AnyTimes()
+		mockConfig.EXPECT().GetInt("password.max_length").Return(69).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_common").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetBool("password.deny_username").Return(true).AnyTimes()
+		mockConfig.EXPECT().GetInt("username.min_length").Return(3).AnyTimes()
 		mockConfig.EXPECT().GetString("jwt.issuer.key").Return("test_key")
 		mockConfig.EXPECT().GetInt(gomock.Any()).Return(60).AnyTimes()
 		mockConfig.EXPECT().GetBool("web.listen.https.enabled").Return(false)

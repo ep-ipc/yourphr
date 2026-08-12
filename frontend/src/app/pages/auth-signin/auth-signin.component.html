@@ -43,27 +43,28 @@
       <form  *ngIf="!showExternalIdP" (ngSubmit)="signinSubmit()" #userForm="ngForm">
         <div class="mb-3">
           <label>Username</label>
-          <input [(ngModel)]="existingUser.username" name="username" #username="ngModel" required autocapitalize="none" minlength="2" type="text" class="form-control" placeholder="Enter your username">
+          <!-- SIGN-IN VALIDATES ONLY "did you type something" (#506). A length rule here refuses an
+               account that predates the policy, or predates an operator raising it — locking someone
+               out of their own records over a rule they cannot act on until they are inside. The
+               server decides; this form just collects. (It also used to enforce 2 while telling the
+               user 4, and reject usernames the server had happily created.) -->
+          <input [(ngModel)]="existingUser.username" name="username" #username="ngModel" required autocapitalize="none" type="text" class="form-control" placeholder="Enter your username">
 
           <div *ngIf="username.invalid && (username.dirty || username.touched)" class="alert alert-danger">
             <div *ngIf="username.errors?.['required']">
               Username is required.
             </div>
-            <div *ngIf="username.errors?.['minlength']">
-              Username must be at least 4 characters long.
-            </div>
           </div>
         </div><!-- mb-3 -->
         <div class="mb-3">
           <label>Password</label>
-          <input [(ngModel)]="existingUser.password" name="password" #password="ngModel" required minlength="8" type="password" class="form-control" placeholder="Enter your password">
+          <!-- Same reasoning: the minlength here is what refused the published demo password after
+               the signup API had accepted it (#505). You either know your password or you do not. -->
+          <input [(ngModel)]="existingUser.password" name="password" #password="ngModel" required type="password" class="form-control" placeholder="Enter your password">
 
           <div *ngIf="password.invalid && (password.dirty || password.touched)" class="alert alert-danger">
             <div *ngIf="password.errors?.['required']">
               Password is required.
-            </div>
-            <div *ngIf="password.errors?.['minlength']">
-              Password must be at least 8 characters long.
             </div>
           </div>
         </div><!-- mb-3 -->

@@ -1190,6 +1190,13 @@ export interface InstanceInfo {
   // endpoint, and only for that one account — every other user, including the operator's own admin
   // on the same instance, gets false. Presentation only: the API refuses the writes regardless.
   demo_admin_session: boolean;
+  // The instance's password policy (#506), published so the sign-up form validates exactly what the
+  // server enforces instead of hardcoding numbers that drift. Sizes and booleans only.
+  password_min_length: number;
+  password_max_length: number;
+  password_deny_common: boolean;
+  password_deny_username: boolean;
+  username_min_length: number;
   // Whether self-service account creation is open (#498). Default true, so an instance that does
   // not publish the key behaves exactly as it always has. The backend enforces it regardless;
   // this only decides whether the UI offers the link. Note the FIRST account on an empty
@@ -1202,6 +1209,11 @@ export interface InstanceInfo {
 function mapInstanceInfo(response: ResponseWrapper): InstanceInfo {
   const data = (response.data as any) || {};
   const str = (key: string): string => (typeof data[key] === 'string' ? data[key].trim() : '');
+  // Env-supplied values arrive as strings (#453 fix), so coerce rather than trusting the type.
+  const num = (value: any, fallback: number): number => {
+    const parsed = typeof value === 'number' ? value : parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  };
   return {
     name: str('operator.name'),
     contact_email: str('operator.contact_email'),
@@ -1212,6 +1224,13 @@ function mapInstanceInfo(response: ResponseWrapper): InstanceInfo {
     demo_enabled: data['demo.enabled'] === true,
     demo_admin_enabled: data['demo.admin.enabled'] === true,
     demo_admin_session: data['demo.admin.session'] === true,
+    // Fall back to the shipped defaults when an instance predates the policy keys, so a form is
+    // never built from `undefined` (which Angular's minlength silently treats as no rule at all).
+    password_min_length: num(data['password.min_length'], 8),
+    password_max_length: num(data['password.max_length'], 69),
+    password_deny_common: data['password.deny_common'] !== false,
+    password_deny_username: data['password.deny_username'] !== false,
+    username_min_length: num(data['username.min_length'], 3),
     // Opposite default to demo_enabled, deliberately: signup has always been open, so an absent
     // key must not silently hide the link on an instance that never set it. Only an explicit
     // false closes it (#498).

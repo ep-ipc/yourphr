@@ -128,6 +128,7 @@ Add `Method` to the session claims. That is what makes step-up re-auth possible 
 
 - **Scope is authentication only** (2026-08-12). Authorization is separate work.
 - **"webconnect" means WebAuthn / passkeys** (2026-08-12).
+- **Password policy is configuration, enforced server-side** ([#506](https://github.com/jwilleke/yourphr/issues/506), 2026-08-12). `auth.PasswordPolicy` is deliberately a value read from config rather than logic inside a handler, so the future password provider owns it by moving one file. It is applied at sign-up, admin user-create and change-password, and **never at sign-in** — validating a credential someone already holds locks them out over a rule they cannot act on until they are inside.
 
 ## Open questions
 

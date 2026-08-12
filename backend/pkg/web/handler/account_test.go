@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	mock_config "github.com/fastenhealth/fasten-onprem/backend/pkg/config/mock"
 	mock_database "github.com/fastenhealth/fasten-onprem/backend/pkg/database/mock"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
@@ -16,6 +17,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func changePasswordContext(t *testing.T, mockDB *mock_database.MockDatabaseRepository, body interface{}) (*gin.Context, *httptest.ResponseRecorder) {
@@ -24,6 +26,12 @@ func changePasswordContext(t *testing.T, mockDB *mock_database.MockDatabaseRepos
 	c, _ := gin.CreateTestContext(w)
 	c.Set(pkg.ContextKeyTypeLogger, logrus.WithField("test", "account"))
 	c.Set(pkg.ContextKeyTypeDatabase, mockDB)
+	// A NEW password must satisfy the instance policy (#506), so the handler reads config. Real
+	// values rather than a permissive stub, so these tests exercise what an instance enforces.
+	appConfig, err := config.Create()
+	require.NoError(t, err)
+	require.NoError(t, appConfig.Init())
+	c.Set(pkg.ContextKeyTypeConfig, appConfig)
 	jsonData, _ := json.Marshal(body)
 	c.Request, _ = http.NewRequest(http.MethodPost, "/account/password", bytes.NewBuffer(jsonData))
 	c.Request.Header.Set("Content-Type", "application/json")

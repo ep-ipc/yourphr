@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/auth"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/gin-gonic/gin"
@@ -38,6 +40,19 @@ func CreateUser(c *gin.Context) {
 
 	var newUser models.User
 	if err := c.ShouldBindJSON(&newUser); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// Same policy as self-service signup (#506). An admin creating a family member's account is not
+	// a reason to accept a weaker password than the instance requires of everyone else.
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+	policy := auth.PasswordPolicyFromConfig(appConfig)
+	if err := policy.ValidateUsername(newUser.Username); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	if err := policy.ValidatePassword(newUser.Username, newUser.Password); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}

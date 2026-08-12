@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/auth"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/gin-gonic/gin"
@@ -74,6 +75,16 @@ func ChangePassword(c *gin.Context) {
 	// Verify the current password before allowing a change.
 	if err := currentUser.CheckPassword(req.CurrentPassword); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "current password is incorrect"})
+		return
+	}
+
+	// The new password must satisfy the instance policy (#506). Note this runs AFTER the current
+	// password is verified above, so a stranger cannot use this endpoint to probe the policy — and
+	// the OLD password is deliberately not validated, because an account created before the policy
+	// existed must still be able to change itself into compliance.
+	appConfig := c.MustGet(pkg.ContextKeyTypeConfig).(config.Interface)
+	if err := auth.PasswordPolicyFromConfig(appConfig).ValidatePassword(currentUser.Username, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 

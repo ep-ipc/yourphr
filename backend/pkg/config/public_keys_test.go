@@ -21,8 +21,13 @@ func TestPublicKeys_ShippedDefault(t *testing.T) {
 		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",
+		"password.deny_common",
+		"password.deny_username",
+		"password.max_length",
+		"password.min_length",
 		"signup.enabled",
 		"theme.name",
+		"username.min_length",
 	}, config.PublicKeys(c))
 	require.NotContains(t, config.PublicKeys(c), "operator.contact_email")
 }
@@ -112,8 +117,13 @@ func TestDefaultPublicKeys_ComesFromTheShippedFile(t *testing.T) {
 		"demo.enabled",
 		"operator.contact_url",
 		"operator.name",
+		"password.deny_common",
+		"password.deny_username",
+		"password.max_length",
+		"password.min_length",
 		"signup.enabled",
 		"theme.name",
+		"username.min_length",
 	}, shipped)
 }
 

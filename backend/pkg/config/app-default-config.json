@@ -88,6 +88,17 @@
   "_comment_rate_limit":"Per-IP fixed-window cap on the UNAUTHENTICATED credential endpoints (signup, signin), to blunt online password guessing (#104). 10/minute is a brute-force backstop, not a throughput setting — bcrypt already makes each attempt expensive. Catalogued because 10 is too low for an automated suite driving real logins: the E2E harness makes ~16 auth calls from one IP and was silently getting 429s that the UI rendered as 'username or password is incorrect', which read as a login regression (#481). Raise it for a test instance; leave it alone in production. NOTE the limiter keys on c.ClientIP(), which honours X-Forwarded-For — behind a proxy without trusted-proxy config, every client shares one bucket.",
   "web.rate_limit.auth_per_minute": 10,
 
+  "_comment_password_policy":"Rules a NEW or CHANGED password must satisfy (#506). Enforced SERVER-SIDE by signup, admin user-create and change-password — the browser forms read these same values and are a courtesy, not the control. Deliberately NOT applied at SIGN-IN: an account created before a policy existed, or before an operator raised the minimum, must still be able to get in; validating a password someone already has locks them out of their own records to enforce a rule they cannot act on until they are inside. Length is measured in BYTES because bcrypt's limit is a byte limit and UTF-8 is variable width — an emoji is four bytes, so a 20-character passphrase can be 80 bytes. NO COMPOSITION RULES (one uppercase, one digit, one symbol) and none are planned: NIST SP 800-63B recommends against them because they push people toward `Password1!` and into reuse while adding little entropy. Length plus a breached-password check is the current guidance.",
+  "password.min_length": 8,
+  "_comment_password_max_length":"bcrypt refuses anything over 72 BYTES with ErrPasswordTooLong, which would otherwise reach a user pasting a passphrase out of a password manager as a raw internal error. 69 leaves a small margin under that ceiling; configuration above 72 is clamped rather than honoured, because the limit belongs to the algorithm and not to the operator.",
+  "password.max_length": 69,
+  "_comment_password_deny":"deny_common rejects the handful of passwords tried FIRST in every credential-stuffing run, from a short embedded list — not the Pwned Passwords API, which would add an outbound network call to sign-up and tell a third party that somebody just set a password here; unacceptable for a self-hosted PHR that has to work with no internet (see #507). deny_username rejects a password containing the account name.",
+  "password.deny_common": true,
+  "password.deny_username": true,
+
+  "_comment_username_policy":"Minimum username length (#506). One value, so the sign-in form, the sign-up form and the server stop disagreeing — before this the sign-in page enforced 2 while telling the user 4, and sign-up enforced 4, so the sign-in page rejected usernames the server had happily created. Published so the forms derive their validators from it rather than hardcoding a number that drifts. Reserved names are a separate rule and live in the repository (#519), because that one applies to self-service registration rather than to every account.",
+  "username.min_length": 3,
+
   "_comment_signup":"Self-service account creation (#498). TRUE by default, which is the behaviour every install has always had — there was no gate at all before this key. Turn it OFF on an internet-facing instance so strangers cannot create accounts; an operator still adds family members from Admin -> Users, so closing signup removes self-service, not multi-user support. THE FIRST RUN IGNORES THIS FLAG: with an empty user table AuthSignup proceeds whatever this says, because the first account created is the instance OWNER and gets UserRoleAdmin, and it is the only way an admin ever comes into existence — no seeded admin, no CLI user-create, no password reset. A flag that could block it would make a fresh deployment unadministrable. On the `public` list so the sign-in page can hide 'Create an Account' rather than offer a link that fails.",
   "signup.enabled": true,
 
@@ -106,6 +117,7 @@
   "_comment_demo_password":"NOT SET BY HAND (#515). demo.password is generated per instance at startup, set on the demo account, and written here — nobody chooses it, nobody types it, and it is never published. POST /api/auth/demo-signin posts no credentials, so a visitor never needs to know one; the only thing a human-chosen value ever bought was the ability to type it at the login form, and it cost us a seed whose published password was too short for our own form (#505) and a collision with the password policy in #506. It is on the `secret` list, so it is masked on the Admin Configuration screen and never served by /api/instance/public. THE VERIFY IS THE POINT: demo-signin checks this value against the stored hash rather than minting a token for whoever demo.username names, so demo.enabled flipped on an instance that happens to hold a user called `demo` does nothing at all. Provisioning regenerates whenever the two drift apart, which is what a freshly restored seed looks like — so a reset needs no operator step.",
   "demo.password": "",
 
+  "_comment_public_password_policy": "The password policy is on the list below so the sign-up form builds its validators from what the server actually enforces, instead of hardcoding numbers that drift (#506). Sizes and booleans only \u2014 the minimum length tells an attacker nothing they would not learn from one rejected attempt, while NOT publishing it is exactly what produced a form and a server that disagreed.",
   "_comment_public": "Keys served by GET /api/instance/public to callers with NO login (#457). Direction matters: this is an allow-list, so a key added anywhere else in this file is private until it is named here. A deny-list would publish anything nobody remembered to list. An instance may change this array in <data>/config/app-custom-config.json — including adding keys — and the server logs a WARN naming anything promoted beyond this shipped set. NOTE operator.contact_email is deliberately absent (#459): an address on an unauthenticated endpoint gets harvested. Signed-in users still see it via GET /api/secure/instance, and an operator running a public help desk can add it back here.",
   "public": [
     "operator.name",
@@ -113,7 +125,12 @@
     "theme.name",
     "demo.enabled",
     "demo.admin.enabled",
-    "signup.enabled"
+    "signup.enabled",
+    "password.min_length",
+    "password.max_length",
+    "password.deny_common",
+    "password.deny_username",
+    "username.min_length"
   ],
 
   "_comment_secret": "Keys masked on the Admin Configuration screen until an admin explicitly reveals one (#458). Deliberately SHORT: masking 47 of 51 settings — which is what happens if everything outside `public` is hidden — makes an operator click through the listen port and the log level, and trains them to reveal reflexively. Note this list is the OPPOSITE shape to `public` and that is intentional: `public` is an allow-list because a mistake there exposes a value to the internet, while this is a deny-list because a mistake here shows a value to an already-authenticated admin on their own screen. Different consequence, different safe default. Entries need not exist in this file — listing a key that is env-only is harmless and future-proofs it.",

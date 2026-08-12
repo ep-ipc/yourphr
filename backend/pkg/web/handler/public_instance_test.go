@@ -32,6 +32,11 @@ var allowedPublicInstanceKeys = []string{
 	// signup.enabled — the sign-in page decides whether to offer "Create an Account" before login
 	// (#498). Also a boolean. The backend enforces the gate regardless of what the UI shows.
 	"signup.enabled",
+	// The password policy (#506). The sign-up form builds its validators from these rather than
+	// hardcoding numbers, which is what let the form and the server disagree. Sizes and booleans —
+	// no secret is disclosed by saying how long a password has to be.
+	"password.min_length", "password.max_length", "password.deny_common", "password.deny_username",
+	"username.min_length",
 }
 
 // publicInstanceStringKeys are the published keys whose unset value is the empty string. Kept

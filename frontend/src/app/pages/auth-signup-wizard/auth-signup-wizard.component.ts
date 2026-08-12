@@ -2,6 +2,8 @@ import {Component, OnInit, ViewChild} from '@angular/core';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {User} from '../../models/fasten/user';
 import {AuthService} from '../../services/auth.service';
+import {DEFAULT_PASSWORD_POLICY, PasswordPolicy} from '../../models/fasten/password-policy';
+import {FastenApiService} from '../../services/fasten-api.service';
 import {Router} from '@angular/router';
 import {ToastService} from '../../services/toast.service';
 import {ToastNotification, ToastType} from '../../models/fasten/toast';
@@ -114,13 +116,27 @@ export class AuthSignupWizardComponent implements OnInit {
   newUser: UserWizard = new UserWizard()
   errorMsg = ""
 
+  // Read from the instance, not hardcoded (#506). Shipped defaults until the request answers.
+  policy: PasswordPolicy = {...DEFAULT_PASSWORD_POLICY}
+
   constructor(
     private authService: AuthService,
     private router: Router,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private fastenApi: FastenApiService
   ) { }
 
   ngOnInit(): void {
+    this.fastenApi.getPublicInstanceInfo().subscribe({
+      next: (info) => this.policy = {
+        password_min_length: info?.password_min_length ?? DEFAULT_PASSWORD_POLICY.password_min_length,
+        password_max_length: info?.password_max_length ?? DEFAULT_PASSWORD_POLICY.password_max_length,
+        password_deny_common: info?.password_deny_common !== false,
+        password_deny_username: info?.password_deny_username !== false,
+        username_min_length: info?.username_min_length ?? DEFAULT_PASSWORD_POLICY.username_min_length,
+      },
+      error: () => this.policy = {...DEFAULT_PASSWORD_POLICY},
+    })
   }
 
   signupSubmit(){
