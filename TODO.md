@@ -32,6 +32,7 @@
 
 ## 🟠 P1
 
+- [#529](https://github.com/jwilleke/yourphr/issues/529) — [SECURITY] Gin trusts every proxy: X-Forwarded-For is caller-controlled, so the per-IP auth rate limit can be bypassed
 - [#526](https://github.com/jwilleke/yourphr/issues/526) — [FEATURE] Enable Debug mode vs Show Raw FHIR
 - [#525](https://github.com/jwilleke/yourphr/issues/525) — [BUG] practitioners (Count Error)
 - [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (<https://demo.yourphr.org/web/>)
