@@ -30,7 +30,7 @@ The trigger was concrete: on the public demo, every write button on the admin sc
 - **Two helpers already drifted into existence** for one concept. A third role would need 25 sites revisited, each an independent chance to be wrong.
 - **The demo rules are expressed in a different dimension entirely** — HTTP method and path prefix, not action. That was the right call under the circumstances (see the [#514](https://github.com/jwilleke/yourphr/issues/514) note below) but it means two separate systems answer overlapping questions, and neither can see the other.
 - **The frontend holds an independent copy of the policy.** `IsAdmin()` is a guess. When it disagrees with the server, the user meets a refusal they were invited to trigger.
-- **Access tokens carry scopes with no ceiling.** A token's authority is not intersected with its owner's, so scope means whatever each handler happens to check.
+- **Access tokens carry no scopes at all.** `models.AccessToken` is `UserID`, `TokenID`, `Name`, `IssuedAt`, `ExpiresAt` — nothing narrows what a token may do, so every token is exactly as powerful as the person who made it. (Not to be confused with the `Scopes` on `ProviderCatalogEntry`: those are SMART scopes we *request from* Epic and Cerner, outbound, and have nothing to do with authorizing callers of our own API.)
 
 ## Prior art
 
@@ -131,7 +131,7 @@ Anyone can edit it from the browser console, so a UI that "checks permission bef
 - Permissions are actions, named `resource:action`, one convention, defined once in Go.
 - The server-side context is request-scoped and authoritative; the client's copy is session-scoped and advisory.
 - Unmapped route means refused.
-- Access-token scopes are a **ceiling** on the owner's permissions, never a grant.
+- **If** access tokens gain scopes, those scopes are a **ceiling** on the owner's permissions, never a grant. (They have none today — see the open question, since introducing them has a migration problem of its own.)
 - Per-user data isolation stays in the repository layer and is not modelled as permissions.
 - The existing demo guards stay until per-route parity is demonstrated.
 
@@ -142,6 +142,24 @@ Anyone can edit it from the browser console, so a UI that "checks permission bef
 - **Does a permission carry a reason string for the UI?** `provider-catalog:delete` denied → "disabled in the public demo" is much better copy than a generic refusal, but it puts presentation text in the policy layer.
 - **How is this tested so the table cannot drift from the routes?** A test that walks the registered routes and asserts each declares a permission would make an unmapped route a build failure rather than a runtime refusal. Probably the highest-value single test in the whole design.
 
+- **Is the role-to-permission mapping configuration, or is it compiled in?** This one collides with a standing rule of this project — variables belong in the configuration system, never hardcoded ([#472](https://github.com/jwilleke/yourphr/issues/472)) — and it is not obvious the rule should win here. Configurable means an operator can build a caregiver role without a release, which is genuinely valuable for a product meant to be self-hosted by families. It also means a typo in a config store silently widens access to medical records, that support questions become unanswerable without seeing the instance's own table, and that the mapping is no longer covered by our tests. A middle position exists: permissions and their meanings are compiled, while the *assignment* of permissions to roles is configuration with a shipped default and a startup validation pass that refuses to boot on an unknown permission name. Worth deciding explicitly rather than by habit.
+
+- **What happens to an open browser session when its authority changes?** The projection is fetched once. Demote an admin and their UI keeps the admin buttons until something refetches — every click then fails against a server that is correctly refusing. The server side is safe either way; the question is purely how bad the UI is allowed to look. Options: accept the staleness and let the refusals explain themselves, refetch on navigation, or reuse `token_generation` ([#508](https://github.com/jwilleke/yourphr/issues/508)) so an authority change invalidates the session outright and forces a clean re-entry.
+
+- **Do access tokens get scopes, and what happens to the ones that already exist?** The ceiling described above assumes a field that does not exist yet, so this is a feature, not an intersection. The migration has two options and both are bad in different directions: default existing tokens to *all* the owner's permissions, which is a silent grant that quietly matches today's behaviour, or default them to nothing, which is correct and breaks every token in the field with no warning. A third path — treat scope-less tokens as legacy, log every use, and refuse to mint new ones without scopes — costs more code and is probably the honest answer.
+
+- **Are denials audited?** On a product holding medical records, "someone tried to do something they were not allowed to do" is exactly the event worth keeping. Sign-in audit was already deferred once in [#507](https://github.com/jwilleke/yourphr/issues/507). But an audit log is itself PHI-adjacent and needs a retention decision, which is the same reasoning that kept IP addresses out of [#512](https://github.com/jwilleke/yourphr/issues/512). Do not add a log without deciding how long it lives and who can read it.
+
+- **Does a refusal name the permission it wanted?** `{"code":"forbidden","permission":"provider-catalog:delete"}` is enormously better for debugging and for writing precise UI copy. It also tells an attacker the shape of the permission model — mild disclosure, and arguably irrelevant given the vocabulary will be in a public repository. Leaning toward including it, but state the reasoning rather than defaulting.
+
+- **Are wildcards allowed?** `admin:*` is convenient and is how these systems usually acquire their first accidental over-grant, because the wildcard silently absorbs every permission added afterwards — which is precisely the failure mode of [#514](https://github.com/jwilleke/yourphr/issues/514) in a new costume. Recommend no wildcards, and if a role really does need everything, generate the full explicit list so a diff shows what changed.
+
+- **Does `admin` survive as a role, or become a bundle of permissions?** Keeping it means two concepts (roles and permissions) where one might do. Dropping it means touching `models.User.Role`, the bootstrap admin provisioning, the reserved-name rules, and the demo admin — a much larger blast radius than phases 1–3, and probably a later phase of its own if it happens at all.
+
+- **Can a permission ever have a subject other than the caller?** Today every question is "may *I* do X". A caregiver or parent acting on another person's records asks "may I do X *to Y's data*", which changes the signature from `Can(p)` to `Can(p, subject)` and pulls row ownership back into a design that deliberately excludes it. Not needed now. Worth knowing that answering "yes" later is a redesign, not an addition.
+
+- **Does the CLI need any of this?** `fasten reset-password` and friends bypass HTTP entirely, so no middleware sees them and no permission is consulted. That is arguably correct — shell access to the host is already total authority, and the command exists precisely for when nobody can sign in ([#510](https://github.com/jwilleke/yourphr/issues/510)). But it should be a stated position rather than an accident of where the code lives, because the next CLI command might not be so obviously fine.
+
 ## Sequencing
 
 Each phase is its own issue, linked with blocked-by — not a checklist inside one issue.
@@ -151,7 +169,7 @@ Each phase is its own issue, linked with blocked-by — not a checklist inside o
 3. **Retire the 25 call sites** and both duplicate helpers, route by route, one PR per handler file so a regression is bisectable.
 4. **Publish the projection** to the client and consume it in the frontend; delete `AuthService.IsAdmin()`.
 5. **Fold the demo rules into permissions**, keeping the group-level default-deny.
-6. **Access-token scope ceiling**, intersecting token scopes with the owner's permissions.
+6. **Access-token scopes** — introducing the field, deciding what existing tokens inherit, and applying the ceiling. Last because it is the only phase that is a new feature rather than a consolidation, and the only one that can break a credential someone is already using.
 
 **Not blocked by any of this:** disabling the demo's dead admin buttons using the `demo.admin.session` flag that already exists. It is about an hour of work, and phase 4 deletes it. Shipping the interim fix is not wasted effort — it is the thing that stops the demo teaching visitors that the app is broken while the framework gets built.
 
