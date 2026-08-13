@@ -72,6 +72,13 @@ func (ae *AppEngine) Reinitialize() error {
 func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 	r := gin.New()
 
+	// Before anything reads c.ClientIP() — the rate limiter and the request log both do (#529).
+	// Gin's default is to trust every proxy, which makes the client's own X-Forwarded-For header
+	// authoritative; an error here leaves the engine trusting nothing, which is the safe direction.
+	if err := ApplyTrustedProxies(r, ae.Config.GetStringSlice(TrustedProxiesConfigKey), ae.Logger); err != nil {
+		ae.Logger.Error(err)
+	}
+
 	// Security response headers on every response (#105 / H4) + staged CSP (#124). First, so it
 	// covers the SPA + API. The report-only strict script-src is computed once here from the
 	// served index.html, so the inline-script hashes can never drift from the served bytes.
