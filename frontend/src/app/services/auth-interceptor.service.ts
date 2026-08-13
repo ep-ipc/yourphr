@@ -1,13 +1,24 @@
 import { Injectable, Injector } from '@angular/core';
 import { HttpErrorResponse, HttpEvent, HttpHandler, HttpInterceptor, HttpRequest } from '@angular/common/http';
 import {Router} from '@angular/router';
-import {Observable, of, throwError} from 'rxjs';
-import {catchError} from 'rxjs/operators';
+import {from, Observable, of, throwError} from 'rxjs';
+import {catchError, mergeMap} from 'rxjs/operators';
 import {AuthService} from './auth.service';
 import {ToastService} from './toast.service';
 import {ToastNotification, ToastType} from '../models/fasten/toast';
 import {GetEndpointAbsolutePath} from '../../lib/utils/endpoint_absolute_path';
 import {environment} from '../../environments/environment';
+
+// A non-JSON body is still an answer worth showing — a proxy's HTML error page, say — so it becomes
+// the message rather than being dropped for failing to parse.
+function parseErrorBody(text: string): any {
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : {error: text};
+  } catch {
+    return {error: text};
+  }
+}
 
 @Injectable({
   providedIn: 'root'
@@ -32,7 +43,29 @@ export class AuthInterceptorService implements HttpInterceptor {
   // Rethrowing rather than swallowing matters too. `of(err.message)` completed the stream as a
   // SUCCESS, so the caller's error handler never ran and the component could not report the reason
   // even if it wanted to.
+  //
+  // A DOWNLOAD asks for responseType 'blob', and Angular applies that type to the ERROR body too —
+  // so the JSON the server sent arrives as a Blob and `err.error.code` is undefined. Every check
+  // against it silently fails, which is how the read-only demo admin pressing "Download backup" got
+  // a bare "Download failed" with no reason: the refusal was never recognised here, and the
+  // component had nothing to show. Read the Blob back and rebuild the response, so a caller sees
+  // the same shape whether or not the request happened to want a file.
   private handleAuthError(err: HttpErrorResponse): Observable<any> {
+    if (err.error instanceof Blob) {
+      return from(err.error.text()).pipe(
+        mergeMap((text) => this.reportAuthError(new HttpErrorResponse({
+          error: parseErrorBody(text),
+          headers: err.headers,
+          status: err.status,
+          statusText: err.statusText,
+          url: err.url || undefined,
+        }))),
+      );
+    }
+    return this.reportAuthError(err);
+  }
+
+  private reportAuthError(err: HttpErrorResponse): Observable<any> {
     if (err.status === 401) {
       this.authService.Logout()
       this.router.navigateByUrl(`/auth/signin`);
@@ -46,6 +79,10 @@ export class AuthInterceptorService implements HttpInterceptor {
       const toastNotification = new ToastNotification()
       toastNotification.type = ToastType.Error
       toastNotification.message = err.error?.error || "this action is disabled in the public demo"
+      // Stays until dismissed, like the source-connect failures. A refusal that fades after five
+      // seconds is a refusal the person who pressed the button can easily never see — and then the
+      // app just looks broken.
+      toastNotification.autohide = false
       this.toastService.show(toastNotification)
     }
 

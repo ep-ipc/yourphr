@@ -110,8 +110,12 @@ export class AdminDatabaseComponent implements OnInit {
         this.backupResult = `Downloaded ${filename} (${this.humanSize(blob.size)}).`;
         this.downloading = false;
       },
-      error: () => {
-        this.backupError = 'Download failed — check the server logs.';
+      // Say what the server said. "Check the server logs" is useless advice to anyone who does not
+      // have them — a demo visitor, or an admin on a hosted instance — and it is wrong for the case
+      // that actually happens here: a REFUSAL, which the server explains in a sentence written for
+      // the person reading it.
+      error: (e) => {
+        this.backupError = e?.error?.error || 'Download failed — check the server logs.';
         this.downloading = false;
       },
     });

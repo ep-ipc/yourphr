@@ -88,6 +88,42 @@ describe('AuthInterceptorService', () => {
     expect(toastService.toasts[0].message).toContain('disabled in the public demo');
   });
 
+  // The download case. Asking for a Blob makes Angular hand the ERROR body back as a Blob too, so
+  // the JSON the server sent is unreadable by anything checking err.error.code — the refusal went
+  // unrecognised and the page printed "Download failed — check the server logs" instead of the
+  // reason. Reported live on /web/admin/database as the read-only demo admin.
+  it('decodes a JSON refusal delivered as a Blob, so downloads report the reason too', (done) => {
+    http.post(apiUrl, {}, {responseType: 'blob', observe: 'response'}).subscribe({
+      next: () => done.fail('should error'),
+      error: (err) => {
+        // The caller gets a usable object, not a Blob it would have to decode itself.
+        expect(err.error.code).toBe('demo_account_restricted');
+        expect(err.error.error).toContain('read-only');
+        expect(toastService.toasts.length).toBe(1);
+        done();
+      },
+    });
+
+    const body = new Blob(
+      [JSON.stringify({success: false, code: 'demo_account_restricted', error: 'the demo admin is read-only'})],
+      {type: 'application/json'});
+    httpMock.expectOne(apiUrl).flush(body, {status: 403, statusText: 'Forbidden'});
+  });
+
+  // A proxy returning an HTML error page is still an answer; failing to parse must not erase it.
+  it('keeps a non-JSON blob body as the message', (done) => {
+    http.post(apiUrl, {}, {responseType: 'blob', observe: 'response'}).subscribe({
+      next: () => done.fail('should error'),
+      error: (err) => {
+        expect(err.error.error).toContain('Gateway');
+        done();
+      },
+    });
+
+    httpMock.expectOne(apiUrl).flush(new Blob(['<h1>502 Bad Gateway</h1>'], {type: 'text/html'}),
+      {status: 502, statusText: 'Bad Gateway'});
+  });
+
   // Other 403s belong to their caller — toasting here as well would report them twice.
   it('leaves a non-demo 403 to the caller', (done) => {
     http.get(apiUrl).subscribe({
