@@ -95,6 +95,31 @@ Three reuse shapes, none chosen:
 
 **A backend rewrite does not force a frontend rewrite.** The Angular app talks to an HTTP contract that a TypeScript backend can serve unchanged, leaving 76.8k lines in place. Server-rendering — the thing that would actually remove the authorization-projection problem described in [`authorization-framework.md`](authorization-framework.md) — is a separate decision that could be taken later, incrementally, or never.
 
+## Angular vs React vs something else — deliberately deferred
+
+Recorded here so it stops being relitigated every time the stack comes up. **The answer for now is: stay on Angular, and do not bundle this with the backend question.**
+
+**The "one language" goal does not require touching the frontend.** Angular *is* TypeScript. A Node backend plus the existing Angular app is already a single-language stack; dropping Angular buys nothing on that axis.
+
+**The frontend is the larger rewrite, not the backend.** 76,776 lines of TypeScript/HTML/SCSS against ~29k hand-written Go (47.7k minus the 18.5k generated models). Bundling "move to Node" with "move to React" more than doubles the program and couples two decisions that can be taken years apart.
+
+Dependency coupling, measured from `frontend/package.json`:
+
+- **Angular-coupled: ~17** — `@angular/*` core, plus `@ng-bootstrap/ng-bootstrap`, `@ng-select/ng-select`, `@swimlane/ngx-datatable`, `ng2-charts`, `ngx-highlightjs`, `ngx-infinite-scroll`, `@fortawesome/angular-fontawesome`. Wrappers, each with a React equivalent.
+- **Framework-agnostic: ~27** — and this is where the expensive domain work lives: `dwv` (DICOM viewer), `lforms` (LHC questionnaire renderer), `fhirpath`, `@types/fhir`, `chart.js`, `jose`, `idb`, `@panva/oauth4webapi`, `rtf.js`. **None of these are rewritten by a framework migration.**
+
+So a React move is cheaper than the raw line count implies — the hard widgets survive — but it is still tens of thousands of lines of components and templates for no user-visible gain.
+
+**The real fork is SPA vs server-rendered, not Angular vs React.** That is the decision [`authorization-framework.md`](authorization-framework.md) identifies as the source of the permission-projection problem, and it is why the demo's dead admin buttons are structural rather than a bug. If server-rendering wins for the admin surfaces, the framework question is moot for those screens.
+
+**Where React genuinely pulls:** `@medplum/react` ships prebuilt FHIR UI — resource tables, search controls, questionnaire forms. If Medplum is adopted on the backend, adopting their components too has real coherence. That is an argument about batteries, not about React being a better framework, and it should be weighed as such.
+
+Sequencing, if this is ever revisited:
+
+1. The backend spike proves or kills the larger question first; the frontend keeps talking to the same HTTP contract either way.
+2. Settle the rendering model before the framework — it subsumes the question for at least the admin half.
+3. If it stays an SPA, stay on Angular. [#482](https://github.com/jwilleke/yourphr/issues/482) (Angular 22) is a cost paid regardless and is a fraction of a migration.
+
 ## Costs and risks that remain
 
 - **Time.** Even with the FHIR domain adopted rather than built, this is months of evenings, during which the live instance keeps needing fixes ([#528](https://github.com/jwilleke/yourphr/issues/528) did not wait).
