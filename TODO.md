@@ -110,7 +110,7 @@ _None._
 
 ## ⚪ Needs triage
 
-_None._
+- [#527](https://github.com/jwilleke/yourphr/issues/527) — [BUG] Blob downloads swallow the server's error, so a refusal reports nothing
 
 ## ⏸ Deferred
 
