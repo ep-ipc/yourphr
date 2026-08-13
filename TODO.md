@@ -1,18 +1,22 @@
 # TODO
 
 <!-- RESUME:START -->
-## ▶ Resume here — 2026-08-12
+## ▶ Resume here — 2026-08-13
 
-- Last worked on: **v2.6.0 released and verified live**. The whole auth batch shipped — password policy [#506](https://github.com/jwilleke/yourphr/issues/506), session revocation [#508](https://github.com/jwilleke/yourphr/issues/508), per-account throttle [#509](https://github.com/jwilleke/yourphr/issues/509), CLI reset [#510](https://github.com/jwilleke/yourphr/issues/510), admin reset [#511](https://github.com/jwilleke/yourphr/issues/511), login stats [#512](https://github.com/jwilleke/yourphr/issues/512), Admin → Users [#513](https://github.com/jwilleke/yourphr/issues/513) — plus [#519](https://github.com/jwilleke/yourphr/issues/519), [#520](https://github.com/jwilleke/yourphr/issues/520), cross-repo label consolidation, and template adoption from `mjs-project-template`.
-- Branch / state: `main`, clean, everything pushed, no stashes. All CI green on `d998cee2`; both release images built.
-- Running / in-flight: **none.** A leftover local test instance from the [#510](https://github.com/jwilleke/yourphr/issues/510) verification was stopped during `/wrap`; ports 9195–9199 free.
+- Last worked on: **v2.6.1 released and live on the demo**, fixing why refused actions reported nothing ([#527](https://github.com/jwilleke/yourphr/issues/527)). Then drafted [`docs/planning/authorization-framework.md`](docs/planning/authorization-framework.md) — the authorization half the authentication doc deferred, derived from ngdpbase's `WikiContext`.
+- Branch / state: `main`, clean, everything pushed, no stashes. Release CI fully green on `0060686f`; both images built.
+- Running / in-flight: **none.** Demo is serving 2.6.1 (`main.590ccaf44403417b.js`).
 - Parked / half-done: none.
 - Next steps:
-  - **Click-test [#520](https://github.com/jwilleke/yourphr/issues/520) on the live demo** — press Connect on the sandbox page as `demoadmin`. It is a frontend fix, so only a browser proves it: you should stay on `/web/admin` with a toast instead of being bounced to sign-in.
+  - **Click-test the two [#527](https://github.com/jwilleke/yourphr/issues/527) fixes on the live demo** — as `demoadmin`, press **Delete** on `/web/admin/provider-catalog` and **Download backup** on `/web/admin/database`. Each should show the server's read-only sentence inline, plus a notification top-right that now stays until dismissed. Frontend-only fixes, so only a browser proves them — unit tests were green while the app was broken, which is the whole lesson of this session.
+  - **Answer the sharpest open question in the authorization draft** — is the role-to-permission mapping configuration or compiled in? It collides with the standing "variables belong in configuration" rule ([#472](https://github.com/jwilleke/yourphr/issues/472)); here that would let a config-store typo silently widen access to medical records. A middle position is written up in the doc. Once the doc is shaped, split it into one issue per phase with blocked-by chains.
+  - **Decide the demo's dead admin buttons** — offered, not filed. Every write control on the admin screens looks live and is refused on press; the fix is the `demo.admin.session` flag plus `[disabled]` and a reason, ~1 hour, following the `medical-sources` precedent from [#496](https://github.com/jwilleke/yourphr/issues/496). Phase 4 of the authorization framework deletes it, which is fine — it stops the demo teaching visitors the app is broken in the meantime.
   - **Decide the demo login-stat gap** — [#512](https://github.com/jwilleke/yourphr/issues/512) records only in `AuthSignin`, so the demo's one-click entrances never move `last_login`/`login_count`. Every account on the demo will read "Never" forever. Either document it or record demo sign-ins too.
-  - **Verify the in-review batch** — [#509](https://github.com/jwilleke/yourphr/issues/509)–[#513](https://github.com/jwilleke/yourphr/issues/513) are all shipped and awaiting your decision to close.
-  - **Six Dependabot PRs** are open and untouched this session ([#492](https://github.com/jwilleke/yourphr/pull/492), [#491](https://github.com/jwilleke/yourphr/pull/491), [#490](https://github.com/jwilleke/yourphr/pull/490), [#489](https://github.com/jwilleke/yourphr/pull/489), [#424](https://github.com/jwilleke/yourphr/pull/424), [#378](https://github.com/jwilleke/yourphr/pull/378)).
+  - **Verify the in-review batch** — [#509](https://github.com/jwilleke/yourphr/issues/509)–[#513](https://github.com/jwilleke/yourphr/issues/513) are shipped and awaiting your decision to close.
+  - **Six Dependabot PRs** still open and untouched ([#492](https://github.com/jwilleke/yourphr/pull/492), [#491](https://github.com/jwilleke/yourphr/pull/491), [#490](https://github.com/jwilleke/yourphr/pull/490), [#489](https://github.com/jwilleke/yourphr/pull/489), [#424](https://github.com/jwilleke/yourphr/pull/424), [#378](https://github.com/jwilleke/yourphr/pull/378)).
 - Blockers / significant notes:
+  - **A green unit suite proved nothing about DI wiring.** `app.module.ts` registered the auth interceptor with an explicit `deps: [AuthService, Router]` — inherited from upstream Fasten commit `03294610` — against a three-argument constructor, so `toastService` was `undefined` in every shipped build while the spec, which registers it *without* `deps`, stayed green. An explicit `deps` array replaces a class's own injection metadata and goes stale silently; do not add one.
+  - **`models.AccessToken` has no scopes field.** Every access token is exactly as powerful as whoever minted it. The `Scopes` on `ProviderCatalogEntry` are outbound SMART scopes requested from Epic and Cerner — unrelated, and easy to conflate.
   - **A bare URL in an issue title turns CI red.** [#524](https://github.com/jwilleke/yourphr/issues/524)'s title contains one, `TODO.md` is generated from titles, and MD034 rejects it — `/pstatus` and `/session-commit` now say to wrap URLs from title text in angle brackets. When reproducing a Markdown Lint failure locally, lint `git ls-files '*.md'`: a plain glob surfaces ~87 errors in gitignored files CI never sees.
   - **The demo runs from a golden database**, not the public seed — `bootstrap.seed.path` points at `/opt/fasten/db/golden/fasten.golden.db`, which carries your own `jwilleke` admin. It survived two schema migrations on the 2.6.0 rollout.
   - **`gh issue create --template` cannot use YAML forms**, which is why both bug templates exist; do not "tidy up" by deleting the markdown one.
@@ -24,7 +28,7 @@
 
 ## 🔴 P0 — Security & Critical
 
-_None._
+*None.*
 
 ## 🟠 P1
 
@@ -124,9 +128,9 @@ _None._
 
 ## 🔀 Open pull requests
 
-- PR: [#492](https://github.com/jwilleke/yourphr/pull/492) — chore(deps): bump ng2-charts from 6.0.1 to 9.0.0 in /frontend _(ready)_
-- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready, CI red)_
-- PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend _(ready)_
-- PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 _(ready)_
-- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(ready, CI red)_
-- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(ready, CI red)_
+- PR: [#492](https://github.com/jwilleke/yourphr/pull/492) — chore(deps): bump ng2-charts from 6.0.1 to 9.0.0 in /frontend *(ready)*
+- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend *(ready, CI red)*
+- PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend *(ready)*
+- PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 *(ready)*
+- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready, CI red)*
+- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready, CI red)*
