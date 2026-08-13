@@ -28,7 +28,7 @@
 
 ## 🔴 P0 — Security & Critical
 
-*None.*
+- [#528](https://github.com/jwilleke/yourphr/issues/528) — [BUG] NULL counter columns: password change does not revoke sessions, and Sign-ins never increments — *fixed on `main` in `4e7f2ab6`; awaiting deploy, then verification on the live instance*
 
 ## 🟠 P1
 
