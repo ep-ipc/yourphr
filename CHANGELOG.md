@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.6.2](https://github.com/jwilleke/yourphr/compare/v2.6.1...v2.6.2) (2026-08-13)
+
+Changing your password did not end a stolen session, on every account older than the release that promised it would. **Upgrading is strongly recommended**, and it signs nobody out.
+
+### Bug Fixes
+
+- **auth: a password change now really does end every other session** ([#528](https://github.com/jwilleke/yourphr/issues/528)). The revocation counter added in 2.6.0 was `NULL` — not `0` — on every account that already existed when that version was installed, because adding an integer column leaves existing rows empty rather than zero. Incrementing it computed `NULL + 1`, which in SQL is `NULL`, so the counter never moved. The database reported the write as successful, nothing was logged, and an empty counter reads back as `0` — the same value every already-issued token carries. The check that ends a stolen session compares the two and found them equal, so **the session survived**.
+
+  Everything built on that counter was affected: password change, an admin resetting someone's password, the `fasten reset-password` CLI, and **Sign out everywhere**. Each reported success and ended nothing. Accounts created *after* 2.6.0 were never affected, which is why this survived a green test suite — every test built its user the one way that cannot reproduce it.
+
+  This release backfills the counter and hardens the arithmetic so an empty value can never silently swallow a write again. The backfill restores what 2.6.0 intended, so **no one is signed out by upgrading**. Sessions still in flight from before the upgrade remain valid — end them deliberately with **Sign out everywhere** if you have reason to.
+
+- **admin: Sign-ins now counts** ([#528](https://github.com/jwilleke/yourphr/issues/528)). The same defect hit the sign-in counter from 2.6.0: Admin → Users showed a real **Last sign-in** beside **Sign-ins: 0**, and it stayed at 0 no matter how often the account signed in. The timestamp is written directly so it was always right; only the count was lost. Counting starts from 0 on upgrade — history before this release was never recorded and is not invented.
+
 ## [2.6.1](https://github.com/jwilleke/yourphr/compare/v2.6.0...v2.6.1) (2026-08-13)
 
 When the app refused an action, it told you nothing — and in one case reported a crash instead of the refusal. Both found on the live demo.
