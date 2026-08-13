@@ -108,12 +108,7 @@
 
 ## 🔵 In review — shipped, awaiting verification
 
-- [#527](https://github.com/jwilleke/yourphr/issues/527) — [BUG] Blob downloads swallow the server's error, so a refusal reports nothing
-- [#513](https://github.com/jwilleke/yourphr/issues/513) — [FEATURE] Admin → Users: search, summary cards, useful columns, row actions
-- [#512](https://github.com/jwilleke/yourphr/issues/512) — [FEATURE] Track last_login and login_count per user (no IPs)
-- [#511](https://github.com/jwilleke/yourphr/issues/511) — [FEATURE] Admin can set another user's password from Admin → Users
-- [#510](https://github.com/jwilleke/yourphr/issues/510) — [FEATURE] fasten reset-password CLI — recover an instance when nobody can sign in
-- [#509](https://github.com/jwilleke/yourphr/issues/509) — [FEATURE] Throttle sign-ins per account, not only per IP (both limits configurable)
+*None.*
 
 ## ⚪ Needs triage
 
