@@ -32,6 +32,7 @@
 
 ## 🟠 P1
 
+- [#526](https://github.com/jwilleke/yourphr/issues/526) — [FEATURE] Enable Debug mode vs Show Raw FHIR
 - [#525](https://github.com/jwilleke/yourphr/issues/525) — [BUG] practitioners (Count Error)
 - [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (<https://demo.yourphr.org/web/>)
 - [#523](https://github.com/jwilleke/yourphr/issues/523) — [FEATURE] /web/medical-history  "Save Report"
@@ -106,6 +107,7 @@
 
 ## 🔵 In review — shipped, awaiting verification
 
+- [#527](https://github.com/jwilleke/yourphr/issues/527) — [BUG] Blob downloads swallow the server's error, so a refusal reports nothing
 - [#513](https://github.com/jwilleke/yourphr/issues/513) — [FEATURE] Admin → Users: search, summary cards, useful columns, row actions
 - [#512](https://github.com/jwilleke/yourphr/issues/512) — [FEATURE] Track last_login and login_count per user (no IPs)
 - [#511](https://github.com/jwilleke/yourphr/issues/511) — [FEATURE] Admin can set another user's password from Admin → Users
@@ -114,7 +116,7 @@
 
 ## ⚪ Needs triage
 
-- [#527](https://github.com/jwilleke/yourphr/issues/527) — [BUG] Blob downloads swallow the server's error, so a refusal reports nothing
+*None.*
 
 ## ⏸ Deferred
 
