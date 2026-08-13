@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.6.1](https://github.com/jwilleke/yourphr/compare/v2.6.0...v2.6.1) (2026-08-13)
+
+When the app refused an action, it told you nothing — and in one case reported a crash instead of the refusal. Both found on the live demo.
+
+### Bug Fixes
+
+- **ui: a refused action reports why it was refused** ([#527](https://github.com/jwilleke/yourphr/issues/527)). The interceptor was registered with an explicit `deps` list that had gone stale against its own constructor, so the toast service was `undefined` in every shipped build — no refusal has ever produced a notification. Worse, the resulting `TypeError` was raised *while handling* the error and propagated in its place, so pressing **Delete** on Admin → Provider Catalog as the read-only demo admin reported `Cannot read properties of undefined (reading 'show')` rather than the server's explanation.
+
+  An explicit `deps` array replaces a class's own injection metadata, which is why it went stale silently; it is gone. Reporting is now wrapped so it can never again replace what it is reporting, and that contract is pinned by a test rather than by care.
+
+- **ui: downloads report refusals too** ([#527](https://github.com/jwilleke/yourphr/issues/527)). A download asks for a `blob` response, and Angular applies that to the *error* body as well — so the server's JSON arrived as a `Blob`, every check against it silently failed, and **Download backup** showed `Download failed — check the server logs.` to a demo visitor who has no server logs. Error bodies are now decoded whatever the request asked for, and the page says what the server said. Affects all three download endpoints.
+
+- **ui: a refusal notification no longer disappears by itself.** Five seconds is long enough to miss entirely, after which the app simply looks broken.
+
 ## [2.6.0](https://github.com/jwilleke/yourphr/compare/v2.5.2...v2.6.0) (2026-08-12)
 
 Account security, end to end: a password change now actually ends a stolen session, passwords have rules the server enforces, sign-ins are throttled per account as well as per address, and there are two ways to recover an account nobody can get into.
