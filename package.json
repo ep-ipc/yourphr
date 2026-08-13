@@ -1,0 +1,28 @@
+{
+  "name": "yourphr-ts-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway spike: can a TypeScript/Node FHIR store replace YourPHR's Go backend? Evaluated in yourphr docs/planning/typescript-stack-evaluation.md",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "export": "tsx scripts/export-resources.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@medplum/core": "^5.1.29",
+    "@medplum/definitions": "^5.1.29",
+    "@medplum/fhir-router": "^5.1.29",
+    "@medplum/fhirtypes": "^5.1.29",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "fhirpath": "^5.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
