@@ -106,7 +106,14 @@ import { GetEncryptionKeyWizardComponent } from './pages/get-encryption-key-wiza
             provide: HTTP_INTERCEPTORS,
             useClass: AuthInterceptorService,
             multi: true,
-            deps: [AuthService, Router]
+            // NO `deps` here, deliberately. An explicit deps array REPLACES the class's own injection
+            // metadata, so it silently goes stale the moment the constructor gains a parameter: this
+            // listed [AuthService, Router] while the constructor took a third argument, and
+            // toastService was therefore `undefined` in the shipped app. The interceptor then threw a
+            // TypeError while handling the error, which REPLACED the real HTTP error on its way to
+            // the component — a 403 reached the provider-catalog page as "Cannot read properties of
+            // undefined". AuthInterceptorService is @Injectable, so Angular resolves it correctly on
+            // its own. Leave this out.
         },
         IsAuthenticatedAuthGuard,
         {

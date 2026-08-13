@@ -1,7 +1,8 @@
 import {TestBed} from '@angular/core/testing';
-import {HTTP_INTERCEPTORS, HttpClient} from '@angular/common/http';
+import {HTTP_INTERCEPTORS, HttpClient, HttpErrorResponse, HttpHandler, HttpRequest} from '@angular/common/http';
 import {HttpClientTestingModule, HttpTestingController} from '@angular/common/http/testing';
 import {Router} from '@angular/router';
+import {throwError} from 'rxjs';
 import {AuthInterceptorService} from './auth-interceptor.service';
 import {AuthService} from './auth.service';
 import {ToastService} from './toast.service';
@@ -122,6 +123,35 @@ describe('AuthInterceptorService', () => {
 
     httpMock.expectOne(apiUrl).flush(new Blob(['<h1>502 Bad Gateway</h1>'], {type: 'text/html'}),
       {status: 502, statusText: 'Bad Gateway'});
+  });
+
+  // The provider-catalog Delete report. app.module.ts registered this interceptor with an explicit
+  // `deps: [AuthService, Router]` — two entries against a three-argument constructor — so the real
+  // app ran with `toastService` undefined while this spec, which registers it without `deps`, was
+  // green. Reporting then threw, and the TypeError REPLACED the 403 on its way to the component:
+  // the page showed "Cannot read properties of undefined (reading 'show')" instead of the refusal.
+  //
+  // The deps array is gone, but the contract worth pinning is the stronger one — the caller gets
+  // its HTTP error even when reporting is broken.
+  it('propagates the HTTP error even when the toast service is missing', (done) => {
+    const interceptor = new AuthInterceptorService(authService, router, undefined as any);
+    const req = new HttpRequest<any>('GET', apiUrl);
+    const refusal = new HttpErrorResponse({
+      error: {code: 'demo_account_restricted', error: 'the demo admin is read-only'},
+      status: 403,
+      statusText: 'Forbidden',
+      url: apiUrl,
+    });
+    const handler: HttpHandler = {handle: () => throwError(refusal)};
+
+    interceptor.intercept(req, handler).subscribe({
+      next: () => done.fail('should error'),
+      error: (err) => {
+        expect(err.status).toBe(403);
+        expect(err.error.code).toBe('demo_account_restricted');
+        done();
+      },
+    });
   });
 
   // Other 403s belong to their caller — toasting here as well would report them twice.

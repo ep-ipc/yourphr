@@ -76,14 +76,23 @@ export class AuthInterceptorService implements HttpInterceptor {
     // say it here. Keyed on the machine-readable code rather than the sentence, which is free to
     // change. Other 403s are left to their caller, which avoids double-reporting.
     if (err.status === 403 && err.error?.code === 'demo_account_restricted') {
-      const toastNotification = new ToastNotification()
-      toastNotification.type = ToastType.Error
-      toastNotification.message = err.error?.error || "this action is disabled in the public demo"
-      // Stays until dismissed, like the source-connect failures. A refusal that fades after five
-      // seconds is a refusal the person who pressed the button can easily never see — and then the
-      // app just looks broken.
-      toastNotification.autohide = false
-      this.toastService.show(toastNotification)
+      // Reporting must never REPLACE what it is reporting. When this threw — toastService was
+      // undefined for months because of a stale `deps` array in app.module.ts — the TypeError
+      // propagated instead of the 403, and Delete on the provider-catalog page showed
+      // "Cannot read properties of undefined (reading 'show')" rather than the server's refusal.
+      // The rethrow below is the contract; nothing above it is allowed to break it.
+      try {
+        const toastNotification = new ToastNotification()
+        toastNotification.type = ToastType.Error
+        toastNotification.message = err.error?.error || "this action is disabled in the public demo"
+        // Stays until dismissed, like the source-connect failures. A refusal that fades after five
+        // seconds is a refusal the person who pressed the button can easily never see — and then the
+        // app just looks broken.
+        toastNotification.autohide = false
+        this.toastService.show(toastNotification)
+      } catch (e) {
+        console.error('could not show the refusal toast', e)
+      }
     }
 
     return throwError(err);
