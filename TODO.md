@@ -28,7 +28,7 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#528](https://github.com/jwilleke/yourphr/issues/528) — [BUG] NULL counter columns: password change does not revoke sessions, and Sign-ins never increments — *shipped in `v2.6.2` and verified end to end on the real upgrade path; demo serves 2.6.2. Ready to close*
+*None.*
 
 ## 🟠 P1
 
@@ -39,7 +39,6 @@
 - [#523](https://github.com/jwilleke/yourphr/issues/523) — [FEATURE] /web/medical-history  "Save Report"
 - [#522](https://github.com/jwilleke/yourphr/issues/522) — [FEATURE] ExplanationOfBenefit Display
 - [#521](https://github.com/jwilleke/yourphr/issues/521) — [FEATURE] Claim - display this resource type
-- [#508](https://github.com/jwilleke/yourphr/issues/508) — [BUG] A stolen session survives a password change — session JWTs cannot be revoked
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
