@@ -201,8 +201,11 @@ func (gr *GormRepository) RecordSuccessfulLogin(ctx context.Context, username st
 		Model(&models.User{}).
 		Where("username = ?", username).
 		UpdateColumns(map[string]interface{}{
-			"last_login":  time.Now().UTC(),
-			"login_count": gorm.Expr("login_count + 1"),
+			"last_login": time.Now().UTC(),
+			// COALESCE, not a bare `login_count + 1`: NULL + 1 is NULL, and the column IS NULL on every
+			// row that predates the migration that added it (#528). The UPDATE then succeeds with
+			// RowsAffected 1 and writes nothing — a silent no-op on exactly the oldest accounts.
+			"login_count": gorm.Expr("COALESCE(login_count, 0) + 1"),
 		})
 	if result.Error != nil {
 		return fmt.Errorf("could not record sign-in for %q: %v", username, result.Error)
@@ -226,7 +229,10 @@ func (gr *GormRepository) BumpUserTokenGeneration(ctx context.Context, username 
 		WithContext(ctx).
 		Model(&models.User{}).
 		Where("username = ?", username).
-		UpdateColumn("token_generation", gorm.Expr("token_generation + 1"))
+		// COALESCE, not a bare `token_generation + 1`: NULL + 1 is NULL, the column IS NULL on every row
+		// that predates its migration, and NULL reads back as 0 — so the bump left the counter equal to
+		// what every already-issued token carries and revoked nothing, silently (#528).
+		UpdateColumn("token_generation", gorm.Expr("COALESCE(token_generation, 0) + 1"))
 	if result.Error != nil {
 		return fmt.Errorf("could not revoke sessions for %q: %v", username, result.Error)
 	}

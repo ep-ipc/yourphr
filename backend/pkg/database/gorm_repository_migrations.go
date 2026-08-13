@@ -428,6 +428,29 @@ func (gr *GormRepository) Migrate() error {
 				return tx.Create(&tmpl).Error
 			},
 		},
+		{
+			// Backfill the two counter columns to 0 (#528). AutoMigrate adds an int column with no
+			// DEFAULT, so `ALTER TABLE users ADD login_count integer` left every PRE-EXISTING row NULL
+			// while rows created afterwards got an explicit 0 from the insert. `NULL + 1` is NULL in
+			// SQL, so both increments below wrote nothing, forever, on exactly the accounts that
+			// predate their migration — and reported success while doing it.
+			//
+			// For token_generation (#508) that meant session revocation was INERT: NULL reads back as
+			// 0, an already-issued token carries 0, and `claims < current` is false. Password change,
+			// admin reset, CLI reset and "sign out everywhere" all told the user their other sessions
+			// were ended and ended none of them.
+			//
+			// Backfilling to 0 is the state both original migrations intended, so it logs nobody out.
+			// The earlier IDs are already recorded on live instances and will never re-run, which is
+			// why this needs its own entry rather than a correction to theirs.
+			ID: "20260813090000", // backfill NULL users.token_generation / users.login_count (#528)
+			Migrate: func(tx *gorm.DB) error {
+				if err := tx.Exec("UPDATE users SET token_generation = 0 WHERE token_generation IS NULL").Error; err != nil {
+					return err
+				}
+				return tx.Exec("UPDATE users SET login_count = 0 WHERE login_count IS NULL").Error
+			},
+		},
 	})
 
 	// run when database is empty
