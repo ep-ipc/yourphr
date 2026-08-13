@@ -28,7 +28,7 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#528](https://github.com/jwilleke/yourphr/issues/528) — [BUG] NULL counter columns: password change does not revoke sessions, and Sign-ins never increments — *shipped in `v2.6.2`; awaiting the Flux rollout, then verification on the live instance*
+- [#528](https://github.com/jwilleke/yourphr/issues/528) — [BUG] NULL counter columns: password change does not revoke sessions, and Sign-ins never increments — *shipped in `v2.6.2` and verified end to end on the real upgrade path; demo serves 2.6.2. Ready to close*
 
 ## 🟠 P1
 
