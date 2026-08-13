@@ -6,7 +6,7 @@
 
 **Authentication only** — proving *who* someone is. Everything below answers that one question.
 
-**Authorization is explicitly out of scope** — what an identity is *allowed to do*. YourPHR already has authorization, in four scattered places: the `admin` role check inside each admin handler, `RequireAuth`, the demo guards ([#496](https://github.com/jwilleke/yourphr/issues/496), [#514](https://github.com/jwilleke/yourphr/issues/514), [#516](https://github.com/jwilleke/yourphr/issues/516)), and per-user isolation in the repository queries. Consolidating those is worth doing and is a **separate** piece of work. Mixing the two into one "auth manager" produces something that decides everything and explains nothing, and the authorization half is where the PHI risk actually lives.
+**Authorization is explicitly out of scope** — what an identity is *allowed to do*. That half is now drafted separately in [`authorization-framework.md`](authorization-framework.md). YourPHR already has authorization, in four scattered places: the `admin` role check inside each admin handler, `RequireAuth`, the demo guards ([#496](https://github.com/jwilleke/yourphr/issues/496), [#514](https://github.com/jwilleke/yourphr/issues/514), [#516](https://github.com/jwilleke/yourphr/issues/516)), and per-user isolation in the repository queries. Consolidating those is worth doing and is a **separate** piece of work. Mixing the two into one "auth manager" produces something that decides everything and explains nothing, and the authorization half is where the PHI risk actually lives.
 
 ## Where we are today
 
