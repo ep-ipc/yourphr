@@ -127,6 +127,40 @@ Sequencing, if this is ever revisited:
 - **Encrypted-database migration.** The existing SQLCipher database must be provably readable by whatever replaces it, before anything switches.
 - **No upstream, ever again.** Already nearly true, but a rewrite makes it final.
 
+## Spike result — 2026-08-13
+
+The thesis above was tested rather than argued. Local throwaway repo `yourphr-ts-spike` (not on GitHub; issues stay here), run against the **synthetic** seed corpus — no real records were used.
+
+**The generic indexer works.** `SqliteFhirRepository` implements Medplum's `FhirRepository` over `better-sqlite3-multiple-ciphers` in **551 lines, roughly half of them comment**, with **three tables serving every resource type** and no per-resource-type code anywhere. 72/72 resources loaded in ~100ms, producing 1,261 index rows across 59 distinct SearchParameter codes, entirely from FHIR's own definitions.
+
+**Searches answer correctly**, matching the corpus exactly:
+
+```text
+Condition?patient=Patient/a08...    -> 2   (corpus has 2)
+Observation?patient=Patient/a08...  -> 40  (corpus has 40)
+Encounter?patient=Patient/a08...    -> 4   (corpus has 4)
+Condition?clinical-status=active    -> 1
+```
+
+**Encryption is real**, asserted in both directions — the right key reads, no key fails, the wrong key fails, and a known plaintext marker is absent from the raw bytes on disk. 5/5.
+
+### The finding that justified running it
+
+The first pass returned **zero** for `Condition?patient=X` while `Immunization?patient=X` returned six. FHIR defines reference parameters like `Condition.patient` as `subject.where(resolve() is Patient)`; `fhirpath.js` refuses `resolve()` in synchronous mode, so parameters with plain paths worked and guarded ones silently indexed nothing. **A search that is confidently wrong, not one that errors** — the same shape as [#527](https://github.com/jwilleke/yourphr/issues/527) and [#528](https://github.com/jwilleke/yourphr/issues/528).
+
+Fixed by stripping the guard and reinstating it at index time from the reference's own type prefix: a reference already knows it is `Patient/123`. The alternative — fhirpath's async mode with a database-backed resolver — would make indexing depend on referential integrity that a partially synced PHR does not have.
+
+### What the spike did NOT prove
+
+- **72 synthetic resources.** Nothing about scale, or about the long tail of real provider data.
+- **No id collisions observed — but the corpus came from one source.** The identity seam (open question 1) is therefore still untested. `createResource` counts and rejects duplicates rather than upserting, so the number will be meaningful when a multi-source corpus is loaded.
+- **No writes from the application** — no sync, no re-import dedup, no SMART token storage, no auth.
+- **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one that SQLCipher-via-Go wrote. That compatibility question stays open.
+
+Unimplemented and deliberately throwing rather than returning partial answers: `withTransaction`, `readHistory`, `readVersion`, `patchResource`, `searchByReference`, `_include`/`_revInclude`, chained and composite parameters.
+
+**Status is unchanged: this is still planning, not a decision.** What changed is that the central technical claim is no longer a hypothesis.
+
 ## Open questions
 
 1. **Resource identity.** YourPHR keys on `(source_id, source_resource_type, source_resource_id)` because one record can arrive from three providers; FHIR's `id` is single-server. Where does that seam land against Medplum's model? Expected to be the first real friction.
