@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.7.0](https://github.com/jwilleke/yourphr/compare/v2.6.2...v2.7.0) (2026-08-13)
+
+A client could tell YourPHR what its own IP address was, and be believed. **If you run behind a reverse proxy, this release needs one setting from you** — see the operator note below.
+
+### Features
+
+- **auth: `web.trusted_proxies` decides whose forwarding headers are believed** ([#529](https://github.com/jwilleke/yourphr/issues/529)). The server never told its HTTP framework which proxies to trust, and that framework's default is to trust *all* of them — so `X-Forwarded-For` and `X-Real-IP` were honoured from any caller, and the address they named became the client's identity.
+
+  That address is what the sign-in rate limiter counts against ([#104](https://github.com/jwilleke/yourphr/issues/104)). Sending a different one on each attempt started a fresh count every time, so the limit never triggered and online password guessing was unthrottled from a single machine. The per-account limit added in [#509](https://github.com/jwilleke/yourphr/issues/509) still applied, so a sustained attempt against **one** account was always covered; what was not covered is an attempt spread across many usernames.
+
+  The header was honoured whether or not a proxy existed, so this applied to any directly reachable instance — port-forwarded, tunnelled, or on the LAN — not only to proxied ones.
+
+  The new setting lists the proxies whose headers may be believed. It defaults to **empty, meaning trust nothing**: the client's address is the connection it actually came from, and headers claiming otherwise are ignored. A malformed entry is logged and leaves the server trusting nothing, so a typo cannot quietly restore the old behaviour.
+
+### Notes for operators
+
+- **Behind a reverse proxy (including the k3s ingress), set `web.trusted_proxies` after upgrading**, in Admin → Configuration — typically `10.42.0.0/16` for a k3s pod network, or the gateway address for docker. Until you do, the app sees every request as coming from the proxy, so all users share one rate-limit bucket and a busy household can throttle itself. Nothing is unsafe in the meantime; the limit simply applies too broadly.
+- **Directly reachable instances need no change.** The default is already correct, and is now genuinely enforced.
+- No default names a specific network. Guessing a deployment's topology in a shipped default is how an instance ends up trusting a network it is not on.
+
 ## [2.6.2](https://github.com/jwilleke/yourphr/compare/v2.6.1...v2.6.2) (2026-08-13)
 
 Changing your password did not end a stolen session, on every account older than the release that promised it would. **Upgrading is strongly recommended**, and it signs nobody out.
