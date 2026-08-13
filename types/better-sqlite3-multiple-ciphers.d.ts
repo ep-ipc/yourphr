@@ -21,6 +21,7 @@ declare module 'better-sqlite3-multiple-ciphers' {
     prepare(sql: string): Statement;
     pragma(source: string): unknown;
     exec(sql: string): this;
+    transaction<T extends (...args: never[]) => unknown>(fn: T): T;
     close(): this;
   }
 

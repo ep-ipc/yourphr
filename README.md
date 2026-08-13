@@ -12,44 +12,81 @@ Real patient data must never enter git history here, private repo or not. `.giti
 
 This mirrors the rule in the product repo's `AGENTS.md`: a PHI leak is irreversible.
 
-## What already works
+## Result: the bar was met
 
-Verified end to end against the **synthetic** seed database (`seed/fasten.seed.db`), so nothing below involved real records:
+All three criteria below were met against the **synthetic** seed corpus. No real records have been used.
 
 ```
-npm install
 npm run export -- --db ../yourphr/seed/fasten.seed.db --out phi/seed-resources.ndjson
-npm run smoke  -- --in phi/seed-resources.ndjson
+npm run load   -- --in phi/seed-resources.ndjson --db phi/spike.db
+npm run roundtrip
 ```
 
-Result: **72/72 resources loaded, zero rejections**, and searches answered by the library rather than by hand-written per-type columns:
+**1. A SQLite-backed `FhirRepository` loads the corpus.** 72/72 resources in ~100ms, 0 id collisions, 1,261 index rows — all derived from FHIR's own SearchParameter definitions, across 59 distinct parameter codes. **551 lines** in `src/SqliteFhirRepository.ts`, and roughly half of that is comment. Compare with 18,518 generated Go lines across 70 files doing the same job.
+
+**2. Clinically meaningful searches work**, with no per-resource-type code anywhere:
 
 ```
-Claim?_count=3 -> 3 entries (total 5)
-Condition?_count=3 -> 2 entries (total 2)
-Encounter?_count=3 -> 3 entries (total 4)
+Condition?patient=Patient/a08...    -> 2  (corpus has 2)
+Observation?patient=Patient/a08...  -> 40 (corpus has 40)
+Encounter?patient=Patient/a08...    -> 4  (corpus has 4)
+Condition?clinical-status=active    -> 1
 ```
 
-That already demonstrates the two claims the evaluation rests on: the existing `resource_raw JSON` column makes export a read rather than a transformation, and search semantics come from `@medplum/fhir-router` rather than from 70 generated model files.
+**3. Encryption is real, not assumed** — `npm run roundtrip`, 5/5:
 
-## What is deliberately NOT built yet
+```
+PASS  reopen with the correct key
+PASS  search works on the encrypted database
+PASS  reading WITHOUT the key fails
+PASS  reading with the WRONG key fails
+PASS  "Wolverine" does not appear in the raw file
+```
 
-`scripts/smoke.ts` uses `MemoryRepository` — the reference implementation shipped by `@medplum/fhir-router`. That isolates "do the resources load and search correctly" from the actual open question:
+The last check greps the raw bytes, because "the driver returned rows" is not evidence that what is on disk is ciphertext.
 
-> **Implement `FhirRepository` over SQLite** (`better-sqlite3-multiple-ciphers`), indexing each resource by evaluating its SearchParameter FHIRPath expressions from `@medplum/definitions` with `fhirpath`.
+### The finding worth keeping
 
-That is the spike. Everything here exists to make starting it a five-minute job.
+The first run reported **7 SearchParameter expressions that failed to evaluate**, and the symptom was worse than the error: `Condition?patient=X` returned **0** while `Immunization?patient=X` returned **6**. A search that is confidently wrong, not one that errors.
 
-## Suggested bar for calling it
+Cause: FHIR defines reference parameters like `Condition.patient` as `Condition.subject.where(resolve() is Patient)`, and `fhirpath.js` refuses `resolve()` in synchronous mode. `Immunization.patient` is a plain path, so it worked. The fix (`stripResolveGuards`) removes the guard and reinstates it at index time by matching the reference's own type prefix — a reference already knows it is `Patient/123`, so resolving it is unnecessary. Using fhirpath's async mode with a database-backed resolver would have made indexing depend on referential integrity a partially synced PHR does not have.
 
-Agree this before starting, not after, or the result is a vibe:
+Same shape as the two defects that started this whole conversation: a silent default, a green-looking result, a wrong answer.
 
-1. A SQLite-backed `FhirRepository` passes the same smoke run as `MemoryRepository`, on the real corpus.
-2. One clinically meaningful search works end to end — for example `Condition?patient=X&clinical-status=active` — without per-resource-type hand-written columns.
-3. An encrypted database written by `better-sqlite3-multiple-ciphers` round-trips. The evaluation flags SQLCipher compatibility with the existing Go-written database as unproven; if that fails, it is a finding, not a blocker to route around quietly.
-4. Honest note on what it took, including where Medplum's resource identity model collided with YourPHR's `(source_id, source_resource_type, source_resource_id)` key — expected to be the first real friction.
+### Still not implemented, deliberately
 
-If (1) and (2) take a weekend, that is the answer. If the FHIR layer eats the whole weekend, that is also the answer.
+`withTransaction`, `readHistory`, `readVersion`, `patchResource`, `searchByReference`, `_include`/`_revInclude`, chained and composite parameters. All **throw** rather than return partial answers. Real work for a product; irrelevant to the question this spike asked.
+
+`withTransaction` is the one with a real design question behind it: `better-sqlite3` transactions are synchronous and the interface is async, so it cannot be implemented honestly without either a different driver or a different concurrency story.
+
+## The scripts
+
+| Command | Does |
+|---|---|
+| `npm run export -- --db <path> [--key <k>]` | Reads `resource_raw` out of any YourPHR SQLite database into NDJSON in `phi/` |
+| `npm run smoke -- --in <ndjson>` | Loads it into Medplum's `MemoryRepository` — the control, proving the corpus itself is sound |
+| `npm run load -- --in <ndjson> --db <path>` | The real thing: loads through `SqliteFhirRepository`, reports index rows and collisions, runs searches |
+| `npm run roundtrip` | Asserts encryption works in both directions, including that the plaintext is absent from the raw file |
+| `npm run typecheck` | `tsc --noEmit` |
+
+`smoke.ts` is kept deliberately: when a search disagrees between the two, the difference isolates whether the fault is in this SQLite implementation or in the corpus.
+
+## What this did NOT prove
+
+Worth being precise, because a spike that oversells is worse than none:
+
+- **Only 72 synthetic resources.** Nothing here says anything about performance, or about the long tail of real provider data. The next honest step is the same run against a real export.
+- **No id collisions were observed** — but the seed came from one source. YourPHR keys on `(source_id, source_resource_type, source_resource_id)` precisely because the same record arrives from several providers, and that is where Medplum's `ResourceType/id` model is expected to bite. `createResource` counts and rejects duplicates rather than upserting, so the number will be real when a multi-source corpus is loaded.
+- **No writes from the app** — no sync, no re-import dedup, no SMART token storage, no auth.
+- **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one SQLCipher-via-Go wrote. That remains the open compatibility question.
+
+## If it goes further
+
+Ordering, from the evaluation doc: read before write, reversible before irreversible, and never a moment where the records live only in the unproven store.
+
+1. Same load against a **real export**, with the collision count taken seriously.
+2. Shadow read-only against the live API — same queries to both stacks, diff the responses.
+3. Only then writes, and auth last, because auth failures are the ones that pass tests while being wrong.
 
 ## Dependencies
 
