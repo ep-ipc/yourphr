@@ -106,7 +106,7 @@
 
 ## 🔵 In review — shipped, awaiting verification
 
-- [#529](https://github.com/jwilleke/yourphr/issues/529) — [SECURITY] Gin trusts every proxy: X-Forwarded-For is caller-controlled, so the per-IP auth rate limit can be bypassed — *released in `v2.7.0`; **after the rollout, set `web.trusted_proxies` to the ingress network** in Admin → Configuration*
+- [#529](https://github.com/jwilleke/yourphr/issues/529) — [SECURITY] Gin trusts every proxy: X-Forwarded-For is caller-controlled, so the per-IP auth rate limit can be bypassed — *released in `v2.7.0` and the demo is serving it; **still to do: set `web.trusted_proxies` to the ingress network** in Admin → Configuration, or every visitor shares one rate-limit bucket*
 
 ## ⚪ Needs triage
 
