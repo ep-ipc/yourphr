@@ -1,6 +1,36 @@
 # Changelog
 
-## [2.7.1](https://github.com/jwilleke/yourphr/compare/v2.7.0...v2.7.1) (2026-08-14)
+## [2.8.0](https://github.com/jwilleke/yourphr/compare/v2.7.1...v2.8.0) (2026-08-14)
+
+Insurance claims are readable instead of refused, your record can be saved to a file, and several screens stopped disagreeing with each other.
+
+### Features
+
+- **Insurance claims and benefit statements now display** ([#521](https://github.com/jwilleke/yourphr/issues/521), [#522](https://github.com/jwilleke/yourphr/issues/522)). Both previously showed *"YourPHR does not know how to display this resource type (yet)"* and offered raw JSON — on the two documents whose whole purpose is to say what was billed and what you owe.
+
+  An **explanation of benefits** leads with the money, in ordinary words: *Amount billed*, *Paid by insurance*, *Applied to your deductible*, rather than the payer's `submitted` / `benefit` / `deductible`. Amounts the app does not recognise keep the payer's own wording instead of vanishing, and the currency comes from the record rather than being assumed.
+
+  A **claim** says plainly what it is: a bill your provider sent to your insurance, and *not* a statement of what you owe. People receive both documents for the same visit and reasonably assume both are bills. Its total is labelled *Amount claimed*, and no balance is calculated, because the record does not state one.
+
+- **Save Report** ([#523](https://github.com/jwilleke/yourphr/issues/523)) downloads your record as a single file you can open, print or keep. The button previously did nothing except navigate you back to the dashboard, losing the page you were reading.
+
+  It asks first, and says what matters: the file has no password and no expiry, so anyone who can open it — or the backup it ends up in — can read your health information. Save it where you would keep a paper copy.
+
+### Bug Fixes
+
+- **The dashboard no longer overstates how many practitioners you have** ([#525](https://github.com/jwilleke/yourphr/issues/525)). The tile counted practitioners, organizations and care teams together but opened a page listing practitioners only, so it could read 40 and deliver 6. A number on a tile is a promise about what you will find when you click it.
+
+- **Practitioner names read consistently** ([#525](https://github.com/jwilleke/yourphr/issues/525)). The list showed each name exactly as its source system wrote it, so "Smith, John" sat beside "John Smith" in the same table. Names are now built from the structured parts every provider sends.
+
+- **One way to see the original record, in one place** ([#526](https://github.com/jwilleke/yourphr/issues/526)). Two screens had grown separate versions of this — a checkbox labelled "Enable Debug mode" inside a warning box on one, a "Show raw FHIR" button in the opposite corner on the other. Both now show **Show raw data** below the record. Looking at your own record in its original form is a normal thing to do, not a developer setting, and the warning styling has gone with the name.
+
+- **A missing detail no longer breaks a record card.** Any record lacking an optional linked item — a provider, an organization — could fail to display at all. Affected every record type; it simply needed data with a gap to show it.
+
+- **Benefit statements from some insurers were missing their dates and claim numbers.** The app only read those fields when the insurer labelled the record in one particular way. Every insurer sends them; not all label it.
+
+### Notes
+
+- **Send to Email is still not available** ([#524](https://github.com/jwilleke/yourphr/issues/524)) and now says so instead of quietly navigating away. Sending a complete medical record by email hands it to third-party mail servers permanently, so it needs a deliberate decision about how — the options are written up on the issue.
 
 A cryptography library in the browser bundle was three years behind on security fixes, and the usual alerting could not see it.
 
