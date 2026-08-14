@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.8.1](https://github.com/jwilleke/yourphr/compare/v2.8.0...v2.8.1) (2026-08-14)
+
+Finishes what 2.8.0 started: claims and benefit statements are readable in the record lists too, and the app stops showing you the technical names for your own records.
+
+### Bug Fixes
+
+- **Claims and benefit statements now display in the record lists** ([#521](https://github.com/jwilleke/yourphr/issues/521), [#522](https://github.com/jwilleke/yourphr/issues/522)). 2.8.0 taught them to display when you opened one, but the list you arrive at still said *"YourPHR does not know how to display this resource type (yet)"* above a column of identifiers. The list and the detail view are built separately and only one of them had been taught. Both lists now show what was billed, by whom, when, and for how much.
+
+### Changes
+
+- **Your records are described in plain words, not standards jargon** ([#262](https://github.com/jwilleke/yourphr/issues/262)). The app was showing the interoperability standard's own names for things — `ExplanationOfBenefit`, `DiagnosticReport`, `MedicationRequest` — in nine places, including the record lists and page headings. They now read as **Insurance statement**, **Test report** and **Prescription**.
+
+  Prescriptions, medications you are taking, and medications a pharmacy dispensed stay named apart rather than all becoming "Medication": those are three different facts, and merging them would say something your record does not.
+
+  A record type the app has no plain name for is spelled out as words rather than shown as jargon — nothing is guessed at.
+
 ## [2.8.0](https://github.com/jwilleke/yourphr/compare/v2.7.1...v2.8.0) (2026-08-14)
 
 Insurance claims are readable instead of refused, your record can be saved to a file, and several screens stopped disagreeing with each other.
