@@ -16,6 +16,7 @@ recommends what to do next. It does not start work.
 - Security signals (quote the URL — an unquoted `?` is glob-expanded by zsh and the call silently fails with `no matches found`, which reads as a false "clean"):
   - `gh api "/repos/{owner}/{repo}/dependabot/alerts?state=open"`
   - `gh api "/repos/{owner}/{repo}/code-scanning/alerts?state=open"` (ignore a 404 — feature off)
+  - `cd frontend && yarn audit --groups dependencies` — **not optional, and not covered by the two above.** Dependabot matches advisories by registry coordinates, so a dependency resolved from a **git URL** can never raise an alert. A critical one sat in the shipped bundle for months while the alerts page read `0 open` ([#530](https://github.com/jwilleke/yourphr/issues/530)). Its exit code is a bitmask of severities found (1 info, 2 low, 4 moderate, 8 high, 16 critical), not pass/fail. See [`docs/security/dependency-scanning.md`](../../docs/security/dependency-scanning.md).
   - any other scanner signal available (e.g. GitGuardian)
 - `gh issue list --state open --limit 100 --json number,title,labels`
 - `gh pr list --state open --limit 50 --json number,title,isDraft,mergeStateStatus,createdAt,labels,body,closingIssuesReferences`

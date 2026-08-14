@@ -40,6 +40,49 @@ jobs:
           name: frontend-coverage
           path: ${{ github.workspace }}/frontend/coverage/fastenhealth/lcov.info
           retention-days: 1
+  audit-frontend-deps:
+    name: Audit Frontend Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+      # Dependabot cannot see a dependency resolved from a git URL — it has no registry coordinates
+      # to match an advisory against — so the alerts page read "0 open" while a CRITICAL sat in the
+      # shipped bundle for months (#530, #533). yarn audit reads the lockfile directly and found it.
+      # No install needed: audit works from yarn.lock alone.
+      - name: Report every advisory (never fails the build)
+        working-directory: frontend
+        run: yarn audit --groups dependencies || true
+      # Gate ONLY on critical production findings. The tree carries ~23 high advisories in build
+      # tooling — eslint, storybook, karma, the Angular devkit — which never reach a browser, and a
+      # job that is permanently red teaches everyone to ignore it, which is worse than no job.
+      #
+      # Yarn Classic's audit exit code is a BITMASK of the severities it reported, not pass/fail:
+      # 1 INFO, 2 LOW, 4 MODERATE, 8 HIGH, 16 CRITICAL. Verified on this tree: a single LOW
+      # advisory exits 2, not 1. So test bit 16 rather than relying on a non-zero exit, which today
+      # would fail every run on that one low finding.
+      #
+      # NOTE `--level` is deliberately absent: on Yarn Classic it does NOT filter — passing
+      # `--level critical` still reports and still counts lows — so including it would suggest a
+      # filter that is not happening.
+      - name: Fail on critical production advisories
+        working-directory: frontend
+        run: |
+          set +e
+          yarn audit --groups dependencies > audit.txt 2>&1
+          code=$?
+          set -e
+          echo "yarn audit exit bitmask: $code"
+          tail -5 audit.txt
+          if [ $(( code & 16 )) -ne 0 ]; then
+            echo "::error::critical advisory in a production dependency — see the report above"
+            exit 1
+          fi
+          echo "no critical production advisories"
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
