@@ -32,6 +32,7 @@
 
 ## 🟠 P1
 
+- [#530](https://github.com/jwilleke/yourphr/issues/530) — [SECURITY] elliptic 6.5.0 ships in the bundle via webcrypto-liner, and Dependabot cannot see it
 - [#526](https://github.com/jwilleke/yourphr/issues/526) — [FEATURE] Enable Debug mode vs Show Raw FHIR
 - [#525](https://github.com/jwilleke/yourphr/issues/525) — [BUG] practitioners (Count Error)
 - [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (<https://demo.yourphr.org/web/>)
@@ -49,6 +50,11 @@
 
 ## 🟡 P2
 
+- PR: [#492](https://github.com/jwilleke/yourphr/pull/492) — chore(deps): bump ng2-charts from 6.0.1 to 9.0.0 in /frontend *(ready)* — no linked issue
+- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend *(CI red — 3 failing)* — no linked issue
+- PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend *(ready)* — no linked issue
+- PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 *(ready)* — no linked issue
+- [#531](https://github.com/jwilleke/yourphr/issues/531) — [security] go/clear-text-logging — 2 high CodeQL alerts in demoSignin, both false positives
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#502](https://github.com/jwilleke/yourphr/issues/502) — [ARCH] Evaluate moving Azia's hand-rolled dark stylesheet onto Bootstrap 5.3 colour modes (data-bs-theme)
 - [#500](https://github.com/jwilleke/yourphr/issues/500) — [FEATURE] ui.theme-name: theme.name is published but wired to nothing — wire it up or remove it
@@ -106,14 +112,12 @@
 
 ## 🔵 In review — shipped, awaiting verification
 
-- [#529](https://github.com/jwilleke/yourphr/issues/529) — [SECURITY] Gin trusts every proxy: X-Forwarded-For is caller-controlled, so the per-IP auth rate limit can be bypassed — *released in `v2.7.0` and the demo is serving it; **still to do: set `web.trusted_proxies` to the ingress network** in Admin → Configuration, or every visitor shares one rate-limit bucket*
-
-## ⚪ Needs triage
-
 *None.*
 
 ## ⏸ Deferred
 
+- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(CI red — 1 failing)* — no linked issue
+- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(CI red — 2 failing)* — no linked issue
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
@@ -122,11 +126,6 @@
 - [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
 
-## 🔀 Open pull requests
+## ❓ Needs triage
 
-- PR: [#492](https://github.com/jwilleke/yourphr/pull/492) — chore(deps): bump ng2-charts from 6.0.1 to 9.0.0 in /frontend *(ready)*
-- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend *(ready, CI red)*
-- PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend *(ready)*
-- PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 *(ready)*
-- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(ready, CI red)*
-- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(ready, CI red)*
+*None.*
