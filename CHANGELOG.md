@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.7.1](https://github.com/jwilleke/yourphr/compare/v2.7.0...v2.7.1) (2026-08-14)
+
+A cryptography library in the browser bundle was three years behind on security fixes, and the usual alerting could not see it.
+
+### Bug Fixes
+
+- **security: the bundled crypto library is patched** ([#530](https://github.com/jwilleke/yourphr/issues/530)). YourPHR ships a WebCrypto polyfill so that browsers without built-in cryptography — which includes any browser served over plain HTTP rather than HTTPS — can still complete the secure handshake when connecting to a provider. That polyfill depended on a **copy of `elliptic` frozen at version 6.5.0**, taken from a personal fork rather than the official release, so none of the security fixes published since ever reached it. Three advisories applied, the most serious rated **critical**.
+
+  It went unreported because the dependency is fetched from a source-code URL rather than the package registry, and automated alerting matches advisories by registry name. The alerts page read clean the entire time. Routine auditing is what surfaced it.
+
+  The build now takes the patched official release (6.6.1) in place of the fork. Nothing changes in how the application behaves.
+
+### Changes
+
+- **`lforms` 42 → 43** and **`ng2-charts` 6 → 9** — questionnaire rendering and charts. Verified against the full browser test suite as well as the unit tests, since both are display components that unit tests barely exercise.
+- **`gorm.io/driver/postgres` 1.6.0 → 1.6.2.**
+
+### Notes for operators
+
+- No action required, and no configuration changes. If you set `web.trusted_proxies` after upgrading to 2.7.0, that setting is unaffected.
+
 ## [2.7.0](https://github.com/jwilleke/yourphr/compare/v2.6.2...v2.7.0) (2026-08-13)
 
 A client could tell YourPHR what its own IP address was, and be believed. **If you run behind a reverse proxy, this release needs one setting from you** — see the operator note below.
