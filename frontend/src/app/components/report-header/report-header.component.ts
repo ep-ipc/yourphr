@@ -1,4 +1,5 @@
-import {Component, Input, OnInit} from '@angular/core';
+import {Component, Input, OnInit, TemplateRef, ViewChild} from '@angular/core';
+import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {ResourceFhir} from '../../models/fasten/resource_fhir';
 import {FastenApiService} from '../../services/fasten-api.service';
 import * as fhirpath from 'fhirpath';
@@ -17,8 +18,11 @@ export class ReportHeaderComponent implements OnInit {
   lastUpdated: Date = null
   @Input() reportHeaderTitle = ""
   @Input() reportHeaderSubTitle = "Organized by condition and encounters"
+  @ViewChild('saveReportWarning') saveReportWarning: TemplateRef<any>
+
   constructor(
     private fastenApi: FastenApiService,
+    private modalService: NgbModal,
   ) { }
 
   ngOnInit(): void {
@@ -51,6 +55,24 @@ export class ReportHeaderComponent implements OnInit {
   getIPSExport(event: Event){
     event.preventDefault()
     return this.fastenApi.getIPSExport("pdf")
+  }
+
+  /**
+   * Save Report downloads the whole record as a self-contained HTML file (#523).
+   *
+   * Warn FIRST, and say what is actually at stake. A patient exporting their record is doing a
+   * normal thing, but the file that lands in Downloads is their complete medical history in the
+   * clear — no password, no expiry — and it will be backed up, synced and shared as casually as any
+   * other download. That is worth one sentence before it happens, not a scare dialog after.
+   *
+   * Deliberately not a browser confirm(): it cannot say this much, and it is not styleable.
+   */
+  saveReport(event: Event){
+    event.preventDefault()
+    this.modalService.open(this.saveReportWarning, {ariaLabelledBy: 'save-report-title'}).result.then(
+      () => this.fastenApi.getIPSExport("html"),
+      () => {}, // dismissed — nothing to do
+    )
   }
 
 }

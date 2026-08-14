@@ -32,12 +32,35 @@
   </nav>
 
   <nav class="nav">
-    <a class="nav-link" routerLink="/" ngbTooltip="not yet implemented"><i class="far fa-save"></i> Save Report</a>
+    <a class="nav-link cursor-pointer" (click)="saveReport($event)"><i class="far fa-save"></i> Save Report</a>
     <a class="nav-link" (click)="getIPSExport($event)"><i class="far fa-file-pdf"></i> Export to PDF</a>
-    <a class="nav-link" routerLink="/" ngbTooltip="not yet implemented"><i class="far fa-envelope"></i>Send to Email</a>
-    <a class="nav-link" routerLink="/" ngbTooltip="not yet implemented"><i class="fas fa-ellipsis-h"></i></a>
+    <a class="nav-link disabled tx-gray-400" ngbTooltip="Not yet available — see issue #524"><i class="far fa-envelope"></i>Send to Email</a>
+    <a class="nav-link disabled tx-gray-400" ngbTooltip="not yet implemented"><i class="fas fa-ellipsis-h"></i></a>
   </nav>
 </div>
+
+<!--
+  Shown before the download starts, not after. The file is the patient's whole record in the clear;
+  saying so once is the difference between an informed export and a surprise (#523).
+-->
+<ng-template #saveReportWarning let-modal>
+  <div class="modal-header">
+    <h5 class="modal-title" id="save-report-title">Save your report</h5>
+    <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss()"></button>
+  </div>
+  <div class="modal-body">
+    <p>This downloads your medical record as a single web-page file you can open, print or keep.</p>
+    <p class="mg-b-0">
+      <strong>The file is not protected.</strong> It contains your health information in readable form,
+      with no password and no expiry — anyone who can open the file, or the backup it ends up in, can
+      read it. Save it somewhere you would keep a paper copy of your records.
+    </p>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-secondary" (click)="modal.dismiss()">Cancel</button>
+    <button type="button" class="btn btn-az-primary" (click)="modal.close('download')">Download report</button>
+  </div>
+</ng-template>
 
 <ng-template #primaryCarePopoverContent>
   <fhir-card [displayModel]="primaryCare"></fhir-card>
