@@ -32,6 +32,8 @@ Insurance claims are readable instead of refused, your record can be saved to a 
 
 - **Send to Email is still not available** ([#524](https://github.com/jwilleke/yourphr/issues/524)) and now says so instead of quietly navigating away. Sending a complete medical record by email hands it to third-party mail servers permanently, so it needs a deliberate decision about how — the options are written up on the issue.
 
+## [2.7.1](https://github.com/jwilleke/yourphr/compare/v2.7.0...v2.7.1) (2026-08-14)
+
 A cryptography library in the browser bundle was three years behind on security fixes, and the usual alerting could not see it.
 
 ### Bug Fixes
