@@ -23,6 +23,7 @@ import {GetEndpointAbsolutePath} from '../../lib/utils/endpoint_absolute_path';
 import {environment} from '../../environments/environment';
 import {ValueSet} from 'fhir/r4';
 import {AttachmentModel} from '../../lib/models/datatypes/attachment-model';
+import {formatHumanName} from '../../lib/models/datatypes/human-name-model';
 import {BinaryModel} from '../../lib/models/resources/binary-model';
 import {HTTP_CLIENT_TOKEN} from "../dependency-injection";
 import * as fhirpath from 'fhirpath';
@@ -1063,7 +1064,10 @@ export class FastenApiService {
               source_resource_id: item.source_resource_id,
               source_id: item.source_id,
               source_resource_type: item.source_resource_type,
-              full_name: item.resource_raw.name?.[0]?.text || item?.sort_title || 'N/A',
+              // Built from the structured given/family parts, NOT HumanName.text: text is written by
+              // whichever system produced the record, so a list rendered from it mixes "Smith, John"
+              // and "John Smith" depending on the provider (#525).
+              full_name: formatHumanName(item.resource_raw.name?.[0]) || item?.sort_title || 'N/A',
               address: item.resource_raw.address?.[0] || {
                 line: [], 
                 city: '', 
