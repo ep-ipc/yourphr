@@ -44,7 +44,12 @@ export const DEFAULT_TILES: DashboardTile[] = [
   {id: 'visits', label: 'Visits & Notes', clinicalLabel: 'Encounters', icon: 'fa-solid fa-notes-medical', route: '/medical-history', resourceTypes: ['Encounter'], count: 0, color: 'teal', unit: 'encounters'},
   {id: 'procedures', label: 'Procedures', clinicalLabel: 'Procedures & surgeries', icon: 'fa-solid fa-user-nurse', route: '/procedures', resourceTypes: ['Procedure'], count: 0, color: 'purple', unit: 'procedures'},
   {id: 'documents', label: 'Documents', clinicalLabel: 'Clinical documents & files', icon: 'fa-solid fa-file-medical', route: '/medical-history', resourceTypes: ['DocumentReference', 'Media', 'Binary'], count: 0, color: 'gray', unit: 'documents'},
-  {id: 'care-team', label: 'Care Team', clinicalLabel: 'Practitioners & organizations', icon: 'fa-solid fa-user-doctor', route: '/practitioners', resourceTypes: ['Practitioner', 'Organization', 'CareTeam'], count: 0, color: 'teal', unit: 'practitioners'},
+  // Counts ONLY Practitioner, because /practitioners lists only practitioners (#525). It previously
+  // summed Practitioner + Organization + CareTeam, so the tile promised a number the page could not
+  // show — 4 on the seed data, 2 rows on arrival — and called the total "practitioners" when most of
+  // it was organizations. A count is a claim about what you will find; it has to match the
+  // destination. Organizations and care teams have no page of their own yet (#535).
+  {id: 'care-team', label: 'Practitioners', clinicalLabel: 'Practitioners involved in your care', icon: 'fa-solid fa-user-doctor', route: '/practitioners', resourceTypes: ['Practitioner'], count: 0, color: 'teal', unit: 'practitioners'},
 ]
 
 @Component({

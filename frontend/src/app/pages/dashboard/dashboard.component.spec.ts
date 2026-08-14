@@ -103,4 +103,27 @@ describe('DashboardComponent', () => {
     expect(component.hasCustomColors).toBeFalse();
     expect(preferences.getTileColors()).toEqual({});
   });
+
+  // A tile's number is a promise about what the page behind it contains. The practitioners tile used
+  // to sum Practitioner + Organization + CareTeam while /practitioners lists practitioners only, so
+  // it read "4 practitioners" and delivered two rows (#525).
+  it('should count only Practitioner on the practitioners tile, matching the page it opens', () => {
+    const tile = DEFAULT_TILES.find((t) => t.id === 'care-team');
+
+    expect(tile.route).toEqual('/practitioners');
+    expect(tile.resourceTypes).toEqual(['Practitioner']);
+  });
+
+  it('should not inflate the practitioners count with organizations', () => {
+    component['populateTileCounts']({
+      resource_type_counts: [
+        {resource_type: 'Practitioner', count: 2},
+        {resource_type: 'Organization', count: 2},
+        {resource_type: 'CareTeam', count: 1},
+      ],
+    } as any);
+
+    const tile = component.tiles.find((t) => t.id === 'care-team');
+    expect(tile.count).toEqual(2);
+  });
 });
