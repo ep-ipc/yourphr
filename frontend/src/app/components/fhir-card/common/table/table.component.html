@@ -1,7 +1,13 @@
 <div class="table-responsive">
   <table class="table">
     <tbody>
-    <tr *ngFor="let rowItem of tableData">
+    <!--
+      Honour `enabled`. Every card sets it — "only show this row if the resource actually carries the
+      field" — and the table used to ignore it, so a missing optional field rendered as a blank row
+      and an absent Reference CRASHED the card on `rowItem.data.reference` (found via #521).
+      Undefined counts as visible, since older cards omit the flag entirely.
+    -->
+    <tr *ngFor="let rowItem of tableData" [hidden]="rowItem.enabled === false">
       <td>
         <strong>{{rowItem.label}}</strong>
       </td>
@@ -23,7 +29,8 @@
           <fhir-coding *ngFor="let coding of rowItem.data" [coding]="coding"></fhir-coding>
         </ng-template>
         <ng-template #dataTypeReference>
-          <a [routerLink]="['/explore', displayModel.source_id, 'resource', rowItem.data.reference]">{{rowItem.data.display}}</a>
+          <!-- Guarded: an absent reference must render nothing, not throw and take the whole card with it. -->
+          <a *ngIf="rowItem.data?.reference" [routerLink]="['/explore', displayModel?.source_id, 'resource', rowItem.data.reference]">{{rowItem.data.display || rowItem.data.reference}}</a>
         </ng-template>
         <ng-template #dataTypeString>{{rowItem.data}}</ng-template>
       </td>

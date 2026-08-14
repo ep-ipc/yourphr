@@ -42,7 +42,9 @@ import {CareTeamComponent} from '../resources/care-team/care-team.component';
 import {GoalComponent} from '../resources/goal/goal.component';
 import {DeviceComponent} from '../resources/device/device.component';
 import {ConsentComponent} from '../resources/consent/consent.component';
+import {ClaimComponent} from '../resources/claim/claim.component';
 import {CoverageComponent} from '../resources/coverage/coverage.component';
+import {ExplanationOfBenefitComponent} from '../resources/explanation-of-benefit/explanation-of-benefit.component';
 import {ServiceRequestComponent} from '../resources/service-request/service-request.component';
 import {SpecimenComponent} from '../resources/specimen/specimen.component';
 import {RelatedPersonComponent} from '../resources/related-person/related-person.component';
@@ -132,6 +134,9 @@ export class FhirCardComponent implements OnInit, OnChanges {
       // case "Communication": {
       //   return ListCommunicationComponent;
       // }
+      case "Claim": {
+        return ClaimComponent;
+      }
       case "Condition": {
         return ConditionComponent;
       }
@@ -155,6 +160,9 @@ export class FhirCardComponent implements OnInit, OnChanges {
       }
       case "Encounter": {
         return EncounterComponent;
+      }
+      case "ExplanationOfBenefit": {
+        return ExplanationOfBenefitComponent;
       }
       case "Goal": {
         return GoalComponent;

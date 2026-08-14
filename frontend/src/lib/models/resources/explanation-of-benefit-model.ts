@@ -125,6 +125,22 @@ export class ExplanationOfBenefitModel extends FastenDisplayModel {
     this.hasInformation = Array.isArray(this.information) && this.information.length > 0;
     this.procedures = _.get(fhirResource, 'procedure', []);
 
+    // These are PLAIN R4 fields, not CARIN extensions, and they used to be read only in c4bbDTO
+    // below — so an ExplanationOfBenefit that did not carry a C4BB profile silently lost its service
+    // dates, its outcome and its claim number (#522). Every payer writes billablePeriod; only some
+    // stamp the profile. Reading them here means the card works for any EOB, and c4bbDTO re-reading
+    // them is harmless.
+    this.billablePeriod = _.get(fhirResource, 'billablePeriod');
+    this.outcome = _.get(fhirResource, 'outcome');
+    this.identifier = _.get(fhirResource, 'identifier');
+    this.payment = _.get(fhirResource, 'payment.amount');
+    this.diagnosis = _.get(fhirResource, 'diagnosis', []);
+    this.hasDiagnosis = this.diagnosis.length > 0;
+    this.items = _.get(fhirResource, 'item', []);
+    this.hasItems = this.items.length > 0;
+    this.careTeam = _.get(fhirResource, 'careTeam', []);
+    this.hasCareTeam = this.careTeam.length > 0;
+
     // Person can have multiple insurances, but one with focal = true is used to judge this claim
     const insuranceList = _.get(fhirResource, 'insurance', []);
     const adjudicationInsurance = insuranceList.filter(item => item.focal)[0];
@@ -184,7 +200,11 @@ export class ExplanationOfBenefitModel extends FastenDisplayModel {
         this.r4DTO(fhirResource)
 
         //https://build.fhir.org/ig/HL7/carin-bb/StructureDefinition-C4BB-ExplanationOfBenefit.html
-        if ((_.get(fhirResource, 'meta.profile[0]') || '').startsWith('http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB')) {
+        // Scans EVERY declared profile, not just the first. meta.profile is an unordered list and a
+        // payer may well stamp its own profile ahead of the CARIN one, which used to mean the C4BB
+        // path silently did not run.
+        const profiles: string[] = _.get(fhirResource, 'meta.profile', []) || []
+        if (profiles.some((profile) => (profile || '').startsWith('http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB'))) {
           this.c4bbDTO(fhirResource)
         }
 

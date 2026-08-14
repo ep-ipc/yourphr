@@ -32,6 +32,7 @@ import {MedicationRequestModel} from './resources/medication-request-model';
 import {MedicationStatementModel} from './resources/medication-statement-model';
 import {BinaryModel} from './resources/binary-model';
 import {MediaModel} from './resources/media-model';
+import {ClaimModel} from './resources/claim-model';
 import {ExplanationOfBenefitModel} from './resources/explanation-of-benefit-model';
 import {ServiceRequestModel} from './resources/service-request-model';
 import {SpecimenModel} from './resources/specimen-model';
@@ -87,9 +88,9 @@ export function fhirModelFactory(
     case ResourceType.CareTeam:
       resourceModel = new CareTeamModel(fhirResourceWrapper.resource_raw, fhirVersion, fastenOptions)
       break
-    // case ResourceType.Claim:
-    //   resourceModel = new ClaimModel(fhirResourceWrapper.resource_raw, fhirVersion, fastenOptions)
-    // break
+    case ResourceType.Claim:
+      resourceModel = new ClaimModel(fhirResourceWrapper.resource_raw, fhirVersion, fastenOptions)
+      break
     // case ResourceType.ClaimResponse:
     //   resourceModel = new ClaimResponseModel(fhirResourceWrapper.resource_raw, fhirVersion, fastenOptions)
     // break

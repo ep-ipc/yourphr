@@ -108,6 +108,20 @@ describe('ExplanationOfBenefitModel', () => {
       expected.hasServices = true
       expected.insurance = Object({ reference: 'Coverage/9876B1' })
 
+      // These are plain R4 fields and this fixture carries no C4BB profile. They used to be read
+      // ONLY in c4bbDTO, so a non-CARIN ExplanationOfBenefit lost its outcome, its claim number and
+      // its line items — and this expectation pinned that as correct (#522). It was not: the payer
+      // sent them, and the card needs them. Now read in r4DTO.
+      expected.outcome = 'complete'
+      expected.identifier = [
+        Object({ system: 'http://www.BenefitsInc.com/fhir/explanationofbenefit', value: '987654321' })
+      ]
+      // items are the raw line items, unlike `services` above which is the mapped summary
+      expected.items = jasmine.any(Array) as any
+      expected.hasItems = true
+      expected.careTeam = [{ sequence: 1, provider: { reference: 'Practitioner/example' } }] as any
+      expected.hasCareTeam = true
+
       expect(new ExplanationOfBenefitModel(example4Fixture)).toEqual(expected);
     });
   })

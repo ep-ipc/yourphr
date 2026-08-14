@@ -6,6 +6,7 @@ export enum ResourceType {
   Binary = "Binary",
   CarePlan = "CarePlan",
   CareTeam = "CareTeam",
+  Claim = "Claim",
   Condition = "Condition",
   Composition = "Composition",
   Consent = "Consent",
