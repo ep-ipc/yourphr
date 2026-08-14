@@ -68,7 +68,7 @@
                 <thead><tr><th>Resource</th><th>Status</th><th>Date</th><th>Dose</th><th>Frequency</th></tr></thead>
                 <tbody>
                   <tr *ngFor="let c of med.contributors">
-                    <td>{{ c.resourceType }}</td>
+                    <td>{{ c.resourceType | resourceTypeLabel }}</td>
                     <td>{{ c.status || '—' }}<span *ngIf="c.state"> ({{ c.state }})</span></td>
                     <td>{{ c.date ? (c.date | date) : '—' }}</td>
                     <td>{{ c.dose || '—' }}</td>

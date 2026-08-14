@@ -11,6 +11,7 @@ import { ReferenceUriPipe } from './reference-uri.pipe';
 import { FastenDisplayModelPipe } from './fasten-display-model.pipe';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { TimeAgoPipe } from './time-ago.pipe';
+import { ResourceTypeLabelPipe } from './resource-type-label.pipe';
 
 @NgModule({
   declarations: [
@@ -24,6 +25,7 @@ import { TimeAgoPipe } from './time-ago.pipe';
     ReferenceUriPipe,
     FastenDisplayModelPipe,
     SafeHtmlPipe,
+    ResourceTypeLabelPipe,
   ],
   imports: [
 
@@ -37,7 +39,8 @@ import { TimeAgoPipe } from './time-ago.pipe';
     HumanNamePipe,
     ReferenceUriPipe,
     FastenDisplayModelPipe,
-    SafeHtmlPipe
+    SafeHtmlPipe,
+    ResourceTypeLabelPipe
   ]
 })
 export class PipesModule {}

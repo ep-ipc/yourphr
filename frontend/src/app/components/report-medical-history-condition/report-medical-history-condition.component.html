@@ -61,7 +61,7 @@
               <ul>
                 <li  *ngFor="let resourceEntry of resourcesLookup | keyvalue">
                   <a class="cursor-pointer tx-indigo" [routerLink]="resourceEntry.key">
-                    {{resourceEntry.value.source_resource_type}} {{resourceEntry.value.sort_title ? '- '+resourceEntry.value.sort_title : '' }}
+                    {{resourceEntry.value.source_resource_type | resourceTypeLabel}} {{resourceEntry.value.sort_title ? '- '+resourceEntry.value.sort_title : '' }}
                   </a>
                 </li>
               </ul>

@@ -28,7 +28,7 @@
             <li *ngFor="let item of searchResults">
               <button type="button" class="search-item" (click)="openResource(item)">
                 <i class="search-item-icon {{iconForType(item.source_resource_type)}}" aria-hidden="true"></i>
-                <span class="search-item-title">{{item.title || item.source_resource_type}}</span>
+                <span class="search-item-title">{{item.title || (item.source_resource_type | resourceTypeLabel)}}</span>
                 <span *ngIf="item.date" class="search-item-date">{{item.date | date:'MMM d, yyyy'}}</span>
               </button>
             </li>
@@ -92,7 +92,7 @@
           <li *ngFor="let item of recentActivity">
             <button type="button" class="activity-item" (click)="openResource(item)">
               <i class="activity-icon {{iconForType(item.source_resource_type)}}" aria-hidden="true"></i>
-              <span class="activity-title">{{item.title || item.source_resource_type}}</span>
+              <span class="activity-title">{{item.title || (item.source_resource_type | resourceTypeLabel)}}</span>
               <span *ngIf="item.date" class="activity-date">{{item.date | date:'MMM d, yyyy'}}</span>
             </button>
           </li>

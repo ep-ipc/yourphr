@@ -8,7 +8,7 @@
       <div class="az-content-breadcrumb" *ngIf="sourceId">
         <span class="cursor-pointer" [routerLink]="['/explore', sourceId]">{{sourceOrPatientLabel}}</span>
         <span class="cursor-pointer" [routerLink]="['/explore']">Explore</span>
-        <span class="cursor-pointer" [routerLink]="['/explore', sourceId]">{{resourceType || 'Resource'}}</span>
+        <span class="cursor-pointer" [routerLink]="['/explore', sourceId]">{{ (resourceType | resourceTypeLabel) || 'Record' }}</span>
         <span>{{resourceTitle}}</span>
       </div>
 

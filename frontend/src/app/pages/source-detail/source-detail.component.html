@@ -58,7 +58,7 @@
 
       <ul class="list-group">
         <li *ngFor="let resourceGroup of resourceTypeCounts | keyvalue" (click)="selectResourceType(resourceGroup.key)" class="list-group-item d-flex justify-content-between align-items-center cursor-pointer">
-          {{resourceGroup.key}} <span class="badge bg-primary rounded-pill">{{resourceGroup.value}}</span>
+          {{resourceGroup.key | resourceTypeLabel}} <span class="badge bg-primary rounded-pill">{{resourceGroup.value}}</span>
         </li>
       </ul>
     </div>

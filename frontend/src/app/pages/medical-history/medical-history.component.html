@@ -60,7 +60,7 @@
                 <ng-template #simpleRow>
                   <div class="card pd-15">
                     <a [routerLink]="['/explore', row.sourceId, 'resource', row.resourceId]">{{ row.title }}</a>
-                    <div class="tx-12 tx-gray-500">{{ row.resourceType }}</div>
+                    <div class="tx-12 tx-gray-500">{{ row.resourceType | resourceTypeLabel }}</div>
                   </div>
                 </ng-template>
                 <app-raw-resource [raw]="resourceFor(row)?.resource_raw"></app-raw-resource>
