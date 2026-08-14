@@ -66,8 +66,6 @@ export function resourceDetailCrumbTitle(resource: ResourceFhir, displayModel: F
 })
 export class ResourceDetailComponent implements OnInit {
   loading = false
-  debugMode = false;
-  copied = false;
 
   sourceId = ""
   /** First crumb: connected source display, else Patient subject.display, else short source id. */
@@ -78,17 +76,6 @@ export class ResourceDetailComponent implements OnInit {
   displayModel: FastenDisplayModel = null
 
   constructor(private fastenApi: FastenApiService, private router: Router, private route: ActivatedRoute, private clipboard: Clipboard) {
-  }
-
-  // #167: copy the raw FHIR resource JSON (shown in debug mode) to the clipboard.
-  copyResourceRaw(): void {
-    if (!this.resource?.resource_raw) { return }
-    const raw = this.resource.resource_raw as any
-    const text = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2)
-    if (this.clipboard.copy(text)) {
-      this.copied = true
-      setTimeout(() => { this.copied = false }, 2000)
-    }
   }
 
   ngOnInit(): void {
