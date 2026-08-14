@@ -32,7 +32,6 @@
 
 ## 🟠 P1
 
-- [#530](https://github.com/jwilleke/yourphr/issues/530) — [SECURITY] elliptic 6.5.0 ships in the bundle via webcrypto-liner, and Dependabot cannot see it
 - [#526](https://github.com/jwilleke/yourphr/issues/526) — [FEATURE] Enable Debug mode vs Show Raw FHIR
 - [#525](https://github.com/jwilleke/yourphr/issues/525) — [BUG] practitioners (Count Error)
 - [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (<https://demo.yourphr.org/web/>)
@@ -50,13 +49,9 @@
 
 ## 🟡 P2
 
-- PR: [#492](https://github.com/jwilleke/yourphr/pull/492) — chore(deps): bump ng2-charts from 6.0.1 to 9.0.0 in /frontend *(ready)* — no linked issue
 - PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend *(CI red — 3 failing)* — no linked issue
-- PR: [#490](https://github.com/jwilleke/yourphr/pull/490) — chore(deps): bump lforms from 42.2.0 to 43.0.0 in /frontend *(ready)* — no linked issue
-- PR: [#489](https://github.com/jwilleke/yourphr/pull/489) — chore(deps): bump gorm.io/driver/postgres from 1.6.0 to 1.6.2 *(ready)* — no linked issue
 - [#533](https://github.com/jwilleke/yourphr/issues/533) — [SECURITY] Dependabot cannot see git-URL dependencies — add yarn audit to CI and the security sweep
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
-- [#531](https://github.com/jwilleke/yourphr/issues/531) — [security] go/clear-text-logging — 2 high CodeQL alerts in demoSignin, both false positives
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#502](https://github.com/jwilleke/yourphr/issues/502) — [ARCH] Evaluate moving Azia's hand-rolled dark stylesheet onto Bootstrap 5.3 colour modes (data-bs-theme)
 - [#500](https://github.com/jwilleke/yourphr/issues/500) — [FEATURE] ui.theme-name: theme.name is published but wired to nothing — wire it up or remove it
