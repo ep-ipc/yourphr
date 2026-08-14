@@ -9,7 +9,9 @@ import {DatatableCareTeamComponent} from './datatable-generic-resource/datatable
 import {DatatableCommunicationComponent} from './datatable-generic-resource/datatable-communication.component';
 import {DatatableConditionComponent} from './datatable-generic-resource/datatable-condition.component';
 import {DatatableConsentComponent} from './datatable-generic-resource/datatable-consent.component';
+import {DatatableClaimComponent} from './datatable-generic-resource/datatable-claim.component';
 import {DatatableCoverageComponent} from './datatable-generic-resource/datatable-coverage.component';
+import {DatatableExplanationOfBenefitComponent} from './datatable-generic-resource/datatable-explanation-of-benefit.component';
 import {DatatableDeviceComponent} from './datatable-generic-resource/datatable-device.component';
 import {DatatableDeviceRequestComponent} from './datatable-generic-resource/datatable-device-request.component';
 import {DatatableDiagnosticReportComponent} from './datatable-generic-resource/datatable-diagnostic-report.component';
@@ -51,7 +53,9 @@ import {NgxDatatableModule} from '@swimlane/ngx-datatable';
     DatatableCommunicationComponent,
     DatatableConditionComponent,
     DatatableConsentComponent,
+    DatatableClaimComponent,
     DatatableCoverageComponent,
+    DatatableExplanationOfBenefitComponent,
     DatatableDeviceComponent,
     DatatableDeviceRequestComponent,
     DatatableDiagnosticReportComponent,
@@ -87,7 +91,9 @@ import {NgxDatatableModule} from '@swimlane/ngx-datatable';
     DatatableCommunicationComponent,
     DatatableConditionComponent,
     DatatableConsentComponent,
+    DatatableClaimComponent,
     DatatableCoverageComponent,
+    DatatableExplanationOfBenefitComponent,
     DatatableDeviceComponent,
     DatatableDeviceRequestComponent,
     DatatableDiagnosticReportComponent,

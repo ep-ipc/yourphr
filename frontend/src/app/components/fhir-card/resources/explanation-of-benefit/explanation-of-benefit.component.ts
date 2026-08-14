@@ -7,6 +7,9 @@ import {TableComponent} from '../../common/table/table.component';
 import {TableRowItem, TableRowItemDataType} from '../../common/table/table-row-item';
 import {FhirCardComponentInterface} from '../../fhir-card/fhir-card-component-interface';
 import {ExplanationOfBenefitModel} from '../../../../../lib/models/resources/explanation-of-benefit-model';
+import {money} from '../../../../../lib/utils/fhir-money';
+
+export {money};
 
 /**
  * What a patient calls "the letter from my insurance" (#522).
@@ -127,21 +130,6 @@ export function amountLabel(category: any): string {
     priorpayerpaid: 'Paid by another insurer',
   };
   return known[code] || category?.text || category?.coding?.[0]?.display || 'Amount';
-}
-
-/** Format a FHIR Money. Currency comes from the resource; nothing is assumed to be dollars. */
-export function money(amount: any): string {
-  const value = amount?.value;
-  if (value === undefined || value === null || isNaN(Number(value))) {
-    return '';
-  }
-  const currency = amount?.currency || 'USD';
-  try {
-    return new Intl.NumberFormat(undefined, {style: 'currency', currency}).format(Number(value));
-  } catch {
-    // An unknown currency code must not cost the reader the number.
-    return `${value} ${currency}`;
-  }
 }
 
 function codingText(codings: any[] | undefined): string {

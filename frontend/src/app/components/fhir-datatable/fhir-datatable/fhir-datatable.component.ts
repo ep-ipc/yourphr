@@ -10,7 +10,9 @@ import {DatatableCareTeamComponent} from '../datatable-generic-resource/datatabl
 import {DatatableCommunicationComponent} from '../datatable-generic-resource/datatable-communication.component';
 import {DatatableConditionComponent} from '../datatable-generic-resource/datatable-condition.component';
 import {DatatableConsentComponent} from '../datatable-generic-resource/datatable-consent.component';
+import {DatatableClaimComponent} from '../datatable-generic-resource/datatable-claim.component';
 import {DatatableCoverageComponent} from '../datatable-generic-resource/datatable-coverage.component';
+import {DatatableExplanationOfBenefitComponent} from '../datatable-generic-resource/datatable-explanation-of-benefit.component';
 import {DatatableDeviceComponent} from '../datatable-generic-resource/datatable-device.component';
 import {DatatableDeviceRequestComponent} from '../datatable-generic-resource/datatable-device-request.component';
 import {DatatableDiagnosticReportComponent} from '../datatable-generic-resource/datatable-diagnostic-report.component';
@@ -120,6 +122,12 @@ export class FhirDatatableComponent implements OnInit, OnChanges {
       }
       case "Consent": {
         return DatatableConsentComponent;
+      }
+      case "Claim": {
+        return DatatableClaimComponent;
+      }
+      case "ExplanationOfBenefit": {
+        return DatatableExplanationOfBenefitComponent;
       }
       case "Coverage": {
         return DatatableCoverageComponent;
