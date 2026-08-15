@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.9.0](https://github.com/jwilleke/yourphr/compare/v2.8.1...v2.9.0) (2026-08-15)
+
+Your records can now leave the app in a form somebody else can use — emailed, or downloaded as a file another health system can import.
+
+### Features
+
+- **Send your records by email** ([#524](https://github.com/jwilleke/yourphr/issues/524)). The button existed and did nothing except navigate you back to the dashboard. It now emails your record summary to an address you choose.
+
+  It asks before it sends, and says what matters plainly: **email is not private and cannot be taken back** — the file has no password, and a copy stays in the recipient's mailbox, and with their email provider, indefinitely. Send it only to someone you would hand a paper copy of your records.
+
+  Nothing is sent until an administrator configures email on the instance; until then the button explains that rather than failing obscurely. See [`docs/admin/email-setup.md`](docs/admin/email-setup.md).
+
+- **Get your records as a file a doctor's office can import** ([#523](https://github.com/jwilleke/yourphr/issues/523), [#524](https://github.com/jwilleke/yourphr/issues/524)). Both **Save Report** and **Send to Email** now offer a choice: a document to read or print, or a **FHIR file** — the standard format health record systems read directly.
+
+  A PDF proves you can *see* your records. The FHIR file is what lets you *take them somewhere else*, which is the harder half and the point of the law this project exists to fulfil. The data was always there; there was no way to get it out except by calling the API by hand.
+
+- **Outbound email, configured once** ([#536](https://github.com/jwilleke/yourphr/issues/536)). One mail setup shared by everything that needs to send. Off by default, and with no relay configured a message is written to the log rather than failing — so a fresh instance never sends anything and never breaks trying. Design adapted from the same author's ngdpbase.
+
+### Bug Fixes
+
+- **Downloaded files are named for you, not for the software.** A saved report arrived as `ips_summary.pdf`; it is now `yourphr-records.pdf`, which is findable in a Downloads folder six months later.
+
+### Notes for operators
+
+- **Email requires setup before it does anything.** Set `mail.enabled` and the relay details in Admin → Configuration. Mail sent directly from a home connection is usually discarded as spam, so in practice this points at a relay you already have — a Gmail App Password, Resend, SendGrid, or your own server. [`docs/admin/email-setup.md`](docs/admin/email-setup.md) covers each, along with the SPF/DKIM/DMARC records needed to send from your own domain.
+- **The mail password is treated as a secret** — masked on the configuration screen, redacted from logs, never sent to a browser.
+- **Sending is limited to five reports per hour per account** and is blocked for the shared demo account. An address that can email arbitrary files to arbitrary people needs a limit.
+- **Certificates are always verified.** There is no option to skip that check, deliberately: this channel carries medical records.
+
 ## [2.8.1](https://github.com/jwilleke/yourphr/compare/v2.8.0...v2.8.1) (2026-08-14)
 
 Finishes what 2.8.0 started: claims and benefit statements are readable in the record lists too, and the app stops showing you the technical names for your own records.
