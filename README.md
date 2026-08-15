@@ -96,6 +96,36 @@ That was the harness being wrong, and it is exactly the false alarm that teaches
 
 Worth noting the synthetic corpus could never have surfaced this: nothing in it comes close to 1000 of anything.
 
+## Shadow read-only against the production stack — 2026-08-15
+
+The migration plan's first step: run both stacks over one corpus and diff the responses, before anything owns a surface.
+
+The `diff` script above compares against Medplum's reference. **This compares against the system actually in production**, which is the harder test — the reference and this spike share a worldview, YourPHR's Go backend does not.
+
+```bash
+# in the product repo — reads through GormRepository, the same path the HTTP handler uses,
+# so no session and no credentials, against a COPY of a snapshot
+SHADOW_DB=<copy> SHADOW_USER=<account> SHADOW_OUT=phi/go-ids.json \
+  go test ./backend/pkg/database/ -run TestShadowExport
+
+# here
+npm run export -- --db <copy> --user <account> --out phi/account.ndjson
+npm run load   -- --in phi/account.ndjson --db phi/shadow-spike.db
+npm run shadow -- --go phi/go-ids.json    --db phi/shadow-spike.db
+```
+
+Result on one real account — **19,796 resources, 29 resource types**:
+
+```text
+29/29 resource types agree exactly
+
+the TypeScript stack returns exactly what the Go stack returns
+```
+
+Every type matched id-for-id, including the large ones: 15,225 DocumentReference, 3,456 Condition, 354 Encounter.
+
+**Comparisons must be per-account.** The Go API enforces per-user isolation from the request context, so an unscoped export cannot be compared against it — the first attempt had 20,061 resources on one side and 19,796 on the other, because a second account's records were in the corpus. `--user` was added to the export for this.
+
 ## What this still does NOT prove
 
 - **No writes from the app** — no sync, no re-import dedup, no SMART token storage, no auth.

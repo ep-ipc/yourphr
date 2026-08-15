@@ -21,6 +21,8 @@ interface Args {
   db: string;
   out: string;
   key?: string;
+  /** Export one account's records only. The API is per-user, so a shadow comparison must be too. */
+  user?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -37,6 +39,7 @@ function parseArgs(argv: string[]): Args {
     db: resolve(db),
     out: resolve(get('--out') ?? 'phi/resources.ndjson'),
     key: get('--key') ?? process.env.YOURPHR_DB_KEY,
+    user: get('--user'),
   };
 }
 
@@ -50,6 +53,19 @@ function main(): void {
     // compatibility question the evaluation flagged as needing proof, so treat it as a finding.
     db.pragma("cipher='sqlcipher'");
     db.pragma(`key='${args.key.replace(/'/g, "''")}'`);
+  }
+
+  let userId: string | undefined;
+  if (args.user) {
+    const row = db.prepare('SELECT id FROM users WHERE username = ?').get(args.user) as
+      | {id: string}
+      | undefined;
+    if (!row) {
+      console.error(`no user named ${args.user} in ${args.db}`);
+      process.exit(1);
+    }
+    userId = row.id;
+    console.log(`exporting records belonging to ${args.user} only`);
   }
 
   const tables = db
@@ -71,7 +87,12 @@ function main(): void {
   for (const { name } of tables) {
     let rows: { resource_raw: string | null }[];
     try {
-      rows = db.prepare(`SELECT resource_raw FROM "${name}" WHERE deleted_at IS NULL`).all() as {
+      // Scoped to one user when asked. Every fhir_* table carries user_id, and YourPHR's API
+      // enforces the same isolation, so an unscoped export cannot be compared against it.
+      const sql = userId
+        ? `SELECT resource_raw FROM "${name}" WHERE deleted_at IS NULL AND user_id = ?`
+        : `SELECT resource_raw FROM "${name}" WHERE deleted_at IS NULL`;
+      rows = (userId ? db.prepare(sql).all(userId) : db.prepare(sql).all()) as {
         resource_raw: string | null;
       }[];
     } catch {

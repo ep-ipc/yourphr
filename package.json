@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "load": "tsx scripts/load-sqlite.ts",
     "roundtrip": "tsx scripts/encrypted-roundtrip.ts",
-    "diff": "tsx scripts/diff-repositories.ts"
+    "diff": "tsx scripts/diff-repositories.ts",
+    "shadow": "tsx scripts/shadow-compare.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",
