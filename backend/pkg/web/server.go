@@ -273,6 +273,10 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 
 					secure.GET("/summary", handler.GetSummary)
 					secure.GET("/summary/ips", handler.GetIPSSummary)
+					// Emailing a record leaves the instance and cannot be recalled, so it is blocked
+					// for the shared demo account like every other write (#496/#514) and rate limited
+					// per account inside the handler (#524).
+					secure.POST("/summary/ips/email", middleware.BlockForDemoAccount(), handler.SendIPSSummaryEmail)
 					secure.GET("/medications/reconciled", handler.GetMedicationsReconciled)
 					secure.GET("/conditions/classified", handler.GetConditionsClassified)
 					secure.GET("/conditions/reconciled", handler.GetConditionsReconciled)

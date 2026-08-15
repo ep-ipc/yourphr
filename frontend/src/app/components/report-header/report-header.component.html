@@ -34,7 +34,7 @@
   <nav class="nav">
     <a class="nav-link cursor-pointer" (click)="saveReport($event)"><i class="far fa-save"></i> Save Report</a>
     <a class="nav-link" (click)="getIPSExport($event)"><i class="far fa-file-pdf"></i> Export to PDF</a>
-    <a class="nav-link disabled tx-gray-400" ngbTooltip="Not yet available — see issue #524"><i class="far fa-envelope"></i>Send to Email</a>
+    <a class="nav-link cursor-pointer" (click)="sendToEmail($event)"><i class="far fa-envelope"></i> Send to Email</a>
     <a class="nav-link disabled tx-gray-400" ngbTooltip="not yet implemented"><i class="fas fa-ellipsis-h"></i></a>
   </nav>
 </div>
@@ -59,6 +59,49 @@
   <div class="modal-footer">
     <button type="button" class="btn btn-outline-secondary" (click)="modal.dismiss()">Cancel</button>
     <button type="button" class="btn btn-az-primary" (click)="modal.close('download')">Download report</button>
+  </div>
+</ng-template>
+
+<!--
+  Same shape as the Save Report warning, deliberately stronger: a download sits on the patient's own
+  machine, while an email lands in somebody else's mailbox provider and cannot be recalled (#524).
+-->
+<ng-template #sendEmailDialog let-modal>
+  <div class="modal-header">
+    <h5 class="modal-title" id="send-email-title">Send your records by email</h5>
+    <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss()"></button>
+  </div>
+
+  <div class="modal-body" *ngIf="!emailSentTo">
+    <div class="form-group mg-b-15">
+      <label for="emailRecipient">Send to</label>
+      <input id="emailRecipient" type="email" class="form-control" placeholder="name@example.com"
+             [(ngModel)]="emailRecipient" [disabled]="emailSending" autocomplete="off">
+    </div>
+
+    <p class="mg-b-10">Your records are attached as a PDF.</p>
+    <p class="mg-b-0">
+      <strong>Email is not private and cannot be taken back.</strong> The file has no password, and a
+      copy will stay in the recipient's mailbox — and with their email provider — indefinitely. Send
+      it only to someone you would hand a paper copy of your records.
+    </p>
+
+    <div *ngIf="emailError" class="alert alert-danger mg-t-15 mg-b-0">{{ emailError }}</div>
+  </div>
+
+  <div class="modal-body" *ngIf="emailSentTo">
+    <div class="alert alert-success mg-b-0">Sent to {{ emailSentTo }}.</div>
+  </div>
+
+  <div class="modal-footer" *ngIf="!emailSentTo">
+    <button type="button" class="btn btn-outline-secondary" (click)="modal.dismiss()" [disabled]="emailSending">Cancel</button>
+    <button type="button" class="btn btn-az-primary" (click)="confirmSendEmail()" [disabled]="emailSending">
+      <span *ngIf="emailSending" class="spinner-border spinner-border-sm mg-r-5"></span>
+      {{ emailSending ? 'Sending…' : 'Send records' }}
+    </button>
+  </div>
+  <div class="modal-footer" *ngIf="emailSentTo">
+    <button type="button" class="btn btn-az-primary" (click)="modal.close()">Done</button>
   </div>
 </ng-template>
 

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { ReportHeaderComponent } from './report-header.component';
 import {FastenApiService} from '../../services/fasten-api.service';
-import {of} from 'rxjs';
+import {of, throwError} from 'rxjs';
 import { RouterTestingModule } from '@angular/router/testing';
 import { NgbModal, NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
@@ -70,6 +70,56 @@ describe('ReportHeaderComponent', () => {
       component.getIPSExport(new MouseEvent('click'));
 
       expect(mockedFastenApiService.getIPSExport).toHaveBeenCalledWith('pdf');
+    });
+  });
+
+  describe('Send to Email (#524)', () => {
+    beforeEach(() => {
+      mockedFastenApiService.sendIPSExportByEmail = jasmine.createSpy('sendIPSExportByEmail');
+    });
+
+    it('should not send without a recipient', () => {
+      component.emailRecipient = '   ';
+
+      component.confirmSendEmail();
+
+      expect(mockedFastenApiService.sendIPSExportByEmail).not.toHaveBeenCalled();
+      expect(component.emailError).toContain('Enter the address');
+    });
+
+    it('should send the trimmed address as a PDF', () => {
+      mockedFastenApiService.sendIPSExportByEmail.and.returnValue(of({sent_to: 'doc@example.org'}));
+      component.emailRecipient = '  doc@example.org  ';
+
+      component.confirmSendEmail();
+
+      expect(mockedFastenApiService.sendIPSExportByEmail).toHaveBeenCalledWith('doc@example.org', 'pdf');
+      expect(component.emailSentTo).toEqual('doc@example.org');
+      expect(component.emailSending).toBeFalse();
+    });
+
+    // The relay's own reason is the only thing that tells somebody whether to fix the address, wait,
+    // or ask their administrator. A generic "failed" is #527 all over again.
+    it('should surface the server error rather than a generic failure', () => {
+      mockedFastenApiService.sendIPSExportByEmail.and.returnValue(
+        throwError(() => ({error: {error: 'email is not enabled on this instance'}}))
+      );
+      component.emailRecipient = 'doc@example.org';
+
+      component.confirmSendEmail();
+
+      expect(component.emailError).toEqual('email is not enabled on this instance');
+      expect(component.emailSending).toBeFalse();
+      expect(component.emailSentTo).toEqual('');
+    });
+
+    it('should fall back to a plain message when the server sends none', () => {
+      mockedFastenApiService.sendIPSExportByEmail.and.returnValue(throwError(() => ({})));
+      component.emailRecipient = 'doc@example.org';
+
+      component.confirmSendEmail();
+
+      expect(component.emailError).toEqual('The report could not be sent.');
     });
   });
 });

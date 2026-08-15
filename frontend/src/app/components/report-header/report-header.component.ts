@@ -19,6 +19,13 @@ export class ReportHeaderComponent implements OnInit {
   @Input() reportHeaderTitle = ""
   @Input() reportHeaderSubTitle = "Organized by condition and encounters"
   @ViewChild('saveReportWarning') saveReportWarning: TemplateRef<any>
+  @ViewChild('sendEmailDialog') sendEmailDialog: TemplateRef<any>
+
+  // Send-to-email dialog state (#524)
+  emailRecipient = ''
+  emailSending = false
+  emailError = ''
+  emailSentTo = ''
 
   constructor(
     private fastenApi: FastenApiService,
@@ -67,6 +74,45 @@ export class ReportHeaderComponent implements OnInit {
    *
    * Deliberately not a browser confirm(): it cannot say this much, and it is not styleable.
    */
+  /**
+   * Send the record to an address the patient chooses (#524).
+   *
+   * The operator's decision, and it corrects the earlier position on that issue: the app already
+   * lets somebody DOWNLOAD this same file unencrypted, so refusing to email it protects nothing and
+   * only makes them do by hand what they could already do. It is their data. What is owed is an
+   * honest warning first — which this dialog gives — not a locked door beside an open window.
+   */
+  sendToEmail(event: Event){
+    event.preventDefault()
+    this.emailRecipient = ''
+    this.emailError = ''
+    this.emailSentTo = ''
+    this.emailSending = false
+    this.modalService.open(this.sendEmailDialog, {ariaLabelledBy: 'send-email-title'})
+  }
+
+  confirmSendEmail(){
+    if (!this.emailRecipient.trim()) {
+      this.emailError = 'Enter the address to send to.'
+      return
+    }
+    this.emailSending = true
+    this.emailError = ''
+    this.fastenApi.sendIPSExportByEmail(this.emailRecipient.trim(), 'pdf').subscribe({
+      next: (result) => {
+        this.emailSending = false
+        this.emailSentTo = result?.sent_to || this.emailRecipient.trim()
+      },
+      error: (err) => {
+        this.emailSending = false
+        // The SERVER's sentence, not a generic failure. It is the only thing that tells somebody
+        // whether to fix the address, wait, or ask their administrator (#527 is what the generic
+        // version costs).
+        this.emailError = err?.error?.error || 'The report could not be sent.'
+      },
+    })
+  }
+
   saveReport(event: Event){
     event.preventDefault()
     this.modalService.open(this.saveReportWarning, {ariaLabelledBy: 'save-report-title'}).result.then(

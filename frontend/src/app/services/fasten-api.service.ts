@@ -926,6 +926,20 @@ export class FastenApiService {
       );
   }
 
+  /**
+   * Email the record summary to an address the patient chooses (#524).
+   *
+   * Returns the error the SERVER gave rather than a generic failure: the relay's reason is the only
+   * thing that tells somebody whether to fix an address, wait, or ask their admin. A send that
+   * reports success while nothing was delivered is the failure this must never have — the patient
+   * would believe their doctor has their records.
+   */
+  sendIPSExportByEmail(to: string, format: string = 'pdf'): Observable<any> {
+    const endpointUrl = `${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/summary/ips/email`;
+    return this._httpClient.post<any>(endpointUrl, {to, format})
+      .pipe(map((response: ResponseWrapper) => response.data));
+  }
+
   getIPSExport(exportType?: string) {
     const format = exportType || "pdf"
     let contentType = "application/pdf"
