@@ -71,14 +71,37 @@ Same shape as the two defects that started this whole conversation: a silent def
 
 `smoke.ts` is kept deliberately: when a search disagrees between the two, the difference isolates whether the fault is in this SQLite implementation or in the corpus.
 
-## What this did NOT prove
+## Run against real records — 2026-08-15
 
-Worth being precise, because a spike that oversells is worse than none:
+The step the synthetic corpus could not do, now done. Snapshot taken from the live instance with `sqlite3 .backup` (consistent, not a torn copy of a file being written), exported, loaded, and diffed.
 
-- **Only 72 synthetic resources.** Nothing here says anything about performance, or about the long tail of real provider data. The next honest step is the same run against a real export.
-- **No id collisions were observed** — but the seed came from one source. YourPHR keys on `(source_id, source_resource_type, source_resource_id)` precisely because the same record arrives from several providers, and that is where Medplum's `ResourceType/id` model is expected to bite. `createResource` counts and rejects duplicates rather than upserting, so the number will be real when a multi-source corpus is loaded.
+| | |
+|---|---|
+| Resources | **20,061** — 278× the seed corpus |
+| Sources | **8** — the multi-source case the identity seam needed |
+| Loaded | **20,061 / 20,061**, ~22s |
+| Index rows | **417,531**, all from FHIR's own SearchParameter definitions |
+| **id collisions** | **0** |
+| Differential | **71/71 queries agree** |
+
+**The identity seam did not bite.** That was the open question this run existed to answer: YourPHR keys on `(source_id, source_resource_type, source_resource_id)` because one record can arrive from several providers, while Medplum keys on `ResourceType/id`. Across 8 sources and 20,061 resources, **zero collisions**. Not proof it can never happen — a ninth source could still send a colliding id — but the concern was hypothetical and now has a number against it.
+
+Resource types the spike had never seen loaded without special-casing, which is the whole point of a generic indexer: `NutritionOrder`, `DeviceRequest`, `AdverseEvent`, `FamilyMemberHistory`, `RelatedPerson`, `Composition`, `Specimen`, `Media`, `Goal`.
+
+### A flaw in the harness, found by real data
+
+The first real run reported **3 disagreements** on `Condition` and `DocumentReference`. Both sides returned exactly **1000** results — a *different* 1000. Neither repository promises an order beyond a page, and the corpus holds 3,469 Conditions and 15,225 DocumentReferences, so the harness was comparing two arbitrary slices and calling the difference a defect.
+
+That was the harness being wrong, and it is exactly the false alarm that teaches people to ignore a gate. Where a result exceeds one page the totals are now compared instead, and the output says so rather than implying membership was checked.
+
+Worth noting the synthetic corpus could never have surfaced this: nothing in it comes close to 1000 of anything.
+
+## What this still does NOT prove
+
 - **No writes from the app** — no sync, no re-import dedup, no SMART token storage, no auth.
-- **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one SQLCipher-via-Go wrote. That remains the open compatibility question.
+- **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one SQLCipher-via-Go wrote. That remains the open compatibility question — though the live instance turns out to be **unencrypted**, so it is less pressing than it looked.
+- **Read paths only.** Every number above is about getting data in and querying it back.
+- **~22s to load 20k resources** is not a benchmark. Nothing here is tuned, and no comparison against the Go implementation was made.
 
 ## If it goes further
 

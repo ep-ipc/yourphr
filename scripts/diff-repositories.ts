@@ -33,16 +33,36 @@ function arg(flag: string, fallback: string): string {
   return i === -1 ? fallback : (argv[i + 1] ?? fallback);
 }
 
-/** Compare by identity and order-independently: two repositories may legitimately order differently. */
-async function idsFor(repo: FhirRepository, query: Query): Promise<string[]> {
+const PAGE = 1000;
+
+interface Result {
+  total: number;
+  ids: string[];
+  truncated: boolean;
+}
+
+/**
+ * Compare by identity, order-independently: two repositories may legitimately order differently.
+ *
+ * TRUNCATION MATTERS. A first pass compared the first 1000 of each and called Condition and
+ * DocumentReference disagreements — both returned exactly 1000, but a DIFFERENT 1000, because
+ * neither guarantees an order and the corpus holds 3,469 and 15,225 of them. That was the harness
+ * being wrong, not the implementation, and it is precisely the false alarm that makes people stop
+ * trusting a gate. Where a result exceeds one page, the totals are compared instead and the
+ * comparison says so rather than pretending it checked membership.
+ */
+async function resultFor(repo: FhirRepository, query: Query): Promise<Result> {
   const bundle = await repo.search({
     resourceType: query.resourceType,
     filters: query.filters as any,
-    count: 1000,
+    count: PAGE,
+    total: 'accurate',
   });
-  return (bundle.entry ?? [])
+  const ids = (bundle.entry ?? [])
     .map((entry) => `${entry.resource?.resourceType}/${entry.resource?.id}`)
     .sort();
+  const total = bundle.total ?? ids.length;
+  return {total, ids, truncated: total > ids.length};
 }
 
 async function main(): Promise<void> {
@@ -118,38 +138,58 @@ async function main(): Promise<void> {
   const disagreements: string[] = [];
   const skipped: string[] = [];
 
+  let byTotalOnly = 0;
+
   for (const query of queries) {
-    let expected: string[];
-    let actual: string[];
+    let expected: Result;
+    let actual: Result;
     try {
-      expected = await idsFor(reference, query);
+      expected = await resultFor(reference, query);
     } catch (err) {
       // The reference not supporting a query says nothing about ours.
       skipped.push(`${query.label} — reference: ${(err as Error).message}`);
       continue;
     }
     try {
-      actual = await idsFor(sqlite, query);
+      actual = await resultFor(sqlite, query);
     } catch (err) {
       disagreements.push(`${query.label}\n    sqlite threw: ${(err as Error).message}`);
       continue;
     }
 
-    if (expected.join(',') === actual.join(',')) {
+    if (expected.total !== actual.total) {
+      disagreements.push(
+        `${query.label}\n    totals differ — reference: ${expected.total}  sqlite: ${actual.total}`
+      );
+      continue;
+    }
+
+    // Beyond one page neither repository promises an order, so which 1000 came back is not a
+    // difference in meaning. Say what was actually checked.
+    if (expected.truncated || actual.truncated) {
+      byTotalOnly++;
       agreed++;
       continue;
     }
 
-    const missing = expected.filter((id) => !actual.includes(id));
-    const extra = actual.filter((id) => !expected.includes(id));
+    if (expected.ids.join(',') === actual.ids.join(',')) {
+      agreed++;
+      continue;
+    }
+
+    const missing = expected.ids.filter((id) => !actual.ids.includes(id));
+    const extra = actual.ids.filter((id) => !expected.ids.includes(id));
     disagreements.push(
-      `${query.label}\n    reference: ${expected.length}  sqlite: ${actual.length}` +
+      `${query.label}\n    reference: ${expected.ids.length}  sqlite: ${actual.ids.length}` +
         (missing.length ? `\n    MISSING from sqlite: ${missing.slice(0, 5).join(', ')}` : '') +
         (extra.length ? `\n    EXTRA in sqlite: ${extra.slice(0, 5).join(', ')}` : '')
     );
   }
 
   console.log(`${agreed}/${queries.length - skipped.length} queries agree`);
+  if (byTotalOnly) {
+    console.log(`  (${byTotalOnly} compared by total only — more than ${PAGE} results, where neither repository promises an order)`);
+  }
   if (skipped.length) {
     console.log(`\n${skipped.length} skipped (unsupported by the reference):`);
     for (const line of skipped.slice(0, 5)) {
