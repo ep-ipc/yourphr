@@ -87,7 +87,7 @@ describe('ReportHeaderComponent', () => {
       expect(component.emailError).toContain('Enter the address');
     });
 
-    it('should send the trimmed address as a PDF', () => {
+    it('should send the trimmed address, defaulting to PDF', () => {
       mockedFastenApiService.sendIPSExportByEmail.and.returnValue(of({sent_to: 'doc@example.org'}));
       component.emailRecipient = '  doc@example.org  ';
 
@@ -96,6 +96,18 @@ describe('ReportHeaderComponent', () => {
       expect(mockedFastenApiService.sendIPSExportByEmail).toHaveBeenCalledWith('doc@example.org', 'pdf');
       expect(component.emailSentTo).toEqual('doc@example.org');
       expect(component.emailSending).toBeFalse();
+    });
+
+    // A PDF is for a person to read; the FHIR bundle is what a receiving system can import, which is
+    // usually the actual goal of sending records to a new provider.
+    it('should send the FHIR bundle when that format is chosen', () => {
+      mockedFastenApiService.sendIPSExportByEmail.and.returnValue(of({sent_to: 'clinic@example.org'}));
+      component.emailRecipient = 'clinic@example.org';
+      component.emailFormat = 'json';
+
+      component.confirmSendEmail();
+
+      expect(mockedFastenApiService.sendIPSExportByEmail).toHaveBeenCalledWith('clinic@example.org', 'json');
     });
 
     // The relay's own reason is the only thing that tells somebody whether to fix the address, wait,

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -110,37 +111,66 @@ func SendIPSSummaryEmail(c *gin.Context) {
 	if format == "" {
 		format = "pdf"
 	}
-	var renderer ips.IPSRenderer
+
+	var content []byte
+	var contentType, extension string
+
 	switch format {
-	case "html":
-		renderer, err = ips.NewHTMLRenderer()
+	case "json":
+		// The FHIR bundle itself. A PDF is for a person to READ; this is what another system can
+		// IMPORT, which is usually the actual goal of sending records to a new provider — and it is
+		// the form the Cures Act is about. Same bytes GET /summary/ips returns with no format.
+		content, err = json.Marshal(ipsData.Bundle)
 		if err != nil {
-			logger.Errorln("could not create the HTML renderer", err)
+			logger.Errorln("could not serialise the summary bundle", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not build your report"})
 			return
 		}
-	case "pdf":
-		renderer = ips_pdf.NewPDFRenderer()
+		// The registered media type for FHIR JSON (RFC 4627 + FHIR R4). Receiving systems key on it;
+		// application/json would still parse but tells the far end nothing about what it is.
+		contentType, extension = "application/fhir+json", "json"
+
+	case "html", "pdf":
+		var renderer ips.IPSRenderer
+		if format == "html" {
+			renderer, err = ips.NewHTMLRenderer()
+			if err != nil {
+				logger.Errorln("could not create the HTML renderer", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not build your report"})
+				return
+			}
+		} else {
+			renderer = ips_pdf.NewPDFRenderer()
+		}
+		content, err = renderer.Render(ipsData)
+		if err != nil {
+			logger.Errorln("could not render the summary to email", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not build your report"})
+			return
+		}
+		contentType, extension = renderer.ContentType(), renderer.FileExtension()
+
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "unsupported format"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "unsupported format — expected pdf, html or json"})
 		return
 	}
 
-	content, err := renderer.Render(ipsData)
-	if err != nil {
-		logger.Errorln("could not render the summary to email", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "could not build your report"})
-		return
+	// Says what the attachment IS, because the two formats are for different readers: a person opens
+	// the PDF, a system imports the FHIR bundle. A receiving clinic that does not know the .json is
+	// importable will simply ignore it.
+	description := "a summary of medical records"
+	if format == "json" {
+		description = "a summary of medical records as a FHIR bundle, which health record systems can import directly"
 	}
 
 	err = sender.Send(appmail.Message{
 		To:      []string{recipient},
 		Subject: "Medical records",
-		Body: "Attached is a summary of medical records, sent from YourPHR at the request of the person they belong to.\n\n" +
+		Body: fmt.Sprintf("Attached is %s, sent from YourPHR at the request of the person they belong to.\n\n", description) +
 			"This file is not password protected. Please store it somewhere you would keep paper medical records.\n",
 		Attachments: []appmail.Attachment{{
-			Filename:    fmt.Sprintf("yourphr-records.%s", renderer.FileExtension()),
-			ContentType: renderer.ContentType(),
+			Filename:    fmt.Sprintf("yourphr-records.%s", extension),
+			ContentType: contentType,
 			Content:     content,
 		}},
 	})

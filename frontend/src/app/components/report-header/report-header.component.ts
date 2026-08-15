@@ -23,6 +23,9 @@ export class ReportHeaderComponent implements OnInit {
 
   // Send-to-email dialog state (#524)
   emailRecipient = ''
+  // PDF for a person to read, FHIR JSON for a system to import. Both are "their records"; which one
+  // is useful depends entirely on who is receiving it (#524).
+  emailFormat: 'pdf' | 'json' = 'pdf'
   emailSending = false
   emailError = ''
   emailSentTo = ''
@@ -85,6 +88,7 @@ export class ReportHeaderComponent implements OnInit {
   sendToEmail(event: Event){
     event.preventDefault()
     this.emailRecipient = ''
+    this.emailFormat = 'pdf'
     this.emailError = ''
     this.emailSentTo = ''
     this.emailSending = false
@@ -98,7 +102,7 @@ export class ReportHeaderComponent implements OnInit {
     }
     this.emailSending = true
     this.emailError = ''
-    this.fastenApi.sendIPSExportByEmail(this.emailRecipient.trim(), 'pdf').subscribe({
+    this.fastenApi.sendIPSExportByEmail(this.emailRecipient.trim(), this.emailFormat).subscribe({
       next: (result) => {
         this.emailSending = false
         this.emailSentTo = result?.sent_to || this.emailRecipient.trim()
