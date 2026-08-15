@@ -2,6 +2,7 @@ package mail
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"strings"
@@ -225,4 +226,60 @@ func serveOneSMTPSession(listener net.Listener, received chan<- string) {
 		}
 	}
 	received <- log.String()
+}
+
+// A patient sending their record is sending a FILE. Plain-text-only would have meant the feature
+// silently mailed an empty message (#524).
+func TestMessage_RendersAttachmentsAsMultipart(t *testing.T) {
+	rendered := string(Message{
+		To:      []string{"doctor@example.org"},
+		Subject: "My records",
+		Body:    "Attached are my records.",
+		Attachments: []Attachment{{
+			Filename:    "yourphr-report.html",
+			ContentType: "text/html",
+			Content:     []byte("<html><body>records</body></html>"),
+		}},
+	}.render("phr@example.org"))
+
+	require.Contains(t, rendered, "Content-Type: multipart/mixed; boundary=")
+	require.Contains(t, rendered, "Content-Type: text/html")
+	require.Contains(t, rendered, `Content-Disposition: attachment; filename="yourphr-report.html"`)
+	require.Contains(t, rendered, "Content-Transfer-Encoding: base64")
+	require.Contains(t, rendered, base64.StdEncoding.EncodeToString([]byte("<html><body>records</body></html>")))
+	require.Contains(t, rendered, "Attached are my records.")
+}
+
+// RFC 2045 caps base64 lines at 76 characters, and some relays reject longer ones. A whole medical
+// record is far past that, so this is the normal case rather than an edge case.
+func TestMessage_WrapsBase64At76Characters(t *testing.T) {
+	rendered := string(Message{
+		To:          []string{"a@example.org"},
+		Subject:     "s",
+		Attachments: []Attachment{{Filename: "big.bin", Content: make([]byte, 4096)}},
+	}.render("phr@example.org"))
+
+	for _, line := range strings.Split(rendered, "\r\n") {
+		require.LessOrEqual(t, len(line), 998, "no line may exceed the SMTP limit")
+	}
+	// The encoded payload itself must be wrapped, not merely under the hard limit.
+	require.Contains(t, rendered, strings.Repeat("A", 76))
+}
+
+func TestMessage_DefaultsAnAttachmentContentType(t *testing.T) {
+	rendered := string(Message{
+		To:          []string{"a@example.org"},
+		Subject:     "s",
+		Attachments: []Attachment{{Filename: "unknown.bin", Content: []byte("x")}},
+	}.render("phr@example.org"))
+
+	require.Contains(t, rendered, "Content-Type: application/octet-stream")
+}
+
+// Without attachments the message stays a simple text/plain email rather than a one-part multipart.
+func TestMessage_StaysPlainWithoutAttachments(t *testing.T) {
+	rendered := string(Message{To: []string{"a@example.org"}, Subject: "s", Body: "b"}.render("phr@example.org"))
+
+	require.Contains(t, rendered, "Content-Type: text/plain; charset=UTF-8")
+	require.NotContains(t, rendered, "multipart/mixed")
 }

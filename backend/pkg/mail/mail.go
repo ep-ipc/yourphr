@@ -15,7 +15,10 @@
 package mail
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/smtp"
@@ -50,9 +53,17 @@ const (
 type Message struct {
 	To      []string
 	Subject string
-	// Body is plain text. HTML and attachments belong to whichever feature needs them, layered on
-	// top rather than assumed here.
+	// Body is plain text.
 	Body string
+	// Attachments are what a patient is usually actually sending — the record itself (#524).
+	Attachments []Attachment
+}
+
+// Attachment is a file carried by a Message.
+type Attachment struct {
+	Filename    string
+	ContentType string
+	Content     []byte
 }
 
 // Sender delivers a Message, or explains why it could not.
@@ -241,6 +252,9 @@ func (m Message) validate() error {
 }
 
 // render builds the RFC 5322 message. CRLF line endings, because some relays reject bare LF.
+//
+// Plain text when there is nothing attached; multipart/mixed when there is. Base64 in 76-character
+// lines, which is what RFC 2045 requires and what relays that reject long lines expect.
 func (m Message) render(from string) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "From: %s\r\n", from)
@@ -248,8 +262,57 @@ func (m Message) render(from string) []byte {
 	fmt.Fprintf(&b, "Subject: %s\r\n", m.Subject)
 	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	b.WriteString("\r\n")
+
+	if len(m.Attachments) == 0 {
+		b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+		b.WriteString(strings.ReplaceAll(m.Body, "\n", "\r\n"))
+		return []byte(b.String())
+	}
+
+	// Fixed boundary string with a random suffix: it must not appear in any part's content, and a
+	// patient's record is arbitrary bytes.
+	boundary := fmt.Sprintf("yourphr-%d-%s", time.Now().UnixNano(), randomToken())
+	fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n", boundary)
+
+	fmt.Fprintf(&b, "--%s\r\n", boundary)
+	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(m.Body, "\n", "\r\n"))
+	b.WriteString("\r\n")
+
+	for _, attachment := range m.Attachments {
+		contentType := attachment.ContentType
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		fmt.Fprintf(&b, "--%s\r\n", boundary)
+		fmt.Fprintf(&b, "Content-Type: %s\r\n", contentType)
+		b.WriteString("Content-Transfer-Encoding: base64\r\n")
+		fmt.Fprintf(&b, "Content-Disposition: attachment; filename=%q\r\n\r\n", attachment.Filename)
+		b.WriteString(wrapBase64(attachment.Content))
+		b.WriteString("\r\n")
+	}
+
+	fmt.Fprintf(&b, "--%s--\r\n", boundary)
 	return []byte(b.String())
+}
+
+func wrapBase64(content []byte) string {
+	encoded := base64.StdEncoding.EncodeToString(content)
+	var b strings.Builder
+	for len(encoded) > 76 {
+		b.WriteString(encoded[:76])
+		b.WriteString("\r\n")
+		encoded = encoded[76:]
+	}
+	b.WriteString(encoded)
+	return b.String()
+}
+
+func randomToken() string {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		// A predictable boundary is still valid MIME; only collision resistance suffers.
+		return "fallback"
+	}
+	return hex.EncodeToString(buf)
 }
