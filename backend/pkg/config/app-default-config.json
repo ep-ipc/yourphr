@@ -150,8 +150,21 @@
     "sandbox.bluebutton.client_secret",
     "sandbox.athena.client_secret",
     "demo.password",
-    "demo.admin.password"
+    "demo.admin.password",
+    "mail.smtp.pass"
   ],
+
+  "_comment_mail": "Outbound email (#524). OFF by default and CONSOLE by default, which together mean a fresh instance never sends anything and never fails trying — a message with nowhere to go is written to the log instead. That matters twice over here: the public demo must not email strangers, and development and the E2E suite need no relay at all. Design and the provider table below are adapted from jwilleke/ngdpbase docs/admin/email-setup.md, which solved the same problem for a wiki; SMTP is the stable part, so only the transport differs (Go net/smtp rather than nodemailer). Set provider to \"smtp\" AND enabled to true before anything leaves the instance. NOTE mail from a home IP is usually dropped or spam-filed, so in practice mail.smtp.host points at a relay the operator already has: smtp.resend.com (user \"resend\", pass = API key), smtp.sendgrid.net (user \"apikey\"), smtp.gmail.com (requires a Google APP PASSWORD, not the account password), region-specific AWS SES (IAM SMTP credentials, not AWS keys), or localhost:1025 for Mailhog in development. Sending from your own domain also needs SPF, DKIM and DMARC records or recipients will reject it.",
+  "mail.enabled": false,
+  "mail.provider": "console",
+  "mail.from": "",
+
+  "_comment_mail_smtp": "SMTP relay settings, used when mail.provider is \"smtp\". Port 587 with secure=false is STARTTLS and is what almost every relay wants; port 465 with secure=true is implicit TLS. mail.smtp.pass is a CREDENTIAL and is listed in `secret` below, so it is masked on the Admin Configuration screen and never served to a browser — prefer an API key scoped to sending over a full account password. There is deliberately no option to skip certificate verification: on a wiki that is a development convenience, but this channel would carry medical records, and a PHR that quietly accepts any certificate is worse than one that refuses to send.",
+  "mail.smtp.host": "",
+  "mail.smtp.port": 587,
+  "mail.smtp.secure": false,
+  "mail.smtp.user": "",
+  "mail.smtp.pass": "",
 
   "_comment_operator": "Who runs this instance. Shown on /contact. Set from Admin Dashboard -> Instance; the operator is the data controller for the records held here.",
   "operator.name": "",
