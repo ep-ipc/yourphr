@@ -35,7 +35,6 @@
 
 ## 🟠 P1
 
-- [#525](https://github.com/jwilleke/yourphr/issues/525) — [BUG] practitioners (Count Error)
 - [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (<https://demo.yourphr.org/web/>)
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
