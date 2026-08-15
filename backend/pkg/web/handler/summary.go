@@ -51,6 +51,17 @@ func GetIPSSummary(c *gin.Context) {
 		return
 	}
 
+	// format=json downloads the FHIR bundle as a FILE. Without a format the same bytes are returned
+	// as an ordinary API response, which is right for a caller reading the API and wrong for a
+	// patient pressing Save: they want something that lands in Downloads and can be handed to a
+	// clinic (#523). application/fhir+json rather than application/json, because the registered type
+	// is what tells receiving software what it is looking at.
+	if format == "json" {
+		c.Header("Content-Disposition", "attachment; filename=yourphr-records.json")
+		c.JSON(http.StatusOK, ipsData.Bundle)
+		return
+	}
+
 	var renderer ips.IPSRenderer
 	switch format {
 	case "html":
@@ -63,7 +74,7 @@ func GetIPSSummary(c *gin.Context) {
 	case "pdf":
 		renderer = ips_pdf.NewPDFRenderer()
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "unsupported format"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "unsupported format — expected pdf, html or json"})
 		return
 	}
 

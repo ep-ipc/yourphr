@@ -43,7 +43,7 @@ describe('ReportHeaderComponent', () => {
       expect(mockedFastenApiService.getIPSExport).not.toHaveBeenCalled();
     });
 
-    it('should download the HTML report once accepted', async () => {
+    it('should download the web-page report once accepted', async () => {
       const modal = TestBed.inject(NgbModal);
       spyOn(modal, 'open').and.returnValue({result: Promise.resolve('download')} as any);
 
@@ -52,6 +52,23 @@ describe('ReportHeaderComponent', () => {
       await Promise.resolve();
 
       expect(mockedFastenApiService.getIPSExport).toHaveBeenCalledWith('html');
+    });
+
+    // Downloading an importable bundle matters as much as emailing one: it is the form another
+    // system can actually read (#523).
+    it('should download the FHIR bundle when that format is chosen', async () => {
+      const modal = TestBed.inject(NgbModal);
+      spyOn(modal, 'open').and.callFake(() => {
+        // The choice is made inside the dialog, before it resolves.
+        component.saveFormat = 'json';
+        return {result: Promise.resolve('download')} as any;
+      });
+
+      component.saveReport(new MouseEvent('click'));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockedFastenApiService.getIPSExport).toHaveBeenCalledWith('json');
     });
 
     // Dismissing must be a real cancel, not a delayed yes.

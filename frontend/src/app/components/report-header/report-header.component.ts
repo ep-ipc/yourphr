@@ -26,6 +26,9 @@ export class ReportHeaderComponent implements OnInit {
   // PDF for a person to read, FHIR JSON for a system to import. Both are "their records"; which one
   // is useful depends entirely on who is receiving it (#524).
   emailFormat: 'pdf' | 'json' = 'pdf'
+  // Save Report offers the same choice for the same reason: a document to read, or a bundle another
+  // system can import (#523).
+  saveFormat: 'html' | 'json' = 'html'
   emailSending = false
   emailError = ''
   emailSentTo = ''
@@ -119,8 +122,9 @@ export class ReportHeaderComponent implements OnInit {
 
   saveReport(event: Event){
     event.preventDefault()
+    this.saveFormat = 'html'
     this.modalService.open(this.saveReportWarning, {ariaLabelledBy: 'save-report-title'}).result.then(
-      () => this.fastenApi.getIPSExport("html"),
+      () => this.fastenApi.getIPSExport(this.saveFormat),
       () => {}, // dismissed — nothing to do
     )
   }

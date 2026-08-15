@@ -945,6 +945,10 @@ export class FastenApiService {
     let contentType = "application/pdf"
     if (exportType == "html") {
       contentType = "text/html"
+    } else if (exportType == "json") {
+      // The registered FHIR media type, not application/json: it is what tells a receiving system
+      // what the file is (#523).
+      contentType = "application/fhir+json"
     }
 
     const httpHeaders = new HttpHeaders().set('Accept', contentType);
@@ -966,7 +970,8 @@ export class FastenApiService {
       // Create a temporary anchor element and trigger the download
       const link = document.createElement('a');
       link.href = fileURL;
-      link.setAttribute('download', `ips_summary.${exportType}`); // Set the filename for the download
+      // Named for the person who has to find it later, not for the API that produced it.
+      link.setAttribute('download', `yourphr-records.${format}`);
       document.body.appendChild(link);
       link.click();
 
