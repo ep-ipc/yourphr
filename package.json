@@ -16,7 +16,8 @@
     "diff": "tsx scripts/diff-repositories.ts",
     "shadow": "tsx scripts/shadow-compare.ts",
     "writes": "tsx scripts/write-tests.ts",
-    "isolation": "tsx scripts/isolation-tests.ts"
+    "isolation": "tsx scripts/isolation-tests.ts",
+    "http": "tsx scripts/http-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

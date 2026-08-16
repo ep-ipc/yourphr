@@ -155,9 +155,48 @@ FAIL  a full reindex reproduces the same index — 407255 -> 407252
 
 Re-import is the direct analogue of [#252](https://github.com/jwilleke/yourphr/issues/252) in the product repo — harden re-import dedup against stale overwrites.
 
+## Auth and the HTTP layer — 2026-08-16 (#537)
+
+### Per-user isolation
+
+The spike had **no concept of a user**: every caller saw every record. On a family instance that is a disclosure, not a missing feature.
+
+Ownership is now a property of the **repository instance**, not an argument — `FhirRepository`'s methods take no user, so a caller that forgot one would silently read everything. Constructing a repository *for* a user makes the scope impossible to omit, which is why the Go side derives it from the request context too.
+
+`(resource_type, id)` was not enough for the primary key: two family members treated at the same hospital are sent the **same Organization id**, and keying on type and id alone made the second import look like a collision.
+
+```bash
+npm run isolation -- --db <copy> --a jwilleke --b jdoe
+```
+
+**6/6** against two real accounts sharing one database — 19,796 resources against 265, 18 shared resource types. Includes a *constructed* shared-id case, because none occurs naturally in this corpus and skipping it would skip the sharpest one.
+
+Verified to detect a leak: removing the scope from `search` alone reports `B saw 3469/13` — one account reading another's entire condition list.
+
+### The HTTP layer
+
+```bash
+npm run http -- --db <loaded> --go phi/go-ids.json
+```
+
+**9/9** over real HTTP against real records: 3,456 Conditions served, matching the Go stack id-for-id, all 29 summary counts equal, 404 where a record is missing.
+
+**The finding: the frontend does not speak FHIR REST.** Medplum's router serves `GET /Condition?patient=x` → `Bundle`. The Angular app calls `GET /api/secure/resource/fhir?sourceResourceType=Condition` and expects `{success, data: ResourceFhir[]}`, where `ResourceFhir` *wraps* the resource with YourPHR's own metadata.
+
+So "no frontend rewrite" is true **but not free** — it requires an adapter, and the adapter needs data a FHIR-native store does not hold:
+
+| Field | Where it comes from |
+|---|---|
+| `source_id` | which connected provider sent the record — must be persisted alongside |
+| `sort_title` | a per-type display title the Go backend derives at write time; empty gives a screen of blank rows |
+| `provenance`, `classified` | attached on the read path ([#271](https://github.com/jwilleke/yourphr/issues/271), [#308](https://github.com/jwilleke/yourphr/issues/308)) |
+
+None is hard. All are invisible until a screen renders wrong, which is why this had to be built rather than reasoned about. `src/server.ts` derives `sort_title` well enough that 3,456/3,456 records have one, but it is not the Go implementation's title.
+
 ## What this still does NOT prove
 
-- **No SYNC, no auth, no HTTP layer.** Writes and dedup are now covered (above), but nothing here fetches from a provider, authenticates anybody, or serves a request. Tracked as a P1 in the product repo.
+- **SYNC is untested and untouched.** Nothing here fetches from a provider: no SMART OAuth, no token refresh, no incremental fetch. It is the largest remaining unknown and the only one needing live provider credentials. Re-import dedup is proven *when the same bytes arrive twice*; a real resync sends slightly different bytes for the same clinical fact, which is [#252](https://github.com/jwilleke/yourphr/issues/252)'s actual problem and is **not** covered.
+- **Authentication itself** — sessions, tokens, sign-in — is not implemented. Isolation is proven *given* a user id; establishing who the caller is remains the Go side's job.
 - **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one SQLCipher-via-Go wrote. That remains the open compatibility question — though the live instance turns out to be **unencrypted**, so it is less pressing than it looked.
 - **Read paths only.** Every number above is about getting data in and querying it back.
 - **~22s to load 20k resources** is not a benchmark. Nothing here is tuned, and no comparison against the Go implementation was made.
