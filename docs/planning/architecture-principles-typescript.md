@@ -66,7 +66,22 @@ For a system holding medical records this is not a tidiness preference, because 
 
 `BaseManager` requires `initialize(config)`, `shutdown()`, **`backup()`** and **`restore()`** — and `BaseUserProvider` repeats `backup`/`restore` as abstract at the provider layer, so neither level can exist without answering it.
 
-Compare where YourPHR is: backup is a feature that happens to exist, and it is **mutually exclusive with database encryption** ([#367](https://github.com/jwilleke/yourphr/issues/367), [#461](https://github.com/jwilleke/yourphr/issues/461), [#363](https://github.com/jwilleke/yourphr/issues/363)). Encrypted instances cannot back up at all. Nobody forgot; nothing forced the question.
+Compare where YourPHR is: backup is a feature that happens to exist, and it is **mutually exclusive with database encryption** ([#367](https://github.com/jwilleke/yourphr/issues/367), [#461](https://github.com/jwilleke/yourphr/issues/461), [#363](https://github.com/jwilleke/yourphr/issues/363)).
+
+The reason is sound rather than an oversight. From `pkg/database/backup.go`: `VACUUM INTO` *"would write a PLAINTEXT snapshot of an encrypted DB (PHI leak), and a restore couldn't be opened with the cipher key — neither is handled yet. Refuse rather than silently leak/break."* Correct call. But it composes badly with encryption defaulting **on** ([#470](https://github.com/jwilleke/yourphr/issues/470)): two individually-right decisions produce a default install with **no backup at all**, which is an outcome neither of them intended.
+
+A database provider owning the connection resolves it, because the component holding the key is the only one that can export correctly. SQLCipher's mechanism is not `VACUUM INTO` but `ATTACH DATABASE … KEY …` followed by `sqlcipher_export()`, which writes an encrypted, consistent copy — and can write it under a *different* key, so backups can be encrypted to a key the operator holds separately from the running instance. That is precisely what off-box `audit.storage` wanted.
+
+Today backup asks a global flag (`database.encryption.enabled`) rather than asking the component that owns the connection. That is the invariant restated: the question belongs at the door.
+
+Four obligations come with it, or the fix is illusory:
+
+- **KDF parameters travel in the artifact** — cipher, iteration count, page size, salt handling; never the key. Otherwise restore onto a fresh install fails even with the right passphrase, at the worst possible moment.
+- **Backups are key-versioned.** Rotate the passphrase and every earlier backup needs the earlier key, so the artifact records which one it was written under.
+- **There is a recovery story.** An encrypted backup nobody can restore is *worse* than no backup, because it looks like protection until the day it matters. This also collides with the operator's own position on export — records a user cannot open in ten years without a key they have lost are not meaningfully theirs.
+- **A deliberately-plaintext export stays available, loudly warned.** Remove it and people will copy the `.db` by hand, at the wrong moment, producing exactly the torn file that `VACUUM INTO` exists to avoid.
+
+**Known gap the base contract does not close:** per-manager `backup()` yields a *torn* snapshot across managers — records at one instant, config at another, audit at a third. Tolerable for a wiki; for records it means restoring a state that never existed. Each manager can answer for itself, but quiescing and ordering is engine-level work that still has to be designed.
 
 ### Where YourPHR already stands, and where it leaks
 
@@ -136,6 +151,39 @@ Two traps:
 
 - **Absent must not mean null.** If `getManager('image')` returns null, every call site needs a check and the one that forgets crashes on real data. Keep the capability addressable and make the *implementation* inert; the saving already happened by not importing the real module. No caller branches — the same disease as 25 scattered admin checks.
 - **Absent must be visible.** An install where a feature silently does nothing because a config key is missing is indistinguishable from a bug. Log the resolved provider set at boot. That is the mail lesson: inert is fine, inert *and invisible* is a support ticket.
+
+### How a manager gets its provider
+
+Each manager selects its provider from configuration at `initialize()`. ngdpbase implements this by convention, and the convention is worth taking as-is:
+
+```text
+ngdpbase.audit.provider              → the selection
+ngdpbase.audit.provider.default      → the fallback
+ngdpbase.audit.provider.cloud.*      → settings for one provider
+```
+
+Status of each refinement below against ngdpbase as it stands today:
+
+**Dynamic import — implemented.** `AuditManager.loadProvider()` does `await import(\`../providers/${this.providerClass}.js\`)`, so an unselected provider's module genuinely never loads. The principle above is not aspirational; it is running code.
+
+**Central resolution — not implemented.** Every manager repeats the same sequence itself: read the key, apply the default, normalise the name to PascalCase, dynamic-import from `../providers/`. It works and it is consistent, but it is a convention rather than a mechanism, so it is enforced by everyone remembering. One factory mapping `(capability, config) → instance` removes the repetition and makes a fake injectable in tests without touching config files.
+
+**Fail-fast — not implemented, and the opposite is deliberate.** This is the one place YourPHR must diverge. `AuditManager` falls back to `NullAuditProvider` **on any load error and on a failed health check**, logs a warning, and boots successfully:
+
+```text
+Failed to load audit provider: <class>
+Falling back to NullAuditProvider due to provider load error
+```
+
+For a wiki that is sound resilience — page serving should survive a broken audit sink. For medical records it is the exact failure shape this project keeps finding: a typo in a provider name, or a bucket unreachable at boot, and the system runs normally **with auditing silently off**. The doc's rule that an unaudited disclosure did not happen is worthless if the audit provider can quietly become inert at startup.
+
+The rule that resolves it is per-capability rather than global, because falling back to inert is right for an image viewer and wrong for an audit trail: **a capability declares whether it is required. Optional capabilities fall back to inert and log; required capabilities refuse to boot.** ngdpbase already has the refusing behaviour where it matters — the magic-link provider *"refuses to register unless [`base-url`] is set explicitly, because a token in a URL is a credential and must not point at the localhost default."* So the precedent exists; it is the default that differs.
+
+**Boot ordering — implemented as an explicit list, with no validation.** `WikiEngine.ts` registers managers in hand-written source order, `ConfigurationManager` first. That is simple and it works, but the dependency graph is implicit in line order and nothing checks it. A manager initialising before the config it reads does not crash — it silently takes defaults, which is worse.
+
+**Shared versus per-capability instances — not addressed, because ngdpbase has no equivalent case.** YourPHR does. RecordManager, UserManager and a database audit sink all need the *same* SQLite connection, not three. With SQLCipher each connection pays a key derivation, and the KDF is deliberately slow — several managers each paying it at boot is a visible delay on a family box for no benefit. So the shape is two-tier: **shared infrastructure providers** (the database handle) resolved once by the engine and handed to managers, versus **per-capability providers** (`audit.storage`, `attachment.storage`) resolved per binding. The accidental version is everyone constructing their own, and it is slow in a way that looks like a mystery.
+
+**Restart-required marking — not present.** ngdpbase's config carries no such marker. YourPHR needs one, because [#472](https://github.com/jwilleke/yourphr/issues/472) lets settings change in the admin UI without editing YAML, so somebody will switch `audit.storage` from filesystem to S3 at runtime. Either the manager re-initialises or the UI says restart required — the outcome to prevent is configuration claiming S3 while the live manager keeps writing to disk. Stated and actual configuration disagreeing silently is the same family as the NULL counters ([#528](https://github.com/jwilleke/yourphr/issues/528)). Marking provider-binding keys restart-required costs one label; hot rebinding a storage provider mid-write is a great deal of machinery for a family box.
 
 ### Providers keep the invariant from producing god objects
 
