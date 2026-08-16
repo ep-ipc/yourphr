@@ -19,15 +19,35 @@ The whole architecture, stated without reference to records, wikis, or any parti
 1. **A resource has exactly one manager, and no other path reaches it.**
 2. **Context is request-scoped and says who is asking.** It is passed into managers; managers are not reached through it.
 3. **Managers decide and act. Providers implement and return.** A provider reports a result; only the manager turns that result into an effect.
-4. **Every action on a resource is a named permission**, declared as data in one registry: `{target}-{action}`.
-5. **Roles collect permissions.** Nothing more — a flat list, additive only.
-6. **Capability and scope are separate.** A role says *what* may be done; the assignment says *over which subjects*. Neither is ever encoded in the other's name.
-7. **Evaluation is tiered, and the resource's own attributes beat global policy.** That is how "everything except" is expressed without deny entries.
-8. **Decisions come in two forms**: one item, or a filter over many. Both are part of the contract, because a list endpoint that improvises its own check is a hole.
-9. **Access without an account is a principal, not a bypass.** A share token resolves to a subject and goes through the same evaluator.
-10. **Every one of these is an invariant, so every one needs a check that fails.** A rule enforced only by documentation decays silently, while the tests stay green.
+4. **Configuration binds capabilities to providers; providers supply behaviour.** Config selects and parameterises. It never expresses logic.
+5. **A capability that is not configured is never loaded.**
+6. **Every action on a resource is a named permission**, declared as data in one registry: `{target}-{action}`.
+7. **Roles collect permissions.** Nothing more — a flat list, additive only.
+8. **Capability and scope are separate.** A role says *what* may be done; the assignment says *over which subjects*. Neither is ever encoded in the other's name.
+9. **Evaluation is tiered, and the resource's own attributes beat global policy.** That is how "everything except" is expressed without deny entries.
+10. **Decisions come in two forms**: one item, or a filter over many. Both are part of the contract, because a list endpoint that improvises its own check is a hole.
+11. **Access without an account is a principal, not a bypass.** A share token resolves to a subject and goes through the same evaluator.
+12. **Every one of these is an invariant, so every one needs a check that fails.** A rule enforced only by documentation decays silently, while the tests stay green.
 
-Points 2 through 9 are consequences of point 1: none of them is enforceable unless there is exactly one door.
+Points 6 through 11 are enforceable only because of point 1: without exactly one door, none of them can be relied on.
+
+## The goal is a reusable framework
+
+The intent is a core that is **architecturally complete and customised through providers and configuration rather than forked code**. That is a different target from "an application built well", and it changes one of the tests below, so it belongs here rather than as an afterthought.
+
+**Why the timing is right rather than premature.** Framework extraction fails when it is done up front, or from two similar applications. ngdpbase is application one and already exists; YourPHR is application two, in an unrelated domain. A wiki and a medical-records system sharing a core is a hard test — seams that survive that gap will survive most things.
+
+**Where the framework must stop.** It cannot know what a compartment is, or what FHIR is, yet the evaluator needs scope. So `resource → scope` resolution is an **application-supplied extension point**. If page-ness is hardcoded anywhere in the evaluator, YourPHR forks on day one and the framework is fiction. That single seam is the test of whether any of this is real.
+
+| Framework owns | Application supplies |
+|---|---|
+| Engine and lifecycle, config system, manager and provider base contracts, auth, policy evaluator, audit, users/roles/sessions, backup and restore contract, share tokens, the permission registry *mechanism* | Its resources and their managers, the permission registry *contents*, its scope resolver, its providers, its UI |
+
+**The extension path must be the path the built-ins use.** From ngdpbase's own `AuthManager`: *"Addons register through the same method, so the contributed path is the one exercised on every boot rather than a second, less-travelled one."* If built-ins take a privileged shortcut, the path adopters depend on is the path nobody tests.
+
+**Give it a falsifiable test**, in the spirit of [#539](https://github.com/jwilleke/yourphr/issues/539)'s stop rule, because "architecturally complete" is otherwise a feeling: **can YourPHR be built with zero edits to framework files?** Count the patches. Each one is a seam in the wrong place — useful data, but only if somebody is counting.
+
+**The cost, stated rather than discovered:** two consumers means a breaking change hurts twice, so the base contracts need a stability guarantee and real versioning. And YourPHR's migration becomes coupled to framework churn on top of the Go freeze and a dated stop rule — three concurrent projects, when the freeze is already the fragile part. Mitigation: **copy the pattern into YourPHR first, extract the package second.** The seams are learned from two implementations in hand; predicting them is where frameworks die.
 
 ## The invariant
 
@@ -68,7 +88,56 @@ Two properties matter more than the list:
 - **A `Null` or `console` provider is the default.** The system is never broken for want of configuration; it degrades to inert. That is what made mail safe to ship half-finished, and it is why the public demo cannot email strangers by accident.
 - **Registration is gated on a config key**, so an unconfigured capability is *absent* rather than half-present.
 
-**Adopt:** the pattern and the inert default. **Do not** adopt the provider *count* — YourPHR does not need Elasticsearch or Redis, and a provider interface with one implementation is a layer, not an abstraction.
+### Capability, not provider type
+
+A capability is one job — audit storage, PHI storage, cache, search index. A provider type is a reusable implementation of that job. The **binding** is what configuration chooses, and the same type can be bound several times with different settings:
+
+```text
+phi.storage        → filesystem
+audit.storage      → s3
+backup.storage     → s3          (different bucket, different credentials)
+attachment.storage → filesystem
+```
+
+"One active" applies to a binding, never to a class. And this composition is not merely permitted — it is often the better architecture. Keeping PHI on the family box while shipping audit off-box is **tamper-evidence**: an attacker who owns the machine can rewrite a local audit log and erase what they did. An audit trail the local administrator cannot alter is the entire point of having one.
+
+Which argues for **finer capabilities in the framework**. A single `StorageProvider` means PHI and logs can never be separated and the operator has no lever at all; four named capabilities means they can compose.
+
+**Every storage binding is independently a data-egress decision.** `phi.storage.provider = "s3"` relocates medical records to Amazon, and in a config file it looks identical to choosing a cache backend. The same care applies to the audit example above: an entry reading *"user X read Alice's Condition/123"* is disclosive on its own, so off-box audit means off-box **and** encrypted client-side, or off-box to storage the operator controls.
+
+So the config system needs a third marker alongside the existing `secret` list: **keys whose value moves PHI off the machine.** Loud in the admin UI, defaulted local, and never altered by an upgrade that finds the default untouched. A PHR whose premise is that records stay in your house must not lose that to a one-word edit that reads like a backend choice.
+
+### Cardinality is a property of the capability
+
+Four kinds, and two of them look identical until they are wrong:
+
+| Cardinality | Examples | On failure |
+|---|---|---|
+| **One active** | PHI storage, cache, search index | Capability is down |
+| **Any-of** (alternatives) | password *or* OIDC *or* magic link | A failed login — never a silent fallback to the next provider, which turns a lockout into an oracle |
+| **All-of** (factors) | password *and* TOTP | Denied |
+| **Broadcast** | audit sinks, notifications | See below |
+
+For a capability that is *one active*, switching providers is a data migration — and `backup()`/`restore()` from the base contract is exactly that path. The contract adopted for disaster recovery turns out to be the filesystem-to-S3 move as well.
+
+**The hazard is between any-of and all-of, and it is live in ngdpbase today.** `ngdpbase.auth.required-factors` is an ordered list meaning *all of these*, six providers are registered simultaneously as alternatives, and the manager's own header says *"Currently single-factor only; multi-factor state management is deferred."* Whoever implements MFA must satisfy every entry in order: wiring it as "try each until one succeeds" turns multi-factor into a bypass, because the attacker simply presents the factor they hold. Same list, same providers, opposite security property — worth a test written before the feature.
+
+**Broadcast failure is a policy decision, not a default.** If an audit sink is unavailable, does the operation proceed? For records the answer is that a disclosure which was not audited did not happen: refuse the export or the share rather than complete it unlogged. Wrong for a wiki's page views, right for PHI leaving the system.
+
+### Not configured means not loaded
+
+Skipping instantiation saves almost nothing — an unused manager object is a few kilobytes. Skipping the **module** saves a great deal, because the cost is the dependency it drags in: an image toolchain, a headless browser for PDF rendering, a Redis or Elasticsearch client. Tens to hundreds of megabytes resident, plus native initialisation at boot.
+
+So the gate must be a **dynamic `import()` inside the factory**. A top-level `import` of the implementation defeats config gating entirely — the module loads and its native bindings initialise regardless, and the config key only decides whether it is called. That distinction is the whole feature and is invisible in review unless looked for. This matters because the deployment target is a family box, not a datacenter.
+
+**The stronger argument is not memory, it is attack surface.** Code that never loads cannot be exploited. An instance with no connected sources should not have the SMART client and its URL-fetching path live at all — and that is the component carrying the SSRF guard already flagged as the most dangerous item in the migration. "Not installed" beats "guarded".
+
+Two traps:
+
+- **Absent must not mean null.** If `getManager('image')` returns null, every call site needs a check and the one that forgets crashes on real data. Keep the capability addressable and make the *implementation* inert; the saving already happened by not importing the real module. No caller branches — the same disease as 25 scattered admin checks.
+- **Absent must be visible.** An install where a feature silently does nothing because a config key is missing is indistinguishable from a bug. Log the resolved provider set at boot. That is the mail lesson: inert is fine, inert *and invisible* is a support ticket.
+
+### Providers keep the invariant from producing god objects
 
 Providers are also what keeps the invariant from producing god objects. "One door" is not "one pile": ngdpbase's own `UserManager` is 1,600 lines carrying password hashing, permission resolution, Express middleware and wiki page creation, with three role methods already gutted to `never` after the split to `RoleManager`. That is what happens when a single path is read as a single class. The manager is the **gate**; the provider is the implementation behind it.
 
@@ -213,7 +282,7 @@ Recording this so the adoption does not become cargo-culting.
 | **Page-oriented ACL** | Its ACL secures *pages*. A PHR secures *resources and compartments*, which is what Medplum's declarative Access Policies are built for. The `PolicyEvaluator` **shape** transfers; its subject model does not. |
 | `PageManager`, `CommentManager`, `FootnoteManager`, `TemplateManager`, `RenderingManager`, `VariableManager` | Wiki domain. No PHR analogue. |
 | `src/plugins/` | JSPWiki-style **markup macros**, not application modules. "YourPHR as an ngdpbase plugin" is not an available shape — this was checked. |
-| 38 managers | A count, not a design. A PHR needs perhaps a third of that, and inventing managers to match the number would be structure for its own sake. |
+| The manager *list* | A count is not a design. YourPHR's managers follow from its own resources, not from matching ngdpbase's roster. (This is about the list, not the granularity — on providers and capabilities the position is now to err **fine**, for the reasons above.) |
 
 ## What this means concretely
 
@@ -227,7 +296,11 @@ Recording this so the adoption does not become cargo-culting.
 **Structure is not free**, and managers and providers are justified by different things — conflating the two tests is how this goes wrong in both directions at once.
 
 - **A manager is justified by being the only door to a resource.** Not by having alternative implementations, and not by symmetry with ngdpbase's list. So the test is: *is this a resource, and would code otherwise reach it directly?* One manager per resource. If two managers own the same table, neither is a chokepoint and the invariant is already gone.
-- **A provider is justified by a second implementation plausibly existing.** Auth, audit and storage: yes. Most else: no. A provider interface with one implementation and no candidate second is a layer, not an abstraction.
+- **A provider is justified by someone plausibly needing to replace it.** For an application that means a second implementation you would write yourself, which is a narrow test. For a **framework** the second implementation is the *adopter's*, and the question becomes whether a customiser would otherwise have to fork. That is a much wider licence, and it is the licence the framework goal asks for.
+
+An earlier draft of this document applied the narrow test and concluded "do not adopt the provider count". Three arguments overturned it: the framework goal makes replaceability the adopter's concern rather than ours; finer capabilities are what let an operator separate PHI storage from audit storage at all; and a capability that is never loaded costs nothing, so granularity is close to free. Erring granular is now the position.
+
+What has *not* changed is that a provider interface must have a plausible second implementation by **someone**. A layer nobody will ever swap is still a layer.
 
 The failure mode to watch is not too many managers — it is **too few, each too large**, because "one path to users" was read as "one class for everything about users". `UserManager` at 1,600 lines is the worked example, in the codebase being copied from.
 
