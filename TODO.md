@@ -29,13 +29,13 @@
 
 > Generated from live GitHub state — ranked by priority label.
 
-## 🔴 P0 — Security & Critical
-
-*None.*
-
 ## 🟠 P1
 
-- [#524](https://github.com/jwilleke/yourphr/issues/524) — [FEATURE] Send to Email (<https://demo.yourphr.org/web/>)
+- [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
+- [#539](https://github.com/jwilleke/yourphr/issues/539) — [SPIKE] Phase 2: SMART sync in TypeScript with SSRF guarding — or stop the transition
+- [#538](https://github.com/jwilleke/yourphr/issues/538) — [CHORE] Phase 0: leave Fasten, stay on Go — adopt the stub under our own name
+- [#537](https://github.com/jwilleke/yourphr/issues/537) — [SPIKE] TypeScript stack: prove auth, the HTTP layer and sync, or stop
+- [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
@@ -47,7 +47,11 @@
 
 ## 🟡 P2
 
-- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend *(CI red — 3 failing)* — no linked issue
+- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready)_ — no linked issue
+- [#543](https://github.com/jwilleke/yourphr/issues/543) — [SPIKE] Phase 5: cut over, keep both, or stop — decided once, not by drift
+- [#542](https://github.com/jwilleke/yourphr/issues/542) — [SPIKE] Phase 4: the long tail — 22.7k lines with no library to adopt
+- [#541](https://github.com/jwilleke/yourphr/issues/541) — [SPIKE] Phase 3: authentication and sessions in the TypeScript stack
+- [#540](https://github.com/jwilleke/yourphr/issues/540) — [CHORE] Phase 1: keep the TypeScript read stack honest in CI
 - [#535](https://github.com/jwilleke/yourphr/issues/535) — [FEATURE] No list view for Organizations (individual ones display fine)
 - [#534](https://github.com/jwilleke/yourphr/issues/534) — [CHORE] related_versions.json is tracked but build-generated, so it dirties the tree on every build
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
@@ -106,14 +110,10 @@
 - [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 - [#14](https://github.com/jwilleke/yourphr/issues/14) — [FEATURE] User Profile Update
 
-## 🔵 In review — shipped, awaiting verification
-
-*None.*
-
 ## ⏸ Deferred
 
-- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend *(CI red — 1 failing)* — no linked issue
-- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend *(CI red — 2 failing)* — no linked issue
+- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(ready — blocked)_ — no linked issue
+- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(ready — blocked)_ — no linked issue
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
@@ -122,6 +122,7 @@
 - [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
 
-## ❓ Needs triage
+## ❓ Needs triage (2)
 
-*None.*
+- [#546](https://github.com/jwilleke/yourphr/issues/546) — [FEATURE] Required vs optional capabilities — a required provider must refuse to boot, not degrade to inert
+- [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
