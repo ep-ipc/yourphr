@@ -61,7 +61,13 @@ Each phase is its own issue with a `blocked by` chain, per the repo's one-issue-
 
 **Phase 1 — the read stack in TypeScript, shadowing.** Already built. Keep it honest by running the harness on the synthetic corpus in CI, and against a real snapshot after any storage change.
 
-**Phase 2 — sync, or stop.** The decisive phase, and the one that should be attempted *before* anything is migrated for real. If SMART sync with SSRF guarding cannot be demonstrated in TypeScript against one real provider, the rest of this plan does not happen and the read stack stays a shadow. Doing it first means failing cheap.
+**Phase 2 — sync, or stop. Due 2026-09-30** ([#539](https://github.com/jwilleke/yourphr/issues/539), milestone *Phase 2 decision — TypeScript sync*). The decisive phase, attempted *before* anything is migrated for real, so that failing is cheap.
+
+The gate is a **sandbox** provider, not production — [#408](https://github.com/jwilleke/yourphr/issues/408) has been open since July trying to prove a *production* provider end-to-end in Go, and holding TypeScript to a bar the working stack has not cleared would make this fail for the wrong reasons. Six sandboxes are already seeded.
+
+**Mid-point signal, 2026-09-05:** the SSRF dispatcher should exist in some form. It is the piece with no library behind it; if it has not started by three weeks in, the end date is already lost, and week 3 is a better time to learn that than week 6.
+
+Demonstrated means: one sandbox connected, a token refreshed, records stored with the differential harness still agreeing, **SSRF tests that fail when the guard is removed**, and a resync producing no duplicates.
 
 **Phase 3 — auth and sessions.** Isolation is proven *given* a user id; establishing who the caller is is not built.
 
@@ -73,7 +79,8 @@ Each phase is its own issue with a `blocked by` chain, per the repo's one-issue-
 
 A migration without a defined failure is one that cannot fail, only drag.
 
-- **If Phase 2 is not demonstrated by an agreed date, stop.** Keep Go, keep the read stack as a shadow or delete it, and record why in this document.
+- **If Phase 2 is not demonstrated by 2026-09-30, stop.** Keep Go, keep the read stack as a shadow or delete it, and record why in this document. The date is a GitHub milestone rather than a line in a plan, so it is visible on the issue and on the board.
+- **Only two things justify moving it**, and neither is being busy: [#408](https://github.com/jwilleke/yourphr/issues/408) landing in Go first, which would give a known-good reference for what production demands; or a provider registration stalling in somebody else's approval queue, as already happened with [#339](https://github.com/jwilleke/yourphr/issues/339).
 - **If the freeze is broken twice for non-security work, the freeze is not real** — either widen the rule deliberately or abandon it, but do not keep pretending.
 - **If two stacks are both serving production for more than one release cycle**, stop and pick one. A half-migrated system maintained by one person is worse than either endpoint.
 
