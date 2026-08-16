@@ -19,6 +19,7 @@
     "isolation": "tsx scripts/isolation-tests.ts",
     "http": "tsx scripts/http-tests.ts",
     "ssrf": "tsx scripts/ssrf-tests.ts",
+    "smart": "tsx scripts/smart-tests.ts",
     "hooks": "git config core.hooksPath .githooks",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:phi": "bash scripts/check-no-phi.sh --all",

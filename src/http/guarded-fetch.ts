@@ -23,6 +23,9 @@ export interface GuardedFetchOptions {
   headers?: Record<string, string>;
   /** Test-only escape hatch, exactly as the Go side has. Never set in production. */
   allowInternal?: boolean;
+  method?: 'GET' | 'POST';
+  /** Sent form-encoded. Used by the OAuth token endpoint, which is why this exists at all. */
+  form?: Record<string, string>;
 }
 
 export interface GuardedResponse {
@@ -57,23 +60,44 @@ export async function guardedFetch(target: string, options: GuardedFetchOptions 
     const url = checked.url;
     const secure = url.protocol === 'https:';
     const send = secure ? httpsRequest : httpRequest;
+    const method = options.method ?? 'GET';
+    const requestBody = options.form ? new URLSearchParams(options.form).toString() : undefined;
 
     const response = await new Promise<IncomingMessage>((resolve, reject) => {
       const req = send(
         url,
         {
+          method,
           agent: secure ? agents.https : agents.http,
-          headers: { accept: 'application/json', ...options.headers },
+          headers: {
+            accept: 'application/json',
+            ...(requestBody === undefined
+              ? {}
+              : {
+                  'content-type': 'application/x-www-form-urlencoded',
+                  'content-length': String(Buffer.byteLength(requestBody)),
+                }),
+            ...options.headers,
+          },
           timeout: timeoutMs,
         },
         resolve
       );
       req.on('timeout', () => req.destroy(new Error(`timed out after ${timeoutMs}ms: ${url.href}`)));
       req.on('error', reject);
+      if (requestBody !== undefined) {
+        req.write(requestBody);
+      }
       req.end();
     });
 
     const location = response.headers.location;
+    // A POST is never replayed to a redirect target. The token endpoint carries a client secret and
+    // an authorization code; following a redirect would hand both to wherever the response pointed.
+    if (method === 'POST' && response.statusCode && response.statusCode >= 300 && response.statusCode < 400) {
+      response.resume();
+      throw new Error(`refusing to follow a redirect from a POST to ${url.href} — credentials would be replayed`);
+    }
     if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && location) {
       response.resume(); // drain, so the socket is released
       // Resolved against the current URL, because a relative Location is legal and common.

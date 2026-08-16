@@ -34,5 +34,8 @@ jobs:
       - name: SSRF guard
         run: npm run ssrf
 
+      - name: SMART client
+        run: npm run smart
+
       - name: No patient data in tracked files
         run: npm run check:phi
