@@ -14,3 +14,6 @@ node_modules/
 dist/
 *.log
 .DS_Store
+private/
+.claude/settings.local.json
+.claude/worktrees/
