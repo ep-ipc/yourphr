@@ -321,6 +321,39 @@ The related split: **the action vocabulary belongs to code** (a permission strin
 
 YourPHR is one user, one account, with per-user isolation. Compartments, guardianship, confidentiality tiers and sharing all arrive with **family sharing**, which is not built. The ask now is narrower: do not let the evaluator's shape foreclose them. An evaluator that can only add permissions together is a decision, even when it is made by not deciding.
 
+## The manager set
+
+Applying "one manager per resource" to YourPHR's actual tables. Derived from the persisted models and the 69-method `DatabaseRepository` interface, not from ngdpbase's roster.
+
+**The thing to get right first: 70+ FHIR resource types are *one* architectural resource.** Condition, Observation, Claim and MedicationRequest are rows in the record store, not resources with doors of their own. The spike already established that this is the correct axis — 551 generic lines replacing 18,518 generated ones. A manager per FHIR type would be the same mistake in a new language.
+
+| Manager | Backing today | Framework or application |
+|---|---|---|
+| **Records** | `ResourceBase`, `RelatedResource`, `ResourceAssociation`, `ResourceComposition`, `Favorite` | application |
+| **Sources** | `SourceCredential`, `SourceSummary` — connected providers, tokens, sync state | application |
+| **Catalog** | `ProviderCatalogEntry` | application |
+| **Glossary** | `Glossary` — patient-legible term explanations | application |
+| **Users** | `User`, passwords, legal consent | framework |
+| **Sessions** | `AccessToken`, token generation, revocation | framework |
+| **Settings** | `SystemSettingEntry`, `UserSettingEntry` | framework |
+| **Jobs** | `BackgroundJob` | framework |
+| **Audit** | does not exist yet ([#507](https://github.com/jwilleke/yourphr/issues/507)) | framework |
+| **Shares** | does not exist yet ([#524](https://github.com/jwilleke/yourphr/issues/524)) | framework |
+| **Backups** | artifacts, plus the cross-manager coordination noted above | framework |
+
+**This split is itself a test of the framework claim, and it passes in a useful way.** Everything application-specific is the health-domain part — records, sources, catalog, glossary. Nothing else about a personal health record is architecturally special, which is the outcome the framework goal needs and did not have to produce.
+
+### Judgment calls, recorded as calls
+
+- **Sessions are split from Users.** Arguably one resource. Split because token generation and revocation have a lifecycle of their own, and [#528](https://github.com/jwilleke/yourphr/issues/528) was precisely that lifecycle failing silently while buried in the user row.
+- **Favorites, legal consent and support requests get no door.** One small table each; a manager apiece is ceremony. Favorites fold into Records, consent into Users, support into nothing yet.
+- **Sources and Catalog look like one resource and are not.** Catalog is what an operator *could* connect to; Sources is what they *did*, holding OAuth credentials. Different lifecycles and very different sensitivity.
+- **Glossary may not be a resource at all** — possibly reference data the display layer reads rather than something needing a door. Listed so the question is answered deliberately rather than by default.
+
+### The trap, now concrete
+
+ngdpbase's `PersonManager` and `OrganizationManager` look like direct hits. They are not. **Patient, Practitioner and Organization are FHIR records living in the record store.** Giving them managers puts a second door on the same table, which breaks the invariant instead of serving it — the exact failure named earlier: *if two managers own the same table, neither is a chokepoint.*
+
 ## What does not transfer
 
 Recording this so the adoption does not become cargo-culting.
@@ -334,10 +367,13 @@ Recording this so the adoption does not become cargo-culting.
 
 ## What this means concretely
 
-- **Sync** ([#539](https://github.com/jwilleke/yourphr/issues/539)) becomes a manager with providers per source type, an inert default, and — because the base contract demands it — an answer for how connected-source state is backed up.
-- **Auth** ([#541](https://github.com/jwilleke/yourphr/issues/541)) uses the provider pattern directly. `PasswordAuthProvider` is the one YourPHR needs today; `MagicLink` and OIDC exist upstream if wanted later, and the point of the interface is that they can arrive without rework.
-- **Audit** — ngdpbase already has `DatabaseAuditProvider` / `FileAuditProvider` / `NullAuditProvider`. That is directly the unresolved thread on [#507](https://github.com/jwilleke/yourphr/issues/507), and the thing [#524](https://github.com/jwilleke/yourphr/issues/524) needs for recording what was emailed to whom.
-- **Backup** stops being a feature and becomes part of every manager's contract, which is the only way the encryption/backup exclusion stops being permanent.
+Against the phases already filed under [#544](https://github.com/jwilleke/yourphr/issues/544):
+
+- **Sync** ([#539](https://github.com/jwilleke/yourphr/issues/539)) is the Sources manager, with a provider per source type and an inert default — and, because the base contract demands it, an answer for how connected-source state is backed up.
+- **Auth** ([#541](https://github.com/jwilleke/yourphr/issues/541)) is Users plus Sessions, over `BaseAuthProvider`. `PasswordAuthProvider` is all YourPHR needs today; the interface is what lets OIDC or magic link arrive later without rework. The result it returns must carry token generation, or [#528](https://github.com/jwilleke/yourphr/issues/528) recurs in a new language.
+- **Audit** ([#507](https://github.com/jwilleke/yourphr/issues/507)) — ngdpbase already has `Database` / `File` / `Null` audit providers to adopt. It is a **required** capability, so it must refuse to boot rather than degrade to inert ([#546](https://github.com/jwilleke/yourphr/issues/546)).
+- **Backup** stops being a feature and becomes part of every manager's contract — the only way the encryption/backup exclusion stops being permanent ([#461](https://github.com/jwilleke/yourphr/issues/461)), and the reason a default install currently has no backup at all ([#545](https://github.com/jwilleke/yourphr/issues/545)).
+- **The two Go leaks** named above are worth fixing whether or not any of this happens, since they are second doors to live data today.
 
 ## The honest risk
 
