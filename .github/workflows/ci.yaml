@@ -1,0 +1,38 @@
+# What can be verified without patient data.
+#
+# Every other harness here (load, diff, writes, isolation, http) reads a real export and can only
+# run on the operator's machine — CI must never see PHI. The SSRF work is deliberately different:
+# it has no database and no records, so it runs on every push, which matters because it is the part
+# of the transition with no library behind it and the part where being wrong is a vulnerability
+# rather than a bug (yourphr#539).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      # The guard is worth exactly as much as this boundary: anything that can import node:https or
+      # call fetch() directly walks around it. See docs/planning/architecture-principles-typescript.md.
+      - name: Network access confined to src/http
+        run: npm run check:boundary
+
+      - name: SSRF guard
+        run: npm run ssrf
+
+      - name: No patient data in tracked files
+        run: npm run check:phi
