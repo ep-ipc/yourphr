@@ -295,7 +295,14 @@ So both forms are part of the contract:
 - `decide(ctx, action, resource)` for a single record
 - `filter(ctx, action, query)` — policy compiled into a **query predicate** for lists
 
-This is not a hypothetical risk. ngdpbase's own `ACLManager` carries the scar in a comment: `getRecentChanges` consulted `audience` only on already-private pages, so **a non-private page with an audience was listed to viewers**. A listing path partially reimplemented the check and leaked. That is the strongest available argument for `filter()` being a first-class form rather than something each list endpoint improvises.
+This is not a hypothetical risk. ngdpbase shipped exactly this leak ([ngdpbase#1054](https://github.com/jwilleke/ngdpbase/issues/1054), fixed 2026-08-16). `VersioningFileProvider.getRecentChanges` consulted `audience` only on already-private pages, so **a non-private page with an audience was listed to viewers who got a 403 on opening it** — 347 of them on the maintainer's own instance. Note the layer: the leak was in a *provider* reimplementing a check the *manager* owned, which is the same boundary this document draws between deciding and implementing.
+
+Two details from the fix are worth carrying over, because both are cheap to get wrong here:
+
+- **A denormalised copy of an authorization attribute goes stale.** The page index cached `audienceRoles` at write time "for index-level access checks", so any page not re-saved since the field was added showed an empty list — 345 of the 347. The fix reads the record's own attributes and treats the index as an enumeration aid only. For a PHR the equivalent is any confidentiality flag cached outside the record.
+- **The same stale field made a second caller fail the opposite way.** `getPagesSharedWith` *under*-reported, hiding 345 pages from "shared with me". One wrong source, one over-disclosure and one silent omission — which is the argument for a single evaluator rather than per-caller reimplementation, stated more sharply than a leak alone makes it.
+
+The resolution was to extract tier-1 evaluation into one shared function that the manager and both listing paths call. That is `filter()` in all but name, arrived at by necessity — the strongest available argument for making it a first-class form here rather than something each list endpoint improvises.
 
 ### Sharing without an account
 
