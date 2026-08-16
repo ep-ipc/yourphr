@@ -283,3 +283,105 @@ func TestMessage_StaysPlainWithoutAttachments(t *testing.T) {
 	require.Contains(t, rendered, "Content-Type: text/plain; charset=UTF-8")
 	require.NotContains(t, rendered, "multipart/mixed")
 }
+
+// A carriage return in a header value ends that header and begins another, so these are the inputs
+// that would let a caller write headers this package never intended. With a patient's records
+// attached, that is a disclosure primitive rather than a formatting bug (#549).
+func TestMessage_RefusesHeaderInjection(t *testing.T) {
+	t.Parallel()
+
+	base := func() Message {
+		return Message{To: []string{"patient@example.com"}, Subject: "Medical records", Body: "hello"}
+	}
+
+	cases := []struct {
+		name string
+		mut  func(*Message)
+	}{
+		{"CRLF in the recipient", func(m *Message) {
+			m.To = []string{"patient@example.com\r\nBcc: attacker@example.net"}
+		}},
+		{"bare LF in the recipient", func(m *Message) {
+			m.To = []string{"patient@example.com\nBcc: attacker@example.net"}
+		}},
+		{"a second recipient carrying CRLF", func(m *Message) {
+			m.To = []string{"patient@example.com", "family@example.com\r\nBcc: attacker@example.net"}
+		}},
+		{"CRLF in the subject", func(m *Message) {
+			m.Subject = "Records\r\nBcc: attacker@example.net"
+		}},
+		{"a subject that ends the header block", func(m *Message) {
+			m.Subject = "Records\r\n\r\nA replacement body signed by nobody"
+		}},
+		// A LONE carriage return, with no newline after it. Some relays treat it as a line break on
+		// its own, and every other case here contains \n — so without this one, a guard checking
+		// only for \n would pass the whole suite. Found by removing the \r check and watching
+		// nothing go red.
+		{"bare CR in the subject", func(m *Message) { m.Subject = "Records\rBcc: attacker@example.net" }},
+		{"bare CR in the recipient", func(m *Message) {
+			m.To = []string{"patient@example.com\rBcc: attacker@example.net"}
+		}},
+		{"a NUL in the subject", func(m *Message) { m.Subject = "Records\x00" }},
+		{"CRLF in an attachment filename", func(m *Message) {
+			m.Attachments = []Attachment{{Filename: "records.pdf\r\nBcc: attacker@example.net", Content: []byte("x")}}
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := base()
+			tc.mut(&msg)
+			require.Error(t, msg.validate(), "validate must refuse: %s", tc.name)
+		})
+	}
+}
+
+// The guard must not refuse ordinary mail. A check that rejects everything protects nothing, because
+// the first person it inconveniences will turn it off.
+func TestMessage_AllowsOrdinarySubjectsAndAddresses(t *testing.T) {
+	t.Parallel()
+
+	msg := Message{
+		To:          []string{"patient@example.com", "Jim Willeke <jim@example.com>"},
+		Subject:     "Your medical records — summary for Dr. O'Brien (2026)",
+		Body:        "line one\nline two\n",
+		Attachments: []Attachment{{Filename: "yourphr-records.pdf", Content: []byte("x")}},
+	}
+	require.NoError(t, msg.validate())
+}
+
+// Both senders reach validate(), so neither can be the one that forgets.
+func TestSenders_RefuseAnInjectedMessage(t *testing.T) {
+	t.Parallel()
+
+	injected := Message{
+		To:      []string{"patient@example.com"},
+		Subject: "Records\r\nBcc: attacker@example.net",
+		Body:    "hello",
+	}
+
+	logger, _ := test.NewNullLogger()
+	console := &consoleSender{reason: "test", logger: logrus.NewEntry(logger)}
+	require.Error(t, console.Send(injected), "the console sender must refuse it too")
+
+	smtp := &smtpSender{host: "127.0.0.1", port: 0, from: "phr@example.com", logger: logrus.NewEntry(logger)}
+	err := smtp.Send(injected)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "subject", "it must fail validation, not while dialling")
+}
+
+// Configuration is wrong for every message that will ever be sent, so it fails at construction.
+func TestNew_RefusesAFromAddressCarryingCRLF(t *testing.T) {
+	t.Parallel()
+
+	appConfig := testConfig(t, map[string]interface{}{
+		KeyEnabled:  true,
+		KeyProvider: ProviderSMTP,
+		KeySMTPHost: "smtp.example.com",
+		KeyFrom:     "phr@example.com\r\nBcc: attacker@example.net",
+	})
+
+	_, err := New(appConfig, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), KeyFrom)
+}

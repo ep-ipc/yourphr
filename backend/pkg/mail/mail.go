@@ -96,6 +96,12 @@ func New(appConfig config.Interface, logger *logrus.Entry) (Sender, error) {
 		if from == "" {
 			return nil, fmt.Errorf("%s is %q but no sender address is set — set %s", KeyProvider, ProviderSMTP, KeyFrom)
 		}
+		// Refused at construction rather than per message: this comes from configuration, so a bad
+		// value is wrong for every message that will ever be sent, and failing to start is a much
+		// louder signal than a send that fails later for reasons nobody connects to a config edit.
+		if headerUnsafe(from) {
+			return nil, fmt.Errorf("%s contains a line break or control character", KeyFrom)
+		}
 		port := appConfig.GetInt(KeySMTPPort)
 		if port <= 0 {
 			port = 587
@@ -236,6 +242,33 @@ func (s *smtpSender) dial(addr string) (*smtp.Client, error) {
 	return client, nil
 }
 
+// headerUnsafe reports whether s cannot be written into a header field.
+//
+// A carriage return or newline ends the header and starts another one, so a value carrying either
+// lets the caller write headers this package never intended — a Bcc to somebody else, or a blank
+// line that ends the header block and takes over the body. With a patient's records attached that
+// is a disclosure primitive, not a formatting bug.
+//
+// Other control characters are refused too. They have no legitimate place in a header field, and
+// what a relay does with them is its own business rather than something to find out in production.
+// Tab is allowed: it is legal folding whitespace.
+func headerUnsafe(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool {
+		return r == '\r' || r == '\n' || r == 0x7f || (r < 0x20 && r != '\t')
+	})
+}
+
+// validate refuses a message the transport must not send.
+//
+// The CRLF checks are here rather than at the one call site that exists today, because render()
+// writes To and Subject straight into headers and cannot refuse anything — it returns bytes. The
+// current caller is safe only by accident of its own construction: a constant subject, and a
+// recipient already through mail.ParseAddress. The second caller — a password reset, a share
+// notification, a subject carrying a report name — inherits an obligation nobody told it about.
+// That is the same shape as an authorization check every handler is expected to remember.
+//
+// Refusing rather than stripping is deliberate. A mangled header is a visible bug; a silently
+// altered recipient list is a message delivered somewhere nobody chose.
 func (m Message) validate() error {
 	if len(m.To) == 0 {
 		return fmt.Errorf("no recipient")
@@ -244,9 +277,23 @@ func (m Message) validate() error {
 		if strings.TrimSpace(to) == "" {
 			return fmt.Errorf("empty recipient address")
 		}
+		if headerUnsafe(to) {
+			return fmt.Errorf("recipient address contains a line break or control character")
+		}
 	}
 	if strings.TrimSpace(m.Subject) == "" {
 		return fmt.Errorf("no subject")
+	}
+	if headerUnsafe(m.Subject) {
+		return fmt.Errorf("subject contains a line break or control character")
+	}
+	for _, attachment := range m.Attachments {
+		// Rendered through %q, which escapes control characters, so this is not currently an
+		// injection route. Refused anyway: the safety here is a property of one format verb in
+		// another function, and that is too thin a thread to hang a filename on.
+		if headerUnsafe(attachment.Filename) {
+			return fmt.Errorf("attachment filename contains a line break or control character")
+		}
 	}
 	return nil
 }
