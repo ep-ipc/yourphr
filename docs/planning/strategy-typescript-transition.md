@@ -55,7 +55,18 @@ Related, already filed: [#485](https://github.com/jwilleke/yourphr/issues/485) r
 
 ## Sequencing
 
-Each phase is its own issue with a `blocked by` chain, per the repo's one-issue-per-phase rule. Nothing here is a step inside another issue.
+Each phase is its own issue, tracked under [#544](https://github.com/jwilleke/yourphr/issues/544) as native sub-issues and chained by `blocked by`. Nothing here is a step inside another issue.
+
+| Phase | Issue | Blocked by |
+|---|---|---|
+| 0 — leave Fasten, stay on Go | [#538](https://github.com/jwilleke/yourphr/issues/538) | — |
+| 1 — keep the read stack honest in CI | [#540](https://github.com/jwilleke/yourphr/issues/540) | — |
+| **2 — sync, or stop** | **[#539](https://github.com/jwilleke/yourphr/issues/539)** | [#538](https://github.com/jwilleke/yourphr/issues/538) |
+| 3 — authentication and sessions | [#541](https://github.com/jwilleke/yourphr/issues/541) | [#539](https://github.com/jwilleke/yourphr/issues/539) |
+| 4 — the long tail | [#542](https://github.com/jwilleke/yourphr/issues/542) | [#539](https://github.com/jwilleke/yourphr/issues/539), [#541](https://github.com/jwilleke/yourphr/issues/541) |
+| 5 — cut over, keep both, or stop | [#543](https://github.com/jwilleke/yourphr/issues/543) | [#542](https://github.com/jwilleke/yourphr/issues/542) |
+
+Phases 0 and 1 are deliberately unblocked and worth doing even if Phase 2 fails.
 
 **Phase 0 — leave Fasten, stay on Go.** Fold the stub in under YourPHR's own name, replace `gofhir-models`, decide the module path. Cheap, reversible, useful whether or not the rest happens, and it removes the liability of depending on a stub of a package that went private.
 
