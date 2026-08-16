@@ -219,3 +219,28 @@ Ordering, from the evaluation doc: read before write, reversible before irrevers
 | `@medplum/core` | 5.1.29 | Validation and utilities |
 | `fhirpath` | 5.1.1 | HL7's FHIRPath engine — drives generic indexing |
 | `better-sqlite3-multiple-ciphers` | 13.0.3 | Encrypted SQLite |
+
+## PHI guard
+
+This repo keeps hundreds of megabytes of **real patient records** in `./phi` next to the code, so
+`.gitignore` alone is not a control — `git add -f` walks straight past it.
+
+`scripts/check-no-phi.sh` refuses to let patient data reach git history. It runs three ways:
+
+| Where | How | Bypassable |
+|---|---|---|
+| pre-commit hook | `.githooks/pre-commit`, installed by `npm install` (or `npm run hooks`) | yes — `--no-verify` |
+| on demand | `npm run check:phi` | — |
+| CI | `.github/workflows/phi-guard.yaml`, on every push | no |
+
+CI runs it because a hook is advisory: it lives on one machine, `--no-verify` skips it, and it is
+absent entirely for anyone who clones without installing.
+
+It refuses four things: anything under `phi/`, `patient-data/` or `sample-data/`; database and bulk
+export extensions (`.db`, `.sqlite`, `.ndjson`, …); files over 2 MiB; and any file containing FHIR
+patient-record fields such as `"birthDate"` or a `subject.reference` of `Patient/…`. Each vector was
+verified to block, and the clean tree verified to pass — a guard nobody has tried to defeat is not
+known to work.
+
+Deliberately strict. A false positive costs one `--no-verify` and a moment's thought; a false
+negative is irreversible.

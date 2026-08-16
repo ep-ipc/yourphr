@@ -17,7 +17,10 @@
     "shadow": "tsx scripts/shadow-compare.ts",
     "writes": "tsx scripts/write-tests.ts",
     "isolation": "tsx scripts/isolation-tests.ts",
-    "http": "tsx scripts/http-tests.ts"
+    "http": "tsx scripts/http-tests.ts",
+    "hooks": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "check:phi": "bash scripts/check-no-phi.sh --all"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

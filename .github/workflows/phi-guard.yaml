@@ -1,0 +1,16 @@
+# The PHI guard runs in CI as well as in the pre-commit hook, because a hook is advisory: it lives
+# on one machine, it is skipped by --no-verify, and it is absent entirely for anyone who clones
+# without running npm install. CI is the copy that cannot be bypassed by accident.
+name: PHI guard
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  no-phi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse patient data in tracked files
+        run: bash scripts/check-no-phi.sh --all
