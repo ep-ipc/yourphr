@@ -934,7 +934,7 @@ export class FastenApiService {
    * reports success while nothing was delivered is the failure this must never have — the patient
    * would believe their doctor has their records.
    */
-  sendIPSExportByEmail(to: string, format: string = 'pdf'): Observable<any> {
+  sendIPSExportByEmail(to: string, format = 'pdf'): Observable<any> {
     const endpointUrl = `${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/summary/ips/email`;
     return this._httpClient.post<any>(endpointUrl, {to, format})
       .pipe(map((response: ResponseWrapper) => response.data));

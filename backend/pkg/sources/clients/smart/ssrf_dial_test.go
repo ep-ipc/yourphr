@@ -104,8 +104,18 @@ func TestGuardedTransport_RefusesObfuscatedLoopback(t *testing.T) {
 		resp.Body.Close()
 		t.Fatal("the request reached a loopback server through an obfuscated address")
 	}
-	if !strings.Contains(err.Error(), "internal address") {
-		t.Errorf("expected the guard's refusal, got %v", err)
+
+	// WHICH layer refuses is platform-dependent, and asserting on the guard's message alone made this
+	// test pass on macOS and fail on Ubuntu CI. The BSD resolver accepts a bare decimal host and hands
+	// back 127.0.0.1, so the dialer sees loopback and refuses; glibc rejects it outright with "no such
+	// host", so the request dies before the guard is consulted. Both outcomes are the property that
+	// matters — nothing connected to loopback — and the assertion above already proves it.
+	//
+	// The guard's own teeth are not weakened by accepting either: TestGuardedDialer_* drive literal
+	// internal addresses straight at the dialer, where no resolver is involved and removing the guard
+	// turns them red.
+	if !strings.Contains(err.Error(), "internal address") && !strings.Contains(err.Error(), "no such host") {
+		t.Errorf("expected the guard's refusal or a failed lookup, got %v", err)
 	}
 }
 
