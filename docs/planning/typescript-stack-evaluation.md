@@ -173,6 +173,18 @@ Two harness flaws that real data exposed and synthetic data could not, both fixe
 - comparing **truncated** result sets reported three false disagreements, because neither repository promises an order beyond a page and the corpus holds 15,225 DocumentReferences
 - comparing **across accounts** compared 20,061 resources against 19,796, because the API enforces per-user isolation and the export did not
 
+### Auth and the HTTP layer — 2026-08-16
+
+Two of the three gaps in [#537](https://github.com/jwilleke/yourphr/issues/537) closed against real records.
+
+**Per-user isolation: 6/6**, tested with two real accounts sharing one database (19,796 resources against 265, 18 shared resource types). Ownership is a property of the repository instance rather than an argument, so a caller cannot forget it. `(resource_type, id)` proved insufficient as a key — two family members treated at the same hospital receive the **same Organization id** — and the shared-id case is tested explicitly because it does not occur naturally in this corpus. Verified to detect a leak.
+
+**The HTTP layer: 9/9** over real HTTP — 3,456 Conditions served, matching the Go stack id for id, all 29 summary counts equal.
+
+**This corrects an assumption made above.** "A backend rewrite does not force a frontend rewrite" is **true but not free**. The Angular app does not speak FHIR REST: it calls `/api/secure/resource/fhir?sourceResourceType=X` and expects a `ResourceFhir` wrapper, while Medplum's router serves FHIR-native `GET /Condition` → `Bundle`. Keeping the frontend therefore requires an adapter, and the adapter needs data a FHIR-native store does not hold — `source_id`, `sort_title`, `provenance`, `classified`. None is hard; all are invisible until a screen renders wrong. Bounded and known, against 76.8k lines of Angular kept.
+
+**Sync remains untested and was not faked.** It needs live provider credentials and a real OAuth round trip; mocking one would test the mock. The specific uncertainty is incremental re-fetch dedup: records dedup when the same bytes arrive twice, but a resync sends *slightly different bytes for the same clinical fact*, which is [#252](https://github.com/jwilleke/yourphr/issues/252)'s real problem.
+
 ### What the spike did NOT prove
 
 - **72 synthetic resources.** Nothing about scale, or about the long tail of real provider data.
