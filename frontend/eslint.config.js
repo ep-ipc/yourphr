@@ -61,6 +61,13 @@ module.exports = tseslint.config(
       "@angular-eslint/template/alt-text": "warn",
       "@angular-eslint/template/elements-content": "warn",
       "@angular-eslint/template/eqeqeq": "warn",
+
+      // -- off: migration nudge, not a bug --
+      // Flags all 647 *ngIf uses across 111 templates. Enabled by default from angular-eslint 21,
+      // which is the only reason #424 has been red since 2026-07-30 — the upgrade itself is fine.
+      // The migration is real work with a real revert story, tracked separately at #551; turning
+      // the rule back on is the last step there.
+      "@angular-eslint/template/prefer-control-flow": "off",
     },
   }
 );
