@@ -55,6 +55,22 @@ export interface SqliteFhirRepositoryOptions {
   readonly file: string;
   /** SQLCipher key. Omit for an unencrypted database. */
   readonly key?: string;
+  /**
+   * Whose records this instance may see (#537).
+   *
+   * A PHR holds a family. YourPHR enforces this from the request context and every query carries
+   * `WHERE user_id = ?`; the spike had NO concept of a user at all, so every caller saw every
+   * record — on a family instance that is a disclosure, not a missing feature.
+   *
+   * Scoped per INSTANCE rather than per call, deliberately: FhirRepository's methods take no user,
+   * so a caller that forgot to pass one would silently read everything. Constructing a repository
+   * for a user makes the scope impossible to omit — the same reason the Go side derives it from the
+   * context rather than from an argument.
+   *
+   * Undefined means unscoped, which is correct for admin tooling like reindexing and refused for
+   * anything serving a request.
+   */
+  readonly userId?: string;
 }
 
 export interface IndexStats {
@@ -69,10 +85,12 @@ export interface IndexStats {
 export class SqliteFhirRepository extends FhirRepository {
   readonly db: InstanceType<typeof Database>;
   readonly stats: IndexStats = { collisions: 0, indexRows: 0, failedExpressions: {} };
+  readonly userId?: string;
 
   constructor(options: SqliteFhirRepositoryOptions) {
     super();
     loadDefinitions();
+    this.userId = options.userId;
 
     this.db = new Database(options.file);
     if (options.key) {
@@ -96,11 +114,15 @@ export class SqliteFhirRepository extends FhirRepository {
       CREATE TABLE IF NOT EXISTS resources (
         resource_type TEXT NOT NULL,
         id            TEXT NOT NULL,
+        -- Owner. Empty string rather than NULL so it can sit in the primary key: two accounts may
+        -- legitimately hold the SAME resource id from the same provider, and keying on
+        -- (type, id) alone made the second import look like a collision (#537).
+        user_id       TEXT NOT NULL DEFAULT '',
         version_id    TEXT NOT NULL,
         last_updated  TEXT NOT NULL,
         deleted       INTEGER NOT NULL DEFAULT 0,
         content       TEXT NOT NULL,
-        PRIMARY KEY (resource_type, id)
+        PRIMARY KEY (resource_type, id, user_id)
       );
 
       CREATE TABLE IF NOT EXISTS resource_history (
@@ -115,12 +137,13 @@ export class SqliteFhirRepository extends FhirRepository {
       CREATE TABLE IF NOT EXISTS search_index (
         resource_type TEXT NOT NULL,
         resource_id   TEXT NOT NULL,
+        user_id       TEXT NOT NULL DEFAULT '',
         code          TEXT NOT NULL,
         value         TEXT NOT NULL,
-        PRIMARY KEY (resource_type, resource_id, code, value)
+        PRIMARY KEY (resource_type, resource_id, user_id, code, value)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_search_lookup ON search_index (resource_type, code, value);
+      CREATE INDEX IF NOT EXISTS idx_search_lookup ON search_index (resource_type, code, value, user_id);
     `);
   }
 
@@ -139,11 +162,14 @@ export class SqliteFhirRepository extends FhirRepository {
       return;
     }
 
-    const del = this.db.prepare('DELETE FROM search_index WHERE resource_type = ? AND resource_id = ?');
-    del.run(resource.resourceType, resource.id);
+    const owner = this.userId ?? '';
+    const del = this.db.prepare(
+      'DELETE FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ?'
+    );
+    del.run(resource.resourceType, resource.id, owner);
 
     const insert = this.db.prepare(
-      'INSERT OR IGNORE INTO search_index (resource_type, resource_id, code, value) VALUES (?, ?, ?, ?)'
+      'INSERT OR IGNORE INTO search_index (resource_type, resource_id, user_id, code, value) VALUES (?, ?, ?, ?, ?)'
     );
 
     for (const param of Object.values(params) as SearchParameter[]) {
@@ -167,7 +193,7 @@ export class SqliteFhirRepository extends FhirRepository {
           if (allowedTypes && !allowedTypes.some((t) => value.startsWith(`${t}/`))) {
             continue;
           }
-          insert.run(resource.resourceType, resource.id, param.code, value);
+          insert.run(resource.resourceType, resource.id, owner, param.code, value);
           this.stats.indexRows++;
         }
       }
@@ -176,10 +202,11 @@ export class SqliteFhirRepository extends FhirRepository {
 
   /** Rebuild every index row from `content`. Possible only because content is stored whole. */
   reindexAll(): void {
-    const rows = this.db.prepare('SELECT content FROM resources WHERE deleted = 0').all() as {
-      content: string;
-    }[];
-    this.db.exec('DELETE FROM search_index');
+    const owner = this.userId ?? '';
+    const rows = this.db
+      .prepare('SELECT content FROM resources WHERE deleted = 0 AND user_id = ?')
+      .all(owner) as {content: string}[];
+    this.db.prepare('DELETE FROM search_index WHERE user_id = ?').run(owner);
     for (const row of rows) {
       this.indexResource(JSON.parse(row.content) as WithId<Resource>);
     }
@@ -211,8 +238,8 @@ export class SqliteFhirRepository extends FhirRepository {
   async createResource<T extends Resource>(resource: T): Promise<WithId<T>> {
     const id = resource.id ?? this.generateId();
     const existing = this.db
-      .prepare('SELECT 1 FROM resources WHERE resource_type = ? AND id = ?')
-      .get(resource.resourceType, id);
+      .prepare('SELECT 1 FROM resources WHERE resource_type = ? AND id = ? AND user_id = ?')
+      .get(resource.resourceType, id, this.userId ?? '');
     if (existing) {
       this.stats.collisions++;
       throw new Error(`duplicate id ${resource.resourceType}/${id}`);
@@ -239,15 +266,15 @@ export class SqliteFhirRepository extends FhirRepository {
     const tx = this.db.transaction(() => {
       this.db
         .prepare(
-          `INSERT INTO resources (resource_type, id, version_id, last_updated, deleted, content)
-           VALUES (?, ?, ?, ?, 0, ?)
-           ON CONFLICT (resource_type, id) DO UPDATE SET
+          `INSERT INTO resources (resource_type, id, user_id, version_id, last_updated, deleted, content)
+           VALUES (?, ?, ?, ?, ?, 0, ?)
+           ON CONFLICT (resource_type, id, user_id) DO UPDATE SET
              version_id = excluded.version_id,
              last_updated = excluded.last_updated,
              deleted = 0,
              content = excluded.content`
         )
-        .run(stored.resourceType, stored.id, versionId, lastUpdated, content);
+        .run(stored.resourceType, stored.id, this.userId ?? '', versionId, lastUpdated, content);
       this.db
         .prepare(
           `INSERT INTO resource_history (resource_type, id, version_id, last_updated, content)
@@ -263,8 +290,8 @@ export class SqliteFhirRepository extends FhirRepository {
 
   async readResource<T extends Resource>(resourceType: string, id: string): Promise<WithId<T>> {
     const row = this.db
-      .prepare('SELECT content, deleted FROM resources WHERE resource_type = ? AND id = ?')
-      .get(resourceType, id) as { content: string; deleted: number } | undefined;
+      .prepare('SELECT content, deleted FROM resources WHERE resource_type = ? AND id = ? AND user_id = ?')
+      .get(resourceType, id, this.userId ?? '') as { content: string; deleted: number } | undefined;
     if (!row || row.deleted) {
       throw new Error(`not found: ${resourceType}/${id}`);
     }
@@ -294,11 +321,11 @@ export class SqliteFhirRepository extends FhirRepository {
   async deleteResource(resourceType: string, id: string): Promise<void> {
     const tx = this.db.transaction(() => {
       this.db
-        .prepare('UPDATE resources SET deleted = 1 WHERE resource_type = ? AND id = ?')
-        .run(resourceType, id);
+        .prepare('UPDATE resources SET deleted = 1 WHERE resource_type = ? AND id = ? AND user_id = ?')
+        .run(resourceType, id, this.userId ?? '');
       this.db
-        .prepare('DELETE FROM search_index WHERE resource_type = ? AND resource_id = ?')
-        .run(resourceType, id);
+        .prepare('DELETE FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ?')
+        .run(resourceType, id, this.userId ?? '');
     });
     tx();
   }
@@ -334,8 +361,10 @@ export class SqliteFhirRepository extends FhirRepository {
       throw new Error('_include / _revInclude are not implemented in the spike — see README');
     }
 
-    const where: string[] = ['r.resource_type = ?', 'r.deleted = 0'];
-    const params: unknown[] = [searchRequest.resourceType];
+    // EVERY query carries the owner. Not a filter callers may add — the whole point is that it
+    // cannot be forgotten (#537).
+    const where: string[] = ['r.resource_type = ?', 'r.deleted = 0', 'r.user_id = ?'];
+    const params: unknown[] = [searchRequest.resourceType, this.userId ?? ''];
 
     for (const filter of searchRequest.filters ?? []) {
       const { sql, values } = this.buildFilter(searchRequest.resourceType, filter);
@@ -372,7 +401,7 @@ export class SqliteFhirRepository extends FhirRepository {
    */
   private buildFilter(resourceType: string, filter: Filter): { sql: string; values: unknown[] } {
     const exists = (clause: string, values: unknown[]): { sql: string; values: unknown[] } => ({
-      sql: `EXISTS (SELECT 1 FROM search_index si WHERE si.resource_type = r.resource_type AND si.resource_id = r.id AND si.code = ? AND ${clause})`,
+      sql: `EXISTS (SELECT 1 FROM search_index si WHERE si.resource_type = r.resource_type AND si.resource_id = r.id AND si.user_id = r.user_id AND si.code = ? AND ${clause})`,
       values: [filter.code, ...values],
     });
 
@@ -395,7 +424,7 @@ export class SqliteFhirRepository extends FhirRepository {
       case Operator.MISSING: {
         const missing = filter.value === 'true';
         return {
-          sql: `${missing ? 'NOT ' : ''}EXISTS (SELECT 1 FROM search_index si WHERE si.resource_type = r.resource_type AND si.resource_id = r.id AND si.code = ?)`,
+          sql: `${missing ? 'NOT ' : ''}EXISTS (SELECT 1 FROM search_index si WHERE si.resource_type = r.resource_type AND si.resource_id = r.id AND si.user_id = r.user_id AND si.code = ?)`,
           values: [filter.code],
         };
       }

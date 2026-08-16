@@ -15,7 +15,8 @@
     "roundtrip": "tsx scripts/encrypted-roundtrip.ts",
     "diff": "tsx scripts/diff-repositories.ts",
     "shadow": "tsx scripts/shadow-compare.ts",
-    "writes": "tsx scripts/write-tests.ts"
+    "writes": "tsx scripts/write-tests.ts",
+    "isolation": "tsx scripts/isolation-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",
