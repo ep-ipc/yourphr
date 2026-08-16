@@ -47,7 +47,7 @@
 
 ## 🟡 P2
 
-- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready — CI red, open >7d, stale)_ — no linked issue
+- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready — CI red, stale)_ — no linked issue
 - [#549](https://github.com/jwilleke/yourphr/issues/549) — [security] go/email-injection — render() writes To and Subject into headers without CRLF handling
 - [#548](https://github.com/jwilleke/yourphr/issues/548) — [security] go/request-forgery — 2 critical CodeQL alerts in the SMART client, guard verified present
 - [#541](https://github.com/jwilleke/yourphr/issues/541) — [SPIKE] Phase 3: authentication and sessions in the TypeScript stack
@@ -124,7 +124,9 @@
 - [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
 
-## ❓ Needs triage (2)
+## ❓ Needs triage (4)
 
+- PR: [#550](https://github.com/jwilleke/yourphr/pull/550) — chore(kit): sync to v1.0.0-69-gba6c1f7 _(ready — supersedes [#547])_ — no linked issue
+- PR: [#547](https://github.com/jwilleke/yourphr/pull/547) — chore(kit): sync to v1.0.0-67-g9c345a5 _(blocked — superseded by [#550])_ — no linked issue
 - [#546](https://github.com/jwilleke/yourphr/issues/546) — [FEATURE] Required vs optional capabilities — a required provider must refuse to boot, not degrade to inert
 - [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
