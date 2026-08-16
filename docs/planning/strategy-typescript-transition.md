@@ -2,7 +2,7 @@
 
 > **Status: proposed, 2026-08-16.** The direction is the operator's decision. The sequencing, the rules and the stop conditions below are the part that needs agreeing before anything acts on it.
 
-Companion to [`typescript-stack-evaluation.md`](typescript-stack-evaluation.md), which measured whether this is possible. This one is about whether it is *wise*, and how it would run.
+Companion to [`typescript-stack-evaluation.md`](typescript-stack-evaluation.md), which measured whether this is possible. This one is about whether it is *wise*, and how it would run. [`architecture-principles-typescript.md`](architecture-principles-typescript.md) covers *how* the TypeScript side is built — the ngdpbase concepts adopted, and the ones deliberately not.
 
 ## The decision
 
