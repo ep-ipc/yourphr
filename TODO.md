@@ -36,30 +36,30 @@ kit_version: "v1.0.0-67-g9c345a5"
 
 <!-- Dependabot and scanner alerts land here first, ahead of other P0 work. -->
 
-_none_
+None.
 
 ## 🟠 P1
 
-_none yet_
+None yet.
 
 ## 🟡 P2
 
-_none yet_
+None yet.
 
 ## 🔵 In review
 
 <!-- Issues labeled `in-review` — shipped and pushed, awaiting the operator's decision to close. -->
 <!-- This band outranks an issue's priority, so finished work surfaces as "ready for your call". -->
 
-_none_
+None.
 
 ## ⏸ Deferred
 
-_none yet_
+None yet.
 
 ## ❓ Needs triage
 
 <!-- Issues and PRs with no resolvable placement. `/pstatus` labels untriaged issues `needs-triage`; -->
 <!-- an open PR lands here when it has neither a placement label nor a linked issue to inherit from. -->
 
-_none yet_
+None yet.

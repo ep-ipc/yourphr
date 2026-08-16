@@ -55,8 +55,39 @@ Then:
 - Rules live in `.markdownlint.jsonc`; the editor, CLI, CI and agents all read that one file.
 <!-- KIT:END -->
 
-# Repo Title
+## yourphr-ts-spike
 
-## Project Context
+### Project Context
 
-<!-- What this repo is, how to build / run it, and the key decisions an agent must know. -->
+A spike, not a product. It exists to answer one question for [jwilleke/yourphr](https://github.com/jwilleke/yourphr): can a TypeScript/Node FHIR store replace the Go backend? The decision and its stop rule live in that repo — `docs/planning/strategy-typescript-transition.md` ([#539](https://github.com/jwilleke/yourphr/issues/539)), and the architecture this code follows is `docs/planning/architecture-principles-typescript.md`.
+
+Nothing here ships to a user. Prefer proving something and writing down the number over building something that works.
+
+### Two hard rules
+
+**Real patient records live in `./phi` and must never enter git history.** A leak is irreversible and a privacy breach. `.gitignore` is not the control — `git add -f` walks past it — so `scripts/check-no-phi.sh` runs as a pre-commit hook and in CI. Never commit `.db`, `.ndjson`, anything under `phi/`, or a file carrying FHIR patient fields. Never use `git add -A` here without looking at what it staged.
+
+**All outbound network access goes through `src/http`.** That is where the SSRF guard lives, and it is worth exactly nothing if another file can import `node:https` or call `fetch()` directly — Node's built-in fetch is undici, which ignores `http.Agent` and therefore ignores the guarded DNS lookup that is the actual control. `scripts/check-http-boundary.sh` fails the build when anything else opens a path to the network.
+
+### Commands
+
+| Command | What it does | Needs real records |
+|---|---|---|
+| `npm run typecheck` | types | no |
+| `npm run ssrf` | SSRF guard suite, 47 checks | no |
+| `npm run check:boundary` | network access confined to `src/http` | no |
+| `npm run check:phi` | no patient data in tracked files | no |
+| `npm run load -- --in <ndjson> --db <db>` | load a corpus through `SqliteFhirRepository` | yes |
+| `npm run diff` / `writes` / `isolation` / `http` | the comparison harnesses | yes |
+
+Only the first four run in CI, because CI must never see PHI. The rest run on the operator's machine.
+
+### What is proven so far
+
+Measured against a real 19,796-resource export, not fixtures: generic indexing in 551 lines against 18,518 generated Go lines; 0 identity collisions across 8 sources; 71/71 queries matching Medplum's reference repository; 29/29 resource types matching production id for id; 11/11 on the write path; 6/6 on per-user isolation; 9/9 on the frontend HTTP contract.
+
+**Sync is the untested one**, and it is the phase the whole decision turns on.
+
+### Conventions
+
+A guard nobody has tried to defeat is not known to work. Every check here was verified by breaking the thing it protects and confirming it goes red — do the same for anything new.
