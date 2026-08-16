@@ -4,7 +4,8 @@
 
 ## 🔴 P0 — Security & Critical
 
-_None._
+- [#546](https://github.com/jwilleke/yourphr/issues/546) — [FEATURE] Required vs optional capabilities — a required provider must refuse to boot, not degrade to inert
+- [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
 
 ## 🟠 P1
 
@@ -90,8 +91,7 @@ _None._
 
 ## 🔵 In review
 
-- [#549](https://github.com/jwilleke/yourphr/issues/549) — [security] go/email-injection — render() writes To and Subject into headers without CRLF handling
-- [#548](https://github.com/jwilleke/yourphr/issues/548) — [security] go/request-forgery — 2 critical CodeQL alerts in the SMART client, guard verified present
+_None._
 
 ## ⏸ Deferred
 
@@ -106,5 +106,4 @@ _None._
 
 ## ❓ Needs triage
 
-- [#546](https://github.com/jwilleke/yourphr/issues/546) — [FEATURE] Required vs optional capabilities — a required provider must refuse to boot, not degrade to inert
-- [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
+_None._
