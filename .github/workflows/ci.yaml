@@ -37,5 +37,8 @@ jobs:
       - name: SMART client
         run: npm run smart
 
+      - name: Sync and resync
+        run: npm run sync
+
       - name: No patient data in tracked files
         run: npm run check:phi
