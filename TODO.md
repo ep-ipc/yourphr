@@ -24,8 +24,6 @@ _None._
 
 ## 🟡 P2
 
-- [#549](https://github.com/jwilleke/yourphr/issues/549) — [security] go/email-injection — render() writes To and Subject into headers without CRLF handling
-- [#548](https://github.com/jwilleke/yourphr/issues/548) — [security] go/request-forgery — 2 critical CodeQL alerts in the SMART client, guard verified present
 - [#541](https://github.com/jwilleke/yourphr/issues/541) — [SPIKE] Phase 3: authentication and sessions in the TypeScript stack
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
@@ -52,7 +50,6 @@ _None._
 - [#465](https://github.com/jwilleke/yourphr/issues/465) — [FEATURE] Record the document digest on the consent record
 - [#462](https://github.com/jwilleke/yourphr/issues/462) — [FEATURE] Share records as a SMART Health Link (shlink)
 - [#455](https://github.com/jwilleke/yourphr/issues/455) — [CHORE] Route all config reads through config.Interface (retire direct os.Getenv and ad-hoc settings files)
-- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(PR · ready · stale 17d)_ — no linked issue
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
@@ -93,7 +90,8 @@ _None._
 
 ## 🔵 In review
 
-_None._
+- [#549](https://github.com/jwilleke/yourphr/issues/549) — [security] go/email-injection — render() writes To and Subject into headers without CRLF handling
+- [#548](https://github.com/jwilleke/yourphr/issues/548) — [security] go/request-forgery — 2 critical CodeQL alerts in the SMART client, guard verified present
 
 ## ⏸ Deferred
 
