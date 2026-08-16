@@ -6,7 +6,7 @@ import (
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	"github.com/fastenhealth/fasten-sources/clients/factory"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/factory"
 )
 
 // Scheduled OAuth token-refresh worker (#51, EPIC #20 component E). SMART sources obtain

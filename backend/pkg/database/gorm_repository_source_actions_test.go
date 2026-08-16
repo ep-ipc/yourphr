@@ -10,7 +10,7 @@ import (
 	mock_config "github.com/fastenhealth/fasten-onprem/backend/pkg/config/mock"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/event_bus"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
+	sourceModels "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"

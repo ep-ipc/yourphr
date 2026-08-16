@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	sourcePkg "github.com/fastenhealth/fasten-sources/pkg"
+	sourcePkg "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/config"
@@ -16,7 +16,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	databaseModel "github.com/fastenhealth/fasten-onprem/backend/pkg/models/database"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/utils"
-	sourceModel "github.com/fastenhealth/fasten-sources/clients/models"
+	sourceModel "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"

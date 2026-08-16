@@ -1,4 +1,4 @@
-// Stub for github.com/fastenhealth/fasten-sources/clients/models
+// Stub for github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models
 package models
 
 import (
@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/fastenhealth/fasten-sources/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 	"github.com/sirupsen/logrus"
 )
 

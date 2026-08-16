@@ -1,4 +1,4 @@
-// Stub for github.com/fastenhealth/fasten-sources/definitions
+// Stub for github.com/fastenhealth/fasten-onprem/backend/pkg/sources/definitions
 package definitions
 
 import "fmt"

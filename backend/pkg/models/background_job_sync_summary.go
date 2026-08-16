@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
+	sourceModels "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 )
 
 // SyncJobOutcome is the operator-facing result of a background SMART/sync job (#441).

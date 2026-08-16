@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	"github.com/fastenhealth/fasten-sources/clients/factory"
-	sourcePkg "github.com/fastenhealth/fasten-sources/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/factory"
+	sourcePkg "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 	"github.com/sirupsen/logrus"
 )
 

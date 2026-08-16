@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
-	sourcePkg "github.com/fastenhealth/fasten-sources/pkg"
+	sourceModels "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
+	sourcePkg "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 )
 
 func TestCountResourcesByType(t *testing.T) {

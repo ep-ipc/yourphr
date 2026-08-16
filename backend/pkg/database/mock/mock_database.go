@@ -11,7 +11,7 @@ import (
 	pkg "github.com/fastenhealth/fasten-onprem/backend/pkg"
 	models "github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	ips "github.com/fastenhealth/fasten-onprem/backend/pkg/utils/ips"
-	models0 "github.com/fastenhealth/fasten-sources/clients/models"
+	models0 "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 	gomock "github.com/golang/mock/gomock"
 	uuid "github.com/google/uuid"
 )

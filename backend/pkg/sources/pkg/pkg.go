@@ -1,4 +1,4 @@
-// Stub replacement for github.com/fastenhealth/fasten-sources/pkg
+// Stub replacement for github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg
 // fasten-sources was made private when EHR integrations were moved to Fasten Connect.
 // This stub satisfies all compile-time imports; no runtime provider sync is implemented.
 // See: https://github.com/fastenhealth/fasten-onprem/issues/629

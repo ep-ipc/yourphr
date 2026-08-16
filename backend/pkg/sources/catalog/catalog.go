@@ -1,10 +1,10 @@
-// Stub for github.com/fastenhealth/fasten-sources/catalog
+// Stub for github.com/fastenhealth/fasten-onprem/backend/pkg/sources/catalog
 package catalog
 
 import (
 	"fmt"
 
-	"github.com/fastenhealth/fasten-sources/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 )
 
 type Brand struct {

@@ -6,7 +6,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/utils/ips"
-	sourcePkg "github.com/fastenhealth/fasten-sources/clients/models"
+	sourcePkg "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 	"github.com/google/uuid"
 )
 

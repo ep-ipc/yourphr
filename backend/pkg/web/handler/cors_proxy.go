@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	sourceDefinitions "github.com/fastenhealth/fasten-sources/definitions"
+	sourceDefinitions "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/definitions"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"

@@ -2,7 +2,7 @@ package _20240114103850
 
 import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	sourcesPkg "github.com/fastenhealth/fasten-sources/pkg"
+	sourcesPkg "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 	"github.com/google/uuid"
 )
 

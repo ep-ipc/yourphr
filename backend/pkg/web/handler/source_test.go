@@ -10,7 +10,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/event_bus"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	"github.com/fastenhealth/fasten-sources/clients/smart"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/smart"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
 	"github.com/sirupsen/logrus"

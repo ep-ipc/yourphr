@@ -12,8 +12,8 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/database"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/metrics"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	"github.com/fastenhealth/fasten-sources/clients/factory"
-	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/factory"
+	sourceModels "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )

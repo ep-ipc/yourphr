@@ -1,4 +1,4 @@
-// Replacement for github.com/fastenhealth/fasten-sources/clients/factory.
+// Replacement for github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/factory.
 // GetSourceClient returns a file-import client for manual sources and the generic SMART on
 // FHIR R4 client (clients/smart) for live EHR sources — no commercial Fasten Lighthouse
 // dependency (see fastenhealth/fasten-onprem#629 and EPIC #20).
@@ -14,8 +14,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/fastenhealth/fasten-sources/clients/models"
-	"github.com/fastenhealth/fasten-sources/pkg"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 	"github.com/sirupsen/logrus"
 )
 

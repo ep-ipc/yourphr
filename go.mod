@@ -2,8 +2,10 @@ module github.com/fastenhealth/fasten-onprem
 
 go 1.26.1
 
-// fasten-sources was made private (see fastenhealth/fasten-onprem#629). Use local stub.
-replace github.com/fastenhealth/fasten-sources => ./fasten-sources-stub
+// fasten-sources was made private upstream (fastenhealth/fasten-onprem#629) and lived here as a
+// local stub behind a replace directive. It is now OURS, folded into backend/pkg/sources (#538):
+// same code, same tests, no external dependency and no replace. It holds the working SMART client
+// and its SSRF guarding, which #539 has to reproduce if sync moves to TypeScript.
 
 //replace github.com/fastenhealth/gofhir-models => ../gofhir-models
 
@@ -28,7 +30,6 @@ require (
 	github.com/dave/jennifer v1.7.1
 	github.com/dominikbraun/graph v0.23.0
 	github.com/dop251/goja v0.0.0-20230605162241-28ee0ee714f3
-	github.com/fastenhealth/fasten-sources v0.6.25
 	github.com/fastenhealth/gofhir-models v0.0.9
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-gormigrate/gormigrate/v2 v2.1.6
@@ -141,7 +142,7 @@ require (
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	golang.org/x/arch v0.22.0 // indirect
-	golang.org/x/oauth2 v0.27.0 // indirect
+	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.40.0 // indirect

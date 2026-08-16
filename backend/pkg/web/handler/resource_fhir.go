@@ -13,7 +13,7 @@ import (
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/provenance"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/utils"
-	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
+	sourceModels "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )

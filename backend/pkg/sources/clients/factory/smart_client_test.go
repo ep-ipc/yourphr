@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fastenhealth/fasten-sources/clients/models"
-	"github.com/fastenhealth/fasten-sources/clients/smart"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/smart"
 	"github.com/sirupsen/logrus"
 )
 

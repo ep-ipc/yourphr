@@ -1,6 +1,6 @@
 package models
 
-import sourcesPkg "github.com/fastenhealth/fasten-sources/pkg"
+import sourcesPkg "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/pkg"
 
 // Provider environments. Production entries are patient-facing (shown on /sources); sandbox entries are
 // admin-only test providers (shown on /sandbox) and never reach patients.

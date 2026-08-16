@@ -1,7 +1,7 @@
 package models
 
 import (
-	sourceModels "github.com/fastenhealth/fasten-sources/clients/models"
+	sourceModels "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
