@@ -150,12 +150,35 @@ The first pass returned **zero** for `Condition?patient=X` while `Immunization?p
 
 Fixed by stripping the guard and reinstating it at index time from the reference's own type prefix: a reference already knows it is `Patient/123`. The alternative — fhirpath's async mode with a database-backed resolver — would make indexing depend on referential integrity that a partially synced PHR does not have.
 
+### Run against real records — 2026-08-15/16
+
+A snapshot of the live instance, taken with `sqlite3 .backup` rather than a file copy, and read as a **copy** throughout. One account: **19,796 resources, 8 sources, 29 resource types**.
+
+| | |
+|---|---|
+| Load | 19,796 / 19,796, ~22s, 413,175 index rows |
+| **id collisions** | **0** — the identity seam did not bite |
+| Agreement with Medplum's reference | **71/71 queries** |
+| **Agreement with the Go stack in production** | **29/29 resource types, id for id** |
+| Write path | **11/11** — re-import, update, delete, reindex |
+
+**Open question 1 is answered.** The identity seam — YourPHR keys on `(source_id, source_resource_type, source_resource_id)` because one record arrives from several providers, Medplum keys on `ResourceType/id` — produced **zero collisions across 8 sources**. Not proof it can never happen, but the concern was hypothetical and now has a number against it.
+
+Nine resource types the spike had never seen loaded with no special-casing, which is what a generic indexer is for.
+
+The **shadow read-only** step of the sequencing below is therefore done, at the repository layer: the Go stack and the TypeScript stack return the same identifiers for the same records. It reads through `GormRepository`, the same code path the HTTP handler uses, so no session or credentials were involved — but it does **not** exercise the handlers themselves.
+
+Two harness flaws that real data exposed and synthetic data could not, both fixed:
+
+- comparing **truncated** result sets reported three false disagreements, because neither repository promises an order beyond a page and the corpus holds 15,225 DocumentReferences
+- comparing **across accounts** compared 20,061 resources against 19,796, because the API enforces per-user isolation and the export did not
+
 ### What the spike did NOT prove
 
 - **72 synthetic resources.** Nothing about scale, or about the long tail of real provider data.
 - **No id collisions observed — but the corpus came from one source.** The identity seam (open question 1) is therefore still untested. `createResource` counts and rejects duplicates rather than upserting, so the number will be meaningful when a multi-source corpus is loaded.
-- **No writes from the application** — no sync, no re-import dedup, no SMART token storage, no auth.
-- **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one that SQLCipher-via-Go wrote. That compatibility question stays open.
+- **Sync, auth and the HTTP layer remain untested.** Writes and re-import dedup are now covered; nothing fetches from a provider, authenticates anybody, or serves a request. The spike has **no concept of a user at all**, which on a family instance is a disclosure rather than a missing feature. Tracked in [#537](https://github.com/jwilleke/yourphr/issues/537).
+- **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one that SQLCipher-via-Go wrote. Less pressing than it looked: the live instance turns out to be **unencrypted**, despite `database.encryption.enabled` defaulting to true.
 
 Unimplemented and deliberately throwing rather than returning partial answers: `withTransaction`, `readHistory`, `readVersion`, `patchResource`, `searchByReference`, `_include`/`_revInclude`, chained and composite parameters.
 
