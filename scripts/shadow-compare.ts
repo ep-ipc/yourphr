@@ -46,7 +46,7 @@ async function main(): Promise<void> {
   console.log(`comparing ${types.length} resource types\n`);
 
   for (const resourceType of types) {
-    const expected = [...goAnswers[resourceType]].sort();
+    const expected = [...(goAnswers[resourceType] ?? [])].sort();
 
     let actual: string[];
     try {

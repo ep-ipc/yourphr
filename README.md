@@ -126,9 +126,38 @@ Every type matched id-for-id, including the large ones: 15,225 DocumentReference
 
 **Comparisons must be per-account.** The Go API enforces per-user isolation from the request context, so an unscoped export cannot be compared against it — the first attempt had 20,061 resources on one side and 19,796 on the other, because a second account's records were in the corpus. `--user` was added to the export for this.
 
+## Write-path testing against real records — 2026-08-16
+
+Everything above is read-path. A store that answers correctly but corrupts on the second import, or leaves stale index rows after an update, is worse than useless for a PHR: records arrive repeatedly, from providers that resend the same resource with small changes.
+
+```bash
+npm run writes -- --in phi/account.ndjson
+```
+
+**11/11 checks pass** on 19,796 real resources:
+
+| Area | Checked |
+|---|---|
+| Re-import | the same corpus imported twice creates no duplicates; all 19,796 are recognised as already present |
+| Update | visible on read, no second copy, **the old indexed value stops matching**, the new one starts |
+| Delete | gone from search, unreadable, and its index rows are removed |
+| Reindex | rebuilding every index row from stored content reproduces the same index, and search still answers |
+
+The update case is the one that matters. If old index rows survive an update, a resolved condition keeps answering a search for active ones — the record looks right when opened and wrong in every list, which is the hardest kind of wrong to notice.
+
+**Verified to have teeth.** Removing the `DELETE FROM search_index` that precedes reindexing turns it red exactly there:
+
+```text
+FAIL  the OLD indexed value no longer matches after an update — stale index row survived
+FAIL  a full reindex reproduces the same index — 407255 -> 407252
+9/11 checks passed
+```
+
+Re-import is the direct analogue of [#252](https://github.com/jwilleke/yourphr/issues/252) in the product repo — harden re-import dedup against stale overwrites.
+
 ## What this still does NOT prove
 
-- **No writes from the app** — no sync, no re-import dedup, no SMART token storage, no auth.
+- **No SYNC, no auth, no HTTP layer.** Writes and dedup are now covered (above), but nothing here fetches from a provider, authenticates anybody, or serves a request. Tracked as a P1 in the product repo.
 - **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one SQLCipher-via-Go wrote. That remains the open compatibility question — though the live instance turns out to be **unencrypted**, so it is less pressing than it looked.
 - **Read paths only.** Every number above is about getting data in and querying it back.
 - **~22s to load 20k resources** is not a benchmark. Nothing here is tuned, and no comparison against the Go implementation was made.

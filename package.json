@@ -14,7 +14,8 @@
     "load": "tsx scripts/load-sqlite.ts",
     "roundtrip": "tsx scripts/encrypted-roundtrip.ts",
     "diff": "tsx scripts/diff-repositories.ts",
-    "shadow": "tsx scripts/shadow-compare.ts"
+    "shadow": "tsx scripts/shadow-compare.ts",
+    "writes": "tsx scripts/write-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",
