@@ -148,3 +148,6 @@ seed/*.db
 seed/*.db-shm
 seed/*.db-wal
 dist-seed/
+
+# Local editor workspace files
+*.code-workspace
