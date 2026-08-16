@@ -1,33 +1,10 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-08-14
-
-- Last worked on: **v2.8.1 released and live on the demo.** Six UI issues taken on ([#521](https://github.com/jwilleke/yourphr/issues/521), [#522](https://github.com/jwilleke/yourphr/issues/522), [#523](https://github.com/jwilleke/yourphr/issues/523), [#525](https://github.com/jwilleke/yourphr/issues/525), [#526](https://github.com/jwilleke/yourphr/issues/526) fixed; [#524](https://github.com/jwilleke/yourphr/issues/524) deliberately not built), plus the day's security thread closed out with [#533](https://github.com/jwilleke/yourphr/issues/533).
-- Branch / state: `main`, clean, everything pushed. One commit ahead of `v2.8.1` (`93fb3010`, CI-only — no release needed). Untracked `yourphr.code-workspace` in the root is **not mine**; decide whether to commit or ignore it.
-- Running / in-flight: **none.** No dev servers, no background agents, no CI in progress. Demo serving 2.8.1.
-- Parked / half-done: none.
-- Next steps:
-  - **Look at 2.8.1 against your own records.** Every real defect today came from you opening a page, not from tests: the 40-vs-6 count, the mixed name order, and the `/explore` list still showing the unknown-type warning after v2.8.0 claimed to fix it. Unexercised: the Claim / ExplanationOfBenefit **lists** and the new plain-language type labels.
-  - **Sanity-check the type wording**, especially `Observation` → "Test result" — that now labels vitals and home measurements, and is probably the wrong word. Mapping is in `frontend/src/app/pipes/resource-type-label.pipe.ts`.
-  - **Close or push back on five `in-review` issues** — [#521](https://github.com/jwilleke/yourphr/issues/521), [#522](https://github.com/jwilleke/yourphr/issues/522), [#523](https://github.com/jwilleke/yourphr/issues/523), [#525](https://github.com/jwilleke/yourphr/issues/525), [#526](https://github.com/jwilleke/yourphr/issues/526).
-  - **Decide [#524](https://github.com/jwilleke/yourphr/issues/524)** — email is blocked on a privacy decision, not effort. Four options written up on the issue; the `mailto:` handoff needs no SMTP, no credentials and no deliverability story.
-  - **[#532](https://github.com/jwilleke/yourphr/issues/532)** is the natural follow-through on the security thread: load `webcrypto-liner` only when `crypto.subtle` is missing, removing the crypto polyfill from most sessions rather than only monitoring it.
-  - **Three Dependabot PRs** left: [#491](https://github.com/jwilleke/yourphr/pull/491) (CI red), [#424](https://github.com/jwilleke/yourphr/pull/424) and [#378](https://github.com/jwilleke/yourphr/pull/378) (both deferred/blocked — note Angular 22 accepts `zone.js ~0.16`, which unblocks [#378](https://github.com/jwilleke/yourphr/pull/378) whenever [#482](https://github.com/jwilleke/yourphr/issues/482) happens).
-- Blockers / significant notes:
-  - **Two registries decide whether a resource displays.** `fhir-card.component.ts` drives the DETAIL view; `fhir-datatable.component.ts` drives the `/explore` LIST. v2.8.0 updated only the first, so lists still showed "does not know how to display this resource type" — caught on the demo, fixed in v2.8.1. Register both, and note `typeLookup()` now has tests for exactly this.
-  - **`navigator.clipboard` and `crypto.subtle` do not exist in an insecure context.** `web.listen.https.enabled` defaults to false, so plain-HTTP LAN deployments are supported and both APIs are absent there. Use Angular CDK's `Clipboard`; this is also why `webcrypto-liner` cannot simply be deleted ([#530](https://github.com/jwilleke/yourphr/issues/530)).
-  - **A clean Dependabot page is not evidence.** Git-URL dependencies have no registry coordinates, so they can never raise an alert — a critical sat in the bundle for months. `yarn audit` now runs in CI and in `/pstatus`; see [`docs/security/dependency-scanning.md`](docs/security/dependency-scanning.md).
-  - **A piped command's exit code is the LAST stage's.** `make test-backend | tail` reported success while the suite failed; `npx ng build` run from the wrong directory did the same. Redirect to a file and check `$?`.
-  - **CI does not lint `CHANGELOG.md`.** A local `LINT=1` was pushed past during the v2.8.0 release and it had eaten the `## [2.7.1]` heading — nothing would ever have gone red. Read the local gate.
-  - **`vendor/` is gitignored but Go auto-selects `-mod=vendor` when it exists**, so every Go dependency bump breaks local builds with an alarming "inconsistent vendoring" error that means nothing about the repo. Run `go mod vendor`.
-  - **The AOT build (`npx ng build`) is the only real frontend gate.** `tsc --noEmit` passes on template errors that break the production build, and reports pre-existing TS4111 errors in `e2e/` that the build never compiles.
-  - **`--config` was removed from the backend.** Configuration is `.env` plus `YOURPHR_*` env vars; see `.env.dev.example`.
-  - **The demo runs from a golden database**, not the public seed — `bootstrap.seed.path` points at `/opt/fasten/db/golden/fasten.golden.db`, carrying your own `jwilleke` admin.
-  - **Chrome automation drives the browser on `jmac`**, not this machine. HackerOne report drafted at `private/reports/2026-08-11-claude-in-chrome-silent-remote-browser-control.md` — **not submitted**.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
+
+## 🔴 P0 — Security & Critical
+
+_None._
 
 ## 🟠 P1
 
@@ -47,7 +24,6 @@
 
 ## 🟡 P2
 
-- PR: [#491](https://github.com/jwilleke/yourphr/pull/491) — chore(deps): bump dwv from 0.31.0 to 0.36.3 in /frontend _(ready — CI red: dwv 0.36 removed dwv.image/dwv.utils, needs the DICOM component ported; stale 10d)_ — no linked issue
 - [#549](https://github.com/jwilleke/yourphr/issues/549) — [security] go/email-injection — render() writes To and Subject into headers without CRLF handling
 - [#548](https://github.com/jwilleke/yourphr/issues/548) — [security] go/request-forgery — 2 critical CodeQL alerts in the SMART client, guard verified present
 - [#541](https://github.com/jwilleke/yourphr/issues/541) — [SPIKE] Phase 3: authentication and sessions in the TypeScript stack
@@ -55,6 +31,8 @@
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#552](https://github.com/jwilleke/yourphr/issues/552) — [CHORE] Port the DICOM viewer to dwv 0.36 — removed APIs and a build path that no longer exists
+- [#551](https://github.com/jwilleke/yourphr/issues/551) — [CHORE] Migrate 647 *ngIf uses to Angular built-in control flow (@if/@for)
 - [#543](https://github.com/jwilleke/yourphr/issues/543) — [SPIKE] Phase 5: cut over, keep both, or stop — decided once, not by drift
 - [#542](https://github.com/jwilleke/yourphr/issues/542) — [SPIKE] Phase 4: the long tail — 22.7k lines with no library to adopt
 - [#540](https://github.com/jwilleke/yourphr/issues/540) — [CHORE] Phase 1: keep the TypeScript read stack honest in CI
@@ -74,6 +52,7 @@
 - [#465](https://github.com/jwilleke/yourphr/issues/465) — [FEATURE] Record the document digest on the consent record
 - [#462](https://github.com/jwilleke/yourphr/issues/462) — [FEATURE] Share records as a SMART Health Link (shlink)
 - [#455](https://github.com/jwilleke/yourphr/issues/455) — [CHORE] Route all config reads through config.Interface (retire direct os.Getenv and ad-hoc settings files)
+- [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(PR · ready · stale 17d)_ — no linked issue
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
@@ -112,19 +91,22 @@
 - [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 - [#14](https://github.com/jwilleke/yourphr/issues/14) — [FEATURE] User Profile Update
 
+## 🔵 In review
+
+_None._
+
 ## ⏸ Deferred
 
-- PR: [#424](https://github.com/jwilleke/yourphr/pull/424) — chore(deps): bump angular-eslint from 20.7.0 to 21.0.1 in /frontend _(ready — CI red: new prefer-control-flow rule errors on every *ngIf; stale 17d)_ — no linked issue
-- PR: [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(ready — blocked on Angular 22 [#482]; stale 52d)_ — no linked issue
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · stale 52d)_ — blocked by [#482](https://github.com/jwilleke/yourphr/issues/482)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
 - [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
 
-## ❓ Needs triage (2)
+## ❓ Needs triage
 
 - [#546](https://github.com/jwilleke/yourphr/issues/546) — [FEATURE] Required vs optional capabilities — a required provider must refuse to boot, not degrade to inert
 - [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
