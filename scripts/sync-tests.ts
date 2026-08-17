@@ -169,22 +169,27 @@ async function main(): Promise<void> {
   check('and the skip is reported rather than silent', idlessReport.skipped.length === 2, `${idlessReport.skipped.length} skipped`);
   idless.close();
 
-  console.log('\nKNOWN GAP: two providers, one resource id\n');
+  console.log('\ntwo providers, one resource id\n');
 
-  // Characterises current behaviour rather than endorsing it.
+  // The store keys on (resource_type, id, user_id) — there is no source in the key, and there
+  // should not be: FHIR identity is (resourceType, id), Medplum's FhirRepository.readResource takes
+  // no source, and references like "Patient/p1" resolve by that pair. Forking that contract would
+  // fork the whole spike.
   //
-  // The store keys on (resource_type, id, user_id) — there is no source dimension. YourPHR's Go
-  // backend keys on (source_id, source_resource_type, source_resource_id), and the difference only
-  // shows when two providers issue the SAME id to the same person. The earlier shadow run measured
-  // 0 collisions across 8 real sources, but that is a property of one person's data, not a
-  // guarantee: nothing stops Epic and Cerner both calling something Condition/c1.
-  //
-  // The failure is worse than a duplicate. The second sync silently OVERWRITES the first provider's
-  // record, so a record does not double — it disappears. Deciding whether to add a source column is
-  // real work, so this test exists to make the gap fail loudly the day the key changes.
+  // But two providers CAN issue the same id to one person — the earlier shadow run measured 0
+  // collisions across 8 real sources, which is a property of one person's data, not a guarantee.
+  // Overwriting is the worst available answer: the record does not double, it DISAPPEARS, and the
+  // row count never changes so nothing looks wrong. Writes are therefore attributed to a source and
+  // a contested id is refused and reported.
   const providerA = startFhirServer();
   const aBase = await listen(providerA.server);
-  await syncFrom(`${aBase}/Everything`, { repo, accessToken: 'at-a', allowInternal: true });
+  const firstRun = await syncFrom(`${aBase}/Everything`, {
+    repo,
+    accessToken: 'at-a',
+    allowInternal: true,
+    sourceId: 'epic',
+  });
+  check('a first source stores normally', firstRun.collisions.length === 0);
   providerA.server.close();
 
   const collide = createServer((_req, res) => {
@@ -193,20 +198,37 @@ async function main(): Promise<void> {
       JSON.stringify({
         resourceType: 'Bundle',
         type: 'searchset',
-        entry: [{ resource: { resourceType: 'Condition', id: 'c1', code: { text: 'A DIFFERENT PROVIDER' } } }],
+        entry: [
+          { resource: { resourceType: 'Condition', id: 'c1', code: { text: 'A DIFFERENT PROVIDER' } } },
+          { resource: { resourceType: 'Condition', id: 'zz9', code: { text: 'Uncontested' } } },
+        ],
       })
     );
   });
   const collideBase = await listen(collide as never);
-  const collision = await syncFrom(`${collideBase}/Everything`, { repo, accessToken: 'at-b', allowInternal: true });
+  const crossSource = await syncFrom(`${collideBase}/Everything`, {
+    repo,
+    accessToken: 'at-b',
+    allowInternal: true,
+    sourceId: 'cerner',
+  });
   collide.close();
 
+  check('the colliding record is refused', crossSource.collisions.length === 1, JSON.stringify(crossSource.collisions[0]?.resource));
+  check('the refusal names both sources',
+    (crossSource.collisions[0]?.detail ?? '').includes('epic') && (crossSource.collisions[0]?.detail ?? '').includes('cerner'),
+    crossSource.collisions[0]?.detail ?? 'no detail');
+
   const c1 = (await repo.readResource('Condition', 'c1')) as { code?: { text?: string } };
-  check(
-    'a second provider OVERWRITES a colliding id (known gap, not desired)',
-    collision.created === 0 && c1.code?.text === 'A DIFFERENT PROVIDER',
-    `Condition/c1 now reads "${c1.code?.text}" — the first provider's record is gone`
-  );
+  check('the first provider\'s record survives untouched', c1.code?.text === 'Hypertension', c1.code?.text ?? 'missing');
+
+  // One contested id must not cost the patient the rest of the sync.
+  check('uncontested records from the second source still store', crossSource.created === 1, `${crossSource.created} created`);
+  const zz9 = (await repo.readResource('Condition', 'zz9')) as { code?: { text?: string } };
+  check('and are readable', zz9.code?.text === 'Uncontested');
+
+  // Attribution must not leak past the run that set it.
+  check('the source is not left attributed after a sync', repo.sourceId === undefined, String(repo.sourceId));
 
   repo.db.close();
   rmSync(dir, { recursive: true, force: true });

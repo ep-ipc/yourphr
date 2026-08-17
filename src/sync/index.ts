@@ -23,10 +23,18 @@ export interface SyncOptions {
   allowInternal?: boolean;
   /** Refused past this, rather than paging forever on a server that always returns a next link. */
   maxPages?: number;
+  /**
+   * Which connected provider these records come from. When set, a record already held from a
+   * DIFFERENT source is refused rather than overwritten — see SqliteFhirRepository.COLLISION.
+   * Unset keeps the previous behaviour, which is correct for a single-source install.
+   */
+  sourceId?: string;
 }
 
 export interface SyncReport {
   pages: number;
+  /** Records refused because another provider already holds that id. Never silently merged. */
+  collisions: { resource: string; detail: string }[];
   /** Resources seen in the response, including ones already held. */
   received: number;
   created: number;
@@ -82,8 +90,14 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
   const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
   const http = new OutboundHttp({ allowInternal: options.allowInternal });
 
+  // Scoped to this run and restored afterwards: the repository is shared, and leaving a source
+  // attributed after the sync would silently change what every later write means.
+  const previousSource = repo.sourceId;
+  repo.sourceId = options.sourceId;
+
   const report: SyncReport = {
     pages: 0,
+    collisions: [],
     received: 0,
     created: 0,
     updated: 0,
@@ -94,59 +108,76 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
   const seenThisRun = new Set<string>();
 
   let url: string | undefined = startUrl;
-  while (url) {
-    if (report.pages >= maxPages) {
-      throw new Error(`stopped after ${maxPages} pages — a provider that always returns a next link`);
-    }
-
-    const response = await http.get(url, { headers: { authorization: `Bearer ${accessToken}` } });
-    if (response.status !== 200) {
-      throw new Error(`HTTP ${response.status} fetching ${url}: ${response.body.toString('utf8').slice(0, 256)}`);
-    }
-
-    let bundle: Bundle;
-    try {
-      bundle = JSON.parse(response.body.toString('utf8')) as Bundle;
-    } catch (err) {
-      throw new Error(`decoding the bundle from ${url}: ${(err as Error).message}`);
-    }
-    if (bundle.resourceType !== 'Bundle') {
-      throw new Error(`expected a Bundle from ${url}, got ${String(bundle.resourceType)}`);
-    }
-
-    report.pages++;
-
-    for (const entry of (bundle.entry ?? []) as BundleEntry[]) {
-      const resource = entry.resource as Resource | undefined;
-      if (!resource?.resourceType) {
-        report.skipped.push({ reason: 'entry carried no resource', detail: JSON.stringify(entry).slice(0, 120) });
-        continue;
-      }
-      if (!resource.id) {
-        // Without an id there is no way to recognise this record on the next sync, so storing it
-        // would guarantee a duplicate later. Refusing is the honest outcome.
-        report.skipped.push({ reason: 'resource had no id', detail: resource.resourceType });
-        continue;
+  try {
+    while (url) {
+      if (report.pages >= maxPages) {
+        throw new Error(`stopped after ${maxPages} pages — a provider that always returns a next link`);
       }
 
-      report.received++;
-      const key = `${resource.resourceType}/${resource.id}`;
-      if (seenThisRun.has(key)) {
-        report.duplicatesWithinRun++;
+      const response = await http.get(url, { headers: { authorization: `Bearer ${accessToken}` } });
+      if (response.status !== 200) {
+        throw new Error(`HTTP ${response.status} fetching ${url}: ${response.body.toString('utf8').slice(0, 256)}`);
       }
-      seenThisRun.add(key);
 
-      const existing = await readIfPresent(repo, resource);
-      await repo.updateResource(resource);
-      if (existing) {
-        report.updated++;
-      } else {
-        report.created++;
-        report.byType[resource.resourceType] = (report.byType[resource.resourceType] ?? 0) + 1;
+      let bundle: Bundle;
+      try {
+        bundle = JSON.parse(response.body.toString('utf8')) as Bundle;
+      } catch (err) {
+        throw new Error(`decoding the bundle from ${url}: ${(err as Error).message}`);
       }
+      if (bundle.resourceType !== 'Bundle') {
+        throw new Error(`expected a Bundle from ${url}, got ${String(bundle.resourceType)}`);
+      }
+
+      report.pages++;
+
+      for (const entry of (bundle.entry ?? []) as BundleEntry[]) {
+        const resource = entry.resource as Resource | undefined;
+        if (!resource?.resourceType) {
+          report.skipped.push({ reason: 'entry carried no resource', detail: JSON.stringify(entry).slice(0, 120) });
+          continue;
+        }
+        if (!resource.id) {
+          // Without an id there is no way to recognise this record on the next sync, so storing it
+          // would guarantee a duplicate later. Refusing is the honest outcome.
+          report.skipped.push({ reason: 'resource had no id', detail: resource.resourceType });
+          continue;
+        }
+
+        report.received++;
+        const key = `${resource.resourceType}/${resource.id}`;
+        if (seenThisRun.has(key)) {
+          report.duplicatesWithinRun++;
+        }
+        seenThisRun.add(key);
+
+        const existing = await readIfPresent(repo, resource);
+        try {
+          await repo.updateResource(resource);
+        } catch (err) {
+          const message = (err as Error).message;
+          if (message.includes('cross-source id collision')) {
+            // Reported and skipped rather than aborting the run: one contested id must not cost the
+            // patient the other 20,000 records in the sync.
+            report.collisions.push({ resource: key, detail: message });
+            continue;
+          }
+          throw err;
+        }
+        if (existing) {
+          report.updated++;
+        } else {
+          report.created++;
+          report.byType[resource.resourceType] = (report.byType[resource.resourceType] ?? 0) + 1;
+        }
+      }
+
+      url = nextPageUrl(bundle, url);
     }
-
-    url = nextPageUrl(bundle, url);
+  } finally {
+    // Restored even when the sync throws: leaving a source attributed would silently change
+    // what every later write to this repository means.
+    repo.sourceId = previousSource;
   }
 
   return report;

@@ -71,6 +71,8 @@ export interface SqliteFhirRepositoryOptions {
    * anything serving a request.
    */
   readonly userId?: string;
+  /** Attributes writes to a provider so a cross-source id collision is refused, not silent. */
+  readonly sourceId?: string;
 }
 
 export interface IndexStats {
@@ -86,11 +88,14 @@ export class SqliteFhirRepository extends FhirRepository {
   readonly db: InstanceType<typeof Database>;
   readonly stats: IndexStats = { collisions: 0, indexRows: 0, failedExpressions: {} };
   readonly userId?: string;
+  /** Which provider subsequent writes are attributed to. See the source_id column comment. */
+  sourceId?: string;
 
   constructor(options: SqliteFhirRepositoryOptions) {
     super();
     loadDefinitions();
     this.userId = options.userId;
+    this.sourceId = options.sourceId;
 
     this.db = new Database(options.file);
     if (options.key) {
@@ -118,6 +123,16 @@ export class SqliteFhirRepository extends FhirRepository {
         -- legitimately hold the SAME resource id from the same provider, and keying on
         -- (type, id) alone made the second import look like a collision (#537).
         user_id       TEXT NOT NULL DEFAULT '',
+        -- Which connected provider a record came from. NOT part of the primary key: FHIR identity
+        -- is (resourceType, id), Medplum's FhirRepository.readResource takes no source, and
+        -- references like "Patient/p1" resolve by that pair. Adding source here would fork the
+        -- contract the whole spike is built on.
+        --
+        -- It is recorded so a COLLISION cannot be silent. YourPHR's Go backend keys on
+        -- (source_id, type, id) precisely because two providers may issue the same id to one
+        -- person; here the second write would simply overwrite the first, and a record would
+        -- disappear rather than double. Storing the source turns that into a refusal.
+        source_id     TEXT NOT NULL DEFAULT '',
         version_id    TEXT NOT NULL,
         last_updated  TEXT NOT NULL,
         deleted       INTEGER NOT NULL DEFAULT 0,
@@ -254,6 +269,15 @@ export class SqliteFhirRepository extends FhirRepository {
     return this.writeResource(resource as WithId<T>);
   }
 
+  /**
+   * Thrown when two providers issue the same id to one person.
+   *
+   * Overwriting is the wrong answer: a record does not double, it DISAPPEARS, and the loss is
+   * invisible because the row count never changes. Refusing makes it a visible failure that names
+   * both sources, which is the least a records system can do with data it cannot safely merge.
+   */
+  static readonly COLLISION = 'cross-source id collision';
+
   private writeResource<T extends Resource>(resource: WithId<T>): WithId<T> {
     const versionId = this.generateId();
     const lastUpdated = new Date().toISOString();
@@ -263,18 +287,35 @@ export class SqliteFhirRepository extends FhirRepository {
     } as WithId<T>;
     const content = JSON.stringify(stored);
 
+    const source = this.sourceId ?? '';
+
     const tx = this.db.transaction(() => {
+      // Only meaningful once writes are attributed. With no source set — every existing harness,
+      // and any single-source install — this is inert and the behaviour is exactly as before.
+      if (source !== '') {
+        const held = this.db
+          .prepare('SELECT source_id FROM resources WHERE resource_type = ? AND id = ? AND user_id = ?')
+          .get(stored.resourceType, stored.id, this.userId ?? '') as { source_id: string } | undefined;
+        if (held && held.source_id !== '' && held.source_id !== source) {
+          throw new Error(
+            `${SqliteFhirRepository.COLLISION}: ${stored.resourceType}/${stored.id} is already held ` +
+              `from source ${held.source_id}; refusing to overwrite it with source ${source}`
+          );
+        }
+      }
+
       this.db
         .prepare(
-          `INSERT INTO resources (resource_type, id, user_id, version_id, last_updated, deleted, content)
-           VALUES (?, ?, ?, ?, ?, 0, ?)
+          `INSERT INTO resources (resource_type, id, user_id, source_id, version_id, last_updated, deleted, content)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?)
            ON CONFLICT (resource_type, id, user_id) DO UPDATE SET
+             source_id = excluded.source_id,
              version_id = excluded.version_id,
              last_updated = excluded.last_updated,
              deleted = 0,
              content = excluded.content`
         )
-        .run(stored.resourceType, stored.id, this.userId ?? '', versionId, lastUpdated, content);
+        .run(stored.resourceType, stored.id, this.userId ?? '', source, versionId, lastUpdated, content);
       this.db
         .prepare(
           `INSERT INTO resource_history (resource_type, id, version_id, last_updated, content)
