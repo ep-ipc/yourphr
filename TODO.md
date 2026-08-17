@@ -1,5 +1,24 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-08-17
+
+- Last worked on: __security queue emptied and the kit brought current.__ [#548](https://github.com/jwilleke/yourphr/issues/548) and [#549](https://github.com/jwilleke/yourphr/issues/549) fixed and closed, all three CodeQL alerts dismissed. [#424](https://github.com/jwilleke/yourphr/pull/424) merged, [#491](https://github.com/jwilleke/yourphr/pull/491) closed for [#552](https://github.com/jwilleke/yourphr/issues/552). Kit synced to v1.9.0 ([#558](https://github.com/jwilleke/yourphr/pull/558)) after two attempts were rejected for real defects. Spike gained a cross-source collision guard and a real-server sync.
+- Branch / state: `main`, clean, everything pushed. Spike (`jwilleke/yourphr-ts-spike`, __private__) also clean, pushed, and current with its own v1.9.0 kit sync — all six guards still pass and its `AGENTS.md` section survived.
+- Running / in-flight: __none.__ No dev servers, no background agents, no CI in progress, no open PRs in either repo.
+- Parked / half-done: none.
+- Next steps:
+  - __[#545](https://github.com/jwilleke/yourphr/issues/545) — the visibility half.__ The only P0 anyone can start, and recommended four runs running: encryption defaults on, backup is refused while it is on, so a default install has __no backup at all__ and nothing says so. Surface it in the admin UI and at startup, and fix the `backup.go:39` comment that still claims encryption is off by default.
+  - __Decide [#461](https://github.com/jwilleke/yourphr/issues/461)'s priority.__ It is the fix for [#545](https://github.com/jwilleke/yourphr/issues/545)'s root cause and sits at P2 beneath its own P0 symptom. The mechanism is not an open question: SQLCipher's `ATTACH … KEY` plus `sqlcipher_export()`.
+  - __Decide what [#546](https://github.com/jwilleke/yourphr/issues/546) is for.__ As P0 it cannot be started — it constrains a TypeScript provider layer that does not exist yet.
+  - __Spike [#539](https://github.com/jwilleke/yourphr/issues/539): 4 of 5 gates.__ Only "one sandbox connected" remains, and it needs a registered client plus a browser for the redirect. Everything before and after the token exchange is proven; the exchange itself has only met a fake.
+- Blockers / significant notes:
+  - __A markdown landmine is armed.__ `.markdownlint.jsonc` is still tracked and shadows `.markdownlint-cli2.jsonc`, so `MD049`/`MD050` are inert. Removing the retired file — which the kit intends — exposes thousands of `**bold**` violations at once. Verified by moving it aside. `TODO.md` itself is clean under both configs.
+  - __The store has no source dimension.__ It keys on `(type, id, user)` while the Go backend keys on `(source_id, type, id)`. A cross-source id collision is now refused and reported rather than silently overwriting, but the records are not merged — one is rejected. Whether to adopt the Go key is still open and gets more expensive with every FHIR-native assumption built on top.
+  - __Verify against the state that will exist, not the one on disk.__ Three times today a check passed against a configuration that was not the one under test: a lint run with both configs present, a sabotage patch that missed its anchor, an isolation run against an account holding zero records. Each read as a pass.
+  - `mjs-project-template` [#49](https://github.com/jwilleke/mjs-project-template/issues/49) and [#59](https://github.com/jwilleke/mjs-project-template/issues/59) remain open upstream.
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
