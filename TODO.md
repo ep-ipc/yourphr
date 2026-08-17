@@ -106,4 +106,5 @@ _None._
 
 ## ❓ Needs triage
 
+- [#554](https://github.com/jwilleke/yourphr/pull/554) — chore(kit): sync to v1.5.2-0-gc41842f _(PR · ready)_ — refs [#553](https://github.com/jwilleke/yourphr/issues/553)
 - [#553](https://github.com/jwilleke/yourphr/issues/553) — [kit] behind v1.1.0-2-gf82f1c9 (repo at v1.0.0-69-gba6c1f7)
