@@ -18,6 +18,11 @@ import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
 
 export interface SyncOptions {
   repo: SqliteFhirRepository;
+  /**
+   * Empty means send no Authorization header at all. Some sandbox and public FHIR endpoints serve
+   * open data and reject a malformed bearer token with 401 — sending "Bearer " plus a placeholder
+   * fails where sending nothing succeeds.
+   */
   accessToken: string;
   /** Tests only. Disables the SSRF guard so a loopback fake can be reached. */
   allowInternal?: boolean;
@@ -114,7 +119,9 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
         throw new Error(`stopped after ${maxPages} pages — a provider that always returns a next link`);
       }
 
-      const response = await http.get(url, { headers: { authorization: `Bearer ${accessToken}` } });
+      const response = await http.get(url, {
+          headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {},
+        });
       if (response.status !== 200) {
         throw new Error(`HTTP ${response.status} fetching ${url}: ${response.body.toString('utf8').slice(0, 256)}`);
       }
