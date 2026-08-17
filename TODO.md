@@ -91,7 +91,7 @@
 
 ## 🔵 In review
 
-_None._
+*None.*
 
 ## ⏸ Deferred
 
@@ -105,4 +105,4 @@ _None._
 
 ## ❓ Needs triage
 
-- [#558](https://github.com/jwilleke/yourphr/pull/558) — chore(kit): sync to v1.9.0-0-g22c939c _(PR · ready)_ — refs [#553](https://github.com/jwilleke/yourphr/issues/553)
+*None.*
