@@ -97,7 +97,6 @@ _None._
 
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · stale 53d)_ — blocked by [#482](https://github.com/jwilleke/yourphr/issues/482)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
@@ -106,4 +105,4 @@ _None._
 
 ## ❓ Needs triage
 
-- [#554](https://github.com/jwilleke/yourphr/pull/554) — chore(kit): sync to v1.5.2-0-gc41842f _(PR · ready)_ — refs [#553](https://github.com/jwilleke/yourphr/issues/553)
+- [#553](https://github.com/jwilleke/yourphr/issues/553) — [kit] behind v1.1.0-2-gf82f1c9 (repo at v1.0.0-69-gba6c1f7)
