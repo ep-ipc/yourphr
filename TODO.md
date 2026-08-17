@@ -1,24 +1,5 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-08-16
-
-- Last worked on: **both security issues closed and all three CodeQL alerts dismissed.** [#549](https://github.com/jwilleke/yourphr/issues/549) mail header injection fixed (`77699c6a`), [#548](https://github.com/jwilleke/yourphr/issues/548) SSRF call sites proven guarded (`073ed4eb`). [#424](https://github.com/jwilleke/yourphr/pull/424) merged after root-causing it, [#491](https://github.com/jwilleke/yourphr/pull/491) closed in favour of [#552](https://github.com/jwilleke/yourphr/issues/552). Spike gained an SSRF guard, a SMART client and paged sync.
-- Branch / state: `main`, clean, everything pushed. Spike (`jwilleke/yourphr-ts-spike`, **private**) also clean and pushed.
-- Running / in-flight: **none.** Full CI green on `073ed4eb` (all 8 jobs). One CodeQL run on a docs-only commit was still finishing at close — it cannot fail on markdown.
-- Parked / half-done: none.
-- Next steps:
-  - **[#545](https://github.com/jwilleke/yourphr/issues/545) — the visibility half.** The only P0 that can actually be started: encryption defaults on, backup is refused while it is on, so a default install has **no backup at all** and nothing says so. Surface it in the admin UI and at startup, and fix the `backup.go:39` comment that still claims encryption is off by default.
-  - **Decide [#461](https://github.com/jwilleke/yourphr/issues/461)'s priority.** It is the issue that actually lifts the encryption/backup exclusion, and it is P2 while its symptom is P0 — so the ranking keeps pointing at the symptom, never the fix. The mechanism is not an open question: SQLCipher's `ATTACH … KEY` + `sqlcipher_export()`.
-  - **Decide what [#546](https://github.com/jwilleke/yourphr/issues/546) is for.** As P0 it cannot be started — it constrains a TypeScript provider layer that does not exist yet. Either a deliberate standing marker, or it belongs with the [#539](https://github.com/jwilleke/yourphr/issues/539) phases.
-  - **Spike [#539](https://github.com/jwilleke/yourphr/issues/539): 3 of 5 gates cleared.** The last two need you — a registered client at one of the six seeded sandboxes plus a browser for the redirect, and a local run of the differential harness against real records.
-- Blockers / significant notes:
-  - **The store has no source dimension.** It keys on `(type, id, user)` while the Go backend keys on `(source_id, type, id)`. Two providers issuing the same id means the second sync **silently overwrites** the first — the record does not double, it disappears. Characterised by a test in the spike, not fixed; changing the key means re-proving the earlier gates against real records. Decide before it is expensive.
-  - **Three tests today passed while checking nothing**, each found only by removing the thing they guard: CRLF cases that all contained `\n` so an `\n`-only check passed; a hostname guard masked by the IP guard; SMART endpoint tests that could not fail. Sabotage every guard before trusting its test.
-  - **Node's built-in `fetch` cannot carry the SSRF guard** — it is undici, which ignores `http.Agent` and therefore ignores the guarded DNS lookup, while looking like ordinary modern code.
-  - `mjs-project-template` [#46](https://github.com/jwilleke/mjs-project-template/issues/46) and [#49](https://github.com/jwilleke/mjs-project-template/issues/49) are open upstream: two command-file rules still missing from the kit (MD049, MD034 escaping), and a fresh sync leaves a repo red.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
 
 ## 🔴 P0 — Security & Critical
@@ -116,7 +97,7 @@ _None._
 
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
-- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · stale 52d)_ — blocked by [#482](https://github.com/jwilleke/yourphr/issues/482)
+- [#378](https://github.com/jwilleke/yourphr/pull/378) — chore(deps): bump zone.js from 0.15.1 to 0.16.2 in /frontend _(PR · ready · stale 53d)_ — blocked by [#482](https://github.com/jwilleke/yourphr/issues/482)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
@@ -125,4 +106,4 @@ _None._
 
 ## ❓ Needs triage
 
-_None._
+- [#553](https://github.com/jwilleke/yourphr/issues/553) — [kit] behind v1.1.0-2-gf82f1c9 (repo at v1.0.0-69-gba6c1f7)
