@@ -1,8 +1,8 @@
 # yourphr-ts-spike
 
-**Throwaway.** An experiment to answer one question with evidence instead of argument: *how expensive is a TypeScript/Node FHIR store, really?* Deleting this repo costs nothing and means nothing.
+__Throwaway.__ An experiment to answer one question with evidence instead of argument: *how expensive is a TypeScript/Node FHIR store, really?* Deleting this repo costs nothing and means nothing.
 
-The evaluation it belongs to lives in the product repo: [`docs/planning/typescript-stack-evaluation.md`](https://github.com/jwilleke/yourphr/blob/main/docs/planning/typescript-stack-evaluation.md). **Issues stay in [`jwilleke/yourphr`](https://github.com/jwilleke/yourphr/issues)** — this repo has no tracker of its own, so there is only ever one place to look.
+The evaluation it belongs to lives in the product repo: [`docs/planning/typescript-stack-evaluation.md`](https://github.com/jwilleke/yourphr/blob/main/docs/planning/typescript-stack-evaluation.md). __Issues stay in [`jwilleke/yourphr`](https://github.com/jwilleke/yourphr/issues)__ — this repo has no tracker of its own, so there is only ever one place to look.
 
 `jwilleke/yourphr` is untouched by any of this. It keeps shipping. If the spike proves out, its history gets merged *into* the product repo rather than the other way round — the issues, planning docs and release lineage are all there and none of them transfer.
 
@@ -14,7 +14,7 @@ This mirrors the rule in the product repo's `AGENTS.md`: a PHI leak is irreversi
 
 ## Result: the bar was met
 
-All three criteria below were met against the **synthetic** seed corpus. No real records have been used.
+All three criteria below were met against the __synthetic__ seed corpus. No real records have been used.
 
 ```
 npm run export -- --db ../yourphr/seed/fasten.seed.db --out phi/seed-resources.ndjson
@@ -22,9 +22,9 @@ npm run load   -- --in phi/seed-resources.ndjson --db phi/spike.db
 npm run roundtrip
 ```
 
-**1. A SQLite-backed `FhirRepository` loads the corpus.** 72/72 resources in ~100ms, 0 id collisions, 1,261 index rows — all derived from FHIR's own SearchParameter definitions, across 59 distinct parameter codes. **551 lines** in `src/SqliteFhirRepository.ts`, and roughly half of that is comment. Compare with 18,518 generated Go lines across 70 files doing the same job.
+__1. A SQLite-backed `FhirRepository` loads the corpus.__ 72/72 resources in ~100ms, 0 id collisions, 1,261 index rows — all derived from FHIR's own SearchParameter definitions, across 59 distinct parameter codes. __551 lines__ in `src/SqliteFhirRepository.ts`, and roughly half of that is comment. Compare with 18,518 generated Go lines across 70 files doing the same job.
 
-**2. Clinically meaningful searches work**, with no per-resource-type code anywhere:
+__2. Clinically meaningful searches work__, with no per-resource-type code anywhere:
 
 ```
 Condition?patient=Patient/a08...    -> 2  (corpus has 2)
@@ -33,7 +33,7 @@ Encounter?patient=Patient/a08...    -> 4  (corpus has 4)
 Condition?clinical-status=active    -> 1
 ```
 
-**3. Encryption is real, not assumed** — `npm run roundtrip`, 5/5:
+__3. Encryption is real, not assumed__ — `npm run roundtrip`, 5/5:
 
 ```
 PASS  reopen with the correct key
@@ -47,7 +47,7 @@ The last check greps the raw bytes, because "the driver returned rows" is not ev
 
 ### The finding worth keeping
 
-The first run reported **7 SearchParameter expressions that failed to evaluate**, and the symptom was worse than the error: `Condition?patient=X` returned **0** while `Immunization?patient=X` returned **6**. A search that is confidently wrong, not one that errors.
+The first run reported __7 SearchParameter expressions that failed to evaluate__, and the symptom was worse than the error: `Condition?patient=X` returned __0__ while `Immunization?patient=X` returned __6__. A search that is confidently wrong, not one that errors.
 
 Cause: FHIR defines reference parameters like `Condition.patient` as `Condition.subject.where(resolve() is Patient)`, and `fhirpath.js` refuses `resolve()` in synchronous mode. `Immunization.patient` is a plain path, so it worked. The fix (`stripResolveGuards`) removes the guard and reinstates it at index time by matching the reference's own type prefix — a reference already knows it is `Patient/123`, so resolving it is unnecessary. Using fhirpath's async mode with a database-backed resolver would have made indexing depend on referential integrity a partially synced PHR does not have.
 
@@ -55,7 +55,7 @@ Same shape as the two defects that started this whole conversation: a silent def
 
 ### Still not implemented, deliberately
 
-`withTransaction`, `readHistory`, `readVersion`, `patchResource`, `searchByReference`, `_include`/`_revInclude`, chained and composite parameters. All **throw** rather than return partial answers. Real work for a product; irrelevant to the question this spike asked.
+`withTransaction`, `readHistory`, `readVersion`, `patchResource`, `searchByReference`, `_include`/`_revInclude`, chained and composite parameters. All __throw__ rather than return partial answers. Real work for a product; irrelevant to the question this spike asked.
 
 `withTransaction` is the one with a real design question behind it: `better-sqlite3` transactions are synchronous and the interface is async, so it cannot be implemented honestly without either a different driver or a different concurrency story.
 
@@ -77,20 +77,20 @@ The step the synthetic corpus could not do, now done. Snapshot taken from the li
 
 | | |
 |---|---|
-| Resources | **20,061** — 278× the seed corpus |
-| Sources | **8** — the multi-source case the identity seam needed |
-| Loaded | **20,061 / 20,061**, ~22s |
-| Index rows | **417,531**, all from FHIR's own SearchParameter definitions |
-| **id collisions** | **0** |
-| Differential | **71/71 queries agree** |
+| Resources | __20,061__ — 278× the seed corpus |
+| Sources | __8__ — the multi-source case the identity seam needed |
+| Loaded | __20,061 / 20,061__, ~22s |
+| Index rows | __417,531__, all from FHIR's own SearchParameter definitions |
+| __id collisions__ | __0__ |
+| Differential | __71/71 queries agree__ |
 
-**The identity seam did not bite.** That was the open question this run existed to answer: YourPHR keys on `(source_id, source_resource_type, source_resource_id)` because one record can arrive from several providers, while Medplum keys on `ResourceType/id`. Across 8 sources and 20,061 resources, **zero collisions**. Not proof it can never happen — a ninth source could still send a colliding id — but the concern was hypothetical and now has a number against it.
+__The identity seam did not bite.__ That was the open question this run existed to answer: YourPHR keys on `(source_id, source_resource_type, source_resource_id)` because one record can arrive from several providers, while Medplum keys on `ResourceType/id`. Across 8 sources and 20,061 resources, __zero collisions__. Not proof it can never happen — a ninth source could still send a colliding id — but the concern was hypothetical and now has a number against it.
 
 Resource types the spike had never seen loaded without special-casing, which is the whole point of a generic indexer: `NutritionOrder`, `DeviceRequest`, `AdverseEvent`, `FamilyMemberHistory`, `RelatedPerson`, `Composition`, `Specimen`, `Media`, `Goal`.
 
 ### A flaw in the harness, found by real data
 
-The first real run reported **3 disagreements** on `Condition` and `DocumentReference`. Both sides returned exactly **1000** results — a *different* 1000. Neither repository promises an order beyond a page, and the corpus holds 3,469 Conditions and 15,225 DocumentReferences, so the harness was comparing two arbitrary slices and calling the difference a defect.
+The first real run reported __3 disagreements__ on `Condition` and `DocumentReference`. Both sides returned exactly __1000__ results — a *different* 1000. Neither repository promises an order beyond a page, and the corpus holds 3,469 Conditions and 15,225 DocumentReferences, so the harness was comparing two arbitrary slices and calling the difference a defect.
 
 That was the harness being wrong, and it is exactly the false alarm that teaches people to ignore a gate. Where a result exceeds one page the totals are now compared instead, and the output says so rather than implying membership was checked.
 
@@ -100,7 +100,7 @@ Worth noting the synthetic corpus could never have surfaced this: nothing in it 
 
 The migration plan's first step: run both stacks over one corpus and diff the responses, before anything owns a surface.
 
-The `diff` script above compares against Medplum's reference. **This compares against the system actually in production**, which is the harder test — the reference and this spike share a worldview, YourPHR's Go backend does not.
+The `diff` script above compares against Medplum's reference. __This compares against the system actually in production__, which is the harder test — the reference and this spike share a worldview, YourPHR's Go backend does not.
 
 ```bash
 # in the product repo — reads through GormRepository, the same path the HTTP handler uses,
@@ -114,7 +114,7 @@ npm run load   -- --in phi/account.ndjson --db phi/shadow-spike.db
 npm run shadow -- --go phi/go-ids.json    --db phi/shadow-spike.db
 ```
 
-Result on one real account — **19,796 resources, 29 resource types**:
+Result on one real account — __19,796 resources, 29 resource types__:
 
 ```text
 29/29 resource types agree exactly
@@ -124,7 +124,7 @@ the TypeScript stack returns exactly what the Go stack returns
 
 Every type matched id-for-id, including the large ones: 15,225 DocumentReference, 3,456 Condition, 354 Encounter.
 
-**Comparisons must be per-account.** The Go API enforces per-user isolation from the request context, so an unscoped export cannot be compared against it — the first attempt had 20,061 resources on one side and 19,796 on the other, because a second account's records were in the corpus. `--user` was added to the export for this.
+__Comparisons must be per-account.__ The Go API enforces per-user isolation from the request context, so an unscoped export cannot be compared against it — the first attempt had 20,061 resources on one side and 19,796 on the other, because a second account's records were in the corpus. `--user` was added to the export for this.
 
 ## Write-path testing against real records — 2026-08-16
 
@@ -134,18 +134,18 @@ Everything above is read-path. A store that answers correctly but corrupts on th
 npm run writes -- --in phi/account.ndjson
 ```
 
-**11/11 checks pass** on 19,796 real resources:
+__11/11 checks pass__ on 19,796 real resources:
 
 | Area | Checked |
 |---|---|
 | Re-import | the same corpus imported twice creates no duplicates; all 19,796 are recognised as already present |
-| Update | visible on read, no second copy, **the old indexed value stops matching**, the new one starts |
+| Update | visible on read, no second copy, __the old indexed value stops matching__, the new one starts |
 | Delete | gone from search, unreadable, and its index rows are removed |
 | Reindex | rebuilding every index row from stored content reproduces the same index, and search still answers |
 
 The update case is the one that matters. If old index rows survive an update, a resolved condition keeps answering a search for active ones — the record looks right when opened and wrong in every list, which is the hardest kind of wrong to notice.
 
-**Verified to have teeth.** Removing the `DELETE FROM search_index` that precedes reindexing turns it red exactly there:
+__Verified to have teeth.__ Removing the `DELETE FROM search_index` that precedes reindexing turns it red exactly there:
 
 ```text
 FAIL  the OLD indexed value no longer matches after an update — stale index row survived
@@ -159,17 +159,17 @@ Re-import is the direct analogue of [#252](https://github.com/jwilleke/yourphr/i
 
 ### Per-user isolation
 
-The spike had **no concept of a user**: every caller saw every record. On a family instance that is a disclosure, not a missing feature.
+The spike had __no concept of a user__: every caller saw every record. On a family instance that is a disclosure, not a missing feature.
 
-Ownership is now a property of the **repository instance**, not an argument — `FhirRepository`'s methods take no user, so a caller that forgot one would silently read everything. Constructing a repository *for* a user makes the scope impossible to omit, which is why the Go side derives it from the request context too.
+Ownership is now a property of the __repository instance__, not an argument — `FhirRepository`'s methods take no user, so a caller that forgot one would silently read everything. Constructing a repository *for* a user makes the scope impossible to omit, which is why the Go side derives it from the request context too.
 
-`(resource_type, id)` was not enough for the primary key: two family members treated at the same hospital are sent the **same Organization id**, and keying on type and id alone made the second import look like a collision.
+`(resource_type, id)` was not enough for the primary key: two family members treated at the same hospital are sent the __same Organization id__, and keying on type and id alone made the second import look like a collision.
 
 ```bash
 npm run isolation -- --db <copy> --a jwilleke --b jdoe
 ```
 
-**6/6** against two real accounts sharing one database — 19,796 resources against 265, 18 shared resource types. Includes a *constructed* shared-id case, because none occurs naturally in this corpus and skipping it would skip the sharpest one.
+__6/6__ against two real accounts sharing one database — 19,796 resources against 265, 18 shared resource types. Includes a *constructed* shared-id case, because none occurs naturally in this corpus and skipping it would skip the sharpest one.
 
 Verified to detect a leak: removing the scope from `search` alone reports `B saw 3469/13` — one account reading another's entire condition list.
 
@@ -179,11 +179,11 @@ Verified to detect a leak: removing the scope from `search` alone reports `B saw
 npm run http -- --db <loaded> --go phi/go-ids.json
 ```
 
-**9/9** over real HTTP against real records: 3,456 Conditions served, matching the Go stack id-for-id, all 29 summary counts equal, 404 where a record is missing.
+__9/9__ over real HTTP against real records: 3,456 Conditions served, matching the Go stack id-for-id, all 29 summary counts equal, 404 where a record is missing.
 
-**The finding: the frontend does not speak FHIR REST.** Medplum's router serves `GET /Condition?patient=x` → `Bundle`. The Angular app calls `GET /api/secure/resource/fhir?sourceResourceType=Condition` and expects `{success, data: ResourceFhir[]}`, where `ResourceFhir` *wraps* the resource with YourPHR's own metadata.
+__The finding: the frontend does not speak FHIR REST.__ Medplum's router serves `GET /Condition?patient=x` → `Bundle`. The Angular app calls `GET /api/secure/resource/fhir?sourceResourceType=Condition` and expects `{success, data: ResourceFhir[]}`, where `ResourceFhir` *wraps* the resource with YourPHR's own metadata.
 
-So "no frontend rewrite" is true **but not free** — it requires an adapter, and the adapter needs data a FHIR-native store does not hold:
+So "no frontend rewrite" is true __but not free__ — it requires an adapter, and the adapter needs data a FHIR-native store does not hold:
 
 | Field | Where it comes from |
 |---|---|
@@ -195,17 +195,17 @@ None is hard. All are invisible until a screen renders wrong, which is why this 
 
 ## What this still does NOT prove
 
-- **SYNC is untested and untouched.** Nothing here fetches from a provider: no SMART OAuth, no token refresh, no incremental fetch. It is the largest remaining unknown and the only one needing live provider credentials. Re-import dedup is proven *when the same bytes arrive twice*; a real resync sends slightly different bytes for the same clinical fact, which is [#252](https://github.com/jwilleke/yourphr/issues/252)'s actual problem and is **not** covered.
-- **Authentication itself** — sessions, tokens, sign-in — is not implemented. Isolation is proven *given* a user id; establishing who the caller is remains the Go side's job.
-- **The existing encrypted database has not been opened.** Round-tripping a database this code wrote is not the same as reading one SQLCipher-via-Go wrote. That remains the open compatibility question — though the live instance turns out to be **unencrypted**, so it is less pressing than it looked.
-- **Read paths only.** Every number above is about getting data in and querying it back.
-- **~22s to load 20k resources** is not a benchmark. Nothing here is tuned, and no comparison against the Go implementation was made.
+- __SYNC is untested and untouched.__ Nothing here fetches from a provider: no SMART OAuth, no token refresh, no incremental fetch. It is the largest remaining unknown and the only one needing live provider credentials. Re-import dedup is proven *when the same bytes arrive twice*; a real resync sends slightly different bytes for the same clinical fact, which is [#252](https://github.com/jwilleke/yourphr/issues/252)'s actual problem and is __not__ covered.
+- __Authentication itself__ — sessions, tokens, sign-in — is not implemented. Isolation is proven *given* a user id; establishing who the caller is remains the Go side's job.
+- __The existing encrypted database has not been opened.__ Round-tripping a database this code wrote is not the same as reading one SQLCipher-via-Go wrote. That remains the open compatibility question — though the live instance turns out to be __unencrypted__, so it is less pressing than it looked.
+- __Read paths only.__ Every number above is about getting data in and querying it back.
+- __~22s to load 20k resources__ is not a benchmark. Nothing here is tuned, and no comparison against the Go implementation was made.
 
 ## If it goes further
 
 Ordering, from the evaluation doc: read before write, reversible before irreversible, and never a moment where the records live only in the unproven store.
 
-1. Same load against a **real export**, with the collision count taken seriously.
+1. Same load against a __real export__, with the collision count taken seriously.
 2. Shadow read-only against the live API — same queries to both stacks, diff the responses.
 3. Only then writes, and auth last, because auth failures are the ones that pass tests while being wrong.
 
@@ -222,7 +222,7 @@ Ordering, from the evaluation doc: read before write, reversible before irrevers
 
 ## PHI guard
 
-This repo keeps hundreds of megabytes of **real patient records** in `./phi` next to the code, so
+This repo keeps hundreds of megabytes of __real patient records__ in `./phi` next to the code, so
 `.gitignore` alone is not a control — `git add -f` walks straight past it.
 
 `scripts/check-no-phi.sh` refuses to let patient data reach git history. It runs three ways:
