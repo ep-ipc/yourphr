@@ -22,6 +22,7 @@
     "smart": "tsx scripts/smart-tests.ts",
     "sync": "tsx scripts/sync-tests.ts",
     "live": "tsx scripts/live-sandbox.ts",
+    "live:smart": "tsx scripts/live-smart.ts",
     "hooks": "git config core.hooksPath .githooks",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:phi": "bash scripts/check-no-phi.sh --all",
