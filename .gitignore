@@ -151,3 +151,5 @@ dist-seed/
 
 # Local editor workspace files
 *.code-workspace
+.kit-sync/
+.kit-check/
