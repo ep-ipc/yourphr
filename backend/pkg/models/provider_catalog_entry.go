@@ -120,7 +120,11 @@ func SandboxProviderSeeds() []SandboxProviderSeed {
 			ApiEndpointBaseUrl: "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4",
 			Scopes:             "launch/patient patient/*.read openid fhirUser offline_access",
 			ClientIDEnv:        "YOURPHR_SANDBOX_EPIC_CLIENT_ID",
-			ClientSecretEnv:    "", // public/PKCE
+			// Confidential since 2026-08-19: Epic never issues refresh tokens to public standalone
+			// clients (their offline-access path for public apps is dynamic client registration).
+			// The app registration is "Is Confidential Client" + "Requires Persistent Access", and
+			// x/oauth2 authenticates client_secret_basic when the secret is present.
+			ClientSecretEnv: "YOURPHR_SANDBOX_EPIC_CLIENT_SECRET",
 		},
 		{
 			// Base/aud is the EHR host (the authz that actually knows the sandbox tenant); the patient

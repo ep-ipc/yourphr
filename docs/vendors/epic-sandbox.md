@@ -11,7 +11,9 @@ serving the mission of immediate patient access ([#15](https://github.com/jwille
 This work is tracked by [#257](https://github.com/jwilleke/yourphr/issues/257)
 and rides on the now-complete SMART on FHIR stack ([EPIC #20](https://github.com/jwilleke/yourphr/issues/20)).
 
-**Register at:** <https://fhir.epic.com> — self-register a patient-facing app to get a non-production `client_id` (public / PKCE, no secret); no approval gate. Save it to `private/secrets.md`.
+**Register at:** <https://fhir.epic.com> — self-register a patient-facing app to get a non-production `client_id`; no approval gate. Save it to `private/secrets.md`.
+
+> **Confidential client since 2026-08-19.** Epic never issues refresh tokens to public standalone clients — their offline-access path for public apps is dynamic client registration, which YourPHR does not implement. The YourPHR app registration therefore has **"Is Confidential Client"** and **"Requires Persistent Access"** checked, with a website-generated **Sandbox Client Secret** (plaintext in `private/secrets.md`, hash stored at Epic). The instance supplies it via `YOURPHR_SANDBOX_EPIC_CLIENT_SECRET`; the Go client then authenticates `client_secret_basic` and Epic returns a `refresh_token`. This ended the 2026-07-31 "access token expired and no refresh token is available" cycle.
 
 ## Status at a glance
 
