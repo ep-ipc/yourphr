@@ -31,6 +31,7 @@ and rides on the now-complete SMART on FHIR stack ([EPIC #20](https://github.com
 | **2026-06-18** | production matrix | ✅ **works** — imports records; skips types Epic **403/400**s (e.g. AdverseEvent 403, CarePlan “requires category” 400) |
 | **2026-07-31** | **yourphr.nerdsbythehour.com** `/web/sandbox` | ✅ **E2E connect + import** — authorize/connect **200** (~11 s connect); per-resource SMART walk ~**4 min** for first pass; Patient stored (UUID). Brief UI 500 on Patient while first pages were still writing (race); later loads **200**. |
 | **2026-08-01** | same host, Sources recheck | ✅ Patient `GET` **200** for Epic sources; imported data still present |
+| **2026-08-19** | **yourphr.nerdsbythehour.com**, confidential-client reconnect | ✅ **Refresh tokens PROVEN.** Reconnected after the app became confidential (secret via Admin catalog): exchange through the relay succeeded, Camila Lopez imported, and the refresh loop went from the every-30-min `no refresh token is available` warning (last at 09:14Z) to `attempted 1, refreshed 1` / `attempted 2, refreshed 2` — two consecutive clean cycles. The 2026-07-31 refresh-token caveat is closed. |
 
 #### 2026-07-31 production notes (detail)
 
