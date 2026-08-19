@@ -19,8 +19,10 @@ describe('AccountProfileComponent', () => {
     api = jasmine.createSpyObj('FastenApiService', [
       'getCurrentUser', 'deleteAccount', 'getSummary', 'getResources', 'changePassword',
       'getLegalConsent', 'grantLegalConsent', 'revokeLegalConsent', 'signOutEverywhere',
+      'getAccessLog',
     ]);
     api.signOutEverywhere.and.returnValue(of(true));
+    api.getAccessLog.and.returnValue(of([]));
     // "Sign out everywhere" (#508) clears the local token after the server revokes it, so the
     // component now depends on AuthService. Stubbed rather than real — the real one wants an HTTP
     // client token that this TestBed does not provide.

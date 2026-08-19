@@ -33,6 +33,12 @@ type DatabaseRepository interface {
 	// RecordSuccessfulLogin stamps last_login and increments login_count (#512). Successes only —
 	// a failure counter on the user row is the first half of account lockout, which #507 rejected.
 	RecordSuccessfulLogin(ctx context.Context, username string) error
+	// RecordAccessEvent increments the patient-visible access log for the current user (#563):
+	// (actor, category, UTC day) buckets with a count and first/last timestamps. No IP, no
+	// user-agent — identity and time answer "who has accessed my record?".
+	RecordAccessEvent(ctx context.Context, category string) error
+	// ListAccessEvents returns the current user's complete access log, newest day first (#563).
+	ListAccessEvents(ctx context.Context) ([]models.AccessEvent, error)
 	GetUsers(ctx context.Context) ([]models.User, error)
 
 	//get a count of every resource type

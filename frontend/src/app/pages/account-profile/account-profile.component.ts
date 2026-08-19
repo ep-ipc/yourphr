@@ -4,6 +4,7 @@ import {Router} from '@angular/router';
 import {AuthService} from '../../services/auth.service';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {AccountUser} from '../../models/fasten/account-user';
+import {AccessEvent} from '../../models/fasten/access-event';
 import {LegalConsentStatus} from '../../models/fasten/legal-consent';
 
 // Account Profile — the system *user account* (login/identity/lifecycle), distinct from the medical
@@ -23,6 +24,11 @@ export class AccountProfileComponent implements OnInit {
   pwError = '';
   pwSuccess = false;
   pwSubmitting = false;
+
+  // Access log (#563): the complete, unedited record of who accessed this account's records.
+  accessLog: AccessEvent[] = [];
+  accessLogLoading = false;
+  accessLogError = '';
 
   // Legal consent (#427)
   legalConsent: LegalConsentStatus | null = null;
@@ -52,6 +58,22 @@ export class AccountProfileComponent implements OnInit {
       },
     });
     this.loadLegalConsent();
+    this.loadAccessLog();
+  }
+
+  loadAccessLog(): void {
+    this.accessLogLoading = true;
+    this.accessLogError = '';
+    this.fastenApi.getAccessLog().subscribe({
+      next: (events) => {
+        this.accessLog = events || [];
+        this.accessLogLoading = false;
+      },
+      error: () => {
+        this.accessLogError = 'Could not load the access log.';
+        this.accessLogLoading = false;
+      },
+    });
   }
 
   loadLegalConsent(): void {

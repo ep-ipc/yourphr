@@ -14,6 +14,7 @@ import (
 	_20250730100000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20250730100000"
 	_20260812120000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20260812120000"
 	_20260812160000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20260812160000"
+	_20260819100000 "github.com/fastenhealth/fasten-onprem/backend/pkg/database/migrations/20260819100000"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
 	databaseModel "github.com/fastenhealth/fasten-onprem/backend/pkg/models/database"
 	sourceCatalog "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/catalog"
@@ -251,6 +252,14 @@ func (gr *GormRepository) Migrate() error {
 			ID: "20260812160000", // add users.last_login and users.login_count (#512)
 			Migrate: func(tx *gorm.DB) error {
 				return tx.AutoMigrate(&_20260812160000.User{})
+			},
+		},
+		{
+			// The patient-visible access log: who accessed which category of a user's records on
+			// which day. Aggregated, no IP/user-agent — see the model comment (#563).
+			ID: "20260819100000", // create access_events (#563)
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(&_20260819100000.AccessEvent{})
 			},
 		},
 		{

@@ -243,6 +243,49 @@
             </div>
           </div>
 
+          <!-- Access log (#563) — the complete record of who accessed this account's records.
+               Shown unfiltered: this table is what makes "you can see everyone who accessed your
+               data" a true statement. No IP addresses, no device fingerprints — who, what, when. -->
+          <div class="col-12 mg-b-20">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="card-title mg-b-0"><i class="fas fa-eye"></i>&nbsp; Access log</h6>
+              </div>
+              <div class="card-body">
+                <p class="tx-gray-500 mg-b-15">
+                  Everyone who has viewed or exported records in this account, by day. YourPHR records who and when — never network addresses or devices.
+                </p>
+                <div *ngIf="accessLogError" class="alert alert-warning tx-13" role="alert">{{ accessLogError }}</div>
+                <app-loading-spinner *ngIf="accessLogLoading" [loadingTitle]="'Loading access log...'"></app-loading-spinner>
+                <p *ngIf="!accessLogLoading && !accessLogError && accessLog.length === 0" class="tx-gray-500 mg-b-0">
+                  No record access has been logged yet. Entries appear as records are viewed.
+                </p>
+                <div *ngIf="!accessLogLoading && accessLog.length > 0" class="table-responsive">
+                  <table class="table table-sm table-striped mg-b-0">
+                    <thead>
+                      <tr>
+                        <th scope="col">Day</th>
+                        <th scope="col">Who</th>
+                        <th scope="col">What</th>
+                        <th scope="col" class="text-end">Times</th>
+                        <th scope="col">Last access</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let event of accessLog">
+                        <td>{{ event.day }}</td>
+                        <td>{{ event.actor_username }}</td>
+                        <td>{{ event.category }}</td>
+                        <td class="text-end">{{ event.count }}</td>
+                        <td>{{ event.last_at | date:'short' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Delete account (danger) -->
           <div class="col-lg-4 mg-b-20">
             <div class="card h-100 border-danger">

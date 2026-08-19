@@ -10,8 +10,8 @@ import (
 
 	pkg "github.com/fastenhealth/fasten-onprem/backend/pkg"
 	models "github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	ips "github.com/fastenhealth/fasten-onprem/backend/pkg/utils/ips"
 	models0 "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
+	ips "github.com/fastenhealth/fasten-onprem/backend/pkg/utils/ips"
 	gomock "github.com/golang/mock/gomock"
 	uuid "github.com/google/uuid"
 )
@@ -695,6 +695,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) GetUsers(ctx interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsers", reflect.TypeOf((*MockDatabaseRepository)(nil).GetUsers), ctx)
 }
 
+// ListAccessEvents mocks base method.
+func (m *MockDatabaseRepository) ListAccessEvents(ctx context.Context) ([]models.AccessEvent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAccessEvents", ctx)
+	ret0, _ := ret[0].([]models.AccessEvent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAccessEvents indicates an expected call of ListAccessEvents.
+func (mr *MockDatabaseRepositoryMockRecorder) ListAccessEvents(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccessEvents", reflect.TypeOf((*MockDatabaseRepository)(nil).ListAccessEvents), ctx)
+}
+
 // ListBackgroundJobs mocks base method.
 func (m *MockDatabaseRepository) ListBackgroundJobs(ctx context.Context, queryOptions models.BackgroundJobQueryOptions) ([]models.BackgroundJob, error) {
 	m.ctrl.T.Helper()
@@ -811,6 +826,20 @@ func (m *MockDatabaseRepository) QueryResources(ctx context.Context, query model
 func (mr *MockDatabaseRepositoryMockRecorder) QueryResources(ctx, query interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryResources", reflect.TypeOf((*MockDatabaseRepository)(nil).QueryResources), ctx, query)
+}
+
+// RecordAccessEvent mocks base method.
+func (m *MockDatabaseRepository) RecordAccessEvent(ctx context.Context, category string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordAccessEvent", ctx, category)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RecordAccessEvent indicates an expected call of RecordAccessEvent.
+func (mr *MockDatabaseRepositoryMockRecorder) RecordAccessEvent(ctx, category interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordAccessEvent", reflect.TypeOf((*MockDatabaseRepository)(nil).RecordAccessEvent), ctx, category)
 }
 
 // RecordSuccessfulLogin mocks base method.

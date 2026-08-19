@@ -11,6 +11,7 @@ import {ClassifiedAllergy} from '../models/fasten/classified-allergy';
 import {ClassifiedImmunization} from '../models/fasten/classified-immunization';
 import {DatabaseInfo, BackupResult, BackupSettings, DirListing, BackupDestinationTest} from '../models/fasten/database-info';
 import {AccountUser} from '../models/fasten/account-user';
+import {AccessEvent} from '../models/fasten/access-event';
 import {ResourceListItem} from '../models/fasten/resource-list-item';
 import {ServerLogs} from '../models/fasten/server-logs';
 import {Source} from '../models/fasten/source';
@@ -150,6 +151,13 @@ export class FastenApiService {
     }).pipe(
       map((response: ResponseWrapper) => response.success)
     );
+  }
+
+  // The current user's complete access log (#563): who accessed which category of their records on
+  // which day. Reading the log itself is not a record access, so it does not log itself.
+  getAccessLog(): Observable<AccessEvent[]> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/access-log`)
+      .pipe(map((response: ResponseWrapper) => (response.data || []) as AccessEvent[]));
   }
 
   // Ends every session for the current user, this browser included (#508). The server bumps the

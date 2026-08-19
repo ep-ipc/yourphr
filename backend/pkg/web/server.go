@@ -251,9 +251,13 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 			// that one account unless it is a read, and a route added below inherits the block
 			// instead of inheriting nothing. Inert for every other user and on every non-demo
 			// instance.
-			secure := api.Group("/secure").Use(middleware.RequireAuth(), middleware.RestrictDemoAdmin())
+			// AccessLog is the patient-visible "who accessed my record" trail (#563). It sits after
+			// auth so the actor is known, and only record-reading routes are recorded — see the
+			// category map in the middleware.
+			secure := api.Group("/secure").Use(middleware.RequireAuth(), middleware.RestrictDemoAdmin(), middleware.AccessLog())
 				{
 					secure.GET("/account/me", handler.GetCurrentUser)
+					secure.GET("/account/access-log", handler.GetAccessLog)
 					// Guarded for the shared demo account (#514). These two are the only routes a
 					// visitor can use to lock EVERYONE out: changing the password leaves
 					// demo.password no longer matching the stored hash, so /auth/demo-signin —
