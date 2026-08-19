@@ -153,3 +153,5 @@ dist-seed/
 *.code-workspace
 .kit-sync/
 .kit-check/
+.continue/
+.agents/
