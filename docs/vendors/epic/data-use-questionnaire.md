@@ -23,12 +23,12 @@ YourPHR is self-hosted, open-source, and the project never receives any patient 
 | Complete record of stored data | Yes | Full export/download exists |
 | Data used beyond direct services | No | The project never receives data at all |
 | Other individuals' data used | No one | — |
-| __Record of who accessed data__ | __No — only a partial record__ | `LastLogin`/`LoginCount` ([#512](https://github.com/jwilleke/yourphr/issues/512)) show account use, but no per-record access log exists. __Upgrade to "Yes, complete record" when [#563](https://github.com/jwilleke/yourphr/issues/563) (P0, patient-visible access log) ships — BEFORE marking production-ready, or "partial" freezes forever__ |
+| __Record of who accessed data__ | __Yes — complete record__ | Upgraded 2026-08-19 after [#563](https://github.com/jwilleke/yourphr/issues/563) shipped in v2.10.0 and deployed: Account Profile shows the complete access log (who, category, day, count, last access). Filed as "partial" earlier the same day while only `LastLogin`/`LoginCount` ([#512](https://github.com/jwilleke/yourphr/issues/512)) existed — the flip waited for the claim to be true of the running product |
 | Data retained after account deletion | No | Account deletion removes the records |
 
 ## Questionnaire from 12/27/2018
 
-Same substance, that version's wording: individual/independent developer · __no BAA__ (patient-facing app; no business associate agreements exist) · open source funding · stored locally on the user's device · people and groups users authorize · __"users authorize access generally and are not notified"__ (no option matched "specific per-entity authorization, no notification" — this under-claims the authorization half rather than overstate the notification half) · complete record of collected data · users can delete all data · not retained after account closure · no use beyond direct services · stores data indefinitely · __partial__ record of who accessed (same [#563](https://github.com/jwilleke/yourphr/issues/563) upgrade note).
+Same substance, that version's wording: individual/independent developer · __no BAA__ (patient-facing app; no business associate agreements exist) · open source funding · stored locally on the user's device · people and groups users authorize · __"users authorize access generally and are not notified"__ (no option matched "specific per-entity authorization, no notification" — this under-claims the authorization half rather than overstate the notification half) · complete record of collected data · users can delete all data · not retained after account closure · no use beyond direct services · stores data indefinitely · __complete__ record of who accessed (upgraded 2026-08-19 with [#563](https://github.com/jwilleke/yourphr/issues/563)/v2.10.0, same note as above).
 
 ## Filing mechanics (for the next edit)
 
@@ -39,7 +39,7 @@ Same substance, that version's wording: individual/independent developer · __no
 
 ## Remaining before production distribution
 
-1. [#563](https://github.com/jwilleke/yourphr/issues/563) lands → flip both access-log answers to "complete record".
-2. Refresh-token proof on the confidential client (see [`epic-sandbox.md`](../epic-sandbox.md) — confidential since 2026-08-19).
+1. ~~[#563](https://github.com/jwilleke/yourphr/issues/563) lands → flip both access-log answers to "complete record".~~ __Done 2026-08-19__ (v2.10.0 deployed, answers flipped and re-verified).
+2. ~~Refresh-token proof on the confidential client.~~ __Done 2026-08-19__ — pod log shows `refreshed == attempted`, the half-hourly warning ended (see [`epic-sandbox.md`](../epic-sandbox.md)).
 3. Operator accepts the open.epic terms of use checkbox (legal agreement — the operator clicks it personally).
 4. __Save & Ready for Production__ — permanently locks the app and these answers; production client_id `dbef27b9-d302-4ed9-bea0-f933ef326be3` then distributes via Automatic Client ID Distribution (USCDI v3).
