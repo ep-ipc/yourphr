@@ -178,6 +178,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) CreateGlossaryEntry(ctx, glossaryE
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGlossaryEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).CreateGlossaryEntry), ctx, glossaryEntry)
 }
 
+// CreateHealthSamples mocks base method.
+func (m *MockDatabaseRepository) CreateHealthSamples(ctx context.Context, samples []models.HealthSample) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateHealthSamples", ctx, samples)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateHealthSamples indicates an expected call of CreateHealthSamples.
+func (mr *MockDatabaseRepositoryMockRecorder) CreateHealthSamples(ctx, samples interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateHealthSamples", reflect.TypeOf((*MockDatabaseRepository)(nil).CreateHealthSamples), ctx, samples)
+}
+
 // CreateProviderCatalogEntry mocks base method.
 func (m *MockDatabaseRepository) CreateProviderCatalogEntry(ctx context.Context, entry *models.ProviderCatalogEntry) error {
 	m.ctrl.T.Helper()
@@ -455,6 +470,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) GetGlossaryEntry(ctx, code, codeSy
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGlossaryEntry", reflect.TypeOf((*MockDatabaseRepository)(nil).GetGlossaryEntry), ctx, code, codeSystem)
 }
 
+// GetHealthSyncStates mocks base method.
+func (m *MockDatabaseRepository) GetHealthSyncStates(ctx context.Context, deviceID string) ([]models.HealthSyncState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHealthSyncStates", ctx, deviceID)
+	ret0, _ := ret[0].([]models.HealthSyncState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHealthSyncStates indicates an expected call of GetHealthSyncStates.
+func (mr *MockDatabaseRepositoryMockRecorder) GetHealthSyncStates(ctx, deviceID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHealthSyncStates", reflect.TypeOf((*MockDatabaseRepository)(nil).GetHealthSyncStates), ctx, deviceID)
+}
+
 // GetInternationalPatientSummaryExport mocks base method.
 func (m *MockDatabaseRepository) GetInternationalPatientSummaryExport(ctx context.Context) (*ips.InternationalPatientSummaryExportData, error) {
 	m.ctrl.T.Helper()
@@ -723,6 +753,22 @@ func (m *MockDatabaseRepository) ListBackgroundJobs(ctx context.Context, queryOp
 func (mr *MockDatabaseRepositoryMockRecorder) ListBackgroundJobs(ctx, queryOptions interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBackgroundJobs", reflect.TypeOf((*MockDatabaseRepository)(nil).ListBackgroundJobs), ctx, queryOptions)
+}
+
+// ListHealthSamples mocks base method.
+func (m *MockDatabaseRepository) ListHealthSamples(ctx context.Context, queryOptions models.HealthSampleQueryOptions) ([]models.HealthSample, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListHealthSamples", ctx, queryOptions)
+	ret0, _ := ret[0].([]models.HealthSample)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ListHealthSamples indicates an expected call of ListHealthSamples.
+func (mr *MockDatabaseRepositoryMockRecorder) ListHealthSamples(ctx, queryOptions interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListHealthSamples", reflect.TypeOf((*MockDatabaseRepository)(nil).ListHealthSamples), ctx, queryOptions)
 }
 
 // ListProviderCatalogEntries mocks base method.
@@ -1025,6 +1071,20 @@ func (m *MockDatabaseRepository) UpdateUserPassword(ctx context.Context, hashedP
 func (mr *MockDatabaseRepositoryMockRecorder) UpdateUserPassword(ctx, hashedPassword interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserPassword", reflect.TypeOf((*MockDatabaseRepository)(nil).UpdateUserPassword), ctx, hashedPassword)
+}
+
+// UpsertHealthSyncState mocks base method.
+func (m *MockDatabaseRepository) UpsertHealthSyncState(ctx context.Context, state *models.HealthSyncState) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertHealthSyncState", ctx, state)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertHealthSyncState indicates an expected call of UpsertHealthSyncState.
+func (mr *MockDatabaseRepositoryMockRecorder) UpsertHealthSyncState(ctx, state interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertHealthSyncState", reflect.TypeOf((*MockDatabaseRepository)(nil).UpsertHealthSyncState), ctx, state)
 }
 
 // UpsertProviderCatalogEntryByDisplay mocks base method.

@@ -17,7 +17,7 @@ serve-storybook: dep-frontend
 
 .PHONY: serve-frontend
 serve-frontend: dep-frontend
-	cd frontend && ng serve --hmr --live-reload -c dev
+	cd frontend && yarn run ng serve --hmr --live-reload -c dev
 
 # Same as serve-frontend but bound to all interfaces so other devices on the LAN (a phone, another
 # machine) can reach the dev app at http://<this-host-ip>:4200. --disable-host-check accepts the LAN
@@ -25,7 +25,7 @@ serve-frontend: dep-frontend
 # already listens on all interfaces (:9090). Only use on a trusted network.
 .PHONY: serve-frontend-lan
 serve-frontend-lan: dep-frontend
-	cd frontend && ng serve --hmr --live-reload -c dev --host 0.0.0.0 --disable-host-check
+	cd frontend && yarn run ng serve --hmr --live-reload -c dev --host 0.0.0.0 --disable-host-check
 
 .PHONY: serve-frontend-prod
 serve-frontend-prod: dep-frontend

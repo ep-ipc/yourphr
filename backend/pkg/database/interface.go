@@ -133,4 +133,12 @@ type DatabaseRepository interface {
 	DeleteAccessToken(ctx context.Context, tokenID string) error
 	GetAccessToken(ctx context.Context, tokenID string) (*models.AccessToken, error)
 	GetAccessTokenByTokenIDAndUsername(ctx context.Context, tokenID string, username string) (*models.AccessToken, error)
+
+	// Apple Health / HealthKit ingestion from the iPhone companion app.
+	// CreateHealthSamples returns the number of rows actually inserted; samples already present are
+	// skipped, so a retried or overlapping push is a no-op rather than a duplicate.
+	CreateHealthSamples(ctx context.Context, samples []models.HealthSample) (int64, error)
+	ListHealthSamples(ctx context.Context, queryOptions models.HealthSampleQueryOptions) ([]models.HealthSample, int64, error)
+	UpsertHealthSyncState(ctx context.Context, state *models.HealthSyncState) error
+	GetHealthSyncStates(ctx context.Context, deviceID string) ([]models.HealthSyncState, error)
 }

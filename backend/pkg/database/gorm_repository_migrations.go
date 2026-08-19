@@ -460,6 +460,19 @@ func (gr *GormRepository) Migrate() error {
 				return tx.Exec("UPDATE users SET login_count = 0 WHERE login_count IS NULL").Error
 			},
 		},
+		{
+			// Apple Health ingestion from the iPhone companion app. These samples are stored directly
+			// rather than as FHIR Observations: the FHIR write path runs ~40 FHIRPath expressions in a
+			// fresh goja runtime per resource, which measures near a second apiece, so a year of
+			// five-minute heart rate would not finish in a day.
+			ID: "20260819120000", // health_samples + health_sync_states (HealthKit ingestion)
+			Migrate: func(tx *gorm.DB) error {
+				return tx.AutoMigrate(
+					&models.HealthSample{},
+					&models.HealthSyncState{},
+				)
+			},
+		},
 	})
 
 	// run when database is empty

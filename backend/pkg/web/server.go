@@ -352,6 +352,17 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					secure.POST("/resource/patient-entry", handler.CreatePatientEntry)
 					secure.DELETE("/encounter/:encounterId/related/:resourceType/:resourceId", handler.EncounterUnlinkResource)
 
+					// Apple Health ingestion from the iPhone companion app. Authenticated by the same
+					// access tokens as everything else under /secure, so the app sends
+					// "Authorization: Bearer <token>" and needs no credential of its own.
+					//
+					// The POST is rate limited and body-capped where sibling routes are not: it is the one
+					// endpoint built to take bulk data from an unattended background client, so a looping
+					// or misconfigured app must not be able to saturate the instance.
+					secure.POST("/health/samples", middleware.RateLimitMiddleware(60, time.Minute), middleware.BlockForDemoAccount(), handler.CreateHealthSamples)
+					secure.GET("/health/samples", handler.ListHealthSamples)
+					secure.GET("/health/sync-state", handler.GetHealthSyncState)
+
 					secure.GET("/dashboards", handler.GetDashboard)
 					secure.POST("/dashboards", handler.AddDashboardLocation)
 					//secure.GET("/dashboard/:dashboardId", handler.GetDashboard)
