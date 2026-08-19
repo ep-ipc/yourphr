@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.10.0](https://github.com/jwilleke/yourphr/compare/v2.9.0...v2.10.0) (2026-08-19)
+
+You can now see who has looked at your records, and a provider connection that used to quietly expire every half hour now stays connected.
+
+### Features
+
+- **An access log you can read** ([#563](https://github.com/jwilleke/yourphr/issues/563)). Account Profile now shows everyone who has viewed or exported records in your account — who, what kind of record, which day, how many times, and when last. The list is complete and unedited; reading it is not itself recorded, and YourPHR deliberately stores no network addresses or device fingerprints — identity and time answer the question that matters: *has anyone else been in my record?*
+
+### Bug Fixes
+
+- **Epic connections stay connected** ([#408](https://github.com/jwilleke/yourphr/issues/408)). Epic never issues refresh tokens to the kind of app YourPHR was registered as, so every Epic connection silently died about 30 minutes after logging in and needed a fresh login to sync again. The app registration is now a confidential client — the kind Epic does refresh — and the operator supplies the client secret in Admin → Provider Catalog. Verified live: the half-hourly *"no refresh token is available"* warning is gone and every refresh now succeeds.
+- **security: email headers cannot be forged through the recipient field** ([#549](https://github.com/jwilleke/yourphr/issues/549)). A line break typed into an email address could have been interpreted as the start of a new mail header. Addresses with line breaks are now refused outright.
+
+### Notes for operators
+
+- **Epic sandbox needs its client secret once.** After upgrading, open Admin → Provider Catalog → Epic (Sandbox) and set the client secret from your Epic app registration (now a confidential client), then reconnect the source once. Without it, Epic token exchange fails.
+
 ## [2.9.0](https://github.com/jwilleke/yourphr/compare/v2.8.1...v2.9.0) (2026-08-15)
 
 Your records can now leave the app in a form somebody else can use — emailed, or downloaded as a file another health system can import.
