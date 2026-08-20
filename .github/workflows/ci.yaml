@@ -72,3 +72,6 @@ jobs:
 
       - name: Migrations (run-once, rollback, downgrade protection)
         run: npm run migrations
+
+      - name: IPS composition + narratives (required sections, legibility, determinism)
+        run: npm run ips

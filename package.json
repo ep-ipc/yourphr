@@ -31,7 +31,8 @@
     "config": "tsx scripts/config-tests.ts",
     "backup": "tsx scripts/backup-tests.ts",
     "worker": "tsx scripts/worker-tests.ts",
-    "migrations": "tsx scripts/migration-tests.ts"
+    "migrations": "tsx scripts/migration-tests.ts",
+    "ips": "tsx scripts/ips-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",
