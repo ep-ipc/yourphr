@@ -71,14 +71,14 @@ async function main(): Promise<void> {
 
   const goDb = new Database(join(dir, 'go.db'));
   goDb.exec(`CREATE TABLE users (id TEXT, username TEXT, deleted_at TEXT)`);
-  goDb.exec(`CREATE TABLE source_credentials (user_id TEXT, display TEXT, api_endpoint_base_url TEXT, client_id TEXT,
+  goDb.exec(`CREATE TABLE source_credentials (id TEXT, user_id TEXT, display TEXT, api_endpoint_base_url TEXT, client_id TEXT,
     patient TEXT, scopes TEXT, access_token TEXT, refresh_token TEXT, expires_at INTEGER, environment TEXT, deleted_at TEXT)`);
   goDb.prepare("INSERT INTO users VALUES ('u-1', 'jim', NULL)").run();
   goDb.prepare("INSERT INTO users VALUES ('u-2', 'ghost', '2026-01-01')").run();
-  goDb.prepare("INSERT INTO source_credentials VALUES ('u-1', 'Epic (Sandbox)', ?, 'cce-client', 'camila', 'launch/patient patient/Condition.read patient/Observation.read', 'migrated-but-expired-token', 'go-refresh-token', 100, 'sandbox', NULL)").run(base);
-  goDb.prepare("INSERT INTO source_credentials VALUES ('u-1', 'Disconnected One', 'https://x.example.org', 'c', 'p', 'patient/*.read', 'a', 'r', 0, 'production', '2026-02-02')").run();
-  goDb.prepare("INSERT INTO source_credentials VALUES ('u-2', 'Ghosts Source', 'https://y.example.org', 'c', 'p', 'patient/*.read', 'a', 'r', 0, 'production', NULL)").run();
-  goDb.prepare("INSERT INTO source_credentials VALUES ('u-1', 'No Refresh', ?, 'c2', 'pat2', 'patient/Condition.read', 'tok2', '', 50, 'sandbox', NULL)").run(base);
+  goDb.prepare("INSERT INTO source_credentials VALUES ('src-1', 'u-1', 'Epic (Sandbox)', ?, 'cce-client', 'camila', 'launch/patient patient/Condition.read patient/Observation.read', 'migrated-but-expired-token', 'go-refresh-token', 100, 'sandbox', NULL)").run(base);
+  goDb.prepare("INSERT INTO source_credentials VALUES ('src-2', 'u-1', 'Disconnected One', 'https://x.example.org', 'c', 'p', 'patient/*.read', 'a', 'r', 0, 'production', '2026-02-02')").run();
+  goDb.prepare("INSERT INTO source_credentials VALUES ('src-3', 'u-2', 'Ghosts Source', 'https://y.example.org', 'c', 'p', 'patient/*.read', 'a', 'r', 0, 'production', NULL)").run();
+  goDb.prepare("INSERT INTO source_credentials VALUES ('src-4', 'u-1', 'No Refresh', ?, 'c2', 'pat2', 'patient/Condition.read', 'tok2', '', 50, 'sandbox', NULL)").run(base);
 
   const legacy = readGoSources(goDb);
   check('the reader joins usernames and skips soft-deleted sources AND users',
@@ -88,6 +88,8 @@ async function main(): Promise<void> {
   const store = new SourceStore(appDb);
   const report = importLegacySources(store, legacy);
   check('import lands both live sources', report.imported.length === 2);
+  check('the Go id -> spike id map covers every live source (yourphr#586 needs it to attribute records)',
+    Object.keys(report.idMap).sort().join(',') === 'src-1,src-4' && store.list().every((s) => Object.values(report.idMap).includes(s.id)));
   check('a source with no refresh token is REPORTED as needs-reconnect, not silently doomed',
     report.needsReconnect.join(',') === 'jim:No Refresh');
 

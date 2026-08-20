@@ -43,6 +43,8 @@ export function resourceTypesFromScopes(scopes: string): string[] {
 }
 
 export interface LegacySource {
+  /** Go's source_credentials.id — what every fhir_* row's source_id points at. */
+  id: string;
   username: string;
   display: string;
   fhirBaseUrl: string;
@@ -64,7 +66,7 @@ export interface LegacySource {
 export function readGoSources(goDb: InstanceType<typeof Database>): LegacySource[] {
   const rows = goDb
     .prepare(
-      `SELECT u.username AS username, s.display AS display, s.api_endpoint_base_url AS base,
+      `SELECT s.id AS id, u.username AS username, s.display AS display, s.api_endpoint_base_url AS base,
               COALESCE(s.client_id, '') AS client_id, COALESCE(s.patient, '') AS patient,
               COALESCE(s.scopes, '') AS scopes, COALESCE(s.access_token, '') AS access_token,
               COALESCE(s.refresh_token, '') AS refresh_token, COALESCE(s.expires_at, 0) AS expires_at,
@@ -74,6 +76,7 @@ export function readGoSources(goDb: InstanceType<typeof Database>): LegacySource
     )
     .all() as Record<string, unknown>[];
   return rows.map((r) => ({
+    id: String(r['id']),
     username: String(r['username']),
     display: String(r['display']),
     fhirBaseUrl: String(r['base']),
@@ -92,6 +95,11 @@ export interface SourceImportReport {
   skippedExisting: string[];
   /** Sources with no refresh token — they migrate, but the first expiry needs a reconnect. */
   needsReconnect: string[];
+  /**
+   * Go source id -> spike source id, for imported AND already-present sources alike, so the record
+   * import (yourphr#586) can attribute every fhir_* row to the source it came from.
+   */
+  idMap: Record<string, number>;
 }
 
 /**
@@ -101,17 +109,18 @@ export interface SourceImportReport {
  * expired one refreshes on the first pass.
  */
 export function importLegacySources(store: SourceStore, sources: LegacySource[]): SourceImportReport {
-  const report: SourceImportReport = { imported: [], skippedExisting: [], needsReconnect: [] };
-  const existing = new Set(store.list().map((s) => `${s.userId}|${s.fhirBaseUrl}|${s.patient}`));
+  const report: SourceImportReport = { imported: [], skippedExisting: [], needsReconnect: [], idMap: {} };
+  const existing = new Map(store.list().map((s) => [`${s.userId}|${s.fhirBaseUrl}|${s.patient}`, s.id]));
   for (const source of sources) {
     const key = `${source.username}|${source.fhirBaseUrl}|${source.patient}`;
     const label = `${source.username}:${source.display}`;
-    if (existing.has(key)) {
+    const held = existing.get(key);
+    if (held !== undefined) {
       report.skippedExisting.push(label);
+      report.idMap[source.id] = held;
       continue;
     }
-    existing.add(key);
-    store.add({
+    const added = store.add({
       userId: source.username,
       display: source.display,
       fhirBaseUrl: source.fhirBaseUrl,
@@ -123,6 +132,8 @@ export function importLegacySources(store: SourceStore, sources: LegacySource[])
       refreshToken: source.refreshToken,
       expiresAt: source.expiresAt,
     });
+    existing.set(key, added.id);
+    report.idMap[source.id] = added.id;
     report.imported.push(label);
     if (source.refreshToken === '') {
       report.needsReconnect.push(label);
