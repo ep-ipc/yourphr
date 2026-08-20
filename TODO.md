@@ -1,5 +1,21 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-08-20
+
+- Last worked on: __the biggest single day of the transition.__ Phase 2 decided PROCEED on [#539](https://github.com/jwilleke/yourphr/issues/539) and the Go freeze RATIFIED (patches only; capability goes to the spike). Phase 3 finished ([#541](https://github.com/jwilleke/yourphr/issues/541)). Phase 4's six decomposed issues ALL built ([#577](https://github.com/jwilleke/yourphr/issues/577)–[#582](https://github.com/jwilleke/yourphr/issues/582)). Phase-5 ladder filed ([#583](https://github.com/jwilleke/yourphr/issues/583)–[#588](https://github.com/jwilleke/yourphr/issues/588)) and three rungs climbed: users (bcrypt verify-then-rehash), sources+tokens (refresh with no reconnect), frontend serving (raw-socket traversal teeth). Also: #575 (24 reachable Go vulns) found by /pstatus and fixed same hour; v2.10.1 + v2.10.2 released and deployed; #545 shipped.
+- Branch / state: `main` clean + pushed, both repos. Spike CI re-running on `b05adb0` (a timing-flaky auth check widened — was red on the #585 push, fix pushed at wrap).
+- Running / in-flight: spike CI on `b05adb0` (verify green next session if not confirmed); session-scoped kit-PR monitor dies with the session (standing rule in memory covers future kit PRs).
+- Parked / half-done: none.
+- Next steps:
+  - Verify spike CI green on `b05adb0` (was the flaky renewal-window check)
+  - [#586](https://github.com/jwilleke/yourphr/issues/586) — one-command migration tool (both import halves ready) — then [#587](https://github.com/jwilleke/yourphr/issues/587) packaging, [#588](https://github.com/jwilleke/yourphr/issues/588) runbook
+  - 14 in-review issues await close calls ([#539](https://github.com/jwilleke/yourphr/issues/539), [#540](https://github.com/jwilleke/yourphr/issues/540), [#541](https://github.com/jwilleke/yourphr/issues/541), [#545](https://github.com/jwilleke/yourphr/issues/545), [#563](https://github.com/jwilleke/yourphr/issues/563), [#575](https://github.com/jwilleke/yourphr/issues/575), [#577](https://github.com/jwilleke/yourphr/issues/577)–[#585](https://github.com/jwilleke/yourphr/issues/585))
+  - Untriaged: [#561](https://github.com/jwilleke/yourphr/issues/561) + 7 Dependabot PRs; [#576](https://github.com/jwilleke/yourphr/issues/576) yarn highs (P1)
+  - Epic production distribution live (518 orgs, auto-sweep ~48h from 2026-08-19) — name your health system to finish [#408](https://github.com/jwilleke/yourphr/issues/408)
+- Blockers / significant notes: tracking rule — ALL working items live in THIS repo's TODO.md + private/project_log.md. Admin-in-spike = bootstrap account (named simplification). Go tokens are plain column values in an unencrypted prod DB — quiet argument for the cut-over.
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 > __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
 
