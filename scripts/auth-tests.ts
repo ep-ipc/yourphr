@@ -191,7 +191,7 @@ async function main(): Promise<void> {
     const db = new Database(join(dir, 'auth.db'));
     const store = new AuthStore(db, {
       sessionKey: randomBytes(32),
-      session: { slidingSeconds: 4, absoluteSeconds: 60 },
+      session: { slidingSeconds: 20, absoluteSeconds: 120 }, // renewal zone [10s,20s) — wide enough for a slow CI runner
     });
     store.createUser('alice', PASSWORD);
     store.createUser('bob', PASSWORD);
@@ -234,8 +234,10 @@ async function main(): Promise<void> {
       aliceList.data.length === 1 && aliceList.data[0]?.source_resource_id === 'alice-cond' &&
       bobList.data.length === 1 && bobList.data[0]?.source_resource_id === 'bob-cond');
 
-    // Past the renewal half of a 4s sliding window, a valid request carries a fresh token.
-    await new Promise((r) => setTimeout(r, 3200));
+    // Past the renewal half of a 20s sliding window, a valid request carries a fresh token.
+    // (Was a 4s window with a 3.2s sleep — a slow CI runner pushed the request past expiry and
+    // the check flaked red. The zone is now 10 seconds wide.)
+    await new Promise((r) => setTimeout(r, 11_000));
     const renewing = await fetch(base + LIST, authed(aliceToken));
     check('the wire: a use near expiry returns X-Renewed-Token', renewing.status === 200 && !!renewing.headers.get('x-renewed-token'));
 
