@@ -8,7 +8,7 @@
  *   npm run auth
  */
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
@@ -241,6 +241,47 @@ async function main(): Promise<void> {
 
     server.close();
     for (const r of repos.values()) r.db.close();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // --- bootstrap provisioning (yourphr#504) + recovery (yourphr#510) ---
+  {
+    const dir = mkdtempSync(join(tmpdir(), 'spike-auth-boot-'));
+    const db = new Database(join(dir, 'auth.db'));
+    const store = new AuthStore(db, { sessionKey: randomBytes(32) });
+
+    const first = store.bootstrapAdmin(dir);
+    check('bootstrap on an empty table creates the admin and a 0600 password file',
+      first.created && !!first.passwordFile && existsSync(first.passwordFile) &&
+      (statSync(first.passwordFile).mode & 0o777) === 0o600);
+
+    const second = store.bootstrapAdmin(dir);
+    check('bootstrap is one-way: a second call on a populated table is a no-op', !second.created && !second.passwordFile);
+
+    const bootPassword = readFileSync(first.passwordFile as string, 'utf8').trim();
+    const signedIn = store.signIn('admin', bootPassword, REQ);
+    check('the bootstrap password signs in', signedIn.ok);
+    check('the password file is DELETED after the first successful sign-in (backups must not carry it)',
+      !existsSync(first.passwordFile as string));
+
+    // Lockout: the admin loses the password; an attacker holds a live session.
+    const attacker = store.signIn('admin', bootPassword, REQ);
+    check('setup: the attacker session is live before recovery', !attacker.ok || store.verifySession((attacker as { token: string }).token).ok);
+
+    const recovered = store.recoverAccess(dir, 'admin');
+    check('recovery writes a fresh 0600 password file', existsSync(recovered.passwordFile) && (statSync(recovered.passwordFile).mode & 0o777) === 0o600);
+    const newPassword = readFileSync(recovered.passwordFile, 'utf8').trim();
+    check('the recovered password signs in and the OLD one no longer does',
+      store.signIn('admin', newPassword, REQ).ok && !store.signIn('admin', bootPassword, REQ).ok);
+    if (signedIn.ok) {
+      check('recovery evicts every pre-recovery session', !store.verifySession(signedIn.token).ok);
+    }
+
+    let unknownRefused = false;
+    try { store.recoverAccess(dir, 'nobody'); } catch { unknownRefused = true; }
+    check('recovery for an unknown account is refused, not silently created', unknownRefused);
+
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }

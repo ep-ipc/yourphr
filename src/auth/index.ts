@@ -27,9 +27,10 @@
  * Deliberately NOT here, recorded rather than silently absent (yourphr#541 acceptance):
  *   - bcrypt verification for accounts migrated from the Go stack (Go stores bcrypt cost-14; node
  *     has no stdlib bcrypt, so Phase 5 migration needs a bcrypt dependency plus rehash-on-login)
- *   - bootstrap provisioning (yourphr#504) and locked-out recovery (yourphr#510)
  *   - a durable throttle store (counters are in-memory; a restart clears them)
  */
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type Database from 'better-sqlite3-multiple-ciphers';
 
@@ -266,6 +267,12 @@ export class AuthStore {
     }
 
     this.throttle.clear(accountKey);
+    if (this.bootstrapFile && username === this.bootstrapUsername && existsSync(this.bootstrapFile)) {
+      // The generated password has served its purpose; a copy inside the data dir would ride along
+      // in every backup from here on (yourphr#466).
+      rmSync(this.bootstrapFile, { force: true });
+      this.bootstrapFile = undefined;
+    }
     const claims: SessionClaims = {
       u: username,
       g: row.token_generation,
@@ -330,5 +337,59 @@ export class AuthStore {
   /** Ends every session for this user, everywhere (yourphr#508's sign-out-everywhere). */
   revokeAllSessions(username: string): void {
     this.db.prepare('UPDATE auth_users SET token_generation = token_generation + 1 WHERE username = ?').run(username);
+  }
+
+  /**
+   * Provision the first admin without the first-run wizard (yourphr#504). The wizard is a RACE on
+   * an internet-facing host: the first account on an empty database becomes the admin, and the app
+   * cannot tell the operator from a passing stranger.
+   *
+   * One-way and only on an EMPTY user table — never overwrites an account, never changes a
+   * password. No password is supplied by the caller: one is generated and written 0600 to
+   * <dataDir>/.admin_bootstrap_password; the caller logs the PATH only. The file is deleted after
+   * the admin's first successful sign-in, because the data directory is exactly what a backup
+   * contains (yourphr#466).
+   */
+  bootstrapAdmin(dataDir: string, username = 'admin'): { created: boolean; passwordFile?: string } {
+    const count = (this.db.prepare('SELECT COUNT(*) AS n FROM auth_users').get() as { n: number }).n;
+    if (count > 0) {
+      return { created: false };
+    }
+    const password = randomBytes(24).toString('base64url');
+    this.createUser(username, password);
+    mkdirSync(dataDir, { recursive: true });
+    const file = join(dataDir, '.admin_bootstrap_password');
+    writeFileSync(file, password + '\n', { mode: 0o600 });
+    this.bootstrapFile = file;
+    this.bootstrapUsername = username;
+    return { created: true, passwordFile: file };
+  }
+
+  private bootstrapFile?: string;
+  private bootstrapUsername?: string;
+
+  /**
+   * Recovery when nobody can sign in (yourphr#510). Deliberately NOT an HTTP route: the proof of
+   * being the operator is filesystem access to the data directory, the same proof that already
+   * implies total control. Sets a fresh generated password, writes it 0600 to
+   * <dataDir>/.recovery_password, and bumps token_generation so whoever caused the lockout is
+   * signed out everywhere the moment the operator recovers.
+   */
+  recoverAccess(dataDir: string, username: string): { passwordFile: string } {
+    const row = this.userRow(username);
+    if (!row) {
+      throw new Error(`no such account: ${username}`);
+    }
+    const password = randomBytes(24).toString('base64url');
+    const result = this.db
+      .prepare('UPDATE auth_users SET password_hash = ?, token_generation = token_generation + 1 WHERE username = ?')
+      .run(hashPassword(password), username);
+    if (result.changes !== 1) {
+      throw new Error('recovery did not apply');
+    }
+    mkdirSync(dataDir, { recursive: true });
+    const file = join(dataDir, '.recovery_password');
+    writeFileSync(file, password + '\n', { mode: 0o600 });
+    return { passwordFile: file };
   }
 }
