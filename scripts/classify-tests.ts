@@ -25,7 +25,7 @@ function main(): void {
     period: { start: '2024-03-05T10:00:00Z' },
   } as unknown as Resource)!;
   check('Epic HOV: the vendor-local class display NEVER surfaces as the category',
-    hov.category === 'Outpatient' && hov.category !== 'HOV');
+    hov.category === 'Outpatient' && !JSON.stringify(hov).includes('"HOV"'));
   check('and the title is the encounter\'s own human text', hov.title === 'Outpatient');
 
   const amb = classify({ resourceType: 'Encounter', id: 'amb', status: 'finished', class: { system: 'v3', code: 'AMB' } } as unknown as Resource)!;
