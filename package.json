@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Throwaway spike: can a TypeScript/Node FHIR store replace YourPHR's Go backend? Evaluated in yourphr docs/planning/typescript-stack-evaluation.md",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "export": "tsx scripts/export-resources.ts",
