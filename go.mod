@@ -2,6 +2,8 @@ module github.com/fastenhealth/fasten-onprem
 
 go 1.26.1
 
+toolchain go1.26.6
+
 // fasten-sources was made private upstream (fastenhealth/fasten-onprem#629) and lived here as a
 // local stub behind a replace directive. It is now OURS, folded into backend/pkg/sources (#538):
 // same code, same tests, no external dependency and no replace. It holds the working SMART client
@@ -48,7 +50,7 @@ require (
 	golang.org/x/crypto v0.55.0
 	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17
 	golang.org/x/mod v0.40.0
-	golang.org/x/net v0.57.0
+	golang.org/x/net v0.58.0
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
@@ -91,7 +93,7 @@ require (
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/image v0.41.0 // indirect
+	golang.org/x/image v0.43.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 )
 
