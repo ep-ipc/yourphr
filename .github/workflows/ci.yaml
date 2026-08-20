@@ -42,3 +42,21 @@ jobs:
 
       - name: No patient data in tracked files
         run: npm run check:phi
+
+      # yourphr#540 — Phase 1: the read stack stays honest in CI. The corpus is GENERATED here,
+      # fully synthetic and deterministic; committing an .ndjson would (rightly) trip the PHI guard.
+      # Against a real snapshot these same harnesses stay manual and occasional — see README.
+      - name: Generate synthetic corpus
+        run: npx tsx scripts/make-synthetic-corpus.ts --out "$RUNNER_TEMP/corpus.ndjson"
+
+      - name: Smoke (reference implementation holds the corpus)
+        run: npx tsx scripts/smoke.ts --in "$RUNNER_TEMP/corpus.ndjson"
+
+      - name: Differential (sqlite repository agrees with the reference)
+        run: npx tsx scripts/diff-repositories.ts --in "$RUNNER_TEMP/corpus.ndjson" --db "$RUNNER_TEMP/diff.db"
+
+      - name: Write path (create, update, delete, reindex)
+        run: npx tsx scripts/write-tests.ts --in "$RUNNER_TEMP/corpus.ndjson" --db "$RUNNER_TEMP/writes.db"
+
+      - name: Auth (sessions, revocation, throttling, the wire)
+        run: npm run auth

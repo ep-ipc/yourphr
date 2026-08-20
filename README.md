@@ -12,6 +12,16 @@ Real patient data must never enter git history here, private repo or not. `.giti
 
 This mirrors the rule in the product repo's `AGENTS.md`: a PHI leak is irreversible.
 
+## The second hard rule: the spike never implements a feature
+
+The TypeScript side tracks how records are stored, queried and served — nothing else ([yourphr#540](https://github.com/jwilleke/yourphr/issues/540)). Product features land in Go (patches only, per the ratified freeze) or wait for the transition phase that owns them. The week the mail transport, Send to Email and FHIR export all landed in Go, the spike needed zero changes — that is what makes running two stacks affordable.
+
+## CI, and what stays manual
+
+Every push runs typecheck, the network-boundary check, the SSRF/SMART/sync/auth harnesses, and — on a __generated, fully synthetic corpus__ — smoke, the differential against the Medplum reference, and the write path ([yourphr#540](https://github.com/jwilleke/yourphr/issues/540)). No PHI exists in CI; the corpus is emitted by `scripts/make-synthetic-corpus.ts` at run time, deterministically.
+
+__Against a real snapshot the harnesses stay manual and occasional__ — after any storage-shape change, or quarterly: `npm run load`, `npm run diff -- --in phi/<export>.ndjson`, `npm run writes -- --in phi/<export>.ndjson`, `npm run isolation`, `npm run shadow`, `npm run http -- --db phi/http.db`. Real data has repeatedly taught what fixtures could not; CI keeps the floor, the manual pass keeps the truth.
+
 ## Result: the bar was met
 
 All three criteria below were met against the __synthetic__ seed corpus. No real records have been used.
