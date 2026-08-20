@@ -5,16 +5,17 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#575](https://github.com/jwilleke/yourphr/issues/575) — [security] Go toolchain 1.26.1 → 1.26.6 (+ x/image 0.43) — 24 reachable stdlib vulnerabilities
 - [#546](https://github.com/jwilleke/yourphr/issues/546) — [FEATURE] Required vs optional capabilities — a required provider must refuse to boot, not degrade to inert
-- [#569](https://github.com/jwilleke/yourphr/pull/569) — chore(deps): bump golang.org/x/mod from 0.38.0 to 0.40.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
-- [#568](https://github.com/jwilleke/yourphr/pull/568) — chore(deps): bump golang.org/x/net from 0.57.0 to 0.58.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
-- [#567](https://github.com/jwilleke/yourphr/pull/567) — chore(deps): bump golang.org/x/oauth2 from 0.27.0 to 0.36.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
-- [#566](https://github.com/jwilleke/yourphr/pull/566) — chore(deps): bump golang.org/x/crypto from 0.54.0 to 0.55.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
 
 ## 🟠 P1
 
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
+- [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
+- [#587](https://github.com/jwilleke/yourphr/issues/587) — [SPIKE] Phase 5: package and deploy the spike — image, release tagging, Flux entry
+- [#586](https://github.com/jwilleke/yourphr/issues/586) — [SPIKE] Phase 5: one-command, per-user, verified migration tool
+- [#585](https://github.com/jwilleke/yourphr/issues/585) — [SPIKE] Phase 5: serve the Angular frontend from the spike process
+- [#584](https://github.com/jwilleke/yourphr/issues/584) — [SPIKE] Phase 5: migrate connected sources and their tokens
+- [#583](https://github.com/jwilleke/yourphr/issues/583) — [SPIKE] Phase 5: migrate user accounts — bcrypt verify-then-rehash, nobody resets a password
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
 - [#538](https://github.com/jwilleke/yourphr/issues/538) — [CHORE] Phase 0: leave Fasten, stay on Go — adopt the stub under our own name
@@ -30,7 +31,6 @@
 
 ## 🟡 P2
 
-- [#541](https://github.com/jwilleke/yourphr/issues/541) — [SPIKE] Phase 3: authentication and sessions in the TypeScript stack
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
@@ -39,7 +39,6 @@
 - [#551](https://github.com/jwilleke/yourphr/issues/551) — [CHORE] Migrate 647 *ngIf uses to Angular built-in control flow (@if/@for)
 - [#543](https://github.com/jwilleke/yourphr/issues/543) — [SPIKE] Phase 5: cut over, keep both, or stop — decided once, not by drift
 - [#542](https://github.com/jwilleke/yourphr/issues/542) — [SPIKE] Phase 4: the long tail — 22.7k lines with no library to adopt
-- [#540](https://github.com/jwilleke/yourphr/issues/540) — [CHORE] Phase 1: keep the TypeScript read stack honest in CI
 - [#535](https://github.com/jwilleke/yourphr/issues/535) — [FEATURE] No list view for Organizations (individual ones display fine)
 - [#534](https://github.com/jwilleke/yourphr/issues/534) — [CHORE] related_versions.json is tracked but build-generated, so it dirties the tree on every build
 - [#502](https://github.com/jwilleke/yourphr/issues/502) — [ARCH] Evaluate moving Azia's hand-rolled dark stylesheet onto Bootstrap 5.3 colour modes (data-bs-theme)
@@ -89,6 +88,15 @@
 
 ## 🔵 In review
 
+- [#582](https://github.com/jwilleke/yourphr/issues/582) — [SPIKE] One HTTP layer over all spike modules
+- [#581](https://github.com/jwilleke/yourphr/issues/581) — [SPIKE] Dynamic Client Registration in the TypeScript stack
+- [#580](https://github.com/jwilleke/yourphr/issues/580) — [SPIKE] Medication reconciliation in the TypeScript stack
+- [#579](https://github.com/jwilleke/yourphr/issues/579) — [SPIKE] Provenance in the TypeScript stack — which source said what, when
+- [#578](https://github.com/jwilleke/yourphr/issues/578) — [SPIKE] Patient-legible classifier in the TypeScript stack
+- [#577](https://github.com/jwilleke/yourphr/issues/577) — [SPIKE] IPS composition and narratives in the TypeScript stack — PDF stays a frontend concern
+- [#575](https://github.com/jwilleke/yourphr/issues/575) — [security] Go toolchain 1.26.1 → 1.26.6 (+ x/image 0.43) — 24 reachable stdlib vulnerabilities
+- [#541](https://github.com/jwilleke/yourphr/issues/541) — [SPIKE] Phase 3: authentication and sessions in the TypeScript stack
+- [#540](https://github.com/jwilleke/yourphr/issues/540) — [CHORE] Phase 1: keep the TypeScript read stack honest in CI
 - [#563](https://github.com/jwilleke/yourphr/issues/563) — [FEATURE] Patient-visible access log — a complete record of who accessed which records, shown to the patient
 - [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
 - [#539](https://github.com/jwilleke/yourphr/issues/539) — [SPIKE] Phase 2: SMART sync in TypeScript with SSRF guarding — or stop the transition
