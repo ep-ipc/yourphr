@@ -14,8 +14,12 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 import { createYourPhrServer } from '../src/server.js';
+import bcryptjs from 'bcryptjs';
 import {
   AuthStore,
+  importLegacyUsers,
+  isLegacyBcrypt,
+  readGoUsers,
   GENERIC_SIGNIN_ERROR,
   clientIp,
   decodeToken,
@@ -283,6 +287,59 @@ async function main(): Promise<void> {
     check('recovery for an unknown account is refused, not silently created', unknownRefused);
 
     db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  // --- Go account migration: bcrypt verify-then-rehash (yourphr#583) ---
+  {
+    const dir = mkdtempSync(join(tmpdir(), 'spike-auth-migrate-'));
+    // A synthetic Go database: the GORM users table shape, one admin + one user + one deleted.
+    const goDb = new Database(join(dir, 'go.db'));
+    goDb.exec(`CREATE TABLE users (username TEXT, password TEXT, token_generation INTEGER, role TEXT, deleted_at TEXT)`);
+    const bcryptHash = bcryptjs.hashSync('go-era-password-long', 8); // cost rides in the hash; 8 keeps the harness fast
+    goDb.prepare("INSERT INTO users VALUES ('jim', ?, 3, 'admin', NULL)").run(bcryptHash);
+    goDb.prepare("INSERT INTO users VALUES ('mary', ?, 0, 'user', NULL)").run(bcryptjs.hashSync('marys-password-long', 8));
+    goDb.prepare("INSERT INTO users VALUES ('ghost', 'x', 0, 'user', '2026-01-01')").run();
+
+    const appDb = new Database(join(dir, 'app.db'));
+    const store = new AuthStore(appDb, { sessionKey: randomBytes(32) });
+    store.createUser('mary', 'already-here-password'); // pre-existing spike account with the same name
+
+    const legacy = readGoUsers(goDb);
+    check('the Go reader skips soft-deleted accounts', legacy.length === 2);
+
+    const report = importLegacyUsers(store, legacy);
+    check('import is one-way: the existing account is skipped and reported, never overwritten',
+      report.imported.join(',') === 'jim' && report.skippedExisting.join(',') === 'mary');
+    check('Go admins are reported for the role wiring', report.admins.join(',') === 'jim');
+
+    const storedBefore = (appDb.prepare("SELECT password_hash FROM auth_users WHERE username = 'jim'").get() as { password_hash: string }).password_hash;
+    check('the imported hash is the bcrypt hash, verbatim', isLegacyBcrypt(storedBefore));
+
+    const wrong = store.signIn('jim', 'not-the-password-long', REQ);
+    const stillBcrypt = (appDb.prepare("SELECT password_hash FROM auth_users WHERE username = 'jim'").get() as { password_hash: string }).password_hash;
+    check('a WRONG password neither signs in nor rehashes', !wrong.ok && isLegacyBcrypt(stillBcrypt));
+
+    const first = store.signIn('jim', 'go-era-password-long', REQ);
+    check('THE GO PASSWORD SIGNS IN — nobody resets anything', first.ok);
+    const storedAfter = (appDb.prepare("SELECT password_hash FROM auth_users WHERE username = 'jim'").get() as { password_hash: string }).password_hash;
+    check('and the hash is now scrypt (upgrade-on-login, one verification, in place)',
+      storedAfter.startsWith('scrypt$') && !isLegacyBcrypt(storedAfter));
+    const second = store.signIn('jim', 'go-era-password-long', REQ);
+    check('the second sign-in verifies via scrypt', second.ok);
+    if (first.ok) {
+      check('the pre-rehash session still verifies (no generation bump — the password did not change)',
+        store.verifySession(first.token).ok);
+    }
+
+    // The carried generation: a token minted below it is already revoked.
+    const staleClaims = { u: 'jim', g: 1, iat: 0, exp: 9_999_999_999, cap: 9_999_999_999 };
+    const stale = issueToken((store as unknown as { config: { sessionKey: Buffer } }).config.sessionKey, staleClaims);
+    check('a Go-side revocation stays revoked: generation carried through the import',
+      !store.verifySession(stale).ok);
+
+    goDb.close();
+    appDb.close();
     rmSync(dir, { recursive: true, force: true });
   }
 

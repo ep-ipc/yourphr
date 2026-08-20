@@ -24,14 +24,20 @@
  * random salt, parameters carried in the stored value (`scrypt$N$r$p$salt$hash`) so cost can be
  * raised later and old hashes keep verifying, constant-time comparison. No dependency.
  *
+ * Migration support (yourphr#583): accounts imported from the Go stack arrive with their bcrypt
+ * cost-14 hashes. Sign-in verifies a legacy $2* hash with bcryptjs (pure JS — verify-only workload,
+ * the cost parameter rides in the hash), then REHASHES TO SCRYPT IN PLACE on success — the
+ * ngdpbase #1042 upgrade-on-login pattern. Nobody resets a password; the store ages over as people
+ * sign in. token_generation is carried through the import, so a revocation that happened on Go
+ * stays revoked here.
+ *
  * Deliberately NOT here, recorded rather than silently absent (yourphr#541 acceptance):
- *   - bcrypt verification for accounts migrated from the Go stack (Go stores bcrypt cost-14; node
- *     has no stdlib bcrypt, so Phase 5 migration needs a bcrypt dependency plus rehash-on-login)
  *   - a durable throttle store (counters are in-memory; a restart clears them)
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import type Database from 'better-sqlite3-multiple-ciphers';
 
 // ---------------------------------------------------------------------------
@@ -259,7 +265,21 @@ export class AuthStore {
     }
 
     const row = this.userRow(username);
-    const verified = row ? verifyPassword(row.password_hash, password) : verifyPassword(dummyHash, password) && false;
+    let verified = false;
+    if (row) {
+      if (isLegacyBcrypt(row.password_hash)) {
+        verified = bcrypt.compareSync(password, row.password_hash);
+        if (verified) {
+          // Upgrade-on-login (yourphr#583): the verified plaintext is in hand exactly once — rehash
+          // now. No generation bump: the password did not change, sessions must survive.
+          this.db.prepare('UPDATE auth_users SET password_hash = ? WHERE username = ?').run(hashPassword(password), username);
+        }
+      } else {
+        verified = verifyPassword(row.password_hash, password);
+      }
+    } else {
+      verifyPassword(dummyHash, password); // unknown users still cost a real verification (yourphr#104)
+    }
     if (!row || !verified) {
       this.throttle.recordFailure(accountKey, nowSeconds);
       this.throttle.recordFailure(ipKey, nowSeconds);
@@ -392,4 +412,61 @@ export class AuthStore {
     writeFileSync(file, password + '\n', { mode: 0o600 });
     return { passwordFile: file };
   }
+}
+
+/** Go's bcrypt hashes are $2a$/$2b$/$2y$ — anything else is this stack's own scrypt scheme. */
+export function isLegacyBcrypt(stored: string): boolean {
+  return /^\$2[aby]\$/.test(stored);
+}
+
+export interface LegacyUser {
+  username: string;
+  /** The bcrypt hash exactly as Go stored it. */
+  passwordHash: string;
+  tokenGeneration: number;
+  role: string;
+}
+
+/** Reads the users table of a Go (GORM) YourPHR database file. */
+export function readGoUsers(goDb: InstanceType<typeof Database>): LegacyUser[] {
+  const rows = goDb.prepare('SELECT username, password, COALESCE(token_generation, 0) AS token_generation, COALESCE(role, \'user\') AS role FROM users WHERE deleted_at IS NULL').all() as Record<string, unknown>[];
+  return rows.map((r) => ({
+    username: String(r['username']),
+    passwordHash: String(r['password']),
+    tokenGeneration: Number(r['token_generation']),
+    role: String(r['role']),
+  }));
+}
+
+export interface ImportReport {
+  imported: string[];
+  skippedExisting: string[];
+  admins: string[];
+}
+
+/**
+ * Imports Go accounts, one-way (yourphr#583): an existing spike account is never overwritten —
+ * skipped and reported, same posture as bootstrap. The bcrypt hash lands verbatim (sign-in
+ * upgrades it); token_generation is carried so Go-side revocations stay revoked.
+ */
+export function importLegacyUsers(store: AuthStore, users: LegacyUser[]): ImportReport {
+  const report: ImportReport = { imported: [], skippedExisting: [], admins: [] };
+  const db = (store as unknown as { db: InstanceType<typeof Database> }).db;
+  for (const user of users) {
+    const exists = db.prepare('SELECT username FROM auth_users WHERE username = ?').get(user.username);
+    if (exists) {
+      report.skippedExisting.push(user.username);
+      continue;
+    }
+    if (!isLegacyBcrypt(user.passwordHash)) {
+      throw new Error(`refusing to import ${user.username}: password hash is not a Go bcrypt hash`);
+    }
+    db.prepare('INSERT INTO auth_users (username, password_hash, token_generation, created_at) VALUES (?, ?, ?, ?)')
+      .run(user.username, user.passwordHash, user.tokenGeneration, new Date().toISOString());
+    report.imported.push(user.username);
+    if (user.role === 'admin') {
+      report.admins.push(user.username);
+    }
+  }
+  return report;
 }
