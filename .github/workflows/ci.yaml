@@ -84,3 +84,6 @@ jobs:
 
       - name: Dynamic Client Registration (endpoint gauntlet, refusals, persistence)
         run: npm run dcr
+
+      - name: The assembly (boot -> sign-in -> record read, every module engaged)
+        run: npm run app

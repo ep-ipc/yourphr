@@ -32,6 +32,23 @@ export interface ServerAuth {
   repoForUser: (username: string) => SqliteFhirRepository;
 }
 
+export interface ServerModules {
+  /** GET /api/secure/summary/ips — the IPS document for the caller (yourphr#577). */
+  ips?: (repo: SqliteFhirRepository) => Promise<unknown>;
+  /** GET /api/secure/resource/provenance/:type/:id (yourphr#579). */
+  provenanceFor?: (repo: SqliteFhirRepository, resourceType: string, id: string) => unknown;
+  /** GET /api/secure/medications/reconciled (yourphr#580). */
+  medications?: (repo: SqliteFhirRepository) => Promise<unknown>;
+  /** Admin surface (yourphr#582): gate decides who counts as the operator. */
+  admin?: {
+    isAdmin: (username: string) => boolean;
+    configSnapshot: () => unknown;
+    catalogList: () => unknown;
+    backupNow: () => unknown;
+    createUser: (username: string, password: string) => void;
+  };
+}
+
 export interface ServerOptions {
   /** The pinned single-user repository — used only when `auth` is absent (the read-only harnesses). */
   repo: SqliteFhirRepository;
@@ -43,6 +60,8 @@ export interface ServerOptions {
    * existing contract harnesses, which test reads, not auth.
    */
   auth?: ServerAuth;
+  /** The assembled modules (yourphr#582). Absent keeps the bare read server. */
+  modules?: ServerModules;
 }
 
 /**
@@ -165,6 +184,7 @@ export function createYourPhrServer(options: ServerOptions) {
       // served by THAT user's repository. 401 for no token, a tampered token, an expired one, or a
       // token whose generation the account has moved past (a password change ends it mid-flight).
       let repo = options.repo;
+      let sessionUser = '';
       if (auth && url.pathname.startsWith('/api/secure/')) {
         const header = req.headers['authorization'] ?? '';
         const token = typeof header === 'string' && header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
@@ -177,6 +197,61 @@ export function createYourPhrServer(options: ServerOptions) {
           res.setHeader('X-Renewed-Token', session.renewed);
         }
         repo = auth.repoForUser(session.username);
+        sessionUser = session.username;
+      }
+
+      // --- the assembled modules (yourphr#582) ---
+      const modules = options.modules;
+      if (modules?.ips && url.pathname === '/api/secure/summary/ips' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await modules.ips(repo)});
+        return;
+      }
+      const provMatch = url.pathname.match(/^\/api\/secure\/resource\/provenance\/([^/]+)\/([^/]+)$/);
+      if (modules?.provenanceFor && provMatch && req.method === 'GET') {
+        const p = modules.provenanceFor(repo, provMatch[1]!, provMatch[2]!);
+        if (!p) {
+          send(res, 404, {success: false, error: 'not found'});
+          return;
+        }
+        send(res, 200, {success: true, data: p});
+        return;
+      }
+      if (modules?.medications && url.pathname === '/api/secure/medications/reconciled' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await modules.medications(repo)});
+        return;
+      }
+      if (modules?.admin && url.pathname.startsWith('/api/secure/admin/')) {
+        // Operator-only. The gate is a role check, not a route secret: a non-admin gets 403 with
+        // no detail about what lives here.
+        if (!modules.admin.isAdmin(sessionUser)) {
+          send(res, 403, {success: false, error: 'admin role required'});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/config' && req.method === 'GET') {
+          send(res, 200, {success: true, data: modules.admin.configSnapshot()});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/catalog' && req.method === 'GET') {
+          send(res, 200, {success: true, data: modules.admin.catalogList()});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/backup' && req.method === 'POST') {
+          send(res, 200, {success: true, data: modules.admin.backupNow()});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/users' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          const username = typeof body?.['username'] === 'string' ? (body['username'] as string) : '';
+          const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
+          try {
+            modules.admin.createUser(username, password);
+          } catch (err) {
+            send(res, 400, {success: false, error: (err as Error).message});
+            return;
+          }
+          send(res, 200, {success: true});
+          return;
+        }
       }
 
       // GET /api/secure/resource/fhir?sourceResourceType=Condition
