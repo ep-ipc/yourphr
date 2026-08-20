@@ -29,7 +29,8 @@
     "check:boundary": "bash scripts/check-http-boundary.sh",
     "auth": "tsx scripts/auth-tests.ts",
     "config": "tsx scripts/config-tests.ts",
-    "backup": "tsx scripts/backup-tests.ts"
+    "backup": "tsx scripts/backup-tests.ts",
+    "worker": "tsx scripts/worker-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

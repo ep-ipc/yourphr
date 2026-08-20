@@ -66,3 +66,6 @@ jobs:
 
       - name: Encrypted backup (ciphertext, roundtrip, refusals)
         run: npm run backup
+
+      - name: Provider catalog + sync worker (secrets, seeding, refresh, isolation)
+        run: npm run worker
