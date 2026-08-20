@@ -33,7 +33,8 @@
     "worker": "tsx scripts/worker-tests.ts",
     "migrations": "tsx scripts/migration-tests.ts",
     "ips": "tsx scripts/ips-tests.ts",
-    "classify": "tsx scripts/classify-tests.ts"
+    "classify": "tsx scripts/classify-tests.ts",
+    "provenance": "tsx scripts/provenance-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

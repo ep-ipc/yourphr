@@ -75,3 +75,6 @@ jobs:
 
       - name: IPS composition + narratives (required sections, legibility, determinism)
         run: npm run ips
+
+      - name: Provenance (source attribution, re-confirmation, honesty)
+        run: npm run provenance
