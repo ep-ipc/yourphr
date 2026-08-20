@@ -78,3 +78,6 @@ jobs:
 
       - name: Provenance (source attribution, re-confirmation, honesty)
         run: npm run provenance
+
+      - name: Medication reconciliation (dedup, state honesty, conflicts surfaced)
+        run: npm run medication
