@@ -18,6 +18,8 @@
  * rewriting 76.8k lines of Angular.
  */
 import {createServer, IncomingMessage, ServerResponse} from 'node:http';
+import {createReadStream, existsSync, statSync} from 'node:fs';
+import {extname, join, resolve, sep} from 'node:path';
 import type {Resource, ResourceType} from '@medplum/fhirtypes';
 import {SqliteFhirRepository} from './SqliteFhirRepository.js';
 import type {AuthStore} from './auth/index.js';
@@ -62,6 +64,12 @@ export interface ServerOptions {
   auth?: ServerAuth;
   /** The assembled modules (yourphr#582). Absent keeps the bare read server. */
   modules?: ServerModules;
+  /**
+   * Directory holding the BUILT Angular app (yourphr#585). When set, non-/api requests serve
+   * static files with an SPA fallback to index.html — one container replaces one container at
+   * cut-over. API routes always win.
+   */
+  webDir?: string;
 }
 
 /**
@@ -129,6 +137,56 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * so: this exists to answer "can the existing frontend load records from the TypeScript stack",
  * not to be a backend.
  */
+const CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.txt': 'text/plain; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
+};
+
+/**
+ * Serves the built Angular app (yourphr#585). The one security rule that matters: the resolved
+ * path must stay INSIDE webDir — a traversal (%2e%2e, ../) gets 404, not the file. SPA fallback:
+ * an extensionless path is an Angular route and gets index.html; a missing asset (has an
+ * extension) is an honest 404, because serving index.html as main.js breaks the app confusingly.
+ */
+function serveStatic(webDir: string, pathname: string, res: ServerResponse): void {
+  const root = resolve(webDir);
+  const decoded = decodeURIComponent(pathname);
+  const candidate = resolve(join(root, decoded));
+  if (candidate !== root && !candidate.startsWith(root + sep)) {
+    res.writeHead(404, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({success: false, error: 'not found'}));
+    return;
+  }
+
+  let file = candidate;
+  if (!existsSync(file) || statSync(file).isDirectory()) {
+    if (extname(decoded) !== '') {
+      res.writeHead(404, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({success: false, error: 'not found'}));
+      return;
+    }
+    file = join(root, 'index.html'); // the SPA fallback — Angular owns the route
+  }
+
+  const type = CONTENT_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
+  res.writeHead(200, {
+    'Content-Type': type,
+    // index.html must revalidate (it names the hashed bundles); hashed assets may cache hard.
+    'Cache-Control': file.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable',
+  });
+  createReadStream(file).pipe(res);
+}
+
 /** Reads a small JSON body; refuses anything over 64KB — sign-in bodies have no reason to be big. */
 function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | undefined> {
   return new Promise((resolve) => {
@@ -305,6 +363,11 @@ export function createYourPhrServer(options: ServerOptions) {
             patients: [],
           },
         });
+        return;
+      }
+
+      if (options.webDir && !url.pathname.startsWith('/api/')) {
+        serveStatic(options.webDir, url.pathname, res);
         return;
       }
 

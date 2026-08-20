@@ -53,7 +53,7 @@ export interface App {
   close: () => void;
 }
 
-export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number } = {}): App {
+export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string } = {}): App {
   // 1. Config — everything below reads it.
   const config = new ConfigStore(dataDir, undefined, options.env ?? process.env);
   const unknown = config.unknownKeys();
@@ -136,6 +136,7 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
   const server = createYourPhrServer({
     repo: repoForUser('__unused__'), // never serves: auth is wired, every request resolves its own repo
     auth: { store: auth, repoForUser },
+    webDir: options.webDir,
     modules: {
       ips: (repo) => buildIps(repo, new Date()).then((d) => d.bundle),
       provenanceFor: (repo, resourceType, id) =>

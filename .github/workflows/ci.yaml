@@ -90,3 +90,6 @@ jobs:
 
       - name: Source + token migration (Go reader, one-way import, refresh without reconnect)
         run: npm run migrate
+
+      - name: Frontend serving (SPA fallback, traversal containment, API precedence)
+        run: npm run web
