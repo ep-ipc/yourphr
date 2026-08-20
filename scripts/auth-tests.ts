@@ -12,6 +12,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
+import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
+import { createYourPhrServer } from '../src/server.js';
 import {
   AuthStore,
   GENERIC_SIGNIN_ERROR,
@@ -177,6 +179,70 @@ async function main(): Promise<void> {
     check('a token decodes under its own key', decodeToken(key, token)?.u === 'alice');
     check('a token is refused under a different key', decodeToken(randomBytes(32), token) === undefined);
     check('a payload signed with an empty signature is refused', decodeToken(key, token.split('.')[0] + '.') === undefined);
+  }
+
+  // --- the wire (yourphr#541): auth enforced by the HTTP layer, not by configuration ---
+  {
+    const dir = mkdtempSync(join(tmpdir(), 'spike-auth-http-'));
+    const db = new Database(join(dir, 'auth.db'));
+    const store = new AuthStore(db, {
+      sessionKey: randomBytes(32),
+      session: { slidingSeconds: 4, absoluteSeconds: 60 },
+    });
+    store.createUser('alice', PASSWORD);
+    store.createUser('bob', PASSWORD);
+
+    // One shared record db, two per-user repositories — the #537 isolation model.
+    const recordsFile = join(dir, 'records.db');
+    const repos = new Map<string, SqliteFhirRepository>();
+    const repoFor = (u: string) => {
+      let r = repos.get(u);
+      if (!r) { r = new SqliteFhirRepository({ file: recordsFile, userId: u }); repos.set(u, r); }
+      return r;
+    };
+    await repoFor('alice').updateResource({ resourceType: 'Condition', id: 'alice-cond', code: { text: 'alice only' } } as never);
+    await repoFor('bob').updateResource({ resourceType: 'Condition', id: 'bob-cond', code: { text: 'bob only' } } as never);
+
+    const server = createYourPhrServer({ repo: repoFor('alice'), auth: { store, repoForUser: repoFor } });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const port = (server.address() as { port: number }).port;
+    const base = `http://127.0.0.1:${port}`;
+    const LIST = '/api/secure/resource/fhir?sourceResourceType=Condition';
+
+    const noToken = await fetch(base + LIST);
+    check('the wire: no token is 401, not a record list', noToken.status === 401);
+    const garbage = await fetch(base + LIST, { headers: { authorization: 'Bearer not-a-token' } });
+    check('the wire: a garbage token is 401', garbage.status === 401);
+
+    const signIn = async (u: string, p: string) =>
+      fetch(base + '/api/auth/signin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
+
+    const aliceBad = await signIn('alice', 'wrong-but-long-enough');
+    check('the wire: a wrong password is 401 with the generic error', aliceBad.status === 401 && ((await aliceBad.json()) as { error: string }).error === GENERIC_SIGNIN_ERROR);
+
+    const aliceToken = (((await (await signIn('alice', PASSWORD)).json()) as { data: { token: string } }).data).token;
+    const bobToken = (((await (await signIn('bob', PASSWORD)).json()) as { data: { token: string } }).data).token;
+    const authed = (token: string) => ({ headers: { authorization: `Bearer ${token}` } });
+
+    const aliceList = (await (await fetch(base + LIST, authed(aliceToken))).json()) as { data: { source_resource_id: string }[] };
+    const bobList = (await (await fetch(base + LIST, authed(bobToken))).json()) as { data: { source_resource_id: string }[] };
+    check('the wire: each session sees ONLY its own records (isolation enforced by the session)',
+      aliceList.data.length === 1 && aliceList.data[0]?.source_resource_id === 'alice-cond' &&
+      bobList.data.length === 1 && bobList.data[0]?.source_resource_id === 'bob-cond');
+
+    // Past the renewal half of a 4s sliding window, a valid request carries a fresh token.
+    await new Promise((r) => setTimeout(r, 3200));
+    const renewing = await fetch(base + LIST, authed(aliceToken));
+    check('the wire: a use near expiry returns X-Renewed-Token', renewing.status === 200 && !!renewing.headers.get('x-renewed-token'));
+
+    store.changePassword('bob', PASSWORD, 'a-brand-new-long-password');
+    const evicted = await fetch(base + LIST, authed(bobToken));
+    check('the wire: a password change 401s the live session mid-flight', evicted.status === 401);
+
+    server.close();
+    for (const r of repos.values()) r.db.close();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 
   const failed = results.filter((r) => !r.ok);

@@ -20,11 +20,29 @@
 import {createServer, IncomingMessage, ServerResponse} from 'node:http';
 import type {Resource, ResourceType} from '@medplum/fhirtypes';
 import {SqliteFhirRepository} from './SqliteFhirRepository.js';
+import type {AuthStore} from './auth/index.js';
+
+export interface ServerAuth {
+  store: AuthStore;
+  /**
+   * The repository serving a VERIFIED user's requests. This signature is the point of the wiring
+   * (yourphr#541): the user id stops being server configuration and becomes something each request
+   * proves with a session — the isolation #537 demonstrated, enforced on the wire.
+   */
+  repoForUser: (username: string) => SqliteFhirRepository;
+}
 
 export interface ServerOptions {
+  /** The pinned single-user repository — used only when `auth` is absent (the read-only harnesses). */
   repo: SqliteFhirRepository;
   /** Which source every record is attributed to. See the note on sourceId below. */
   sourceId?: string;
+  /**
+   * When present, /api/secure/* requires a Bearer session from POST /api/auth/signin, and each
+   * request is served as its verified user. Absent keeps the legacy pinned-user behavior for the
+   * existing contract harnesses, which test reads, not auth.
+   */
+  auth?: ServerAuth;
 }
 
 /**
@@ -92,13 +110,74 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * so: this exists to answer "can the existing frontend load records from the TypeScript stack",
  * not to be a backend.
  */
+/** Reads a small JSON body; refuses anything over 64KB — sign-in bodies have no reason to be big. */
+function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | undefined> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > 64 * 1024) {
+        req.destroy();
+        resolve(undefined);
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>);
+      } catch {
+        resolve(undefined);
+      }
+    });
+    req.on('error', () => resolve(undefined));
+  });
+}
+
 export function createYourPhrServer(options: ServerOptions) {
-  const {repo} = options;
   const sourceId = options.sourceId ?? 'spike';
+  const auth = options.auth;
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
+
+      // POST /api/auth/signin — the only route that exists without a session. Throttling, the
+      // generic error and the trusted-proxy rule all live in AuthStore; this is just transport.
+      if (auth && url.pathname === '/api/auth/signin' && req.method === 'POST') {
+        const body = await readJsonBody(req);
+        const username = typeof body?.['username'] === 'string' ? (body['username'] as string) : '';
+        const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
+        const result = auth.store.signIn(username, password, {
+          remoteAddr: req.socket.remoteAddress ?? '',
+          xff: typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : undefined,
+        });
+        if (!result.ok) {
+          send(res, 401, {success: false, error: result.error});
+          return;
+        }
+        send(res, 200, {success: true, data: {token: result.token}});
+        return;
+      }
+
+      // The session gate: with auth wired, every /api/secure/* request proves who it is, and is
+      // served by THAT user's repository. 401 for no token, a tampered token, an expired one, or a
+      // token whose generation the account has moved past (a password change ends it mid-flight).
+      let repo = options.repo;
+      if (auth && url.pathname.startsWith('/api/secure/')) {
+        const header = req.headers['authorization'] ?? '';
+        const token = typeof header === 'string' && header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
+        const session = token ? auth.store.verifySession(token) : ({ok: false} as const);
+        if (!session.ok) {
+          send(res, 401, {success: false, error: 'unauthorized'});
+          return;
+        }
+        if (session.renewed) {
+          res.setHeader('X-Renewed-Token', session.renewed);
+        }
+        repo = auth.repoForUser(session.username);
+      }
 
       // GET /api/secure/resource/fhir?sourceResourceType=Condition
       if (url.pathname === '/api/secure/resource/fhir' && req.method === 'GET') {
