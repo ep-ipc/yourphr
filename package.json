@@ -27,7 +27,8 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "check:phi": "bash scripts/check-no-phi.sh --all",
     "check:boundary": "bash scripts/check-http-boundary.sh",
-    "auth": "tsx scripts/auth-tests.ts"
+    "auth": "tsx scripts/auth-tests.ts",
+    "config": "tsx scripts/config-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

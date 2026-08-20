@@ -60,3 +60,6 @@ jobs:
 
       - name: Auth (sessions, revocation, throttling, the wire)
         run: npm run auth
+
+      - name: Configuration system (precedence, overlay, refusals)
+        run: npm run config
