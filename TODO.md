@@ -1,34 +1,20 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-08-17
-
-- Last worked on: __security queue emptied and the kit brought current.__ [#548](https://github.com/jwilleke/yourphr/issues/548) and [#549](https://github.com/jwilleke/yourphr/issues/549) fixed and closed, all three CodeQL alerts dismissed. [#424](https://github.com/jwilleke/yourphr/pull/424) merged, [#491](https://github.com/jwilleke/yourphr/pull/491) closed for [#552](https://github.com/jwilleke/yourphr/issues/552). Kit synced to v1.9.0 ([#558](https://github.com/jwilleke/yourphr/pull/558)) after two attempts were rejected for real defects. Spike gained a cross-source collision guard and a real-server sync.
-- Branch / state: `main`, clean, everything pushed. Spike (`jwilleke/yourphr-ts-spike`, __private__) also clean, pushed, and current with its own v1.9.0 kit sync — all six guards still pass and its `AGENTS.md` section survived.
-- Running / in-flight: __none.__ No dev servers, no background agents, no CI in progress, no open PRs in either repo.
-- Parked / half-done: none.
-- Next steps:
-  - __[#545](https://github.com/jwilleke/yourphr/issues/545) — the visibility half.__ The only P0 anyone can start, and recommended four runs running: encryption defaults on, backup is refused while it is on, so a default install has __no backup at all__ and nothing says so. Surface it in the admin UI and at startup, and fix the `backup.go:39` comment that still claims encryption is off by default.
-  - __Decide [#461](https://github.com/jwilleke/yourphr/issues/461)'s priority.__ It is the fix for [#545](https://github.com/jwilleke/yourphr/issues/545)'s root cause and sits at P2 beneath its own P0 symptom. The mechanism is not an open question: SQLCipher's `ATTACH … KEY` plus `sqlcipher_export()`.
-  - __Decide what [#546](https://github.com/jwilleke/yourphr/issues/546) is for.__ As P0 it cannot be started — it constrains a TypeScript provider layer that does not exist yet.
-  - __Spike [#539](https://github.com/jwilleke/yourphr/issues/539): all five gates cleared (2026-08-18).__ `live-smart.ts` connected the SMART Health IT launcher end to end — real PKCE exchange, real refresh, idempotent resync on the refreshed token. The Phase 2 decision is now yours; Phase 3 ([#541](https://github.com/jwilleke/yourphr/issues/541)) unblocks on it.
-- Blockers / significant notes:
-  - __A markdown landmine is armed.__ `.markdownlint.jsonc` is still tracked and shadows `.markdownlint-cli2.jsonc`, so `MD049`/`MD050` are inert. Removing the retired file — which the kit intends — exposes thousands of `**bold**` violations at once. Verified by moving it aside. `TODO.md` itself is clean under both configs.
-  - __The store has no source dimension.__ It keys on `(type, id, user)` while the Go backend keys on `(source_id, type, id)`. A cross-source id collision is now refused and reported rather than silently overwriting, but the records are not merged — one is rejected. Whether to adopt the Go key is still open and gets more expensive with every FHIR-native assumption built on top.
-  - __Verify against the state that will exist, not the one on disk.__ Three times today a check passed against a configuration that was not the one under test: a lint run with both configs present, a sabotage patch that missed its anchor, an isolation run against an account holding zero records. Each read as a pass.
-  - `mjs-project-template` [#49](https://github.com/jwilleke/mjs-project-template/issues/49) and [#59](https://github.com/jwilleke/mjs-project-template/issues/59) remain open upstream.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
+> __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
 
 ## 🔴 P0 — Security & Critical
 
+- [#575](https://github.com/jwilleke/yourphr/issues/575) — [security] Go toolchain 1.26.1 → 1.26.6 (+ x/image 0.43) — 24 reachable stdlib vulnerabilities
 - [#546](https://github.com/jwilleke/yourphr/issues/546) — [FEATURE] Required vs optional capabilities — a required provider must refuse to boot, not degrade to inert
-- [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
+- [#569](https://github.com/jwilleke/yourphr/pull/569) — chore(deps): bump golang.org/x/mod from 0.38.0 to 0.40.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
+- [#568](https://github.com/jwilleke/yourphr/pull/568) — chore(deps): bump golang.org/x/net from 0.57.0 to 0.58.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
+- [#567](https://github.com/jwilleke/yourphr/pull/567) — chore(deps): bump golang.org/x/oauth2 from 0.27.0 to 0.36.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
+- [#566](https://github.com/jwilleke/yourphr/pull/566) — chore(deps): bump golang.org/x/crypto from 0.54.0 to 0.55.0 *(PR · ready)* — refs [#575](https://github.com/jwilleke/yourphr/issues/575)
 
 ## 🟠 P1
 
-- [#539](https://github.com/jwilleke/yourphr/issues/539) — [SPIKE] Phase 2: SMART sync in TypeScript with SSRF guarding — or stop the transition
+- [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
 - [#538](https://github.com/jwilleke/yourphr/issues/538) — [CHORE] Phase 0: leave Fasten, stay on Go — adopt the stub under our own name
@@ -85,13 +71,6 @@
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
-- [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
-- [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
-- [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
-- [#336](https://github.com/jwilleke/yourphr/issues/336) — [FEATURE] Explore — Send to Email
-- [#335](https://github.com/jwilleke/yourphr/issues/335) — [FEATURE] Explore — Export to PDF
-- [#334](https://github.com/jwilleke/yourphr/issues/334) — [FEATURE] Explore — Save Report
-- [#333](https://github.com/jwilleke/yourphr/issues/333) — [EPIC] Explore — record export options (Save Report, PDF, Email)
 - [#314](https://github.com/jwilleke/yourphr/issues/314) — [FEATURE] Wearable Device Integration for Vitals, Activity & PGHD
 - [#307](https://github.com/jwilleke/yourphr/issues/307) — [FEATURE] Manual records — frontend: entry/edit/delete forms
 - [#305](https://github.com/jwilleke/yourphr/issues/305) — [FEATURE] Manual records — backend: store/edit/delete user-created records (FHIR-consistent)
@@ -110,12 +89,14 @@
 
 ## 🔵 In review
 
-*None.*
+- [#563](https://github.com/jwilleke/yourphr/issues/563) — [FEATURE] Patient-visible access log — a complete record of who accessed which records, shown to the patient
+- [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
+- [#539](https://github.com/jwilleke/yourphr/issues/539) — [SPIKE] Phase 2: SMART sync in TypeScript with SSRF guarding — or stop the transition
 
 ## ⏸ Deferred
 
-- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
+- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
@@ -124,4 +105,11 @@
 
 ## ❓ Needs triage
 
-*None.*
+- [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
+- [#574](https://github.com/jwilleke/yourphr/pull/574) — chore(deps): bump chromatic from 18.1.0 to 18.2.0 in /frontend *(PR · ready)* — no linked issue
+- [#573](https://github.com/jwilleke/yourphr/pull/573) — chore(deps): bump @angular/compiler from 20.3.27 to 20.3.28 in /frontend *(PR · ready)* — no linked issue
+- [#572](https://github.com/jwilleke/yourphr/pull/572) — chore(deps): bump ts-node from 8.3.0 to 9.1.1 in /frontend *(PR · ready)* — no linked issue
+- [#571](https://github.com/jwilleke/yourphr/pull/571) — chore(deps): bump @compodoc/compodoc from 1.2.1 to 2.0.0 in /frontend *(PR · ready)* — no linked issue
+- [#570](https://github.com/jwilleke/yourphr/pull/570) — chore(deps): bump @fortawesome/angular-fontawesome from 2.0.1 to 3.0.0 in /frontend *(PR · ready)* — no linked issue
+- [#565](https://github.com/jwilleke/yourphr/pull/565) — chore(deps): bump github.com/sirupsen/logrus from 1.9.4 to 1.10.0 *(PR · ready)* — no linked issue
+- [#564](https://github.com/jwilleke/yourphr/pull/564) — chore(ci): bump actions/checkout from 4 to 7 *(PR · ready)* — no linked issue
