@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.2](https://github.com/jwilleke/yourphr/compare/v2.10.1...v2.10.2) (2026-08-20)
+
+Security patch — no features, no behavior changes.
+
+### Bug Fixes
+
+- __security: the Go runtime and its extended libraries are patched__ ([#575](https://github.com/jwilleke/yourphr/issues/575)). The backend was built on a Go toolchain carrying 24 published vulnerabilities its code actually reaches — including the HTTP server and TLS stack this app fronts the internet with. Toolchain moved to go1.26.6, `golang.org/x/image` and `golang.org/x/net` updated, and `golang.org/x/crypto`, `x/oauth2`, `x/mod` merged from dependency PRs. `govulncheck` now reports __zero__ vulnerabilities affecting the code.
+
 ## [2.10.1](https://github.com/jwilleke/yourphr/compare/v2.10.0...v2.10.1) (2026-08-20)
 
 An instance that cannot make backups now says so, everywhere an operator could learn it.
