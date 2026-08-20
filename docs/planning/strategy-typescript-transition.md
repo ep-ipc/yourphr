@@ -74,6 +74,8 @@ __Phase 1 — the read stack in TypeScript, shadowing.__ Already built. Keep it 
 
 __Phase 2 — sync, or stop. Due 2026-09-30__ ([#539](https://github.com/jwilleke/yourphr/issues/539), milestone *Phase 2 decision — TypeScript sync*). The decisive phase, attempted *before* anything is migrated for real, so that failing is cheap.
 
+> __OUTCOME (2026-08-20): DEMONSTRATED — the transition proceeds.__ All five gates cleared 2026-08-18, 43 days ahead of the stop date: SSRF tests that fail when the guard is removed (47 checks, sabotage-verified), a real PKCE S256 exchange and a real refresh grant against the SMART Health IT sandbox's authorization server, records fetched and stored with the differential harness agreeing (re-verified against 20,061 real records; 29/29 resource types match the Go stack exactly), and a resync on the refreshed token creating nothing new. Operator decision recorded on [#539](https://github.com/jwilleke/yourphr/issues/539): __proceed to Phase 3__. The real cut-over commitment remains Phase 5.
+
 The gate is a __sandbox__ provider, not production — [#408](https://github.com/jwilleke/yourphr/issues/408) has been open since July trying to prove a *production* provider end-to-end in Go, and holding TypeScript to a bar the working stack has not cleared would make this fail for the wrong reasons. Six sandboxes are already seeded.
 
 __Mid-point signal, 2026-09-05:__ the SSRF dispatcher should exist in some form. It is the piece with no library behind it; if it has not started by three weeks in, the end date is already lost, and week 3 is a better time to learn that than week 6.
