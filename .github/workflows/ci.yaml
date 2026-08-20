@@ -69,3 +69,6 @@ jobs:
 
       - name: Provider catalog + sync worker (secrets, seeding, refresh, isolation)
         run: npm run worker
+
+      - name: Migrations (run-once, rollback, downgrade protection)
+        run: npm run migrations
