@@ -73,7 +73,7 @@ function checkUrls(write: CatalogWrite): void {
 }
 
 export class ProviderCatalog {
-  constructor(private readonly db: Database.Database) {
+  constructor(private readonly db: InstanceType<typeof Database>) {
     db.exec(`CREATE TABLE IF NOT EXISTS provider_catalog (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       display TEXT NOT NULL UNIQUE,

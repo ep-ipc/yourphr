@@ -50,7 +50,7 @@ export interface JobSummary {
 const REFRESH_MARGIN_SECONDS = 10 * 60;
 
 export class SourceStore {
-  constructor(private readonly db: Database.Database) {
+  constructor(private readonly db: InstanceType<typeof Database>) {
     db.exec(`CREATE TABLE IF NOT EXISTS connected_sources (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL,
