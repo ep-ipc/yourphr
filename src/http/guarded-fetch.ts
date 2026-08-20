@@ -26,6 +26,8 @@ export interface GuardedFetchOptions {
   method?: 'GET' | 'POST';
   /** Sent form-encoded. Used by the OAuth token endpoint, which is why this exists at all. */
   form?: Record<string, string>;
+  /** Sent as application/json. Used by RFC 7591 dynamic client registration (yourphr#581). */
+  json?: unknown;
 }
 
 export interface GuardedResponse {
@@ -61,7 +63,12 @@ export async function guardedFetch(target: string, options: GuardedFetchOptions 
     const secure = url.protocol === 'https:';
     const send = secure ? httpsRequest : httpRequest;
     const method = options.method ?? 'GET';
-    const requestBody = options.form ? new URLSearchParams(options.form).toString() : undefined;
+    const requestBody = options.form
+      ? new URLSearchParams(options.form).toString()
+      : options.json !== undefined
+        ? JSON.stringify(options.json)
+        : undefined;
+    const requestContentType = options.form ? 'application/x-www-form-urlencoded' : 'application/json';
 
     const response = await new Promise<IncomingMessage>((resolve, reject) => {
       const req = send(
@@ -74,7 +81,7 @@ export async function guardedFetch(target: string, options: GuardedFetchOptions 
             ...(requestBody === undefined
               ? {}
               : {
-                  'content-type': 'application/x-www-form-urlencoded',
+                  'content-type': requestContentType,
                   'content-length': String(Buffer.byteLength(requestBody)),
                 }),
             ...options.headers,

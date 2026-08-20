@@ -35,7 +35,8 @@
     "ips": "tsx scripts/ips-tests.ts",
     "classify": "tsx scripts/classify-tests.ts",
     "provenance": "tsx scripts/provenance-tests.ts",
-    "medication": "tsx scripts/medication-tests.ts"
+    "medication": "tsx scripts/medication-tests.ts",
+    "dcr": "tsx scripts/dcr-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",
