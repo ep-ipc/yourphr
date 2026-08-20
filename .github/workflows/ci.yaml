@@ -63,3 +63,6 @@ jobs:
 
       - name: Configuration system (precedence, overlay, refusals)
         run: npm run config
+
+      - name: Encrypted backup (ciphertext, roundtrip, refusals)
+        run: npm run backup

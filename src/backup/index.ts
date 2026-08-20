@@ -1,0 +1,172 @@
+/**
+ * Encrypted database backup — the TypeScript-first build that retires yourphr#461 without touching
+ * the frozen Go stack. The Go product refuses backup while at-rest encryption is on (#367), because
+ * its VACUUM INTO would write a PLAINTEXT snapshot of an encrypted database; #545 made that refusal
+ * loud. This module is the lift: the backup itself is ciphertext, so the exclusion has nothing left
+ * to protect.
+ *
+ * The design point the strategy doc called out: the DATABASE PROVIDER owns the connection and is
+ * the only component holding the key, so it is the only component that can export correctly. The
+ * mechanism: ATTACH an empty database under the BACKUP key and copy schema + rows into it inside
+ * one transaction, then DETACH. (SQLCipher's sqlcipher_export() is exactly this loop; the
+ * SQLite3MultipleCiphers build this repo uses does not ship that convenience function, so the loop
+ * is written out — same pages, same guarantee.) The copy is transactional (consistent against live
+ * writes) and encrypted from its first byte — there is no plaintext intermediate on disk at any
+ * moment.
+ *
+ * Decisions, with reasons:
+ *   - A backup key is REQUIRED, always — even for a plaintext source database. A backup is the file
+ *     that leaves the machine (NAS, cloud, a USB stick in a drawer), which makes it the copy most
+ *     likely to be lost; "the database is plaintext so the backup may as well be" gets the risk
+ *     exactly backwards.
+ *   - The backup key is its own secret (backup.encryption.key), not the database key: the file that
+ *     travels and the file that stays should not fall to the same compromise. Same key is allowed,
+ *     just never assumed.
+ *   - No gzip, deliberately (the Go filename convention carries .gz): ciphertext does not compress,
+ *     and a backup that DID compress would be evidence of plaintext where none belongs. Size parity
+ *     with the database is the expected, checkable shape.
+ *   - Restore STAGES: the backup is opened under its key, integrity-checked, exported to a fresh
+ *     file under the TARGET key, and the caller swaps files. Never on top of a live database.
+ */
+import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import Database from 'better-sqlite3-multiple-ciphers';
+import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
+
+const SUFFIX = '-yourphr-spike-backup.db';
+
+/**
+ * Copies every table, index, trigger and view from the main database into the attached schema,
+ * inside one transaction — a consistent snapshot even against concurrent writers, because SQLite
+ * gives the transaction a stable read view. This is sqlcipher_export()'s documented behavior,
+ * spelled out.
+ */
+function exportInto(db: InstanceType<typeof Database>, schema: string): void {
+  const objects = db
+    .prepare(
+      "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END"
+    )
+    .all() as { type: string; name: string; sql: string }[];
+
+  db.exec('BEGIN');
+  try {
+    for (const object of objects) {
+      // Re-point the DDL at the attached schema. CREATE TABLE x -> CREATE TABLE "schema".x is the
+      // one rewrite sqlcipher_export performs; sqlite_master SQL never carries a schema prefix.
+      const ddl = object.sql.replace(
+        /^(CREATE (?:TABLE|INDEX|UNIQUE INDEX|TRIGGER|VIEW|VIRTUAL TABLE))\s+(?:IF NOT EXISTS\s+)?("[^"]+"|\[[^\]]+\]|\S+)/i,
+        (_m, head: string, name: string) => `${head} ${schema}.${name}`
+      );
+      db.exec(ddl);
+      if (object.type === 'table') {
+        db.exec(`INSERT INTO ${schema}."${object.name}" SELECT * FROM main."${object.name}"`);
+      }
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** SQLCipher key pragma escaping, matching SqliteFhirRepository. */
+function quoteKey(key: string): string {
+  return `'${key.replace(/'/g, "''")}'`;
+}
+
+export function backupFileName(now: Date): string {
+  return now.toISOString().replace(/\.\d{3}Z$/, 'Z').replace(/:/g, '-') + SUFFIX;
+}
+
+export interface BackupResult {
+  file: string;
+  sizeBytes: number;
+  pruned: string[];
+}
+
+/**
+ * Writes an encrypted, consistent backup of the repository's live database into `destination`,
+ * then prunes beyond `maxBackups` (oldest first; the date-first names sort chronologically).
+ */
+export function backupDatabase(
+  repo: SqliteFhirRepository,
+  options: { destination: string; backupKey: string; maxBackups?: number; now?: Date }
+): BackupResult {
+  const backupKey = options.backupKey.trim();
+  if (backupKey === '') {
+    throw new Error('a backup key is required — backups are always encrypted (see backup.encryption.key)');
+  }
+  mkdirSync(options.destination, { recursive: true });
+  const file = join(options.destination, backupFileName(options.now ?? new Date()));
+
+  // ATTACH cannot bind the KEY clause, so the key is escaped inline exactly as the repository
+  // escapes its own key pragma. The filename IS bindable and stays bound.
+  repo.db.prepare(`ATTACH DATABASE ? AS backup KEY ${quoteKey(backupKey)}`).run(file);
+  try {
+    exportInto(repo.db, 'backup');
+  } finally {
+    repo.db.prepare('DETACH DATABASE backup').run();
+  }
+
+  const pruned: string[] = [];
+  const max = options.maxBackups ?? 0;
+  if (max > 0) {
+    const backups = listBackups(options.destination);
+    for (const old of backups.slice(max)) {
+      unlinkSync(join(options.destination, old.name));
+      pruned.push(old.name);
+    }
+  }
+  return { file, sizeBytes: statSync(file).size, pruned };
+}
+
+/** Backups in `dir`, newest first (the date-first names make name order time order). */
+export function listBackups(dir: string): { name: string; sizeBytes: number }[] {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(SUFFIX))
+    .sort()
+    .reverse()
+    .map((name) => ({ name, sizeBytes: statSync(join(dir, name)).size }));
+}
+
+export interface RestoreResult {
+  stagedFile: string;
+  tables: number;
+}
+
+/**
+ * Stages a restore: opens the backup under its key, integrity-checks it, and exports it to
+ * `stagedFile` under `targetKey` (empty = plaintext target, for an unencrypted deployment).
+ * The caller swaps the staged file into place — never on top of a live database.
+ */
+export function stageRestore(
+  backupFile: string,
+  backupKey: string,
+  stagedFile: string,
+  targetKey: string
+): RestoreResult {
+  const db = new Database(backupFile, { readonly: false });
+  try {
+    db.pragma("cipher='sqlcipher'");
+    db.pragma(`key=${quoteKey(backupKey)}`);
+    let integrity: string;
+    try {
+      integrity = (db.pragma('integrity_check') as { integrity_check: string }[])[0]?.integrity_check ?? 'failed';
+    } catch (err) {
+      throw new Error(`backup cannot be read — wrong key, or not a backup: ${(err as Error).message}`);
+    }
+    if (integrity !== 'ok') {
+      throw new Error(`backup failed its integrity check: ${integrity}`);
+    }
+    db.prepare(`ATTACH DATABASE ? AS staged KEY ${quoteKey(targetKey)}`).run(stagedFile);
+    try {
+      exportInto(db, 'staged');
+    } finally {
+      db.prepare('DETACH DATABASE staged').run();
+    }
+    const tables = (db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'").get() as { n: number }).n;
+    return { stagedFile, tables };
+  } finally {
+    db.close();
+  }
+}

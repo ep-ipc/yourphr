@@ -53,6 +53,9 @@ export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
   'auth.password.min-length': { default: 12, description: 'Server-enforced password minimum (yourphr#506).' },
   'auth.trusted-proxies': { default: [] as string[], description: 'Direct peers whose X-Forwarded-For is believed (yourphr#529). Empty = believe nobody.' },
   'sync.max-pages': { default: 500, description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
+  'backup.destination': { default: '', description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
+  'backup.max-backups': { default: 7, description: 'Retention: newest N backups are kept; 0 disables pruning.' },
+  'backup.encryption.key': { default: '', bootstrap: true, secret: true, description: 'Backups are ALWAYS encrypted under this key — its own secret, not the database key, because the copy that travels and the copy that stays should not fall together. Bootstrap: env only.' },
 };
 
 const ENV_PREFIX = 'SPIKE_';
