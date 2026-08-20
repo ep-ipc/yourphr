@@ -37,7 +37,8 @@
     "provenance": "tsx scripts/provenance-tests.ts",
     "medication": "tsx scripts/medication-tests.ts",
     "dcr": "tsx scripts/dcr-tests.ts",
-    "app": "tsx scripts/app-tests.ts"
+    "app": "tsx scripts/app-tests.ts",
+    "migrate": "tsx scripts/migrate-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

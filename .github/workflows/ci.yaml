@@ -87,3 +87,6 @@ jobs:
 
       - name: The assembly (boot -> sign-in -> record read, every module engaged)
         run: npm run app
+
+      - name: Source + token migration (Go reader, one-way import, refresh without reconnect)
+        run: npm run migrate

@@ -108,6 +108,11 @@ export class SourceStore {
     }));
   }
 
+  /** Persists a discovered token endpoint (migrated sources arrive without one — yourphr#584). */
+  updateTokenUrl(id: number, tokenUrl: string): void {
+    this.db.prepare('UPDATE connected_sources SET token_url = ? WHERE id = ?').run(tokenUrl, id);
+  }
+
   updateTokens(id: number, accessToken: string, refreshToken: string, expiresAt: number): void {
     this.db
       .prepare('UPDATE connected_sources SET access_token = ?, refresh_token = ?, expires_at = ? WHERE id = ?')
@@ -185,7 +190,15 @@ export async function runSyncPass(deps: WorkerDeps, now = Math.floor(Date.now() 
             scopes: [],
             allowInternal: deps.allowInternal,
           });
-          const endpoints: Endpoints = { authorization: 'unused-for-refresh', token: source.tokenUrl };
+          // A migrated source arrives without a token endpoint (Go re-discovered every time,
+          // yourphr#584). Discover once, through the guarded client, and persist — after this the
+          // source is indistinguishable from a natively connected one.
+          let tokenUrl = source.tokenUrl;
+          if (tokenUrl === '') {
+            tokenUrl = (await client.discover()).token;
+            deps.store.updateTokenUrl(source.id, tokenUrl);
+          }
+          const endpoints: Endpoints = { authorization: 'unused-for-refresh', token: tokenUrl };
           const token = await client.refresh(endpoints, source.refreshToken);
           accessToken = token.accessToken;
           deps.store.updateTokens(
