@@ -224,8 +224,8 @@ async function main(): Promise<void> {
     const aliceBad = await signIn('alice', 'wrong-but-long-enough');
     check('the wire: a wrong password is 401 with the generic error', aliceBad.status === 401 && ((await aliceBad.json()) as { error: string }).error === GENERIC_SIGNIN_ERROR);
 
-    const aliceToken = (((await (await signIn('alice', PASSWORD)).json()) as { data: { token: string } }).data).token;
-    const bobToken = (((await (await signIn('bob', PASSWORD)).json()) as { data: { token: string } }).data).token;
+    const aliceToken = ((await (await signIn('alice', PASSWORD)).json()) as { data: string }).data;
+    const bobToken = ((await (await signIn('bob', PASSWORD)).json()) as { data: string }).data;
     const authed = (token: string) => ({ headers: { authorization: `Bearer ${token}` } });
 
     const aliceList = (await (await fetch(base + LIST, authed(aliceToken))).json()) as { data: { source_resource_id: string }[] };

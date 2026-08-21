@@ -48,6 +48,7 @@ export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
   'database.encryption.key': { default: '', bootstrap: true, secret: true, description: 'At-rest cipher key. Bootstrap and secret: env only, never the overlay.' },
   'web.listen.port': { default: 8080, bootstrap: true, description: 'TCP port the process listens on. Bootstrap.' },
   'web.listen.host': { default: '0.0.0.0', bootstrap: true, description: 'Address the process binds. Bootstrap.' },
+  'web.secure-cookies': { default: false, bootstrap: true, description: 'Mark the session cookie Secure. Off behind a TLS-terminating proxy that reaches this process over plain HTTP. Bootstrap.' },
   'web.static-dir': { default: '', bootstrap: true, description: 'Directory holding the built Angular app (index.html at its root). Empty = API only. Bootstrap.' },
   'sync.interval-seconds': { default: 900, description: 'How often the background worker refreshes tokens and syncs connected sources. 0 disables the worker.' },
   'auth.session.sliding-seconds': { default: 3600, description: 'A session use inside this window is valid and renews the window.' },

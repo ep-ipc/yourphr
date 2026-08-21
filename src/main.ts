@@ -54,6 +54,7 @@ const app = assembleApp(dataDir, {
   env,
   webDir: webDir === '' ? undefined : webDir,
   workerIntervalMs: intervalSeconds > 0 ? intervalSeconds * 1000 : undefined,
+  version,
 });
 
 if (app.bootstrapPasswordFile) {

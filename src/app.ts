@@ -121,7 +121,7 @@ export interface App {
   close: () => void;
 }
 
-export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string } = {}): App {
+export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): App {
   const stores = openStores(dataDir, options.env ?? process.env);
   const { config, auth, catalog, sources, repoForUser } = stores;
 
@@ -169,9 +169,13 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
 
   const server = createYourPhrServer({
     repo: repoForUser('__unused__'), // never serves: auth is wired, every request resolves its own repo
-    auth: { store: auth, repoForUser },
+    auth: { store: auth, repoForUser, cookieMaxAgeSeconds: config.getInt('auth.session.absolute-seconds'), secureCookies: config.getBool('web.secure-cookies') },
     webDir: options.webDir,
+    version: options.version,
     modules: {
+      // Only what an anonymous caller may know; the password minimum is published so the UI can say
+      // it before the server refuses (yourphr#506's shape).
+      publicInstance: () => ({ 'password.min_length': config.getInt('auth.password.min-length') }),
       ips: (repo) => buildIps(repo, new Date()).then((d) => d.bundle),
       provenanceFor: (repo, resourceType, id) =>
         provenanceFor({ db: repo.db, userId: repo.userId ?? '', sourceDisplay }, resourceType, id),

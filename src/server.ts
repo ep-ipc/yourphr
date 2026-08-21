@@ -24,8 +24,33 @@ import type {Resource, ResourceType} from '@medplum/fhirtypes';
 import {SqliteFhirRepository} from './SqliteFhirRepository.js';
 import type {AuthStore} from './auth/index.js';
 
+/**
+ * The Go cookie name, on purpose: a browser that moves between the two stacks during the cut-over
+ * (yourphr#588) keeps one session entry, and the Angular app (yourphr#118 Phase 2b) never sees a
+ * token — it relies entirely on this HttpOnly cookie being set on sign-in and read on /api/secure/*.
+ */
+export const SESSION_COOKIE = 'fasten_session';
+
+function sessionCookie(token: string, maxAgeSeconds: number, secure: boolean): string {
+  return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Strict${secure ? '; Secure' : ''}`;
+}
+
+function readCookie(header: string | undefined, name: string): string {
+  if (!header) return '';
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim();
+  }
+  return '';
+}
+
 export interface ServerAuth {
   store: AuthStore;
+  /** Lifetime of the session cookie — the session's absolute cap; default 12h like DefaultSessionPolicy. */
+  cookieMaxAgeSeconds?: number;
+  /** Mark the cookie Secure. False behind a TLS-terminating proxy that talks plain HTTP to us (Go's web.listen.https.enabled posture). */
+  secureCookies?: boolean;
   /**
    * The repository serving a VERIFIED user's requests. This signature is the point of the wiring
    * (yourphr#541): the user id stops being server configuration and becomes something each request
@@ -42,6 +67,8 @@ export interface ServerModules {
   /** GET /api/secure/medications/reconciled (yourphr#580). */
   medications?: (repo: SqliteFhirRepository) => Promise<unknown>;
   /** Admin surface (yourphr#582): gate decides who counts as the operator. */
+  /** What an anonymous caller may know about this instance (GET /api/instance/public). */
+  publicInstance?: () => Record<string, unknown>;
   admin?: {
     isAdmin: (username: string) => boolean;
     configSnapshot: () => unknown;
@@ -70,6 +97,8 @@ export interface ServerOptions {
    * cut-over. API routes always win.
    */
   webDir?: string;
+  /** Reported by GET /api/version — the Angular footer shows it. */
+  version?: string;
 }
 
 /**
@@ -227,6 +256,26 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // The Angular app's boot calls (found by the parity audit, yourphr#591) — Go's shapes exactly.
+      if (url.pathname === '/api/version' && req.method === 'GET') {
+        send(res, 200, {success: true, data: {version: options.version ?? '0.0.0-dev', environment_name: ''}});
+        return;
+      }
+      if (url.pathname === '/api/health' && req.method === 'GET') {
+        send(res, 200, {success: true, data: {first_run_wizard: false, standby_mode: false}});
+        return;
+      }
+      if (url.pathname === '/api/instance/public' && req.method === 'GET') {
+        send(res, 200, {success: true, data: options.modules?.publicInstance?.() ?? {}});
+        return;
+      }
+      // Logout clears the HttpOnly cookie — the one thing JavaScript cannot do itself.
+      if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
+        res.setHeader('Set-Cookie', sessionCookie('', 0, auth?.secureCookies ?? false));
+        send(res, 200, {success: true});
+        return;
+      }
+
       // POST /api/auth/signin — the only route that exists without a session. Throttling, the
       // generic error and the trusted-proxy rule all live in AuthStore; this is just transport.
       if (auth && url.pathname === '/api/auth/signin' && req.method === 'POST') {
@@ -241,7 +290,11 @@ export function createYourPhrServer(options: ServerOptions) {
           send(res, 401, {success: false, error: result.error});
           return;
         }
-        send(res, 200, {success: true, data: {token: result.token}});
+        // The Go envelope, exactly: data IS the token string — the Angular auth service does
+        // setAuthToken(resp.data). Wrapping it in an object signed the user straight back out
+        // (found by the parity audit, yourphr#591).
+        res.setHeader('Set-Cookie', sessionCookie(result.token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
+        send(res, 200, {success: true, data: result.token});
         return;
       }
 
@@ -251,8 +304,10 @@ export function createYourPhrServer(options: ServerOptions) {
       let repo = options.repo;
       let sessionUser = '';
       if (auth && url.pathname.startsWith('/api/secure/')) {
+        // Bearer first (API clients, the harnesses), else the HttpOnly cookie (the browser).
         const header = req.headers['authorization'] ?? '';
-        const token = typeof header === 'string' && header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
+        const bearer = typeof header === 'string' && header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
+        const token = bearer !== '' ? bearer : readCookie(req.headers['cookie'], SESSION_COOKIE);
         const session = token ? auth.store.verifySession(token) : ({ok: false} as const);
         if (!session.ok) {
           send(res, 401, {success: false, error: 'unauthorized'});
@@ -260,9 +315,22 @@ export function createYourPhrServer(options: ServerOptions) {
         }
         if (session.renewed) {
           res.setHeader('X-Renewed-Token', session.renewed);
+          res.setHeader('Set-Cookie', sessionCookie(session.renewed, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
         }
         repo = auth.repoForUser(session.username);
         sessionUser = session.username;
+      }
+
+      // Who am I — the call the Angular app makes on every route to decide it is signed in, and
+      // where it learns the role. Fields the spike does not store (full_name, email, picture) are
+      // empty, not invented; id is the username because that is the spike's account identity.
+      if (auth && url.pathname === '/api/secure/account/me' && req.method === 'GET') {
+        send(res, 200, {success: true, data: {
+          id: sessionUser, username: sessionUser, full_name: '', email: '', picture: '',
+          role: options.modules?.admin?.isAdmin(sessionUser) ? 'admin' : 'user',
+          demo_account: false, last_login: null, login_count: 0,
+        }});
+        return;
       }
 
       // --- the assembled modules (yourphr#582) ---

@@ -65,11 +65,26 @@ async function main(): Promise<void> {
     fetch(`${base}/api/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
 
   const adminSignin = await signIn('admin', adminPassword);
-  const adminToken = ((await adminSignin.json()) as { data: { token: string } }).data.token;
+  const adminToken = ((await adminSignin.json()) as { data: string }).data;
   check('the bootstrap password signs in over the wire', adminSignin.status === 200 && !!adminToken);
   check('and the password file is gone after that first sign-in', !existsSync(app.bootstrapPasswordFile!));
 
   const authed = (token: string) => ({ headers: { authorization: `Bearer ${token}` } });
+
+  // --- the browser contract (yourphr#591 parity audit): the Angular app never holds a token ---
+  const setCookie = adminSignin.headers.get('set-cookie') ?? '';
+  check('sign-in sets the HttpOnly fasten_session cookie the Angular app relies on',
+    setCookie.startsWith('fasten_session=') && /HttpOnly/.test(setCookie) && /SameSite=Strict/.test(setCookie) && /Max-Age=\d+/.test(setCookie));
+  const cookieOnly = await fetch(`${base}/api/secure/account/me`, { headers: { cookie: setCookie.split(';')[0]! } });
+  const me = (await cookieOnly.json()) as { data: { username: string; role: string } };
+  check('the cookie ALONE authenticates /api/secure/account/me, which names the user and the role',
+    cookieOnly.status === 200 && me.data.username === 'admin' && me.data.role === 'admin');
+  const logout = await fetch(`${base}/api/auth/logout`, { method: 'POST' });
+  check('logout clears the cookie (Max-Age=0) — the one thing JavaScript cannot do', /fasten_session=;.*Max-Age=0/.test(logout.headers.get('set-cookie') ?? ''));
+  const boot = await Promise.all(['/api/version', '/api/health', '/api/instance/public'].map((p) => fetch(`${base}${p}`)));
+  const bootBodies = await Promise.all(boot.map((r) => r.json() as Promise<{ success: boolean; data: Record<string, unknown> }>));
+  check('the boot calls answer in the Go shapes: version, health, instance/public',
+    boot.every((r) => r.status === 200) && typeof bootBodies[0]!.data['version'] === 'string' && bootBodies[1]!.data['first_run_wizard'] === false && bootBodies[2]!.data['password.min_length'] === 12);
 
   // Admin creates alice THROUGH THE API (policy enforced server-side).
   const shortPw = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'alice', password: 'short' }) });
@@ -77,7 +92,7 @@ async function main(): Promise<void> {
   const created = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'alice', password: 'a-long-enough-password' }) });
   check('the admin creates a user over the wire', created.status === 200);
 
-  const aliceToken = (((await (await signIn('alice', 'a-long-enough-password')).json()) as { data: { token: string } }).data).token;
+  const aliceToken = ((await (await signIn('alice', 'a-long-enough-password')).json()) as { data: string }).data;
 
   // Connect a source for alice and run the worker once — the sync half of the assembly.
   app.sources.add({
