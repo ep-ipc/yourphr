@@ -4,6 +4,8 @@ A working checklist for the cut-over decided in [strategy-typescript-transition.
 
 Go is frozen (ratified 2026-08-20): patches only for security, data correctness and misrepresentation. Every new capability goes to [yourphr-ts-spike](https://github.com/jwilleke/yourphr-ts-spike).
 
+__The decision (2026-08-21): the TypeScript stack replaces yourPHR once the two are at equal compatibility.__ [#543](https://github.com/jwilleke/yourphr/issues/543) is therefore *cut over*; the only open question is *when*, and *when* is the parity epic [#591](https://github.com/jwilleke/yourphr/issues/591) — parity meaning everything the household and the operator actually use on the live instance, enumerated by a route-by-route audit of the shared Angular app against the spike's HTTP layer, one child issue per gap. A Go feature nobody uses is retired, not ported.
+
 ## Where the ladder stands
 
 | Rung | Issue | State |
@@ -12,9 +14,10 @@ Go is frozen (ratified 2026-08-20): patches only for security, data correctness 
 | Connected sources and their tokens — refresh and sync with no reconnect | [#584](https://github.com/jwilleke/yourphr/issues/584) | closed |
 | Angular frontend served from the spike process | [#585](https://github.com/jwilleke/yourphr/issues/585) | closed |
 | One-command, per-user, verified migration tool | [#586](https://github.com/jwilleke/yourphr/issues/586) | in review — verified against a production copy 2026-08-21: 20,068 records, 53/53 id lists agree |
-| Package and deploy — image, release tagging, Flux entry | [#587](https://github.com/jwilleke/yourphr/issues/587) | open |
+| Package and deploy — image, release tagging, Flux entry | [#587](https://github.com/jwilleke/yourphr/issues/587) | v0.1.0 released; Flux `yourphr-ts` deployed alongside Go (no Ingress); waiting on the ghcr package being made public |
+| Parity — what must work before the swap | [#591](https://github.com/jwilleke/yourphr/issues/591) | open — the gate for [#543](https://github.com/jwilleke/yourphr/issues/543) |
 | Cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed | [#588](https://github.com/jwilleke/yourphr/issues/588) | open |
-| Cut over, keep both, or stop — decided once | [#543](https://github.com/jwilleke/yourphr/issues/543) | open |
+| Cut over, keep both, or stop — decided once | [#543](https://github.com/jwilleke/yourphr/issues/543) | decided: cut over, gated on [#591](https://github.com/jwilleke/yourphr/issues/591) |
 
 ## What the tool migrates
 
@@ -90,6 +93,8 @@ From [#588](https://github.com/jwilleke/yourphr/issues/588); each step has a che
 8. __Stop rule.__ Two stacks serving production for more than one release cycle means pick one ([#543](https://github.com/jwilleke/yourphr/issues/543)).
 
 ## Open decisions
+
+- ~~Cut over, keep both, or stop~~ — decided 2026-08-21: cut over, at parity ([#591](https://github.com/jwilleke/yourphr/issues/591)).
 
 - Encrypt the spike database from day one (bootstrap key before the migration run) — recommended.
 - Operator account after the swap: bootstrap admin vs a role column.
