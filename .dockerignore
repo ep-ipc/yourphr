@@ -1,0 +1,8 @@
+# The image is built from package*.json, tsconfig*.json and src/ only. Everything else is either
+# not shipped (harness scripts, docs, CI) or must never be near a build context (PHI, databases).
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.build.json
+!src/

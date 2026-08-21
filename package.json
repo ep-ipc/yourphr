@@ -1,6 +1,6 @@
 {
   "name": "yourphr-ts-spike",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Throwaway spike: can a TypeScript/Node FHIR store replace YourPHR's Go backend? Evaluated in yourphr docs/planning/typescript-stack-evaluation.md",
@@ -8,6 +8,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
     "export": "tsx scripts/export-resources.ts",
     "smoke": "tsx scripts/smoke.ts",
     "typecheck": "tsc --noEmit",
@@ -41,7 +43,8 @@
     "migrate": "tsx scripts/migrate-tests.ts",
     "web": "tsx scripts/web-tests.ts",
     "migrate:go": "tsx scripts/migrate-from-go.ts",
-    "migrate:tool": "tsx scripts/migrate-tool-tests.ts"
+    "migrate:tool": "tsx scripts/migrate-tool-tests.ts",
+    "process": "tsx scripts/process-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

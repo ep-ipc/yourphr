@@ -220,6 +220,13 @@ export function createYourPhrServer(options: ServerOptions) {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
 
+      // GET /healthz — liveness/readiness for the orchestrator (yourphr#587). No session, no data:
+      // it says the process is up and serving, nothing about who is asking.
+      if (url.pathname === '/healthz' && req.method === 'GET') {
+        send(res, 200, {ok: true});
+        return;
+      }
+
       // POST /api/auth/signin — the only route that exists without a session. Throttling, the
       // generic error and the trusted-proxy rule all live in AuthStore; this is just transport.
       if (auth && url.pathname === '/api/auth/signin' && req.method === 'POST') {

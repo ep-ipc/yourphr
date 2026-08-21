@@ -220,6 +220,42 @@ Ordering, from the evaluation doc: read before write, reversible before irrevers
 2. Shadow read-only against the live API — same queries to both stacks, diff the responses.
 3. Only then writes, and auth last, because auth failures are the ones that pass tests while being wrong.
 
+## Running it as a process — 2026-08-21 ([#587](https://github.com/jwilleke/yourphr/issues/587))
+
+`src/main.ts` is the entrypoint. The environment carries __bootstrap and secrets only__ — everything else is a setting in the config store under the data directory, per [yourphr#472](https://github.com/jwilleke/yourphr/issues/472). Variable names follow `envNameFor()`: `SPIKE_` + the key upper-cased with `.` and `-` as `_`.
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `SPIKE_STORAGE_DATA_DIR` | where everything this instance owns lives — __required__, no default | — |
+| `SPIKE_WEB_STATIC_DIR` | the built Angular app (must hold `index.html`); empty = API only | empty |
+| `SPIKE_WEB_LISTEN_PORT` / `SPIKE_WEB_LISTEN_HOST` | listen address | `8080` / `0.0.0.0` |
+| `SPIKE_DATABASE_ENCRYPTION_KEY` | at-rest key for the database and the tokens in it; a loud warning when unset | unset |
+| `SPIKE_BACKUP_ENCRYPTION_KEY` | backups are always encrypted and refuse without it | unset |
+| `SPIKE_SYNC_INTERVAL_SECONDS` | worker cadence; `0` disables — a setting, not bootstrap, so the screen can change it | `900` |
+
+It refuses to start (exit 78) on a missing or unwritable data directory or a static directory without `index.html`: a misconfigured process that boots inert is the failure [yourphr#546](https://github.com/jwilleke/yourphr/issues/546) names. `GET /healthz` answers 200 with no session for the orchestrator's probes. On first start a bootstrap `admin` account is created and its password written to `<data dir>/.admin_bootstrap_password` (mode 0600) — the log names the file, never the password. `SIGTERM` closes cleanly.
+
+`npm run process` proves all of that on every push (10/10).
+
+### The image
+
+`Dockerfile` does not build the frontend. The Angular app is built once by the product repo's release and ships in `ghcr.io/jwilleke/yourphr`; this image copies the built bundle out of that released image, pinned by the `FRONTEND_IMAGE` build argument (currently `ghcr.io/jwilleke/yourphr:2.10.2`). TypeScript compiles on the build platform and the one native module ships linux x64 and arm64 prebuilds, so the multi-arch build needs no native runners and compiles nothing under QEMU. Runs as `node`, data at `/opt/yourphr/data` (a volume), UI at `/opt/yourphr/web`, port 8080.
+
+```bash
+docker build -t yourphr-ts-spike:local .
+docker run --rm -p 8080:8080 -v spike-data:/opt/yourphr/data -e SPIKE_DATABASE_ENCRYPTION_KEY=... yourphr-ts-spike:local
+```
+
+### Releasing
+
+Same contract as the product ([deployment-contract.md](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/deployment-contract.md)): a __direct annotated tag__ `vX.Y.Z` on `main` is the only thing that builds an image. `.github/workflows/docker-release.yaml` publishes `ghcr.io/jwilleke/yourphr-ts-spike:X.Y.Z` (+ `:X.Y`, `:latest`) for `linux/amd64` and `linux/arm64`; pushes to `main` are CI-tested and build nothing. Flux's `ImagePolicy` in `mj-infra-flux` follows semver tags only.
+
+```bash
+# bump "version" in package.json, commit chore(release): vX.Y.Z, then
+git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin main --tags
+gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
+```
+
 ## Dependencies
 
 | Package | Version | Why |

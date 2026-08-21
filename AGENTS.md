@@ -89,6 +89,8 @@ __All outbound network access goes through `src/http`.__ That is where the SSRF 
 | Command | What it does | Needs real records |
 |---|---|---|
 | `npm run typecheck` | types | no |
+| `npm run build` / `npm start` | emit `dist/` with `tsc`, run the process (`src/main.ts`; bootstrap from `SPIKE_*` env, see README) | no |
+| `npm run process` | the process harness: boot, `/healthz`, static, refusals, clean shutdown | no |
 | `npm run ssrf` | SSRF guard suite, 47 checks | no |
 | `npm run check:boundary` | network access confined to `src/http` | no |
 | `npm run check:phi` | no patient data in tracked files | no |

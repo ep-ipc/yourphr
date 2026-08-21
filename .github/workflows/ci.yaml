@@ -26,6 +26,10 @@ jobs:
       - name: Types
         run: npm run typecheck
 
+      # What the image ships (yourphr#587): tsc must EMIT, not just check.
+      - name: Build (dist/ is what the image runs)
+        run: npm run build
+
       # The guard is worth exactly as much as this boundary: anything that can import node:https or
       # call fetch() directly walks around it. See docs/planning/architecture-principles-typescript.md.
       - name: Network access confined to src/http
@@ -96,3 +100,6 @@ jobs:
 
       - name: One-command migration (users, catalog, sources, records, config; verification gate with teeth)
         run: npm run migrate:tool
+
+      - name: The process (boot from environment, /healthz, static, refusals, clean shutdown)
+        run: npm run process
