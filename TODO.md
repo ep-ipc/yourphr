@@ -1,21 +1,5 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-08-20
-
-- Last worked on: __the biggest single day of the transition.__ Phase 2 decided PROCEED on [#539](https://github.com/jwilleke/yourphr/issues/539) and the Go freeze RATIFIED (patches only; capability goes to the spike). Phase 3 finished ([#541](https://github.com/jwilleke/yourphr/issues/541)). Phase 4's six decomposed issues ALL built ([#577](https://github.com/jwilleke/yourphr/issues/577)–[#582](https://github.com/jwilleke/yourphr/issues/582)). Phase-5 ladder filed ([#583](https://github.com/jwilleke/yourphr/issues/583)–[#588](https://github.com/jwilleke/yourphr/issues/588)) and three rungs climbed: users (bcrypt verify-then-rehash), sources+tokens (refresh with no reconnect), frontend serving (raw-socket traversal teeth). Also: #575 (24 reachable Go vulns) found by /pstatus and fixed same hour; v2.10.1 + v2.10.2 released and deployed; #545 shipped.
-- Branch / state: `main` clean + pushed, both repos. Spike CI re-running on `b05adb0` (a timing-flaky auth check widened — was red on the #585 push, fix pushed at wrap).
-- Running / in-flight: spike CI on `b05adb0` (verify green next session if not confirmed); session-scoped kit-PR monitor dies with the session (standing rule in memory covers future kit PRs).
-- Parked / half-done: none.
-- Next steps:
-  - Verify spike CI green on `b05adb0` (was the flaky renewal-window check)
-  - [#586](https://github.com/jwilleke/yourphr/issues/586) — one-command migration tool (both import halves ready) — then [#587](https://github.com/jwilleke/yourphr/issues/587) packaging, [#588](https://github.com/jwilleke/yourphr/issues/588) runbook
-  - 14 in-review issues await close calls ([#539](https://github.com/jwilleke/yourphr/issues/539), [#540](https://github.com/jwilleke/yourphr/issues/540), [#541](https://github.com/jwilleke/yourphr/issues/541), [#545](https://github.com/jwilleke/yourphr/issues/545), [#563](https://github.com/jwilleke/yourphr/issues/563), [#575](https://github.com/jwilleke/yourphr/issues/575), [#577](https://github.com/jwilleke/yourphr/issues/577)–[#585](https://github.com/jwilleke/yourphr/issues/585))
-  - Untriaged: [#561](https://github.com/jwilleke/yourphr/issues/561) + 7 Dependabot PRs; [#576](https://github.com/jwilleke/yourphr/issues/576) yarn highs (P1)
-  - Epic production distribution live (518 orgs, auto-sweep ~48h from 2026-08-19) — name your health system to finish [#408](https://github.com/jwilleke/yourphr/issues/408)
-- Blockers / significant notes: tracking rule — ALL working items live in THIS repo's TODO.md + private/project_log.md. Admin-in-spike = bootstrap account (named simplification). Go tokens are plain column values in an unencrypted prod DB — quiet argument for the cut-over.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
 > __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
 
@@ -25,14 +9,11 @@
 
 ## 🟠 P1
 
+- [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
+- [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
 - [#587](https://github.com/jwilleke/yourphr/issues/587) — [SPIKE] Phase 5: package and deploy the spike — image, release tagging, Flux entry
-- [#586](https://github.com/jwilleke/yourphr/issues/586) — [SPIKE] Phase 5: one-command, per-user, verified migration tool
-- [#585](https://github.com/jwilleke/yourphr/issues/585) — [SPIKE] Phase 5: serve the Angular frontend from the spike process
-- [#584](https://github.com/jwilleke/yourphr/issues/584) — [SPIKE] Phase 5: migrate connected sources and their tokens
-- [#583](https://github.com/jwilleke/yourphr/issues/583) — [SPIKE] Phase 5: migrate user accounts — bcrypt verify-then-rehash, nobody resets a password
-- [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
 - [#538](https://github.com/jwilleke/yourphr/issues/538) — [CHORE] Phase 0: leave Fasten, stay on Go — adopt the stub under our own name
 - [#537](https://github.com/jwilleke/yourphr/issues/537) — [SPIKE] TypeScript stack: prove auth, the HTTP layer and sync, or stop
@@ -47,6 +28,7 @@
 
 ## 🟡 P2
 
+- [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] yarn build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
@@ -86,6 +68,13 @@
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
+- [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
+- [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
+- [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
+- [#336](https://github.com/jwilleke/yourphr/issues/336) — [FEATURE] Explore — Send to Email
+- [#335](https://github.com/jwilleke/yourphr/issues/335) — [FEATURE] Explore — Export to PDF
+- [#334](https://github.com/jwilleke/yourphr/issues/334) — [FEATURE] Explore — Save Report
+- [#333](https://github.com/jwilleke/yourphr/issues/333) — [EPIC] Explore — record export options (Save Report, PDF, Email)
 - [#314](https://github.com/jwilleke/yourphr/issues/314) — [FEATURE] Wearable Device Integration for Vitals, Activity & PGHD
 - [#307](https://github.com/jwilleke/yourphr/issues/307) — [FEATURE] Manual records — frontend: entry/edit/delete forms
 - [#305](https://github.com/jwilleke/yourphr/issues/305) — [FEATURE] Manual records — backend: store/edit/delete user-created records (FHIR-consistent)
@@ -104,23 +93,12 @@
 
 ## 🔵 In review
 
-- [#582](https://github.com/jwilleke/yourphr/issues/582) — [SPIKE] One HTTP layer over all spike modules
-- [#581](https://github.com/jwilleke/yourphr/issues/581) — [SPIKE] Dynamic Client Registration in the TypeScript stack
-- [#580](https://github.com/jwilleke/yourphr/issues/580) — [SPIKE] Medication reconciliation in the TypeScript stack
-- [#579](https://github.com/jwilleke/yourphr/issues/579) — [SPIKE] Provenance in the TypeScript stack — which source said what, when
-- [#578](https://github.com/jwilleke/yourphr/issues/578) — [SPIKE] Patient-legible classifier in the TypeScript stack
-- [#577](https://github.com/jwilleke/yourphr/issues/577) — [SPIKE] IPS composition and narratives in the TypeScript stack — PDF stays a frontend concern
-- [#575](https://github.com/jwilleke/yourphr/issues/575) — [security] Go toolchain 1.26.1 → 1.26.6 (+ x/image 0.43) — 24 reachable stdlib vulnerabilities
-- [#541](https://github.com/jwilleke/yourphr/issues/541) — [SPIKE] Phase 3: authentication and sessions in the TypeScript stack
-- [#540](https://github.com/jwilleke/yourphr/issues/540) — [CHORE] Phase 1: keep the TypeScript read stack honest in CI
-- [#563](https://github.com/jwilleke/yourphr/issues/563) — [FEATURE] Patient-visible access log — a complete record of who accessed which records, shown to the patient
-- [#545](https://github.com/jwilleke/yourphr/issues/545) — [BUG] Default install has no backup path — encryption defaults on, and backup is gated on encryption
-- [#539](https://github.com/jwilleke/yourphr/issues/539) — [SPIKE] Phase 2: SMART sync in TypeScript with SSRF guarding — or stop the transition
+- [#586](https://github.com/jwilleke/yourphr/issues/586) — [SPIKE] Phase 5: one-command, per-user, verified migration tool
 
 ## ⏸ Deferred
 
-- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
+- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
@@ -130,10 +108,3 @@
 ## ❓ Needs triage
 
 - [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
-- [#574](https://github.com/jwilleke/yourphr/pull/574) — chore(deps): bump chromatic from 18.1.0 to 18.2.0 in /frontend *(PR · ready)* — no linked issue
-- [#573](https://github.com/jwilleke/yourphr/pull/573) — chore(deps): bump @angular/compiler from 20.3.27 to 20.3.28 in /frontend *(PR · ready)* — no linked issue
-- [#572](https://github.com/jwilleke/yourphr/pull/572) — chore(deps): bump ts-node from 8.3.0 to 9.1.1 in /frontend *(PR · ready)* — no linked issue
-- [#571](https://github.com/jwilleke/yourphr/pull/571) — chore(deps): bump @compodoc/compodoc from 1.2.1 to 2.0.0 in /frontend *(PR · ready)* — no linked issue
-- [#570](https://github.com/jwilleke/yourphr/pull/570) — chore(deps): bump @fortawesome/angular-fontawesome from 2.0.1 to 3.0.0 in /frontend *(PR · ready)* — no linked issue
-- [#565](https://github.com/jwilleke/yourphr/pull/565) — chore(deps): bump github.com/sirupsen/logrus from 1.9.4 to 1.10.0 *(PR · ready)* — no linked issue
-- [#564](https://github.com/jwilleke/yourphr/pull/564) — chore(ci): bump actions/checkout from 4 to 7 *(PR · ready)* — no linked issue
