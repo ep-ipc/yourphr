@@ -18,10 +18,12 @@ function check(name: string, ok: boolean, detail = ''): void {
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 }
 
-const ENTRY = ['tsx', 'src/main.ts'];
+// node itself, not an npx/npm wrapper: a signal sent to a wrapper is reported as the wrapper dying
+// (exit null) while the real process is orphaned — the CI runner showed exactly that on Linux.
+const ENTRY = ['--import', 'tsx', 'src/main.ts'];
 
 function runOnce(env: Record<string, string>): { status: number | null; stderr: string } {
-  const r = spawnSync('npx', ENTRY, { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 30_000 });
+  const r = spawnSync(process.execPath, ENTRY, { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 30_000 });
   return { status: r.status, stderr: r.stderr };
 }
 
@@ -68,7 +70,7 @@ async function main(): Promise<void> {
 
   // --- the process ---
   const port = 18000 + Math.floor(Math.random() * 1000);
-  const child = spawn('npx', ENTRY, {
+  const child = spawn(process.execPath, ENTRY, {
     env: { ...process.env, [DATA]: dataDir, [WEB]: webDir, [PORT]: String(port), [envNameFor('web.listen.host')]: '127.0.0.1', [envNameFor('sync.interval-seconds')]: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
