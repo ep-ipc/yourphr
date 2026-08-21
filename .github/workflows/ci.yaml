@@ -93,3 +93,6 @@ jobs:
 
       - name: Frontend serving (SPA fallback, traversal containment, API precedence)
         run: npm run web
+
+      - name: One-command migration (users, catalog, sources, records, config; verification gate with teeth)
+        run: npm run migrate:tool

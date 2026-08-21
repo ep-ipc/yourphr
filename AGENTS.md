@@ -94,6 +94,7 @@ __All outbound network access goes through `src/http`.__ That is where the SSRF 
 | `npm run check:phi` | no patient data in tracked files | no |
 | `npm run load -- --in <ndjson> --db <db>` | load a corpus through `SqliteFhirRepository` | yes |
 | `npm run diff` / `writes` / `isolation` / `http` | the comparison harnesses | yes |
+| `npm run migrate:go -- --go <go.db> --data <dir> [--user <account>] [--go-answers <go-ids.json>]` | migrate a frozen Go instance into the spike's stores, then verify every (user, type) id list against it — exit 0 only on agreement (yourphr#586) | yes |
 
 Only the first four run in CI, because CI must never see PHI. The rest run on the operator's machine.
 

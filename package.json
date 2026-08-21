@@ -39,7 +39,9 @@
     "dcr": "tsx scripts/dcr-tests.ts",
     "app": "tsx scripts/app-tests.ts",
     "migrate": "tsx scripts/migrate-tests.ts",
-    "web": "tsx scripts/web-tests.ts"
+    "web": "tsx scripts/web-tests.ts",
+    "migrate:go": "tsx scripts/migrate-from-go.ts",
+    "migrate:tool": "tsx scripts/migrate-tool-tests.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

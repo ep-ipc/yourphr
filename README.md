@@ -77,6 +77,7 @@ Same shape as the two defects that started this whole conversation: a silent def
 | `npm run smoke -- --in <ndjson>` | Loads it into Medplum's `MemoryRepository` — the control, proving the corpus itself is sound |
 | `npm run load -- --in <ndjson> --db <path>` | The real thing: loads through `SqliteFhirRepository`, reports index rows and collisions, runs searches |
 | `npm run roundtrip` | Asserts encryption works in both directions, including that the plaintext is absent from the raw file |
+| `npm run migrate:go -- --go <go.db> --data <dir> [--go-data <root>] [--user <account>] [--go-answers <go-ids.json>]` | The cut-over tool (yourphr#586): users, catalog, sources, records and config out of a frozen Go database into the spike's own stores, one-way and re-runnable, then the verification gate — per user, per resource type, the id list the Go tables hold against what the spike's search path returns. Exit 0 only on full agreement; `--go-answers` adds the `TestShadowExport` comparison through Go's own read path |
 | `npm run typecheck` | `tsc --noEmit` |
 
 `smoke.ts` is kept deliberately: when a search disagrees between the two, the difference isolates whether the fault is in this SQLite implementation or in the corpus.
