@@ -98,6 +98,7 @@
 
 ## 🔵 In review
 
+- [#611](https://github.com/jwilleke/yourphr/issues/611) — [SPIKE] #608 child: Users + Sessions managers over PasswordAuthProvider — AuthResult with token generation, any-of/all-of cardinality, the MFA-bypass test
 - [#610](https://github.com/jwilleke/yourphr/issues/610) — [SPIKE] #608 child: unit tests (vitest, per manager over fake providers, coverage floor) and E2E tests (Playwright over the built Angular app)
 - [#609](https://github.com/jwilleke/yourphr/issues/609) — [SPIKE] #608 child: framework skeleton (Engine, BaseManager, ApiContext, ConfigurationManager, store-boundary lint) + RecordsManager over SqliteRecordsProvider
 - [#604](https://github.com/jwilleke/yourphr/issues/604) — [SPIKE] Parity: users page — list, create, admin password reset
