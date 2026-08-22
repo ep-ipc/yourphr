@@ -9,7 +9,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { ProviderCatalog } from '../src/catalog/index.js';
 import { bootSources } from './lib/boot-sources.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 
@@ -81,49 +80,53 @@ async function main(): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'spike-worker-'));
   const db = new Database(join(dir, 'app.db'));
 
+  const lines: string[] = [];
+  const harness = await bootSources(db, join(dir, 'records.db'), { maxPages: 10, log: (l) => lines.push(l) });
+  const { sources, jobs, catalog, ctxFor } = harness;
+  const admin = ctxFor('admin');
+  const entries = () => catalog.entries(admin);
+
   // --- catalog rules ---
-  const catalog = new ProviderCatalog(db);
-  const entry = catalog.create({
+  const entry = await catalog.createEntry(admin, {
     display: 'Fake Sandbox', environment: 'sandbox', fhirBaseUrl: 'https://fhir.example.org/r4',
     scopes: 'patient/*.read', clientId: 'cid-1', clientSecret: 'the-secret', enabled: true,
   });
   check('a created entry reports hasClientSecret but never the secret itself',
     entry.hasClientSecret && !JSON.stringify(entry).includes('the-secret'));
 
-  const updated = catalog.update(entry.id, {
+  const updated = (await catalog.updateEntry(admin, entry.id, {
     display: 'Fake Sandbox', environment: 'sandbox', fhirBaseUrl: 'https://fhir.example.org/r4',
     scopes: 'patient/*.read patient/Patient.read', enabled: true,
-  });
+  }))!;
   check('an update omitting the secret PRESERVES the stored one (yourphr#286)',
-    updated.hasClientSecret && catalog.clientSecretFor(entry.id) === 'the-secret');
+    updated.hasClientSecret && (await catalog.clientSecretFor(admin, entry.id)) === 'the-secret');
 
   let ssrfRefused = false;
   try {
-    catalog.create({ display: 'Evil', environment: 'sandbox', fhirBaseUrl: 'http://169.254.169.254/fhir', scopes: 's' });
+    await catalog.createEntry(admin, { display: 'Evil', environment: 'sandbox', fhirBaseUrl: 'http://169.254.169.254/fhir', scopes: 's' });
   } catch { ssrfRefused = true; }
   check('a catalog URL is SSRF-checked at write time, not just at dial time', ssrfRefused);
 
   let httpRefused = false;
   try {
-    catalog.create({ display: 'Downgrade', environment: 'production', fhirBaseUrl: 'http://fhir.example.org/r4', scopes: 's' });
+    await catalog.createEntry(admin, { display: 'Downgrade', environment: 'production', fhirBaseUrl: 'http://fhir.example.org/r4', scopes: 's' });
   } catch { httpRefused = true; }
   check('a production entry must be https', httpRefused);
 
-  catalog.create({ display: 'Prod On', environment: 'production', fhirBaseUrl: 'https://prod.example.org/r4', scopes: 's', enabled: true });
+  await catalog.createEntry(admin, { display: 'Prod On', environment: 'production', fhirBaseUrl: 'https://prod.example.org/r4', scopes: 's', enabled: true });
+  const connectable = await catalog.connectable(ctxFor('alice'));
   check('patients see enabled PRODUCTION entries only — sandboxes are admin-only',
-    catalog.connectable().length === 1 && catalog.connectable()[0]?.display === 'Prod On');
+    connectable.length === 1 && connectable[0]?.['display'] === 'Prod On');
 
-  catalog.seed([{ display: 'Fake Sandbox', environment: 'sandbox', fhirBaseUrl: 'https://other.example.org', scopes: 'other', clientId: 'seed-cid' }]);
+  await catalog.seed([{ display: 'Fake Sandbox', environment: 'sandbox', fhirBaseUrl: 'https://other.example.org', scopes: 'other', clientId: 'seed-cid' }]);
+  const seededEntry = (await entries()).find((e) => e.id === entry.id);
   check('seeding never clobbers an operator\'s edits (provision-then-preserve)',
-    catalog.byId(entry.id)?.scopes === 'patient/*.read patient/Patient.read' && catalog.byId(entry.id)?.clientId === 'cid-1');
+    seededEntry?.scopes === 'patient/*.read patient/Patient.read' && seededEntry?.clientId === 'cid-1');
 
   // --- the worker loop against a live fake ---
   const fake = startFakeProvider();
   const base = await listen(fake.server);
 
-  const lines: string[] = [];
-  const harness = await bootSources(db, join(dir, 'records.db'), { maxPages: 10, log: (l) => lines.push(l) });
-  const { sources, jobs, ctxFor } = harness;
   const repos = new Map<string, SqliteFhirRepository>();
   const repoForUser = (u: string) => {
     let r = repos.get(u);

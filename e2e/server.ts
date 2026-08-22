@@ -35,7 +35,7 @@ const app = await assembleApp(dir, {
   },
   webDir,
   version: 'e2e',
-  seeds: [{ display: 'Fake Regional Health', environment: 'sandbox', fhirBaseUrl: fakeBase, scopes: 'patient/Condition.read patient/MedicationStatement.read', clientId: 'fake-cid', enabled: true, allowInternal: true }],
+  seeds: [{ display: 'Fake Regional Health', environment: 'sandbox', fhirBaseUrl: fakeBase, scopes: 'patient/Condition.read patient/MedicationStatement.read', clientId: 'fake-cid', enabled: true }],
 });
 writeFileSync(ADMIN_PASS_FILE, readFileSync(app.bootstrapPasswordFile!, 'utf8'), { mode: 0o600 });
 

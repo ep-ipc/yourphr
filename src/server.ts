@@ -78,20 +78,6 @@ export interface ServerModules {
     /** Throws ApiError on a malformed query. */
     query: (ctx: ApiContext, body: Record<string, unknown>) => Promise<unknown[]>;
   };
-  /** The provider catalog (yourphr#603): admin CRUD, the sandbox list, authorize + connect. */
-  catalog?: {
-    list: () => unknown[];
-    get: (id: string) => unknown | undefined;
-    /** Throws on a refusal (message is the reason). */
-    create: (body: Record<string, unknown>) => unknown;
-    update: (id: string, body: Record<string, unknown>) => unknown | undefined;
-    remove: (id: string) => boolean;
-    sandbox: () => unknown[];
-    connectable: () => unknown[];
-    /** Resolves Go's authorize answer; rejects with a status-bearing error. */
-    authorize: (username: string, id: string, body: Record<string, unknown>) => Promise<unknown>;
-    connect: (ctx: ApiContext, id: string, body: Record<string, unknown>) => Promise<{ source: unknown; data: unknown }>;
-  };
   /** The account page and the legal pages (yourphr#596). */
   account?: {
     /** GET /api/legal/:kind — public. Throws when an operator override is unusable. */
@@ -126,7 +112,6 @@ export interface ServerModules {
     /** Throws with a status-bearing error: 400 unknown/invalid, 409 env-pinned. */
     configSet: (key: string, value: unknown) => void;
     configReset: (key: string) => boolean;
-    catalogList: () => unknown;
     backupNow: () => Promise<unknown>;
     createUser: (ctx: ApiContext, username: string, password: string, role?: string) => Promise<void>;
     /** The Users page (yourphr#604). */
@@ -549,15 +534,14 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // --- the provider catalog (yourphr#603): admin curates, members connect ---
-      if (modules?.catalog && url.pathname.startsWith('/api/secure/provider-catalog')) {
-        const cat = modules.catalog;
+      if (engine.has('catalog') && url.pathname.startsWith('/api/secure/provider-catalog')) {
+        const cat = engine.managers.catalog;
         const fail = (err: unknown): void => {
           const e = err as Error & { status?: number; extra?: Record<string, unknown> };
           send(res, e.status ?? 400, {success: false, error: e.message, ...(e.extra ?? {})});
         };
         if (url.pathname === '/api/secure/provider-catalog/sandbox' && req.method === 'GET') {
-          if (!ctx.isAdmin()) { send(res, 403, {success: false, error: 'admin role required'}); return; }
-          send(res, 200, {success: true, data: cat.sandbox()});
+          send(res, 200, {success: true, data: await cat.sandbox(ctx)});
           return;
         }
         const connectMatch = url.pathname.match(/^\/api\/secure\/provider-catalog\/([^/]+)\/(authorize|connect)$/);
@@ -565,7 +549,7 @@ export function createYourPhrServer(options: ServerOptions) {
           const body = (await readJsonBody(req)) ?? {};
           try {
             if (connectMatch[2] === 'authorize') {
-              send(res, 200, {success: true, ...(await cat.authorize(sessionUser, decodeURIComponent(connectMatch[1]!), body)) as Record<string, unknown>});
+              send(res, 200, {success: true, ...(await cat.authorize(ctx, decodeURIComponent(connectMatch[1]!), body))});
             } else {
               const r = await cat.connect(ctx, decodeURIComponent(connectMatch[1]!), body);
               send(res, 200, {success: true, source: r.source, data: r.data});
@@ -579,20 +563,20 @@ export function createYourPhrServer(options: ServerOptions) {
           // Everything else is the admin's: the catalog is instance configuration.
           if (!ctx.isAdmin()) { send(res, 403, {success: false, error: 'admin role required to manage the provider catalog'}); return; }
           if (url.pathname === '/api/secure/provider-catalog' && req.method === 'GET') {
-            send(res, 200, {success: true, data: cat.list()});
+            send(res, 200, {success: true, data: await cat.list(ctx)});
             return;
           }
           if (url.pathname === '/api/secure/provider-catalog' && req.method === 'POST') {
             const body = await readJsonBody(req);
             if (!body) { send(res, 400, {success: false, error: 'invalid request'}); return; }
-            try { send(res, 200, {success: true, data: cat.create(body)}); } catch (err) { fail(err); }
+            try { send(res, 200, {success: true, data: await cat.create(ctx, body)}); } catch (err) { fail(err); }
             return;
           }
           const idMatch = url.pathname.match(/^\/api\/secure\/provider-catalog\/([^/]+)$/);
           if (idMatch) {
             const id = decodeURIComponent(idMatch[1]!);
             if (req.method === 'GET') {
-              const entry = cat.get(id);
+              const entry = await cat.get(ctx, id);
               entry === undefined ? send(res, 404, {success: false, error: 'no such catalog entry'}) : send(res, 200, {success: true, data: entry});
               return;
             }
@@ -600,13 +584,13 @@ export function createYourPhrServer(options: ServerOptions) {
               const body = await readJsonBody(req);
               if (!body) { send(res, 400, {success: false, error: 'invalid request'}); return; }
               try {
-                const entry = cat.update(id, body);
+                const entry = await cat.update(ctx, id, body);
                 entry === undefined ? send(res, 404, {success: false, error: 'no such catalog entry'}) : send(res, 200, {success: true, data: entry});
               } catch (err) { fail(err); }
               return;
             }
             if (req.method === 'DELETE') {
-              send(res, 200, {success: true, data: {deleted: cat.remove(id) ? 1 : 0}});
+              send(res, 200, {success: true, data: {deleted: (await cat.remove(ctx, id)) ? 1 : 0}});
               return;
             }
           }
@@ -620,8 +604,8 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // --- the Sources page (yourphr#594) ---
-      if (modules?.catalog && url.pathname === '/api/secure/provider-catalog/connectable' && req.method === 'GET') {
-        send(res, 200, {success: true, data: modules.catalog.connectable()});
+      if (engine.has('catalog') && url.pathname === '/api/secure/provider-catalog/connectable' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.catalog.connectable(ctx)});
         return;
       }
       if (engine.has('sources')) {
@@ -949,8 +933,8 @@ export function createYourPhrServer(options: ServerOptions) {
           }
           return;
         }
-        if (url.pathname === '/api/secure/admin/catalog' && req.method === 'GET') {
-          send(res, 200, {success: true, data: modules.admin.catalogList()});
+        if (engine.has('catalog') && url.pathname === '/api/secure/admin/catalog' && req.method === 'GET') {
+          send(res, 200, {success: true, data: await engine.managers.catalog.entries(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/admin/backup' && req.method === 'POST') {

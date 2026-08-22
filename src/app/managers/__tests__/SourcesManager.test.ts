@@ -9,7 +9,7 @@ import { EventBus, type SourceEvent } from '../../../events/index.js';
 import { FakeRecordsProvider } from '../../providers/__tests__/FakeRecordsProvider.js';
 import { FakeJobsProvider } from '../../../framework/providers/__tests__/FakeJobsProvider.js';
 import { FakeSourcesProvider } from '../../providers/__tests__/FakeSourcesProvider.js';
-import { BaseSourceClientProvider, NullSourceClientProvider, type FetchReport, type RefreshedTokens } from '../../providers/BaseSourceClientProvider.js';
+import { BaseSourceClientProvider, NullSourceClientProvider, type AuthorizationResult, type AuthorizationStart, type FetchReport, type RefreshedTokens } from '../../providers/BaseSourceClientProvider.js';
 import type { ConnectedSource } from '../../providers/BaseSourcesProvider.js';
 import type { RecordsWriter } from '../../providers/BaseRecordsProvider.js';
 
@@ -21,6 +21,8 @@ class ScriptedClient extends BaseSourceClientProvider {
   failRefresh = false;
   failFetch = false;
   perType = 2;
+  async beginAuthorization(): Promise<AuthorizationStart> { throw new Error('not in this spec'); }
+  async completeAuthorization(): Promise<AuthorizationResult> { throw new Error('not in this spec'); }
   async refresh(source: ConnectedSource, now: number): Promise<RefreshedTokens> {
     this.refreshes++;
     if (this.failRefresh) throw new Error('token endpoint said no');

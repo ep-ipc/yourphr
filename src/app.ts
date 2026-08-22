@@ -27,15 +27,13 @@ import { UsersManager } from './framework/managers/UsersManager.js';
 import { SessionsManager } from './framework/managers/SessionsManager.js';
 import { SqliteUsersProvider } from './framework/providers/SqliteUsersProvider.js';
 import { PasswordAuthProvider } from './framework/providers/PasswordAuthProvider.js';
-import { ProviderCatalog, catalogEntryShape, connectableShape, connectionPolicy, type CatalogEntry, type CatalogWrite } from './catalog/index.js';
+import { CatalogManager, type CatalogWrite } from './app/managers/CatalogManager.js';
+import { SqliteCatalogProvider } from './app/providers/SqliteCatalogProvider.js';
 import { Engine } from './framework/Engine.js';
 import { ConfigurationManager } from './framework/ConfigurationManager.js';
 import { ApiContext } from './framework/ApiContext.js';
 import { RecordsManager } from './app/managers/RecordsManager.js';
 import { SqliteRecordsProvider } from './app/providers/SqliteRecordsProvider.js';
-import { SmartClient, generateVerifier } from './smart/index.js';
-import { resourceTypesFromScopes } from './migrate/index.js';
-import { randomUUID } from 'node:crypto';
 import { SourcesManager, sourceShape } from './app/managers/SourcesManager.js';
 import { JobsManager, backgroundJobShape } from './framework/managers/JobsManager.js';
 import { SqliteSourcesProvider } from './app/providers/SqliteSourcesProvider.js';
@@ -140,7 +138,8 @@ export interface Stores {
   dbKey: string;
   users: UsersManager;
   sessions: SessionsManager;
-  catalog: ProviderCatalog;
+  /** The one door to the provider catalog (yourphr#613). */
+  catalog: CatalogManager;
   /** The one door to connected sources and their sync (yourphr#612). */
   sources: SourcesManager;
   /** The one door to the job history (yourphr#612). */
@@ -189,7 +188,6 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   runMigrations(db, APP_MIGRATIONS);
 
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
-  const catalog = new ProviderCatalog(db);
   const favorites = new FavoriteStore(db);
   const account = new AccountStore(db);
   // 3. Accounts and sessions as managers over providers (yourphr#611): user storage in the app
@@ -213,14 +211,18 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // configuration, loaded only when configured, inert (and said so) when not.
   const events = new EventBus();
   engine.register('jobs', new JobsManager(engine, new SqliteJobsProvider(db)));
-  engine.register('sources', new SourcesManager(engine, new SqliteSourcesProvider(db), await sourceClientFor(config.getString('sources.client.provider'), env), {
+  const sourceClient = await sourceClientFor(config.getString('sources.client.provider'), env);
+  const allowInternal = env['SPIKE_TEST_ALLOW_INTERNAL'] === '1';
+  engine.register('sources', new SourcesManager(engine, new SqliteSourcesProvider(db), sourceClient, {
     maxPages: config.getInt('sync.max-pages'),
     events,
     log: (line) => appLog.info(line),
   }));
+  // 8. Catalog (yourphr#613): what the instance can connect to; connects through Sources and the same client.
+  engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(db), sourceClient, { allowInternal, log: (line) => appLog.warn(line) }));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
-  const { records, sources, jobs } = engine.managers;
+  const { records, sources, jobs, catalog } = engine.managers;
   // The Records manager names a source for the records that carry its id — asked of the Sources door.
   records.sourceDisplay = (sourceId) => sources.displayOf(sourceId);
 
@@ -239,7 +241,7 @@ export interface App {
   config: ConfigStore;
   users: UsersManager;
   sessions: SessionsManager;
-  catalog: ProviderCatalog;
+  catalog: CatalogManager;
   sources: SourcesManager;
   jobs: JobsManager;
   account: AccountStore;
@@ -260,7 +262,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
 
   // Provision-then-preserve.
   if (options.seeds) {
-    catalog.seed(options.seeds);
+    await catalog.seed(options.seeds);
   }
 
   // The worker: the Sources manager's pass, on the configured interval.
@@ -298,39 +300,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
 
   const withStatus = (status: number, message: string): Error & { status: number } => Object.assign(new Error(message), { status });
 
-  const catalogById = (publicId: string): CatalogEntry | undefined => (/^\d+$/.test(publicId) ? catalog.byId(Number(publicId)) : undefined);
-  const enabledCatalogEntry = (publicId: string): CatalogEntry => {
-    const e = catalogById(publicId);
-    if (!e || !e.enabled) throw withStatus(404, 'no such enabled catalog entry');
-    return e;
-  };
-  /** Go's providerCatalogRequest -> a CatalogWrite; an update keeps what the body does not say. */
-  const catalogWriteFrom = (body: Record<string, unknown>, existing?: CatalogEntry): CatalogWrite => {
-    const str = (k: string, fallback = ''): string => (typeof body[k] === 'string' ? (body[k] as string).trim() : fallback);
-    const environment = str('environment', existing?.environment ?? 'production') === 'sandbox' ? 'sandbox' : 'production';
-    return {
-      display: str('display', existing?.display ?? ''),
-      environment,
-      fhirBaseUrl: str('api_endpoint_base_url', existing?.fhirBaseUrl ?? ''),
-      scopes: str('scopes', existing?.scopes ?? ''),
-      clientId: str('client_id', existing?.clientId ?? ''),
-      clientSecret: str('client_secret'),
-      enabled: typeof body['enabled'] === 'boolean' ? (body['enabled'] as boolean) : existing?.enabled ?? false,
-      authorizeUrlOverride: str('authorize_url_override', existing?.authorizeUrlOverride ?? ''),
-      platformType: str('platform_type', existing?.platformType ?? '') || 'ehr',
-      brandLogoUrl: str('brand_logo_url', existing?.brandLogoUrl ?? ''),
-      consentPolicy: str('consent_policy', existing?.consentPolicy ?? ''),
-      preConnectProfile: str('pre_connect_profile', existing?.preConnectProfile ?? ''),
-      allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
-    };
-  };
-  const smartClientFor = (e: CatalogEntry, redirectUri: string): SmartClient =>
-    new SmartClient({
-      fhirBaseUrl: e.fhirBaseUrl, clientId: e.clientId, clientSecret: catalog.clientSecretFor(e.id) || undefined,
-      redirectUri, scopes: e.scopes.split(/\s+/).filter(Boolean),
-      allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
-    });
-
   /** Go's LegalConsentStatus, from the stored timestamp ('' = not accepted). */
   const consentStatus = (acceptedAt: string): Record<string, unknown> => ({
     accepted: acceptedAt !== '',
@@ -356,101 +325,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
       ips: (ctx) => records.ips(ctx).then((d) => d.bundle),
       provenanceFor: (ctx, resourceType, id) => records.provenance(ctx, resourceType, id),
       medications: (ctx) => records.medications(ctx),
-      catalog: {
-        list: () => catalog.list().map(catalogEntryShape),
-        get: (id) => {
-          const e = catalogById(id);
-          return e ? catalogEntryShape(e) : undefined;
-        },
-        create: (body) => {
-          const write = catalogWriteFrom(body);
-          if (!write.display || !write.fhirBaseUrl || !write.clientId) throw withStatus(400, 'display, api_endpoint_base_url, and client_id are required');
-          try {
-            return catalogEntryShape(catalog.create(write));
-          } catch (err) {
-            throw withStatus(400, (err as Error).message);
-          }
-        },
-        update: (id, body) => {
-          const e = catalogById(id);
-          if (!e) return undefined;
-          const write = catalogWriteFrom(body, e);
-          try {
-            return catalogEntryShape(catalog.update(e.id, write));
-          } catch (err) {
-            throw withStatus(400, (err as Error).message);
-          }
-        },
-        remove: (id) => {
-          const e = catalogById(id);
-          return e ? catalog.remove(e.id) : false;
-        },
-        // Sandboxes are for the admin to try a provider before a member meets it (the Sandbox page).
-        sandbox: () => catalog.list().filter((e) => e.enabled && e.environment === 'sandbox').map(connectableShape),
-        // The catalog's connectable entries in Go's ConnectableProvider shape, policy resolved by Go's rules (yourphr#603).
-        connectable: () => catalog.connectable().map(connectableShape),
-        authorize: async (_username, id, body) => {
-          const e = enabledCatalogEntry(id);
-          const redirectUri = typeof body['redirect_uri'] === 'string' ? (body['redirect_uri'] as string).trim() : '';
-          if (redirectUri === '') {
-            // Go derives the callback from its SMART relay; there is no relay in this stack (the product's #408).
-            throw withStatus(501, 'no SMART relay in this stack — supply redirect_uri (this deployment\'s /sources/callback/<state> page)');
-          }
-          const client = smartClientFor(e, redirectUri);
-          let endpoints;
-          try {
-            endpoints = await client.discover();
-          } catch (err) {
-            throw withStatus(502, `SMART discovery failed: ${(err as Error).message}`);
-          }
-          if (e.authorizeUrlOverride !== '') endpoints = { ...endpoints, authorization: e.authorizeUrlOverride };
-          const state = randomUUID();
-          const verifier = generateVerifier();
-          return { authorize_url: client.authorizeUrl(endpoints, state, verifier), state, code_verifier: verifier, redirect_uri: redirectUri };
-        },
-        connect: async (ctx, id, body) => {
-          const username = ctx.username;
-          const e = enabledCatalogEntry(id);
-          if (connectionPolicy(e).requiresUserConsent && users.consentAcceptedAt(ctx) === '') {
-            throw Object.assign(withStatus(403, 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting a medical source.'),
-              { extra: { error_code: 'legal_consent_required', privacy_policy_url: '/privacy', terms_of_service_url: '/terms' } });
-          }
-          const str = (k: string): string => (typeof body[k] === 'string' ? (body[k] as string).trim() : '');
-          const verifier = str('code_verifier');
-          const code = str('code');
-          if (verifier === '') throw withStatus(400, 'code_verifier is required');
-          if (code === '' && str('state') === '') throw withStatus(400, 'one of code or state is required');
-          if (code === '') throw withStatus(501, 'no SMART relay in this stack — the callback page must send the authorization code');
-          const redirectUri = str('redirect_uri');
-          if (redirectUri === '') throw withStatus(400, 'redirect_uri is required (the one the authorization used)');
-          const client = smartClientFor(e, redirectUri);
-          let endpoints;
-          try {
-            endpoints = await client.discover();
-          } catch (err) {
-            throw withStatus(502, `SMART discovery failed: ${(err as Error).message}`);
-          }
-          let token;
-          try {
-            token = await client.exchangeCode(endpoints, code, verifier);
-          } catch (err) {
-            throw withStatus(502, `token exchange failed: ${(err as Error).message}`);
-          }
-          const patient = (token.patient ?? '').trim();
-          if (patient === '') throw withStatus(502, 'token had no patient id — this stack does not yet resolve one from the FHIR API');
-          const patientFacing = connectableShape(e)['display'] as string;
-          const display = patientFacing === e.display && str('display') !== '' ? str('display') : patientFacing;
-          const source = await sources.add(ctx, {
-            userId: username, display, fhirBaseUrl: e.fhirBaseUrl, tokenUrl: endpoints.token, clientId: e.clientId, patient,
-            resourceTypes: resourceTypesFromScopes(e.scopes), accessToken: token.accessToken, refreshToken: token.refreshToken ?? '',
-            expiresAt: token.expiresAt ? Math.floor(token.expiresAt.getTime() / 1000) : 0,
-            platformType: e.platformType || 'ehr', environment: e.environment,
-          });
-          // The initial import runs in the background, as Go's does; the page follows it on the event stream.
-          sources.syncInBackground(ctx, source);
-          return { source: sourceShape(source, undefined), data: { status: 'import_started' } };
-        },
-      },
       records: {
         recent: (ctx, limit) => records.recent(ctx, limit),
         conditions: (ctx) => records.conditions(ctx),
@@ -553,7 +427,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           if (!spec) throw withStatus(400, `unknown configuration key ${JSON.stringify(key)}`);
           return config.clear(key);
         },
-        catalogList: () => catalog.list(),
         backupNow,
         createUser: (ctx, username, password, role) => users.createUser(ctx, username, password, role === 'admin' ? 'admin' : 'user'),
         listUsers: async (ctx) => (await users.listUsers(ctx)).map((u) => ({ id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0 })),

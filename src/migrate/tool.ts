@@ -28,7 +28,7 @@ import { join } from 'node:path';
 import type { Resource, ResourceType } from '@medplum/fhirtypes';
 import { readGoUsers, readGoSources, importLegacySources, readGoAccountData, importLegacyAccountData, type SourceImportReport, type AccountImportReport } from './index.js';
 import type { ImportReport as UserImportReport } from '../framework/managers/UsersManager.js';
-import type { CatalogWrite, ProviderCatalog } from '../catalog/index.js';
+import type { CatalogManager, CatalogWrite } from '../app/managers/CatalogManager.js';
 import type { ConfigStore, ConfigValue } from '../config/index.js';
 import type { Stores } from '../app.js';
 import type { Engine } from '../framework/Engine.js';
@@ -137,43 +137,23 @@ export interface CatalogImportReport {
   notCarried: readonly string[];
 }
 
-/** One-way by display name; an operator's existing entry is never touched. */
-export function importLegacyCatalog(catalog: ProviderCatalog, entries: LegacyCatalogEntry[], options: { allowInternal?: boolean } = {}): CatalogImportReport {
-  const report: CatalogImportReport = { imported: [], skippedExisting: [], rejected: [], notCarried: CATALOG_FIELDS_NOT_CARRIED };
-  const existing = new Set(catalog.list().map((e) => e.display));
-  for (const e of entries) {
-    if (existing.has(e.display)) {
-      report.skippedExisting.push(e.display);
-      continue;
-    }
-    if (e.environment !== 'sandbox' && e.environment !== 'production') {
-      report.rejected.push({ display: e.display, reason: `environment "${e.environment}" is neither sandbox nor production` });
-      continue;
-    }
-    const write: CatalogWrite = {
-      display: e.display,
-      environment: e.environment,
-      fhirBaseUrl: e.fhirBaseUrl,
-      scopes: e.scopes,
-      clientId: e.clientId,
-      clientSecret: e.clientSecret,
-      enabled: e.enabled,
-      authorizeUrlOverride: e.authorizeUrlOverride,
-      platformType: e.platformType,
-      brandLogoUrl: e.brandLogoUrl,
-      consentPolicy: e.consentPolicy,
-      preConnectProfile: e.preConnectProfile,
-      allowInternal: options.allowInternal ?? false,
-    };
-    try {
-      catalog.create(write);
-      existing.add(e.display);
-      report.imported.push(e.display);
-    } catch (err) {
-      report.rejected.push({ display: e.display, reason: (err as Error).message });
-    }
-  }
-  return report;
+/** One-way by display name through the Catalog door, as the migration principal; an operator's existing entry is never touched. */
+export async function importLegacyCatalog(catalog: CatalogManager, ctx: ApiContext, entries: LegacyCatalogEntry[], options: { allowInternal?: boolean } = {}): Promise<CatalogImportReport> {
+  const writes: CatalogWrite[] = entries.map((e) => ({
+    display: e.display,
+    environment: e.environment as CatalogWrite['environment'],
+    fhirBaseUrl: e.fhirBaseUrl,
+    scopes: e.scopes,
+    clientId: e.clientId,
+    clientSecret: e.clientSecret,
+    enabled: e.enabled,
+    authorizeUrlOverride: e.authorizeUrlOverride,
+    platformType: e.platformType,
+    brandLogoUrl: e.brandLogoUrl,
+    consentPolicy: e.consentPolicy,
+    preConnectProfile: e.preConnectProfile,
+  }));
+  return { ...(await catalog.importLegacy(ctx, writes, { allowInternal: options.allowInternal })), notCarried: CATALOG_FIELDS_NOT_CARRIED };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -565,11 +545,12 @@ export async function migrateFromGo(goDb: GoDb, stores: Stores, options: Migrati
   log('account data (legal consent, access log)');
   const account = importLegacyAccountData(stores.account, readGoAccountData(goDb).filter((d) => selected.has(d.username)));
 
+  const migrationCtx = ApiContext.system('migration', 'migration', stores.engine);
   log('catalog');
-  const catalog = importLegacyCatalog(stores.catalog, readGoCatalog(goDb), { allowInternal: options.allowInternalUrls });
+  const catalog = await importLegacyCatalog(stores.catalog, migrationCtx, readGoCatalog(goDb), { allowInternal: options.allowInternalUrls });
 
   log('sources');
-  const sources = await importLegacySources(stores.sources, ApiContext.system('migration', 'migration', stores.engine), readGoSources(goDb).filter((s) => selected.has(s.username)));
+  const sources = await importLegacySources(stores.sources, migrationCtx, readGoSources(goDb).filter((s) => selected.has(s.username)));
 
   log('records');
   const read = newReadStats();

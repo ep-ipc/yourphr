@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3-multiple-ciphers';
 import bcrypt from 'bcryptjs';
 import { openStores } from '../src/app.js';
+import { ApiContext } from '../src/framework/ApiContext.js';
 import { CATALOG_FIELDS_NOT_CARRIED, migrateFromGo, openGoDatabase, verifyAgainstGo } from '../src/migrate/tool.js';
 import { isLegacyBcrypt } from '../src/framework/providers/PasswordAuthProvider.js';
 
@@ -131,11 +132,13 @@ async function main(): Promise<void> {
 
   check('catalog: live entries imported, the retired one skipped, an unknown environment rejected by name',
     report.catalog.imported.sort().join(',') === 'Epic (Production),Local Sandbox' && report.catalog.rejected.length === 1 && report.catalog.rejected[0]!.display === 'Bad Env');
-  const epicEntry = stores.catalog.list().find((e) => e.display === 'Epic (Production)')!;
-  check('catalog: the client secret lands (write-only) and enabled carries', epicEntry.hasClientSecret && stores.catalog.clientSecretFor(epicEntry.id) === 's3cret' && epicEntry.enabled);
+  const catalogCtx = ApiContext.system('test', 'admin', stores.engine);
+  const catalogEntries = () => stores.catalog.entries(catalogCtx);
+  const epicEntry = (await catalogEntries()).find((e) => e.display === 'Epic (Production)')!;
+  check('catalog: the client secret lands (write-only) and enabled carries', epicEntry.hasClientSecret && (await stores.catalog.clientSecretFor(catalogCtx, epicEntry.id)) === 's3cret' && epicEntry.enabled);
   check('catalog: platform_type, brand_logo_url, consent_policy and pre_connect_profile are CARRIED (yourphr#603); nothing is listed as not carried',
     report.catalog.notCarried.length === 0 && CATALOG_FIELDS_NOT_CARRIED.length === 0 && epicEntry.platformType === 'epic' && epicEntry.brandLogoUrl === 'https://logo.example.org/e.png'
-      && epicEntry.consentPolicy === 'required' && epicEntry.preConnectProfile === 'auto' && stores.catalog.list().find((e) => e.display === 'Local Sandbox')?.consentPolicy === 'skip');
+      && epicEntry.consentPolicy === 'required' && epicEntry.preConnectProfile === 'auto' && (await catalogEntries()).find((e) => e.display === 'Local Sandbox')?.consentPolicy === 'skip');
 
   check('sources: the two live sources imported with a Go id -> spike id map',
     report.sources.imported.length === 2 && Object.keys(report.sources.idMap).sort().join(',') === 'src-1,src-3');
