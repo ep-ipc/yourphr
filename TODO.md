@@ -15,7 +15,6 @@
 - [#605](https://github.com/jwilleke/yourphr/issues/605) — [SPIKE] Parity: medical-history graph — POST /secure/resource/graph/MedicalHistory
 - [#604](https://github.com/jwilleke/yourphr/issues/604) — [SPIKE] Parity: users page — list, create, admin password reset
 - [#603](https://github.com/jwilleke/yourphr/issues/603) — [SPIKE] Parity: provider-catalog admin page and sandbox page
-- [#602](https://github.com/jwilleke/yourphr/issues/602) — [SPIKE] Parity: admin dashboard, database, logs and configuration pages
 - [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
 - [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — checks pending)* — no linked issue (external; architecture declined, search goal carried by its own P1 issue)
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
@@ -100,6 +99,7 @@
 
 ## 🔵 In review
 
+- [#602](https://github.com/jwilleke/yourphr/issues/602) — [SPIKE] Parity: admin dashboard, database, logs and configuration pages
 - [#596](https://github.com/jwilleke/yourphr/issues/596) — [SPIKE] Parity: account page and legal — access log, legal consent, privacy and terms text, password change, sign out everywhere
 - [#595](https://github.com/jwilleke/yourphr/issues/595) — [SPIKE] Parity: dashboard and record pages — recent, reconciled conditions, classified allergies/immunizations, labs query, favorites
 - [#594](https://github.com/jwilleke/yourphr/issues/594) — [SPIKE] Parity: the Sources page — list, connectable catalog, events stream, per-source actions
