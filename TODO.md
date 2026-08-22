@@ -98,6 +98,7 @@
 
 ## 🔵 In review
 
+- [#615](https://github.com/jwilleke/yourphr/issues/615) — [SPIKE] #608 child: Backup manager — schedule, health, staged restore and the artifact store behind BackupManager over an optional backup-storage provider; AdminOps retired
 - [#614](https://github.com/jwilleke/yourphr/issues/614) — [SPIKE] #608 child: Audit manager — the access log as a REQUIRED capability over SqliteAuditProvider; consent folds into the users provider; AccountStore retired
 - [#613](https://github.com/jwilleke/yourphr/issues/613) — [SPIKE] #608 child: Catalog manager — provider_catalog behind CatalogManager over SqliteCatalogProvider; authorize/connect through the source-client provider
 - [#612](https://github.com/jwilleke/yourphr/issues/612) — [SPIKE] #608 child: Sources + Jobs managers — worker store → SourcesManager/JobsManager over providers, SMART client as an optional config-bound provider with an inert default
