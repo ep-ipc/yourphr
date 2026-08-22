@@ -109,3 +109,5 @@ __Sync is the untested one__, and it is the phase the whole decision turns on.
 ### Conventions
 
 A guard nobody has tried to defeat is not known to work. Every check here was verified by breaking the thing it protects and confirming it goes red — do the same for anything new.
+
+__The Context object is the only door to a resource__ ([yourphr#608](https://github.com/jwilleke/yourphr/issues/608); modelled on [ngdpbase `src/context`](https://github.com/jwilleke/ngdpbase/tree/master/src/context)). A process-scoped app context holds the stores, services, log and events; a request-scoped `RequestContext.from(req, app)` carries `username`, `role`, `isAuthenticated`, the caller's `repo`, and the guards (`requireAuthenticated()`, `requireAdmin()`) that throw an `ApiError(status, message)` one error boundary renders in Go's envelope. A handler takes `ctx` and nothing else; resource access is `ctx.repo`, `ctx.app.<store>`, `ctx.app.log`. Do not add a closure to `ServerModules` or an inline role check for a new route — that bag is what #608 removes.
