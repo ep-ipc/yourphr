@@ -6,7 +6,7 @@
  *   npm run app
  */
 import { createServer, type ServerResponse } from 'node:http';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
@@ -257,6 +257,70 @@ async function main(): Promise<void> {
 
   check('the migration ledger exists from first boot (downgrade refusal has ground to stand on)',
     (app.auth as unknown as { db?: unknown }) !== undefined && existsSync(join(dir, 'spike.db')));
+
+  // --- the account page and the legal pages (yourphr#596) ---
+  type LegalDoc = { kind: string; html: string; digest: string; source: string; path?: string };
+  const privacy = (await (await fetch(`${base}/api/legal/privacy`)).json()) as { data: LegalDoc };
+  const unknownLegal = await fetch(`${base}/api/legal/cookies`);
+  check('/api/legal/privacy is public and serves the shipped document as HTML with its sha256 digest',
+    privacy.data.kind === 'privacy' && privacy.data.source === 'shipped' && privacy.data.html.includes('<h') && /^sha256:[0-9a-f]{64}$/.test(privacy.data.digest) && unknownLegal.status === 404);
+  mkdirSync(join(dir, 'config'), { recursive: true });
+  writeFileSync(join(dir, 'config', 'terms-of-service.md'), '# House rules\n\nBe kind.\n');
+  const terms = (await (await fetch(`${base}/api/legal/terms`)).json()) as { data: LegalDoc };
+  writeFileSync(join(dir, 'config', 'terms-of-service.md'), '   \n');
+  const emptyOverride = await fetch(`${base}/api/legal/terms`);
+  rmSync(join(dir, 'config', 'terms-of-service.md'));
+  check('an operator override in <data>/config replaces the text and says so; an EMPTY override is an error, not a silent fallback',
+    terms.data.source === 'operator' && terms.data.html.includes('House rules') && !!terms.data.path && emptyOverride.status === 500);
+
+  const accessLog = (await (await fetch(`${base}/api/secure/account/access-log`, authed(aliceToken))).json()) as { data: { actor_username: string; category: string; day: string; count: number }[] };
+  const categories = new Set(accessLog.data.map((e) => e.category));
+  check('the access log recorded this harness\'s own reads as day buckets: who, which category, how many',
+    accessLog.data.every((e) => e.actor_username === 'alice' && /^\d{4}-\d{2}-\d{2}$/.test(e.day) && e.count >= 1)
+      && categories.has('Conditions') && categories.has('Records (FHIR)') && categories.has('Full export') && !categories.has('undefined'));
+  const adminLog = (await (await fetch(`${base}/api/secure/account/access-log`, authed(adminToken))).json()) as { data: unknown[] };
+  check('the access log is the account\'s own — the admin sees nothing of alice\'s', adminLog.data.length === 0 || adminLog.data.length < accessLog.data.length);
+
+  type Consent = { accepted: boolean; accepted_at?: string; privacy_policy_url: string; medicare_sources_disconnected?: number };
+  const consentBefore = (await (await fetch(`${base}/api/secure/account/legal-consent`, authed(aliceToken))).json()) as { data: Consent };
+  const granted = (await (await fetch(`${base}/api/secure/account/legal-consent/grant`, { method: 'POST', ...authed(aliceToken) })).json()) as { data: Consent };
+  const consentAfter = (await (await fetch(`${base}/api/secure/account/legal-consent`, authed(aliceToken))).json()) as { data: Consent };
+  check('legal consent: not accepted until granted; granting records an RFC3339 time in Go\'s shape',
+    consentBefore.data.accepted === false && consentBefore.data.privacy_policy_url === '/privacy' && granted.data.accepted === true
+      && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(granted.data.accepted_at ?? '') && consentAfter.data.accepted_at === granted.data.accepted_at);
+  const medicare = app.sources.add({ userId: 'alice', display: 'Medicare Blue Button', fhirBaseUrl: 'https://sandbox.bluebutton.cms.gov/v2/fhir', tokenUrl: '', clientId: 'c',
+    patient: 'm', resourceTypes: ['Coverage'], accessToken: 'tok', refreshToken: 'ref', expiresAt: 99_999_999 });
+  const revoked = (await (await fetch(`${base}/api/secure/account/legal-consent/revoke`, { method: 'POST', ...authed(aliceToken) })).json()) as { data: Consent };
+  check('revoking the consent disconnects the Medicare sources (Go\'s rule) and reports how many',
+    revoked.data.accepted === false && revoked.data.medicare_sources_disconnected === 1 && app.sources.byId(medicare.id)?.accessToken === '' && app.sources.byId(medicare.id)?.refreshToken === '');
+
+  const pw = (current: string, next: string) => fetch(`${base}/api/secure/account/password`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${aliceToken}` }, body: JSON.stringify({ current_password: current, new_password: next }) });
+  const wrongCurrent = await pw('not-her-password', 'another-long-enough-password');
+  const tooShort = await pw('a-long-enough-password', 'short');
+  const changed = await pw('a-long-enough-password', 'another-long-enough-password');
+  const changedBody = (await changed.json()) as { success: boolean; data: string };
+  const oldTokenAfter = await fetch(`${base}/api/secure/account/me`, authed(aliceToken));
+  const newTokenWorks = await fetch(`${base}/api/secure/account/me`, authed(changedBody.data));
+  check('password change: wrong current is 401, policy refusal is 400, success ends the old session and hands back a fresh one on the cookie',
+    wrongCurrent.status === 401 && tooShort.status === 400 && changed.status === 200 && typeof changedBody.data === 'string' && (changed.headers.get('set-cookie') ?? '').startsWith('fasten_session=')
+      && oldTokenAfter.status === 401 && newTokenWorks.status === 200);
+  const aliceToken2 = changedBody.data;
+  const signedOut = await fetch(`${base}/api/secure/account/sign-out-everywhere`, { method: 'POST', ...authed(aliceToken2) });
+  const afterSignOut = await fetch(`${base}/api/secure/account/me`, authed(aliceToken2));
+  const backIn = await signIn('alice', 'another-long-enough-password');
+  check('sign out everywhere ends every session including this one, clears the cookie, and the new password signs back in',
+    signedOut.status === 200 && /fasten_session=;.*Max-Age=0/.test(signedOut.headers.get('set-cookie') ?? '') && afterSignOut.status === 401 && backIn.status === 200);
+
+  app.auth.createUser('zed', 'zeds-long-enough-password');
+  const zedToken = ((await (await signIn('zed', 'zeds-long-enough-password')).json()) as { data: string }).data;
+  app.sources.add({ userId: 'zed', display: 'Zed Clinic', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pz', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999 });
+  await app.syncNow(1_000_200);
+  const zedHad = ((await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition`, authed(zedToken))).json()) as { data: unknown[] }).data.length;
+  const zedDeleted = await fetch(`${base}/api/secure/account/me`, { method: 'DELETE', ...authed(zedToken) });
+  const zedAgain = await signIn('zed', 'zeds-long-enough-password');
+  const zedRows = (app.auth as unknown as { db: { prepare: (q: string) => { get: (...a: unknown[]) => { n: number } } } }).db.prepare("SELECT COUNT(*) AS n FROM connected_sources WHERE user_id = 'zed'").get().n;
+  check('deleting the account removes its sources, records, and the account itself; the password no longer signs in',
+    zedHad === 3 && zedDeleted.status === 200 && zedAgain.status === 401 && app.auth.roleOf('zed') === undefined && zedRows === 0);
 
   fake.close();
   app.close();

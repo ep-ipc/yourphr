@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { ConfigStore } from './config/index.js';
 import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
-import { AuthStore } from './auth/index.js';
+import { AuthStore, GENERIC_SIGNIN_ERROR } from './auth/index.js';
 import { ProviderCatalog, type CatalogWrite } from './catalog/index.js';
 import { SourceStore, runSyncPass, syncSource, type ConnectedSource, type JobSummary } from './worker/index.js';
 import { EventBus } from './events/index.js';
@@ -32,6 +32,8 @@ import { classifyAllergies } from './allergies/index.js';
 import { classifyImmunizations } from './immunizations/index.js';
 import { recentResources, runQuery, type QueryRequest } from './query/index.js';
 import { FavoriteStore } from './favorites/index.js';
+import { AccountStore, accessCategoryFor, providerRequiresLegalConsent } from './account/index.js';
+import { loadLegalDocument, parseLegalKind } from './legal/index.js';
 import { backupDatabase } from './backup/index.js';
 import { buildIps } from './ips/index.js';
 import { provenanceFor } from './provenance/index.js';
@@ -107,6 +109,7 @@ export interface Stores {
   catalog: ProviderCatalog;
   sources: SourceStore;
   favorites: FavoriteStore;
+  account: AccountStore;
   repoForUser: (userId: string) => SqliteFhirRepository;
   repos: Map<string, SqliteFhirRepository>;
   close: () => void;
@@ -142,6 +145,7 @@ export function openStores(dataDir: string, env: Record<string, string | undefin
   const catalog = new ProviderCatalog(db);
   const sources = new SourceStore(db);
   const favorites = new FavoriteStore(db);
+  const account = new AccountStore(db);
   const recordsPath = join(dataDir, 'records.db');
   const repos = new Map<string, SqliteFhirRepository>();
   const repoForUser = (userId: string): SqliteFhirRepository => {
@@ -154,7 +158,7 @@ export function openStores(dataDir: string, env: Record<string, string | undefin
   };
 
   return {
-    config, db, dbKey, auth, catalog, sources, favorites, repoForUser, repos,
+    config, db, dbKey, auth, catalog, sources, favorites, account, repoForUser, repos,
     close: () => {
       for (const repo of repos.values()) repo.db.close();
       db.close();
@@ -237,7 +241,7 @@ export interface App {
 
 export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): App {
   const stores = openStores(dataDir, options.env ?? process.env);
-  const { config, auth, catalog, sources, favorites, repoForUser } = stores;
+  const { config, auth, catalog, sources, favorites, account, repoForUser } = stores;
 
   // Bootstrap the first admin on an empty install — after auth exists, before anything serves.
   const bootstrap = auth.bootstrapAdmin(dataDir);
@@ -293,6 +297,14 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
   });
 
   const events = new EventBus();
+
+  /** Go's LegalConsentStatus, from the stored timestamp ('' = not accepted). */
+  const consentStatus = (acceptedAt: string): Record<string, unknown> => ({
+    accepted: acceptedAt !== '',
+    ...(acceptedAt !== '' ? { accepted_at: acceptedAt } : {}),
+    privacy_policy_url: '/privacy',
+    terms_of_service_url: '/terms',
+  });
 
   /** The caller's source, by its public id — undefined for another user's or a malformed id. */
   const owned = (username: string, publicId: string): ConnectedSource | undefined => {
@@ -422,6 +434,63 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
         allergies: (repo) => classifyAllergies(inputsOf(repo, 'AllergyIntolerance')),
         immunizations: (repo) => classifyImmunizations(inputsOf(repo, 'Immunization')),
         query: (repo, body) => runQuery(repo, body as unknown as QueryRequest),
+      },
+      account: {
+        legalDocument: (kind) => {
+          const parsed = parseLegalKind(kind);
+          return parsed ? loadLegalDocument(dataDir, parsed) : undefined;
+        },
+        accessLog: (username) => account.listAccess(username),
+        recordAccess: (username, pathname) => {
+          const category = accessCategoryFor(pathname);
+          if (category) account.recordAccess(username, username, category);
+        },
+        legalConsent: (username) => consentStatus(account.consentAcceptedAt(username)),
+        grantConsent: (username) => {
+          const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+          account.setConsentAcceptedAt(username, now);
+          return consentStatus(now);
+        },
+        revokeConsent: (username) => {
+          account.setConsentAcceptedAt(username, '');
+          // Go's rule: revoking the consent disconnects the sources that required it.
+          let disconnected = 0;
+          for (const s of sources.list()) {
+            if (s.userId !== username || !providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType)) continue;
+            sources.clearTokens(s.id);
+            disconnected++;
+          }
+          return { ...consentStatus(''), medicare_sources_disconnected: disconnected };
+        },
+        changePassword: (username, current, next) => {
+          const changed = auth.changePassword(username, current, next);
+          if (!changed.ok) {
+            // Go: wrong current password is 401 with its own message; a policy refusal is 400 with the reason.
+            return changed.error === GENERIC_SIGNIN_ERROR
+              ? { ok: false, status: 401, error: 'current password is incorrect' }
+              : { ok: false, status: 400, error: changed.error ?? 'password change did not apply' };
+          }
+          return { ok: true, token: auth.issueSession(username) };
+        },
+        signOutEverywhere: (username) => auth.revokeAllSessions(username),
+        deleteAccount: (username) => {
+          // Everything the account owns, then the account: its sources and their records, records
+          // it wrote itself, favourites, consent, the access log, the sessions. The repository for
+          // this user is closed and dropped so a reconnect starts clean.
+          const repo = repoForUser(username);
+          for (const s of sources.list().filter((s) => s.userId === username)) {
+            removeSourceRecords(repo, username, `source-${s.id}`);
+            sources.remove(s.id);
+          }
+          removeSourceRecords(repo, username, '');
+          repo.db.prepare('DELETE FROM resources WHERE user_id = ?').run(username);
+          repo.db.prepare('DELETE FROM search_index WHERE user_id = ?').run(username);
+          for (const fav of favorites.list(username, 'Practitioner')) favorites.remove(username, fav);
+          account.deleteUser(username);
+          auth.deleteUser(username);
+          repo.db.close();
+          stores.repos.delete(username);
+        },
       },
       favorites: {
         list: (username, resourceType) => favorites.list(username, resourceType),

@@ -17,6 +17,7 @@
  */
 import type Database from 'better-sqlite3-multiple-ciphers';
 import type { SourceStore } from '../worker/index.js';
+import type { AccountStore, AccessEvent } from '../account/index.js';
 
 /** The core set a wildcard grant maps to — the types the record screens actually use. */
 export const WILDCARD_RESOURCE_TYPES = [
@@ -147,6 +148,62 @@ export function importLegacySources(store: SourceStore, sources: LegacySource[])
     report.imported.push(label);
     if (source.refreshToken === '') {
       report.needsReconnect.push(label);
+    }
+  }
+  return report;
+}
+
+// ---------------------------------------------------------------------------
+// The account's own records (yourphr#596): legal consent and the access log
+
+export interface LegacyAccountData {
+  username: string;
+  /** Go's user setting tos_privacy_accepted_at; '' when never accepted or revoked. */
+  consentAcceptedAt: string;
+  accessEvents: AccessEvent[];
+}
+
+const hasTable = (goDb: InstanceType<typeof Database>, name: string): boolean =>
+  goDb.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+
+/**
+ * Reads, per live user, the legal consent timestamp (a user_settings row) and the access log
+ * (access_events buckets). Either table may be absent on an older Go schema — that reads as
+ * "nothing recorded", not as a failure. The patient's own audit trail carries whole: Go keeps it
+ * indefinitely, so the swap must not be the day it vanished.
+ */
+export function readGoAccountData(goDb: InstanceType<typeof Database>): LegacyAccountData[] {
+  const users = goDb.prepare('SELECT id, username FROM users WHERE deleted_at IS NULL').all() as { id: string; username: string }[];
+  const consent = hasTable(goDb, 'user_settings')
+    ? goDb.prepare("SELECT user_id, COALESCE(setting_value_string, '') AS at FROM user_settings WHERE setting_key_name = 'tos_privacy_accepted_at' AND deleted_at IS NULL").all() as { user_id: string; at: string }[]
+    : [];
+  const events = hasTable(goDb, 'access_events')
+    ? goDb.prepare('SELECT user_id, actor_username, category, day, count, first_at, last_at FROM access_events WHERE deleted_at IS NULL ORDER BY day, category').all() as ({ user_id: string } & AccessEvent)[]
+    : [];
+  return users.map((u) => ({
+    username: u.username,
+    consentAcceptedAt: (consent.find((c) => c.user_id === u.id)?.at ?? '').trim(),
+    accessEvents: events.filter((e) => e.user_id === u.id).map(({ user_id: _ignored, ...event }) => ({ ...event, count: Number(event.count) })),
+  }));
+}
+
+export interface AccountImportReport {
+  consentsCarried: string[];
+  accessEventsImported: number;
+  accessEventsSkipped: number;
+}
+
+/** One-way: a consent already recorded here is kept; an access bucket already present is kept. */
+export function importLegacyAccountData(store: AccountStore, data: LegacyAccountData[]): AccountImportReport {
+  const report: AccountImportReport = { consentsCarried: [], accessEventsImported: 0, accessEventsSkipped: 0 };
+  for (const d of data) {
+    if (d.consentAcceptedAt !== '' && store.consentAcceptedAt(d.username) === '') {
+      store.setConsentAcceptedAt(d.username, d.consentAcceptedAt);
+      report.consentsCarried.push(d.username);
+    }
+    for (const event of d.accessEvents) {
+      if (store.importAccessEvent(d.username, event)) report.accessEventsImported++;
+      else report.accessEventsSkipped++;
     }
   }
   return report;

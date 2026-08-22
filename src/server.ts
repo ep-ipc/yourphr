@@ -76,6 +76,20 @@ export interface ServerModules {
     /** Throws on a malformed query — the caller gets 400 with the reason. */
     query: (repo: SqliteFhirRepository, body: Record<string, unknown>) => unknown[];
   };
+  /** The account page and the legal pages (yourphr#596). */
+  account?: {
+    /** GET /api/legal/:kind — public. Throws when an operator override is unusable. */
+    legalDocument: (kind: string) => unknown | undefined;
+    accessLog: (username: string) => unknown[];
+    /** Called for every listed GET a signed-in user makes; the store folds it into a day bucket. */
+    recordAccess: (username: string, pathname: string) => void;
+    legalConsent: (username: string) => unknown;
+    grantConsent: (username: string) => unknown;
+    revokeConsent: (username: string) => unknown;
+    changePassword: (username: string, current: string, next: string) => { ok: true; token?: string } | { ok: false; status: number; error: string };
+    signOutEverywhere: (username: string) => void;
+    deleteAccount: (username: string) => void;
+  };
   /** GET/POST/DELETE /api/secure/user/favorites (yourphr#595): the caller's starred practitioners. */
   favorites?: {
     list: (username: string, resourceType: string) => unknown[];
@@ -314,6 +328,12 @@ export function createYourPhrServer(options: ServerOptions) {
         send(res, 200, {success: true, data: {first_run_wizard: false, standby_mode: false}});
         return;
       }
+      const legalMatch = url.pathname.match(/^\/api\/legal\/([^/]+)$/);
+      if (options.modules?.account && legalMatch && req.method === 'GET') {
+        const document = options.modules.account.legalDocument(decodeURIComponent(legalMatch[1]!));
+        document === undefined ? send(res, 404, {success: false, error: `unknown legal document "${legalMatch[1]}"`}) : send(res, 200, {success: true, data: document});
+        return;
+      }
       if (url.pathname === '/api/instance/public' && req.method === 'GET') {
         send(res, 200, {success: true, data: options.modules?.publicInstance?.() ?? {}});
         return;
@@ -368,6 +388,66 @@ export function createYourPhrServer(options: ServerOptions) {
         }
         repo = auth.repoForUser(session.username);
         sessionUser = session.username;
+      }
+
+      // The access log (yourphr#596): a listed GET by a signed-in user is an access of their record.
+      if (auth && options.modules?.account && req.method === 'GET') {
+        options.modules.account.recordAccess(sessionUser, url.pathname);
+      }
+
+      // --- the account page (yourphr#596) ---
+      if (auth && options.modules?.account && url.pathname.startsWith('/api/secure/account/')) {
+        const account = options.modules.account;
+        if (url.pathname === '/api/secure/account/access-log' && req.method === 'GET') {
+          send(res, 200, {success: true, data: account.accessLog(sessionUser)});
+          return;
+        }
+        if (url.pathname === '/api/secure/account/legal-consent' && req.method === 'GET') {
+          send(res, 200, {success: true, data: account.legalConsent(sessionUser)});
+          return;
+        }
+        if (url.pathname === '/api/secure/account/legal-consent/grant' && req.method === 'POST') {
+          send(res, 200, {success: true, data: account.grantConsent(sessionUser)});
+          return;
+        }
+        if (url.pathname === '/api/secure/account/legal-consent/revoke' && req.method === 'POST') {
+          send(res, 200, {success: true, data: account.revokeConsent(sessionUser)});
+          return;
+        }
+        if (url.pathname === '/api/secure/account/password' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          const current = typeof body?.['current_password'] === 'string' ? (body['current_password'] as string) : '';
+          const next = typeof body?.['new_password'] === 'string' ? (body['new_password'] as string) : '';
+          if (!body || current === '' || next === '') {
+            send(res, 400, {success: false, error: 'invalid request'});
+            return;
+          }
+          const changed = account.changePassword(sessionUser, current, next);
+          if (!changed.ok) {
+            send(res, changed.status, {success: false, error: changed.error});
+            return;
+          }
+          // The generation bump ended this session too; a fresh one rides back on the cookie, as Go does.
+          if (changed.token) {
+            res.setHeader('Set-Cookie', sessionCookie(changed.token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
+            send(res, 200, {success: true, data: changed.token});
+          } else {
+            send(res, 200, {success: true});
+          }
+          return;
+        }
+        if (url.pathname === '/api/secure/account/sign-out-everywhere' && req.method === 'POST') {
+          account.signOutEverywhere(sessionUser);
+          res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
+          send(res, 200, {success: true});
+          return;
+        }
+        if (url.pathname === '/api/secure/account/me' && req.method === 'DELETE') {
+          account.deleteAccount(sessionUser);
+          res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
+          send(res, 200, {success: true});
+          return;
+        }
       }
 
       // Who am I — the call the Angular app makes on every route to decide it is signed in, and

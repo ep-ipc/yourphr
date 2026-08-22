@@ -39,6 +39,14 @@ function makeGoInstance(root: string, options: { badRow?: boolean } = {}): strin
   db.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, NULL)').run('u-1', 'jim', hash, 2, 'admin');
   db.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, NULL)').run('u-2', 'pat', hash, 0, 'user');
   db.prepare("INSERT INTO users VALUES ('u-3', 'ghost', ?, 0, 'user', '2026-01-01')").run(hash);
+  // The account's own records (yourphr#596): consent as a user setting, the access log as day buckets.
+  db.exec(`CREATE TABLE user_settings (id TEXT PRIMARY KEY, user_id TEXT, setting_key_name TEXT, setting_value_string TEXT, deleted_at TEXT)`);
+  db.prepare("INSERT INTO user_settings VALUES ('s-1', 'u-1', 'tos_privacy_accepted_at', '2026-03-01T10:00:00Z', NULL)").run();
+  db.prepare("INSERT INTO user_settings VALUES ('s-2', 'u-2', 'tos_privacy_accepted_at', '', NULL)").run();
+  db.exec(`CREATE TABLE access_events (id TEXT PRIMARY KEY, user_id TEXT, actor_username TEXT, category TEXT, day TEXT, count INTEGER, first_at TEXT, last_at TEXT, deleted_at TEXT)`);
+  db.prepare("INSERT INTO access_events VALUES ('e-1', 'u-1', 'jim', 'Conditions', '2026-04-01', 3, '2026-04-01T08:00:00Z', '2026-04-01T09:00:00Z', NULL)").run();
+  db.prepare("INSERT INTO access_events VALUES ('e-2', 'u-1', 'jim', 'Summary', '2026-04-02', 1, '2026-04-02T08:00:00Z', '2026-04-02T08:00:00Z', NULL)").run();
+  db.prepare("INSERT INTO access_events VALUES ('e-3', 'u-3', 'ghost', 'Summary', '2026-04-02', 1, '2026-04-02T08:00:00Z', '2026-04-02T08:00:00Z', NULL)").run();
 
   db.exec(`CREATE TABLE source_credentials (id TEXT PRIMARY KEY, user_id TEXT, display TEXT, api_endpoint_base_url TEXT, client_id TEXT,
     patient TEXT, scopes TEXT, access_token TEXT, refresh_token TEXT, expires_at INTEGER, environment TEXT, deleted_at TEXT)`);
@@ -113,6 +121,10 @@ async function main(): Promise<void> {
 
   check('users: both live accounts imported, the soft-deleted one left behind',
     report.users.imported.sort().join(',') === 'jim,pat' && report.users.goLive === 2 && report.users.admins.join(',') === 'jim');
+  check('account data: the legal consent and the access log carry whole, per live user (yourphr#596)',
+    report.account.consentsCarried.join(',') === 'jim' && report.account.accessEventsImported === 2 && stores.account.consentAcceptedAt('jim') === '2026-03-01T10:00:00Z'
+      && stores.account.consentAcceptedAt('pat') === '' && stores.account.listAccess('jim').map((e) => `${e.day}:${e.category}:${e.count}`).join(',') === '2026-04-02:Summary:1,2026-04-01:Conditions:3'
+      && stores.account.listAccess('ghost').length === 0);
   const signIn = stores.auth.signIn('jim', PASSWORD, { remoteAddr: '127.0.0.1', xff: undefined });
   const storedHash = (stores.db.prepare('SELECT password_hash FROM auth_users WHERE username = ?').get('jim') as { password_hash: string }).password_hash;
   check('a migrated account signs in with its Go password and is rehashed on the way (yourphr#583)', signIn.ok && !isLegacyBcrypt(storedHash));

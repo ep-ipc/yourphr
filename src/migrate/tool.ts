@@ -27,7 +27,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Resource, ResourceType } from '@medplum/fhirtypes';
 import { readGoUsers, importLegacyUsers, type ImportReport as UserImportReport } from '../auth/index.js';
-import { readGoSources, importLegacySources, type SourceImportReport } from './index.js';
+import { readGoSources, importLegacySources, readGoAccountData, importLegacyAccountData, type SourceImportReport, type AccountImportReport } from './index.js';
 import type { CatalogWrite, ProviderCatalog } from '../catalog/index.js';
 import type { ConfigStore, ConfigValue } from '../config/index.js';
 import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
@@ -528,6 +528,7 @@ export interface MigrationOptions {
 
 export interface MigrationReport {
   users: UserImportReport & { goLive: number };
+  account: AccountImportReport;
   catalog: CatalogImportReport;
   sources: SourceImportReport;
   records: RecordImportReport;
@@ -549,6 +550,8 @@ export async function migrateFromGo(goDb: GoDb, stores: Stores, options: Migrati
 
   log(`users: ${selectedUsers.length} of ${liveUsers.length} live accounts selected`);
   const users = { ...importLegacyUsers(stores.auth, readGoUsers(goDb).filter((u) => selected.has(u.username))), goLive: liveUsers.length };
+  log('account data (legal consent, access log)');
+  const account = importLegacyAccountData(stores.account, readGoAccountData(goDb).filter((d) => selected.has(d.username)));
 
   log('catalog');
   const catalog = importLegacyCatalog(stores.catalog, readGoCatalog(goDb), { allowInternal: options.allowInternalUrls });
@@ -572,7 +575,7 @@ export async function migrateFromGo(goDb: GoDb, stores: Stores, options: Migrati
     records.rejectedTotal === 0 &&
     users.imported.length + users.skippedExisting.length === selectedUsers.length;
 
-  return { users, catalog, sources, records, config, verify, ok };
+  return { users, account, catalog, sources, records, config, verify, ok };
 }
 
 export function formatReport(r: MigrationReport): string {
@@ -582,6 +585,7 @@ export function formatReport(r: MigrationReport): string {
   section('users');
   lines.push(`  imported ${r.users.imported.length}, already present ${r.users.skippedExisting.length} (Go has ${r.users.goLive} live)`);
   if (r.users.admins.length) lines.push(`  Go admins carried as admin here: ${r.users.admins.join(', ')}`);
+  lines.push(`  legal consent carried for ${r.account.consentsCarried.length} account(s); access log buckets imported ${r.account.accessEventsImported}, already present ${r.account.accessEventsSkipped}`);
 
   section('catalog');
   lines.push(`  imported ${r.catalog.imported.length}, already present ${r.catalog.skippedExisting.length}, rejected ${r.catalog.rejected.length}`);

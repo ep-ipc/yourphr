@@ -54,7 +54,8 @@
     "@medplum/fhirtypes": "^5.1.29",
     "bcryptjs": "^3.0.3",
     "better-sqlite3-multiple-ciphers": "^13.0.3",
-    "fhirpath": "^5.1.1"
+    "fhirpath": "^5.1.1",
+    "marked": "^18.0.10"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

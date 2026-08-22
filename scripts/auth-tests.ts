@@ -269,6 +269,14 @@ async function main(): Promise<void> {
     const signedIn = store.signIn('admin', bootPassword, REQ);
     check('the bootstrap password signs in', signedIn.ok);
     check('the bootstrap account is created with the admin ROLE, not recognised by name (yourphr#597)', store.roleOf('admin') === 'admin');
+    const minted = store.issueSession('admin');
+    check('a session can be minted for an existing account (after a password change) and verifies; never for a stranger (yourphr#596)',
+      !!minted && store.verifySession(minted).ok && store.issueSession('nobody') === undefined);
+    store.createUser('temp', 'a-temporary-long-password');
+    const tempSession = store.issueSession('temp');
+    store.changePassword('temp', 'a-temporary-long-password', 'a-brand-new-long-password');
+    check('the minted session dies with the generation bump of a password change', !!tempSession && !store.verifySession(tempSession).ok);
+    check('deleting the account removes it; a second delete reports nothing to delete', store.deleteUser('temp') && !store.deleteUser('temp') && store.roleOf('temp') === undefined);
     check('the password file is DELETED after the first successful sign-in (backups must not carry it)',
       !existsSync(first.passwordFile as string));
 

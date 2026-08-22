@@ -391,6 +391,29 @@ export class AuthStore {
   }
 
   /**
+   * A fresh session for an account that just proved itself another way — after a password change,
+   * whose generation bump ended the session that made it (yourphr#596, Go's ChangePassword does the
+   * same). Not a sign-in: no throttle, no password, and undefined for an account that does not exist.
+   */
+  issueSession(username: string, nowSeconds = Math.floor(Date.now() / 1000)): string | undefined {
+    const row = this.userRow(username);
+    if (!row) return undefined;
+    const claims: SessionClaims = {
+      u: username,
+      g: row.token_generation,
+      iat: nowSeconds,
+      exp: nowSeconds + this.session.slidingSeconds,
+      cap: nowSeconds + this.session.absoluteSeconds,
+    };
+    return issueToken(this.config.sessionKey, claims);
+  }
+
+  /** Removes the account. The caller removes what the account owned first. */
+  deleteUser(username: string): boolean {
+    return this.db.prepare('DELETE FROM auth_users WHERE username = ?').run(username).changes > 0;
+  }
+
+  /**
    * Provision the first admin without the first-run wizard (yourphr#504). The wizard is a RACE on
    * an internet-facing host: the first account on an empty database becomes the admin, and the app
    * cannot tell the operator from a passing stranger.
