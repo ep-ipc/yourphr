@@ -1,21 +1,5 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-08-21
-
-- Last worked on: __the spike became the successor.__ Jim decided it replaces yourPHR at parity; [#543](https://github.com/jwilleke/yourphr/issues/543) = cut over, gated on the parity epic [#591](https://github.com/jwilleke/yourphr/issues/591). [#586](https://github.com/jwilleke/yourphr/issues/586) migration tool built and VERIFIED on a prod copy (20,068 records, 53/53; 58/58 with Go's own answers); [#587](https://github.com/jwilleke/yourphr/issues/587) shipped: `v0.1.0` image, Flux `yourphr-ts` pod Running in the cluster beside Go (no Ingress). First parity audit run (`frontend/scripts/parity-audit.mjs`): fixed the spike's browser session contract (cookie, envelope, boot calls — spike `8e68dd5`), measured 15 missing endpoints, filed [#593](https://github.com/jwilleke/yourphr/issues/593)–[#597](https://github.com/jwilleke/yourphr/issues/597). Also: 7 Dependabot PRs merged, 15 in-review closed, yarn-audit bridges [#589](https://github.com/jwilleke/yourphr/issues/589)/[#590](https://github.com/jwilleke/yourphr/issues/590), `docs/migration-path.md` written.
-- Branch / state: `main` clean + pushed (product, spike; flux `master` clean + pushed). 0 stashes.
-- Running / in-flight: cluster pod `yourphr-ts` Running (0.1.0 — predates the session fix, harmless, nothing routes to it). Docs-only CI on `74450a6` finishing. External PR [#598](https://github.com/jwilleke/yourphr/pull/598) has a workflow awaiting first-contributor approval (`action_required`).
-- Parked / half-done: local audit artifacts outside git — `yourphr-ts-spike/phi/prod-2.10.2/` (prod copy, gitignored), `/tmp/spike-prod-test`, `/tmp/spike-audit`, `/tmp/spike-web`; recreate the audit instance with `node dist/main.js` + `SPIKE_STORAGE_DATA_DIR=/tmp/spike-audit SPIKE_WEB_STATIC_DIR=/tmp/spike-web SPIKE_WEB_LISTEN_PORT=18090`.
-- Next steps:
-  - [#598](https://github.com/jwilleke/yourphr/pull/598) (external, P1): Jim decides — approve CI run, Go-freeze collision, needs a security read (browser-reachable Typesense, per-request CSP). Offer `/security-review`.
-  - [#597](https://github.com/jwilleke/yourphr/issues/597) real admin role first (unblocks admin-page measurement), then [#593](https://github.com/jwilleke/yourphr/issues/593) shell → [#594](https://github.com/jwilleke/yourphr/issues/594) sources → [#595](https://github.com/jwilleke/yourphr/issues/595) records → [#596](https://github.com/jwilleke/yourphr/issues/596) account; re-run the audit after each; cut `v0.2.0` when the shell stops 404ing.
-  - [#592](https://github.com/jwilleke/yourphr/issues/592) frontend: `/settings` sends `Bearer null` → signs out on prod; 5 call sites; ship as 2.10.3.
-  - Close calls for Jim: [#586](https://github.com/jwilleke/yourphr/issues/586), [#587](https://github.com/jwilleke/yourphr/issues/587) (in-review); parents [#537](https://github.com/jwilleke/yourphr/issues/537), [#542](https://github.com/jwilleke/yourphr/issues/542) (all children closed).
-  - [#588](https://github.com/jwilleke/yourphr/issues/588) runbook: cut from `docs/migration-path.md`; rollback rehearsal needs Jim at the Ingress.
-- Blockers / significant notes: never put prod account names in public issues (classifier blocked one; re-posted sanitized). Repo visibility ≠ package visibility on ghcr. Chrome tab group drops when two browsers are connected — the Playwright audit script replaced hand-driving. Lesson on the spike: the "9/9 frontend contract" never covered auth transport.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
 > __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
 
@@ -28,15 +12,13 @@
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
-- [#600](https://github.com/jwilleke/yourphr/pull/600) — fix(frontend): make ReportMedicalHistoryEditorComponent standalone with its own imports *(PR · blocked — checks pending)* — no linked issue
 - [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
-- [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — checks pending)* — no linked issue
+- [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — checks pending)* — refs [#599](https://github.com/jwilleke/yourphr/issues/599) (search goal kept there), [#600](https://github.com/jwilleke/yourphr/pull/600) merged; external, decision posted
 - [#597](https://github.com/jwilleke/yourphr/issues/597) — [SPIKE] Parity: a real admin role — the migrated operator must reach the admin pages
 - [#596](https://github.com/jwilleke/yourphr/issues/596) — [SPIKE] Parity: account page and legal — access log, legal consent, privacy and terms text, password change, sign out everywhere
 - [#595](https://github.com/jwilleke/yourphr/issues/595) — [SPIKE] Parity: dashboard and record pages — recent, reconciled conditions, classified allergies/immunizations, labs query, favorites
 - [#594](https://github.com/jwilleke/yourphr/issues/594) — [SPIKE] Parity: the Sources page — list, connectable catalog, events stream, per-source actions
 - [#593](https://github.com/jwilleke/yourphr/issues/593) — [SPIKE] Parity: the app shell — /api/secure/instance and /api/secure/jobs on every page
-- [#592](https://github.com/jwilleke/yourphr/issues/592) — [BUG] /settings sends `Authorization: Bearer null` and signs the user out — reads a localStorage token that has not existed since #118
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
 - [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
@@ -118,6 +100,7 @@
 
 ## 🔵 In review
 
+- [#592](https://github.com/jwilleke/yourphr/issues/592) — [BUG] /settings sends `Authorization: Bearer null` and signs the user out — reads a localStorage token that has not existed since #118
 - [#587](https://github.com/jwilleke/yourphr/issues/587) — [SPIKE] Phase 5: package and deploy the spike — image, release tagging, Flux entry
 - [#586](https://github.com/jwilleke/yourphr/issues/586) — [SPIKE] Phase 5: one-command, per-user, verified migration tool
 
@@ -133,4 +116,5 @@
 
 ## ❓ Needs triage
 
+- [#601](https://github.com/jwilleke/yourphr/issues/601) — Unraid App Template
 - [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
