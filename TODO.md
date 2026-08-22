@@ -13,7 +13,7 @@
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
-- [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — checks pending)* — refs [#599](https://github.com/jwilleke/yourphr/issues/599) (search goal kept there), [#600](https://github.com/jwilleke/yourphr/pull/600) merged; external, decision posted
+- [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — checks pending)* — no linked issue (external; architecture declined, search goal carried by its own P1 issue)
 - [#597](https://github.com/jwilleke/yourphr/issues/597) — [SPIKE] Parity: a real admin role — the migrated operator must reach the admin pages
 - [#596](https://github.com/jwilleke/yourphr/issues/596) — [SPIKE] Parity: account page and legal — access log, legal consent, privacy and terms text, password change, sign out everywhere
 - [#595](https://github.com/jwilleke/yourphr/issues/595) — [SPIKE] Parity: dashboard and record pages — recent, reconciled conditions, classified allergies/immunizations, labs query, favorites
