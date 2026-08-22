@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.10.3](https://github.com/jwilleke/yourphr/compare/v2.10.2...v2.10.3) (2026-08-22)
+
+Opening the Settings page no longer signs you out.
+
+### Bug Fixes
+
+- __The Settings page signed you out__ ([#592](https://github.com/jwilleke/yourphr/issues/592)). It built its own `Authorization` header from a browser-storage token that has not existed since the session moved into an HttpOnly cookie, so every call it made carried `Bearer null`, the server refused it, and the app treated the refusal as a dead session. The page now relies on the cookie like every other page. Found by the parity audit that measures the TypeScript stack against the real UI ([#591](https://github.com/jwilleke/yourphr/issues/591)).
+- __A from-scratch frontend build no longer fails on a dead component__ ([#600](https://github.com/jwilleke/yourphr/pull/600), lifted from [#598](https://github.com/jwilleke/yourphr/pull/598) by Parth Kheni). `ReportMedicalHistoryEditorComponent` is now standalone with its own imports.
+
+### Dependencies
+
+- Angular 20.3.29 and CLI 20.3.34; angular-fontawesome 3.0.0; compodoc 2.0.0; ts-node 9.1.1; chromatic 18.2.0; logrus 1.10.0; actions/checkout v7.
+
 ## [2.10.2](https://github.com/jwilleke/yourphr/compare/v2.10.1...v2.10.2) (2026-08-20)
 
 Security patch — no features, no behavior changes.
