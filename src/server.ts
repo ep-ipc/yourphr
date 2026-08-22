@@ -110,7 +110,6 @@ export interface ServerModules {
     /** Throws with a status-bearing error: 400 unknown/invalid, 409 env-pinned. */
     configSet: (key: string, value: unknown) => void;
     configReset: (key: string) => boolean;
-    backupNow: () => Promise<unknown>;
     createUser: (ctx: ApiContext, username: string, password: string, role?: string) => Promise<void>;
     /** The Users page (yourphr#604). */
     listUsers: (ctx: ApiContext) => Promise<unknown[]>;
@@ -118,13 +117,7 @@ export interface ServerModules {
     instanceSettings: () => { name: string; contact_email: string; contact_url: string };
     setInstanceSettings: (s: { name: string; contact_email: string; contact_url: string }) => void;
     metrics: (ctx: ApiContext) => Promise<unknown> | unknown;
-    databaseInfo: () => Promise<unknown>;
-    /** Returns the file path of a fresh backup for streaming. */
-    backupFile: () => Promise<{ file: string; name: string; sizeBytes: number }>;
-    setSchedule: (body: Record<string, unknown>) => unknown;
-    testDestination: (destination: string) => unknown;
-    browse: (path: string) => unknown;
-    stageRestore: (backupName: string) => Promise<unknown>;
+    databaseInfo: (ctx: ApiContext) => Promise<unknown>;
     logs: () => { level: string; valid_levels: string[]; lines: string[] };
     setLogLevel: (level: string) => string;
     relayConfig: () => unknown;
@@ -850,57 +843,59 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/admin/database' && req.method === 'GET') {
-          send(res, 200, {success: true, data: await admin.databaseInfo()});
+          send(res, 200, {success: true, data: await admin.databaseInfo(ctx)});
           return;
         }
-        if (url.pathname === '/api/secure/admin/database/backup' && req.method === 'POST') {
+        const backups = engine.has('backups') ? engine.managers.backups : undefined;
+        const backupFailed = (err: unknown): void => send(res, (err as ApiError).status ?? 400, {success: false, error: (err as Error).message});
+        if (backups && url.pathname === '/api/secure/admin/database/backup' && req.method === 'POST') {
           try {
-            const b = await admin.backupFile();
+            const b = await backups.backupNow(ctx);
             send(res, 200, {success: true, data: {filename: b.name, path: b.file, destination: dirname(b.file), size_bytes: b.sizeBytes}});
           } catch (err) {
-            send(res, 400, {success: false, error: (err as Error).message});
+            backupFailed(err);
           }
           return;
         }
-        if (url.pathname === '/api/secure/admin/database/backup/download' && req.method === 'POST') {
+        if (backups && url.pathname === '/api/secure/admin/database/backup/download' && req.method === 'POST') {
           let b: { file: string; name: string; sizeBytes: number };
           try {
-            b = await admin.backupFile();
+            b = await backups.backupNow(ctx);
           } catch (err) {
-            send(res, 400, {success: false, error: (err as Error).message});
+            backupFailed(err);
             return;
           }
           res.writeHead(200, {'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename=${b.name}`, 'Content-Length': b.sizeBytes});
           createReadStream(b.file).pipe(res);
           return;
         }
-        if (url.pathname === '/api/secure/admin/database/schedule' && req.method === 'POST') {
+        if (backups && url.pathname === '/api/secure/admin/database/schedule' && req.method === 'POST') {
           const body = await readJsonBody(req);
           if (!body) {
             send(res, 400, {success: false, error: 'invalid request'});
             return;
           }
           try {
-            send(res, 200, {success: true, data: admin.setSchedule(body)});
+            send(res, 200, {success: true, data: backups.setSchedule(ctx, body as never)});
           } catch (err) {
-            send(res, 400, {success: false, error: (err as Error).message});
+            backupFailed(err);
           }
           return;
         }
-        if (url.pathname === '/api/secure/admin/database/backup/test' && req.method === 'POST') {
+        if (backups && url.pathname === '/api/secure/admin/database/backup/test' && req.method === 'POST') {
           const body = await readJsonBody(req);
-          send(res, 200, {success: true, data: admin.testDestination(typeof body?.['destination'] === 'string' ? (body['destination'] as string) : '')});
+          send(res, 200, {success: true, data: await backups.testDestination(ctx, typeof body?.['destination'] === 'string' ? (body['destination'] as string) : '')});
           return;
         }
-        if (url.pathname === '/api/secure/admin/database/browse' && req.method === 'GET') {
+        if (backups && url.pathname === '/api/secure/admin/database/browse' && req.method === 'GET') {
           try {
-            send(res, 200, {success: true, data: admin.browse(url.searchParams.get('path') ?? '')});
+            send(res, 200, {success: true, data: await backups.browse(ctx, url.searchParams.get('path') ?? '')});
           } catch (err) {
-            send(res, 400, {success: false, error: (err as Error).message});
+            backupFailed(err);
           }
           return;
         }
-        if (url.pathname === '/api/secure/admin/database/restore' && req.method === 'POST') {
+        if (backups && url.pathname === '/api/secure/admin/database/restore' && req.method === 'POST') {
           const body = await readJsonBody(req);
           const name = typeof body?.['backup_name'] === 'string' ? (body['backup_name'] as string) : '';
           if (!body || name === '') {
@@ -912,10 +907,9 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
           try {
-            send(res, 200, {success: true, data: await admin.stageRestore(name)});
+            send(res, 200, {success: true, data: await backups.stageRestore(ctx, name)});
           } catch (err) {
-            const message = (err as Error).message;
-            send(res, message.startsWith('no such backup') ? 404 : 400, {success: false, error: message});
+            backupFailed(err);
           }
           return;
         }
@@ -937,8 +931,8 @@ export function createYourPhrServer(options: ServerOptions) {
           send(res, 200, {success: true, data: await engine.managers.catalog.entries(ctx)});
           return;
         }
-        if (url.pathname === '/api/secure/admin/backup' && req.method === 'POST') {
-          send(res, 200, {success: true, data: await modules.admin.backupNow()});
+        if (engine.has('backups') && url.pathname === '/api/secure/admin/backup' && req.method === 'POST') {
+          send(res, 200, {success: true, data: await engine.managers.backups.backupNow(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/admin/users' && req.method === 'POST') {

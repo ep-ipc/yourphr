@@ -254,9 +254,10 @@ export class RecordsManager extends BaseManager {
     return { manager: this.name, takenAt: (options.now ?? new Date()).toISOString(), files: [result.file], ...result };
   }
 
-  async restore(): Promise<void> {
-    // A records restore is staged by the backup coordinator and applied at the next start (see
-    // src/admin) — a live file is never overwritten. Until Backups is a manager, that path stays.
-    throw new ApiError(501, 'records restore is applied at start from a staged file, not live');
+  /** The base contract (yourphr#615): the backup named in `data.files` is staged under this store's key and applied at the next start — a live file is never overwritten. */
+  async restore(data: BackupData, options: { key: string }): Promise<void> {
+    const file = data.files?.[0];
+    if (!file) throw new ApiError(400, 'a records restore needs the backup file to stage');
+    await this.provider.stageRestore(file, options.key);
   }
 }

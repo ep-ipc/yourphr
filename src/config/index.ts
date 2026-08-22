@@ -62,6 +62,7 @@ export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
   'audit.provider': { default: 'sqlite', description: "Where the patient-visible access log is kept. REQUIRED (yourphr#614): there is no inert default — an unknown or unhealthy provider refuses to boot rather than run with auditing off." },
   'sources.client.provider': { default: 'smart', description: "How connected sources are reached: 'smart' (SMART on FHIR over the guarded HTTP client) or 'null' (an instance that never syncs — nothing fetched, every sync says why). Optional capability (yourphr#612)." },
   'sync.max-pages': { default: 500, description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
+  'backup.storage.provider': { default: 'filesystem', description: "Where backup artifacts live: 'filesystem' (a local folder — the data directory, a NAS mount) or 'null' (no backup storage: the instance serves, every backup action refuses with a reason). Optional capability (yourphr#615)." },
   'backup.destination': { default: '', description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
   'backup.max-backups': { default: 7, description: 'Retention: newest N backups are kept; 0 disables pruning.' },
   'backup.schedule.enabled': { default: false, description: 'Run scheduled backups from this process (yourphr#602).' },

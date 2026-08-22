@@ -101,4 +101,9 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
     this.backups.push({ destination: options.destination, key: options.key });
     return { file: `${options.destination}/fake.db`, sizeBytes: this.rows.size, pruned: [] };
   }
+  staged: { backupFile: string; backupKey: string }[] = [];
+  async stageRestore(backupFile: string, backupKey: string): Promise<{ tables: number }> {
+    this.staged.push({ backupFile, backupKey });
+    return { tables: 3 };
+  }
 }

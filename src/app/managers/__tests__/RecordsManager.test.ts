@@ -121,7 +121,9 @@ describe('RecordsManager — the one door, scoped to whoever is asking', () => {
     expect(b.manager).toBe('records');
     expect(b.files).toEqual(['/dest/fake.db']);
     expect(provider.backups).toEqual([{ destination: '/dest', key: 'k' }]);
-    await expect(records.restore()).rejects.toMatchObject({ status: 501 });
+    await expect(records.restore({ manager: 'backups', takenAt: 'now' }, { key: 'k' })).rejects.toMatchObject({ status: 400 });
+    await records.restore({ manager: 'backups', takenAt: 'now', files: ['/dest/fake.db'] }, { key: 'travel-key' });
+    expect(provider.staged).toEqual([{ backupFile: '/dest/fake.db', backupKey: 'travel-key' }]);
     expect(await records.integrityOk()).toBe(true);
   });
 });

@@ -63,6 +63,8 @@ export abstract class BaseRecordsProvider {
   abstract integrityOk(): Promise<boolean>;
   /** An encrypted copy of the whole store under `key`; returns the file written. */
   abstract backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }>;
+  /** Stage a backup back under this store's own key, next to its own files, for the next start. */
+  abstract stageRestore(backupFile: string, backupKey: string): Promise<{ tables: number }>;
 }
 
 export type { ResourceType };

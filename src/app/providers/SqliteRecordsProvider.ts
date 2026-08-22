@@ -9,7 +9,8 @@ import type Database from 'better-sqlite3-multiple-ciphers';
 import type { Bundle, Resource } from '@medplum/fhirtypes';
 import type { SearchRequest, WithId } from '@medplum/core';
 import { SqliteFhirRepository } from '../../SqliteFhirRepository.js';
-import { backupDatabase } from '../../backup/index.js';
+import { dirname } from 'node:path';
+import { backupDatabase, stageInstanceRestore } from './sqlite-backup.js';
 import { BaseRecordsProvider, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
 
 const PARAM_NAME = /^[a-z][a-z0-9-]*$/i;
@@ -226,5 +227,9 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
       now: options.now,
       alsoExport: options.alsoExport as InstanceType<typeof Database>[] | undefined,
     });
+  }
+
+  async stageRestore(backupFile: string, backupKey: string): Promise<{ tables: number }> {
+    return stageInstanceRestore(backupFile, backupKey, dirname(this.file), this.key ?? '');
   }
 }

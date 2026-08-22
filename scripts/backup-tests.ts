@@ -12,7 +12,7 @@ import { mkdtempSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
-import { backupDatabase, listBackups, stageRestore, backupFileName } from '../src/backup/index.js';
+import { backupDatabase, listBackups, stageRestore, backupFileName } from '../src/app/providers/sqlite-backup.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {

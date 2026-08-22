@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { stageRestore } from '../src/backup/index.js';
+import { stageRestore } from '../src/app/providers/sqlite-backup.js';
 import { assembleApp, sourceShape } from '../src/app.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
 

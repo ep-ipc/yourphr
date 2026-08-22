@@ -46,10 +46,13 @@ import { providerRequiresLegalConsent } from './account/index.js';
 import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { loadLegalDocument, parseLegalKind } from './legal/index.js';
-import { AdminOps, applyStagedRestore } from './admin/index.js';
+import { BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
+import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
+import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
+import { BACKUP_SUFFIX, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
 import { basename } from 'node:path';
-import { backupDatabase } from './backup/index.js';
+import { existsSync, statSync } from 'node:fs';
 import { createYourPhrServer, toResourceFhir } from './server.js';
 import { SqliteFhirRepository } from './SqliteFhirRepository.js';
 import { randomBytes } from 'node:crypto';
@@ -151,6 +154,8 @@ export interface Stores {
   favorites: FavoriteStore;
   /** The access log (yourphr#614) — required; refuses to boot unhealthy. */
   audit: AuditManager;
+  /** Backups (yourphr#615): schedule, health, staged restore over optional storage. */
+  backups: BackupManager;
   /** The composition root (yourphr#608): managers, in validated boot order. */
   engine: Engine;
   /** The one door to records (yourphr#609). */
@@ -158,6 +163,13 @@ export interface Stores {
   /** The PHI-storage provider — for the migration tool's verification gate, which reads below the manager on purpose. */
   recordsProvider: SqliteRecordsProvider;
   close: () => Promise<void>;
+}
+
+/** The backup-storage provider configuration names: 'filesystem' or 'null' (inert, said so); anything else refuses to boot. */
+function backupProviderFor(name: string): BaseBackupProvider {
+  if (name === 'filesystem') return new FilesystemBackupProvider(BACKUP_SUFFIX);
+  if (name === 'null') { appLog.warn('backup.storage.provider = null: no backup storage — every backup action will refuse'); return new NullBackupProvider(); }
+  throw new Error(`backup.storage.provider: unknown provider '${name}' (filesystem or null)`);
 }
 
 /** The audit provider configuration names: only 'sqlite' exists; anything else is a refusal, never a silent Null. */
@@ -188,7 +200,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const dbKey = config.getString('database.encryption.key');
   const engine = new Engine();
   const engineRef = (): Engine => engine;
-  applyStagedRestore(dataDir, config.getString('database.location'), (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
+  applyStagedRestore(dataDir, [[STAGED_RECORDS, 'records.db'], [STAGED_APP, config.getString('database.location')]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
   const db = new Database(join(dataDir, config.getString('database.location')));
   if (dbKey !== '') {
     db.pragma("cipher='sqlcipher'");
@@ -216,7 +228,10 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('audit.provider'), db)));
   engine.register('users', users);
   engine.register('sessions', sessions);
-  engine.register('records', new RecordsManager(engine, recordsProvider));
+  const recordsManager = new RecordsManager(engine, recordsProvider);
+  engine.register('records', recordsManager);
+  // Backups (yourphr#615): the coordinator over OPTIONAL storage; the records door is the exporter.
+  engine.register('backups', new BackupManager(engine, backupProviderFor(config.getString('backup.storage.provider')), { dataDir, exporter: recordsManager, alsoExport: [db] }));
   // 7. Jobs and Sources (yourphr#612): the source client is an OPTIONAL capability — bound by
   // configuration, loaded only when configured, inert (and said so) when not.
   const events = new EventBus();
@@ -232,12 +247,12 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(db), sourceClient, { allowInternal, log: (line) => appLog.warn(line) }));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
-  const { records, sources, jobs, catalog, audit } = engine.managers;
+  const { records, sources, jobs, catalog, audit, backups } = engine.managers;
   // The Records manager names a source for the records that carry its id — asked of the Sources door.
   records.sourceDisplay = (sourceId) => sources.displayOf(sourceId);
 
   return {
-    config, db, dbKey, users, sessions, catalog, sources, jobs, events, favorites, audit, engine, records, recordsProvider,
+    config, db, dbKey, users, sessions, catalog, sources, jobs, events, favorites, audit, backups, engine, records, recordsProvider,
     close: async () => {
       await engine.shutdown();
       db.close();
@@ -255,6 +270,7 @@ export interface App {
   sources: SourcesManager;
   jobs: JobsManager;
   audit: AuditManager;
+  backups: BackupManager;
   bootstrapPasswordFile?: string;
   syncNow: (now?: number) => Promise<unknown>;
   backupNow: () => Promise<unknown>;
@@ -263,7 +279,7 @@ export interface App {
 
 export async function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): Promise<App> {
   const stores = await openStores(dataDir, options.env ?? process.env);
-  const { config, users, sessions, catalog, sources, favorites, audit, engine, records, events } = stores;
+  const { config, users, sessions, catalog, sources, favorites, audit, backups, engine, records, events } = stores;
   /** The worker and the migration tool act for an account as a named system principal. */
   const systemCtx = (name: string, username: string): ApiContext => ApiContext.system(name, username, engine);
 
@@ -281,15 +297,15 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     : undefined;
   timer?.unref?.();
 
-  const adminOps = new AdminOps({ dataDir, config, appDb: stores.db, sources, records });
-  const backupNow = () => adminOps.backupNow();
+  const scheduler = ApiContext.system('scheduler', 'scheduler', engine);
+  const backupNow = () => backups.backupNow(scheduler);
   // The scheduler (yourphr#602): once a minute, is a backup due? Outcome recorded by backupNow.
   let lastScheduledMinute: string | undefined;
   const scheduleTimer = options.workerIntervalMs === undefined ? undefined : setInterval(() => {
     const now = new Date();
-    if (!adminOps.scheduleDue(now, lastScheduledMinute)) return;
+    if (!backups.due(now, lastScheduledMinute)) return;
     lastScheduledMinute = now.toISOString().slice(0, 16);
-    adminOps.backupNow().then(
+    backupNow().then(
       (r) => appLog.info(`scheduled backup written: ${r.file} (${r.sizeBytes} bytes)`),
       (err: Error) => appLog.error(`scheduled backup failed: ${err.message}`)
     );
@@ -432,7 +448,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           if (!spec) throw withStatus(400, `unknown configuration key ${JSON.stringify(key)}`);
           return config.clear(key);
         },
-        backupNow,
         createUser: (ctx, username, password, role) => users.createUser(ctx, username, password, role === 'admin' ? 'admin' : 'user'),
         listUsers: async (ctx) => (await users.listUsers(ctx)).map((u) => ({ id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0 })),
         resetUserPassword: async (ctx, username) => {
@@ -447,15 +462,28 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           config.set('operator.contact_url', s.contact_url);
         },
         metrics: (ctx) => sources.adminMetrics(ctx),
-        databaseInfo: () => adminOps.databaseInfo(),
-        backupFile: async () => {
-          const r = await adminOps.backupNow();
-          return { file: r.file, name: basename(r.file), sizeBytes: r.sizeBytes };
+        // Go's DatabaseInfoResponse over this stack's two files — a view composed from the doors.
+        databaseInfo: async (ctx) => {
+          const files = [join(dataDir, config.getString('database.location')), join(dataDir, 'records.db')];
+          const sizeBytes = files.reduce((n, f) => n + (existsSync(f) ? statSync(f).size : 0), 0);
+          const quickCheck = (): boolean => {
+            try { return String((stores.db.pragma('quick_check') as { quick_check: string }[])[0]?.quick_check ?? '').toLowerCase() === 'ok'; } catch { return false; }
+          };
+          return {
+            location: files.join(' + '),
+            encryption_enabled: config.getString('database.encryption.key') !== '',
+            size_bytes: sizeBytes,
+            users: await users.count(ctx),
+            sources: await sources.count(),
+            integrity_ok: quickCheck() && (await records.integrityOk()),
+            backup_destination: backups.destination(),
+            backups: (await backups.list(ctx)).map((b) => ({ name: b.name, size_bytes: b.sizeBytes, modified: b.modified })),
+            schedule: backups.schedule(),
+            backup_health: backups.health(),
+            allowed_backup_roots: [],
+            backups_unavailable: backups.unavailable(),
+          };
         },
-        setSchedule: (body) => adminOps.setSchedule(body as never),
-        testDestination: (destination) => adminOps.testDestination(destination),
-        browse: (path) => adminOps.browse(path),
-        stageRestore: (name) => adminOps.stageRestore(name),
         logs: () => ({ level: appLog.currentLevel(), valid_levels: VALID_LEVELS, lines: appLog.recent() }),
         setLogLevel: (level) => {
           const set = appLog.setLevel(level);
@@ -478,6 +506,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     sources,
     jobs: stores.jobs,
     audit,
+    backups,
     bootstrapPasswordFile: bootstrap.passwordFile,
     syncNow: (now?: number) => sources.pass(now),
     backupNow,

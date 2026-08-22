@@ -31,9 +31,16 @@
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
+import type { SqliteFhirRepository } from '../../SqliteFhirRepository.js';
 
 const SUFFIX = '-yourphr-spike-backup.db';
+/** What one of our artifacts is called — the backup-storage provider lists by it. */
+export const BACKUP_SUFFIX = SUFFIX;
+/** Tables that live in records.db; everything else in a backup belongs to the app database. */
+export const RECORDS_TABLES = new Set(['resources', 'resource_history', 'search_index']);
+/** The staged halves a restore writes next to the live files; applied at the next start. */
+export const STAGED_RECORDS = 'records.db.staged';
+export const STAGED_APP = 'spike.db.staged';
 
 /**
  * Copies every table, index, trigger and view from the main database into the attached schema,
@@ -197,4 +204,14 @@ export function stageRestore(
   } finally {
     db.close();
   }
+}
+
+/**
+ * Stage a whole-instance restore (yourphr#602, #615): both halves of a backup are exported under
+ * the live key into <dataDir>/*.staged; the next start swaps them in. Live files are never touched.
+ */
+export function stageInstanceRestore(backupFile: string, backupKey: string, dataDir: string, targetKey: string): { tables: number } {
+  const records = stageRestore(backupFile, backupKey, join(dataDir, STAGED_RECORDS), targetKey, (t) => RECORDS_TABLES.has(t));
+  stageRestore(backupFile, backupKey, join(dataDir, STAGED_APP), targetKey, (t) => !RECORDS_TABLES.has(t));
+  return { tables: records.tables };
 }

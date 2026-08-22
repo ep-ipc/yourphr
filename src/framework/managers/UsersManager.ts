@@ -138,6 +138,12 @@ export class UsersManager extends BaseManager {
     return password;
   }
 
+  /** How many accounts the instance holds — the admin's database page. */
+  async count(ctx: ApiContext): Promise<number> {
+    if (ctx.system === '') ctx.requireAdmin();
+    return this.provider.count();
+  }
+
   /** The caller deletes their own account (the rest of what they own is the app's to remove first). */
   async deleteSelf(ctx: ApiContext): Promise<boolean> {
     ctx.requireAuthenticated();
