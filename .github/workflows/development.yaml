@@ -89,6 +89,11 @@ jobs:
     container: ghcr.io/packagrio/packagr:latest-golang
     env:
       STATIC: true
+      # The image ships GOTOOLCHAIN=local, which silently ignores go.mod's `toolchain` line: the
+      # suite was running on the image's Go (1.26.5) while go.mod pins 1.26.6, and the first
+      # govulncheck run (#607) reported the 1.26.5 stdlib advisories. `auto` downloads the pinned
+      # toolchain (into the cached module dir) so tests and the scan see the Go the release builds with.
+      GOTOOLCHAIN: auto
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
