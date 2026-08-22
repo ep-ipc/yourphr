@@ -9,6 +9,7 @@ import { createServer, type ServerResponse } from 'node:http';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { assembleApp } from '../src/app.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
@@ -91,6 +92,7 @@ async function main(): Promise<void> {
   check('the admin user-create route enforces the password policy', shortPw.status === 400);
   const created = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'alice', password: 'a-long-enough-password' }) });
   check('the admin creates a user over the wire', created.status === 200);
+  check('and that user is a user, not an admin (yourphr#597)', app.auth.roleOf('alice') === 'user');
 
   const aliceToken = ((await (await signIn('alice', 'a-long-enough-password')).json()) as { data: string }).data;
 
@@ -117,6 +119,12 @@ async function main(): Promise<void> {
   // Admin surface: gated, masked, working.
   const aliceAdmin = await fetch(`${base}/api/secure/admin/config`, authed(aliceToken));
   check('a non-admin gets 403 from the admin surface', aliceAdmin.status === 403);
+  // The gate is the ROLE, not the name (yourphr#597): an admin called anything else gets in.
+  app.auth.createUser('ops', 'an-operator-password', 'admin');
+  const opsToken = ((await (await signIn('ops', 'an-operator-password')).json()) as { data: string }).data;
+  const opsMe = (await (await fetch(`${base}/api/secure/account/me`, authed(opsToken))).json()) as { data: { role: string } };
+  const opsAdmin = await fetch(`${base}/api/secure/admin/config`, authed(opsToken));
+  check('an admin not named admin reaches the admin surface — the gate reads the role column', opsMe.data.role === 'admin' && opsAdmin.status === 200);
   const snapshot = (await (await fetch(`${base}/api/secure/admin/config`, authed(adminToken))).json()) as { data: { key: string; value: unknown; source: string }[] };
   const secretRow = snapshot.data.find((r) => r.key === 'database.encryption.key');
   check('the config snapshot masks secrets and names sources', secretRow?.value === '••••' && secretRow?.source === 'environment');
@@ -134,6 +142,23 @@ async function main(): Promise<void> {
   fake.close();
   app.close();
   rmSync(dir, { recursive: true, force: true });
+
+  // --- a database from before the role column (yourphr#597): nobody is demoted, the named admin stays one ---
+  {
+    const oldDir = mkdtempSync(join(tmpdir(), 'spike-app-prerole-'));
+    const old = new Database(join(oldDir, 'spike.db'));
+    old.exec(`CREATE TABLE auth_users (username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, token_generation INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)`);
+    old.prepare("INSERT INTO auth_users VALUES ('admin', 'x', 0, '2026-08-20'), ('pat', 'x', 0, '2026-08-20')").run();
+    old.exec(`CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, description TEXT NOT NULL, applied_at TEXT NOT NULL)`);
+    old.prepare("INSERT INTO schema_migrations VALUES ('20260820200000', 'baseline', '2026-08-20')").run();
+    old.close();
+    const upgraded = assembleApp(oldDir, { env: { SPIKE_TEST_ALLOW_INTERNAL: '1' } });
+    check('a pre-role database boots, and bootstrap does not run (the table was populated)', !upgraded.bootstrapPasswordFile);
+    check('the account named admin — the admin until now — is recorded as one', upgraded.auth.roleOf('admin') === 'admin');
+    check('every other pre-existing account is a user', upgraded.auth.roleOf('pat') === 'user');
+    upgraded.close();
+    rmSync(oldDir, { recursive: true, force: true });
+  }
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

@@ -268,6 +268,7 @@ async function main(): Promise<void> {
     const bootPassword = readFileSync(first.passwordFile as string, 'utf8').trim();
     const signedIn = store.signIn('admin', bootPassword, REQ);
     check('the bootstrap password signs in', signedIn.ok);
+    check('the bootstrap account is created with the admin ROLE, not recognised by name (yourphr#597)', store.roleOf('admin') === 'admin');
     check('the password file is DELETED after the first successful sign-in (backups must not carry it)',
       !existsSync(first.passwordFile as string));
 
@@ -314,6 +315,10 @@ async function main(): Promise<void> {
     check('import is one-way: the existing account is skipped and reported, never overwritten',
       report.imported.join(',') === 'jim' && report.skippedExisting.join(',') === 'mary');
     check('Go admins are reported for the role wiring', report.admins.join(',') === 'jim');
+    check('the Go role is CARRIED: the operator there is the operator here (yourphr#597)',
+      store.roleOf('jim') === 'admin' && store.isAdmin('jim'));
+    check('a skipped account keeps its own role (one-way means the role too)', store.roleOf('mary') === 'user' && !store.isAdmin('mary'));
+    check('an unknown account has no role', store.roleOf('nobody') === undefined && !store.isAdmin('nobody'));
 
     const storedBefore = (appDb.prepare("SELECT password_hash FROM auth_users WHERE username = 'jim'").get() as { password_hash: string }).password_hash;
     check('the imported hash is the bcrypt hash, verbatim', isLegacyBcrypt(storedBefore));

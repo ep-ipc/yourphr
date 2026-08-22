@@ -9,9 +9,10 @@
  * seeding after the catalog exists and never clobbering operator edits; the worker last, because
  * it must find everything else standing.
  *
- * Roles, honestly scoped: the operator is the BOOTSTRAP admin account. A real role column is
- * Phase-5 work (it touches migration of Go's users table); a single-operator household is the
- * deployment this spike models, and the gate is a named simplification, not an accident.
+ * Roles (yourphr#597): the admin gate reads `auth_users.role`. The bootstrap account is created
+ * 'admin', imported Go accounts carry Go's role, and the migration below translates the earlier
+ * "the account named admin is the admin" simplification (yourphr#582) into data for installs that
+ * predate the column — so the bootstrap admin keeps working and nobody is silently demoted.
  *
  * openStores() is the first half of that order, factored out so the migration tool (yourphr#586)
  * opens EXACTLY the stores the server opens — same files, same key, same per-user repository seam.
@@ -21,7 +22,7 @@
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { ConfigStore } from './config/index.js';
-import { runMigrations, type Migration } from './migrations/index.js';
+import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
 import { AuthStore } from './auth/index.js';
 import { ProviderCatalog, type CatalogWrite } from './catalog/index.js';
 import { SourceStore, runSyncPass } from './worker/index.js';
@@ -43,6 +44,25 @@ const APP_MIGRATIONS: Migration[] = [
     id: '20260820200000',
     description: 'assembly baseline — module schemas owned by their constructors, ledger established',
     up: () => undefined,
+  },
+  {
+    id: '20260822090000',
+    description: 'auth_users.role (yourphr#597) — the admin gate reads a column; the account named admin, which WAS the admin until now, is recorded as one',
+    up: (db) => {
+      // Frozen pre-role shape: on a fresh database the table does not exist yet (the constructor
+      // would create it, with the column, a step later) — create it here so ADD COLUMN has a table.
+      db.exec(`CREATE TABLE IF NOT EXISTS auth_users (
+        username TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        token_generation INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )`);
+      const columns = (db.pragma('table_info(auth_users)') as { name: string }[]).map((c) => c.name);
+      if (!columns.includes('role')) {
+        addColumnWithDefault(db, 'auth_users', 'role', 'TEXT', 'user');
+      }
+      db.exec(`UPDATE auth_users SET role = 'admin' WHERE username = 'admin'`);
+    },
   },
 ];
 
@@ -181,7 +201,7 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
         provenanceFor({ db: repo.db, userId: repo.userId ?? '', sourceDisplay }, resourceType, id),
       medications,
       admin: {
-        isAdmin: (username) => username === 'admin', // the named simplification — see module header
+        isAdmin: (username) => auth.isAdmin(username),
         configSnapshot: () => config.snapshot(),
         catalogList: () => catalog.list(),
         backupNow,

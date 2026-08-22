@@ -578,7 +578,7 @@ export function formatReport(r: MigrationReport): string {
 
   section('users');
   lines.push(`  imported ${r.users.imported.length}, already present ${r.users.skippedExisting.length} (Go has ${r.users.goLive} live)`);
-  if (r.users.admins.length) lines.push(`  Go admins: ${r.users.admins.join(', ')} — the spike's admin is the bootstrap account; role migration is not part of this rung`);
+  if (r.users.admins.length) lines.push(`  Go admins carried as admin here: ${r.users.admins.join(', ')}`);
 
   section('catalog');
   lines.push(`  imported ${r.catalog.imported.length}, already present ${r.catalog.skippedExisting.length}, rejected ${r.catalog.rejected.length}`);

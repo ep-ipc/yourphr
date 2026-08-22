@@ -31,8 +31,14 @@
  * sign in. token_generation is carried through the import, so a revocation that happened on Go
  * stays revoked here.
  *
+ * Roles (yourphr#597): `auth_users.role` is 'admin' or 'user', nothing else. The bootstrap account
+ * is created 'admin'; imported Go accounts carry Go's role; everybody else is 'user'. The admin gate
+ * reads the column — the earlier "the account named admin is the admin" simplification (yourphr#582)
+ * is gone, translated into data for pre-existing installs by the app migration that added the column.
+ *
  * Deliberately NOT here, recorded rather than silently absent (yourphr#541 acceptance):
  *   - a durable throttle store (counters are in-memory; a restart clears them)
+ *   - role changes over HTTP (there is no "make me admin" route; roles come from bootstrap or import)
  */
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -204,6 +210,26 @@ export interface AuthConfig {
 /** The one message for every sign-in failure (yourphr#104). */
 export const GENERIC_SIGNIN_ERROR = 'invalid username or password';
 
+export type Role = 'admin' | 'user';
+
+/** Anything that is not exactly 'admin' is a user — a typo in a role is never a privilege. */
+export function normaliseRole(role: unknown): Role {
+  return role === 'admin' ? 'admin' : 'user';
+}
+
+/**
+ * The table as the constructor creates it on a fresh database. The app migration that added
+ * `role` (src/app.ts, 20260822) carries a frozen copy of the pre-role shape — keep this one current
+ * and that one untouched.
+ */
+export const AUTH_USERS_SCHEMA = `CREATE TABLE IF NOT EXISTS auth_users (
+  username TEXT PRIMARY KEY,
+  password_hash TEXT NOT NULL,
+  token_generation INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user'
+)`;
+
 export class AuthStore {
   private readonly session: SessionPolicy;
   private readonly throttlePolicy: ThrottlePolicy;
@@ -217,21 +243,26 @@ export class AuthStore {
     this.minPasswordLength = config.minPasswordLength ?? 12;
     this.trustedProxies = config.trustedProxies ?? [];
     this.throttle = new Throttle(this.throttlePolicy);
-    db.exec(`CREATE TABLE IF NOT EXISTS auth_users (
-      username TEXT PRIMARY KEY,
-      password_hash TEXT NOT NULL,
-      token_generation INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL
-    )`);
+    db.exec(AUTH_USERS_SCHEMA);
   }
 
-  createUser(username: string, password: string): void {
+  createUser(username: string, password: string, role: Role = 'user'): void {
     if (!/^[a-z0-9][a-z0-9._-]{1,62}$/.test(username)) {
       throw new Error('username must be 2-63 chars: lowercase letters, digits, . _ - (leading alphanumeric)');
     }
     this.checkPolicy(password);
-    this.db.prepare('INSERT INTO auth_users (username, password_hash, token_generation, created_at) VALUES (?, ?, 0, ?)')
-      .run(username, hashPassword(password), new Date().toISOString());
+    this.db.prepare('INSERT INTO auth_users (username, password_hash, token_generation, created_at, role) VALUES (?, ?, 0, ?, ?)')
+      .run(username, hashPassword(password), new Date().toISOString(), role);
+  }
+
+  /** The account's role, or undefined for an account that does not exist. */
+  roleOf(username: string): Role | undefined {
+    const row = this.db.prepare('SELECT role FROM auth_users WHERE username = ?').get(username) as { role: string } | undefined;
+    return row ? normaliseRole(row.role) : undefined;
+  }
+
+  isAdmin(username: string): boolean {
+    return this.roleOf(username) === 'admin';
   }
 
   private checkPolicy(password: string): void {
@@ -376,7 +407,7 @@ export class AuthStore {
       return { created: false };
     }
     const password = randomBytes(24).toString('base64url');
-    this.createUser(username, password);
+    this.createUser(username, password, 'admin');
     mkdirSync(dataDir, { recursive: true });
     const file = join(dataDir, '.admin_bootstrap_password');
     writeFileSync(file, password + '\n', { mode: 0o600 });
@@ -447,7 +478,9 @@ export interface ImportReport {
 /**
  * Imports Go accounts, one-way (yourphr#583): an existing spike account is never overwritten —
  * skipped and reported, same posture as bootstrap. The bcrypt hash lands verbatim (sign-in
- * upgrades it); token_generation is carried so Go-side revocations stay revoked.
+ * upgrades it); token_generation is carried so Go-side revocations stay revoked; Go's role is
+ * carried (yourphr#597) — an account that was the operator there is the operator here. A skipped
+ * account keeps the role it already has: one-way means the role too.
  */
 export function importLegacyUsers(store: AuthStore, users: LegacyUser[]): ImportReport {
   const report: ImportReport = { imported: [], skippedExisting: [], admins: [] };
@@ -461,10 +494,11 @@ export function importLegacyUsers(store: AuthStore, users: LegacyUser[]): Import
     if (!isLegacyBcrypt(user.passwordHash)) {
       throw new Error(`refusing to import ${user.username}: password hash is not a Go bcrypt hash`);
     }
-    db.prepare('INSERT INTO auth_users (username, password_hash, token_generation, created_at) VALUES (?, ?, ?, ?)')
-      .run(user.username, user.passwordHash, user.tokenGeneration, new Date().toISOString());
+    const role = normaliseRole(user.role);
+    db.prepare('INSERT INTO auth_users (username, password_hash, token_generation, created_at, role) VALUES (?, ?, ?, ?, ?)')
+      .run(user.username, user.passwordHash, user.tokenGeneration, new Date().toISOString(), role);
     report.imported.push(user.username);
-    if (user.role === 'admin') {
+    if (role === 'admin') {
       report.admins.push(user.username);
     }
   }
