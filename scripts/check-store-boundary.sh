@@ -18,12 +18,11 @@ cd "$(dirname "$0")/.."
 # Where the store and the driver may legitimately live.
 ALLOW_DRIVER='^src/framework/|^src/app/providers/|^src/SqliteFhirRepository\.ts'
 # Not yet converted to managers over providers — each line is a #608 child:
-#   src/migrations    engine-owned schema ledger
 #   src/config        ConfigurationManager's store
 #   src/migrate       reads the GO database (a different store) and carries rows through the managers
-#   src/app.ts        opens the app database until the engine owns the shared connection
+#   src/app.ts        the composition root: builds providers over the engine-owned handle
 #   src/sync          repositoryWriter for the harnesses that hand a repository in (retire with Favorites/Records fold)
-ALLOW_TRANSITIONAL='^src/(migrations|config|migrate|sync|ips)/|^src/app\.ts'
+ALLOW_TRANSITIONAL='^src/(config|migrate|sync|ips)/|^src/app\.ts'
 
 # A type-only import cannot reach a store; it only names the shape a legacy option accepts.
 driver_hits=$(

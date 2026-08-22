@@ -128,7 +128,7 @@ async function main(): Promise<void> {
       && (await stores.users.consentAcceptedAt(asUser('pat'))) === '' && (await stores.audit.list(asUser('jim'))).map((e) => `${e.day}:${e.category}:${e.count}`).join(',') === '2026-04-02:Summary:1,2026-04-01:Conditions:3'
       && (await stores.audit.list(asUser('ghost'))).length === 0);
   const signIn = await stores.sessions.signIn('jim', { password: PASSWORD }, { remoteAddr: '127.0.0.1', xff: undefined });
-  const storedHash = (stores.db.prepare('SELECT password_hash FROM auth_users WHERE username = ?').get('jim') as { password_hash: string }).password_hash;
+  const storedHash = (await stores.users.record('jim'))!.passwordHash;
   check('a migrated account signs in with its Go password and is rehashed on the way (yourphr#583)', signIn.ok && !isLegacyBcrypt(storedHash));
 
   check('catalog: live entries imported, the retired one skipped, an unknown environment rejected by name',

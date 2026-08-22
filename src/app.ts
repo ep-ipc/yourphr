@@ -22,7 +22,9 @@
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { ConfigStore, envNameFor, type ConfigValue } from './config/index.js';
-import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
+import { addColumnWithDefault, type Migration } from './framework/providers/sqlite-migrations.js';
+import { DatabaseManager } from './framework/managers/DatabaseManager.js';
+import { SqliteDatabaseProvider } from './framework/providers/SqliteDatabaseProvider.js';
 import { UsersManager } from './framework/managers/UsersManager.js';
 import { SessionsManager } from './framework/managers/SessionsManager.js';
 import { SqliteUsersProvider } from './framework/providers/SqliteUsersProvider.js';
@@ -138,6 +140,7 @@ const APP_MIGRATIONS: Migration[] = [
 /** Everything that owns data, opened the one way the server opens it. */
 export interface Stores {
   config: ConfigStore;
+  /** The app database's handle — the composition root's and the harnesses'; never a route's. */
   db: InstanceType<typeof Database>;
   /** '' when the database is unencrypted. */
   dbKey: string;
@@ -200,12 +203,10 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const engine = new Engine();
   const engineRef = (): Engine => engine;
   applyStagedRestore(dataDir, [[STAGED_RECORDS, 'records.db'], [STAGED_APP, config.getString('database.location')]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
-  const db = new Database(join(dataDir, config.getString('database.location')));
-  if (dbKey !== '') {
-    db.pragma("cipher='sqlcipher'");
-    db.pragma(`key='${dbKey.replace(/'/g, "''")}'`);
-  }
-  runMigrations(db, APP_MIGRATIONS);
+  // The app database's one connection is the engine's (yourphr#617): opened and migrated by its
+  // provider before any sibling provider is built over it; closed last at shutdown.
+  const database = new DatabaseManager(engine, new SqliteDatabaseProvider(join(dataDir, config.getString('database.location')), dbKey, APP_MIGRATIONS));
+  const db = database.handle;
 
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
   // 3. Accounts and sessions as managers over providers (yourphr#611): user storage in the app
@@ -222,6 +223,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
   engine.register('configuration', new ConfigurationManager(engine, config));
+  engine.register('database', database);
   // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.
   engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('audit.provider'), db)));
   engine.register('users', users);
@@ -252,8 +254,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   return {
     config, db, dbKey, users, sessions, catalog, sources, jobs, events, audit, backups, engine, records, recordsProvider,
     close: async () => {
-      await engine.shutdown();
-      db.close();
+      await engine.shutdown(); // the database manager closes the connection, last
     },
   };
 }
@@ -457,16 +458,13 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
         databaseInfo: async (ctx) => {
           const files = [join(dataDir, config.getString('database.location')), join(dataDir, 'records.db')];
           const sizeBytes = files.reduce((n, f) => n + (existsSync(f) ? statSync(f).size : 0), 0);
-          const quickCheck = (): boolean => {
-            try { return String((stores.db.pragma('quick_check') as { quick_check: string }[])[0]?.quick_check ?? '').toLowerCase() === 'ok'; } catch { return false; }
-          };
           return {
             location: files.join(' + '),
             encryption_enabled: config.getString('database.encryption.key') !== '',
             size_bytes: sizeBytes,
             users: await users.count(ctx),
             sources: await sources.count(),
-            integrity_ok: quickCheck() && (await records.integrityOk()),
+            integrity_ok: (await engine.managers.database.integrityOk()) && (await records.integrityOk()),
             backup_destination: backups.destination(),
             backups: (await backups.list(ctx)).map((b) => ({ name: b.name, size_bytes: b.sizeBytes, modified: b.modified })),
             schedule: backups.schedule(),

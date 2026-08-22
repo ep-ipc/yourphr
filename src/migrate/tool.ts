@@ -487,7 +487,7 @@ export async function verifyAgainstGo(goDb: GoDb, stores: Stores, users: GoUser[
     disagreements: [],
     counts: {
       goUsers: readGoUserIds(goDb).length,
-      tsUsers: (stores.db.prepare('SELECT COUNT(*) AS n FROM auth_users').get() as { n: number }).n,
+      tsUsers: await stores.users.count(ApiContext.system('migration', 'migration', stores.engine)),
       goSources: readGoSources(goDb).length,
       tsSources: await stores.sources.count(),
     },

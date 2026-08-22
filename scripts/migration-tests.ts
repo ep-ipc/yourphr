@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { runMigrations, addColumnWithDefault, type Migration } from '../src/migrations/index.js';
+import { runMigrations, addColumnWithDefault, type Migration } from '../src/framework/providers/sqlite-migrations.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
