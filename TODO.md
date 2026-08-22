@@ -98,6 +98,7 @@
 
 ## 🔵 In review
 
+- [#609](https://github.com/jwilleke/yourphr/issues/609) — [SPIKE] #608 child: framework skeleton (Engine, BaseManager, ApiContext, ConfigurationManager, store-boundary lint) + RecordsManager over SqliteRecordsProvider
 - [#604](https://github.com/jwilleke/yourphr/issues/604) — [SPIKE] Parity: users page — list, create, admin password reset
 - [#603](https://github.com/jwilleke/yourphr/issues/603) — [SPIKE] Parity: provider-catalog admin page and sandbox page
 - [#607](https://github.com/jwilleke/yourphr/issues/607) — [CHORE] govulncheck in CI — the Go side had no vulnerability scan (local vendor/ staleness was a red herring)
