@@ -60,6 +60,9 @@ export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
   'sync.max-pages': { default: 500, description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
   'backup.destination': { default: '', description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
   'backup.max-backups': { default: 7, description: 'Retention: newest N backups are kept; 0 disables pruning.' },
+  'operator.name': { default: '', description: 'Who runs this instance — shown on the contact, privacy and help pages (yourphr#593). Public.' },
+  'operator.contact_email': { default: '', description: 'How a signed-in member reaches the operator. Withheld from anonymous callers (yourphr#459).' },
+  'operator.contact_url': { default: '', description: 'A contact page or form for this instance. Public.' },
   'backup.encryption.key': { default: '', bootstrap: true, secret: true, description: 'Backups are ALWAYS encrypted under this key — its own secret, not the database key, because the copy that travels and the copy that stays should not fall together. Bootstrap: env only.' },
 };
 

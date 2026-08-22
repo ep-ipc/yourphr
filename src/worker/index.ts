@@ -36,6 +36,8 @@ export interface ConnectedSource {
 }
 
 export interface JobSummary {
+  /** Row id; absent on a summary that has not been recorded yet. */
+  id?: number;
   sourceId: number;
   outcome: 'success' | 'failure';
   received: number;
@@ -136,7 +138,27 @@ export class SourceStore {
     const rows = sourceId
       ? this.db.prepare('SELECT * FROM sync_jobs WHERE source_id = ? ORDER BY id').all(sourceId)
       : this.db.prepare('SELECT * FROM sync_jobs ORDER BY id').all();
-    return (rows as Record<string, unknown>[]).map((r) => ({
+    return this.toSummaries(rows as Record<string, unknown>[]);
+  }
+
+  /**
+   * The jobs a signed-in member may see: those of THEIR sources, newest first (yourphr#593). The
+   * per-user seam is the join on connected_sources.user_id — a job never names a user itself.
+   */
+  jobsForUser(userId: string, query: { limit: number; offset: number; outcome?: 'success' | 'failure' } = { limit: 20, offset: 0 }): JobSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT j.* FROM sync_jobs j JOIN connected_sources s ON s.id = j.source_id
+         WHERE s.user_id = ? AND (? IS NULL OR j.outcome = ?)
+         ORDER BY j.id DESC LIMIT ? OFFSET ?`
+      )
+      .all(userId, query.outcome ?? null, query.outcome ?? null, query.limit, query.offset);
+    return this.toSummaries(rows as Record<string, unknown>[]);
+  }
+
+  private toSummaries(rows: Record<string, unknown>[]): JobSummary[] {
+    return rows.map((r) => ({
+      id: r['id'] as number,
       sourceId: r['source_id'] as number,
       outcome: r['outcome'] as 'success' | 'failure',
       received: r['received'] as number,

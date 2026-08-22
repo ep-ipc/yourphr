@@ -69,6 +69,10 @@ export interface ServerModules {
   /** Admin surface (yourphr#582): gate decides who counts as the operator. */
   /** What an anonymous caller may know about this instance (GET /api/instance/public). */
   publicInstance?: () => Record<string, unknown>;
+  /** What a signed-in member may know (GET /api/secure/instance, yourphr#593): public plus the operator contact. */
+  instanceForUser?: (username: string) => Record<string, unknown>;
+  /** GET /api/secure/jobs (yourphr#593): the caller's sync jobs in Go's BackgroundJob shape. */
+  jobsForUser?: (username: string, query: { limit: number; page: number; status?: string; jobType?: string }) => unknown[];
   admin?: {
     isAdmin: (username: string) => boolean;
     configSnapshot: () => unknown;
@@ -335,6 +339,27 @@ export function createYourPhrServer(options: ServerOptions) {
 
       // --- the assembled modules (yourphr#582) ---
       const modules = options.modules;
+      // The two calls every page makes (yourphr#593): who runs this instance, and the job indicator.
+      if (modules?.instanceForUser && url.pathname === '/api/secure/instance' && req.method === 'GET') {
+        send(res, 200, {success: true, data: modules.instanceForUser(sessionUser)});
+        return;
+      }
+      if (modules?.jobsForUser && url.pathname === '/api/secure/jobs' && req.method === 'GET') {
+        const limitParam = Number(url.searchParams.get('limit') ?? 0);
+        const pageParam = Number(url.searchParams.get('page') ?? 0);
+        if (!Number.isInteger(limitParam) || limitParam < 0 || !Number.isInteger(pageParam) || pageParam < 0) {
+          send(res, 400, {success: false, error: 'limit and page must be non-negative integers'});
+          return;
+        }
+        const query = {
+          limit: limitParam === 0 ? 20 : limitParam, // Go's ResourceListPageSize when unset or 0
+          page: pageParam,
+          status: url.searchParams.get('status') ?? undefined,
+          jobType: url.searchParams.get('jobType') ?? undefined,
+        };
+        send(res, 200, {success: true, data: modules.jobsForUser(sessionUser, query)});
+        return;
+      }
       if (modules?.ips && url.pathname === '/api/secure/summary/ips' && req.method === 'GET') {
         send(res, 200, {success: true, data: await modules.ips(repo)});
         return;

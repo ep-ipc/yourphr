@@ -142,9 +142,10 @@ async function main(): Promise<void> {
   check('records: per-user isolation holds across the migration', (patConditions.total ?? 0) === 1 && (patSeesJim.total ?? 0) === 0);
 
   check('config: the translatable keys are carried with their units converted',
-    report.config.carried.length === 2 && stores.config.getInt('auth.session.sliding-seconds') === 1800 && stores.config.getInt('backup.max-backups') === 3);
-  check('config: everything else is LISTED as not carried, nested shape flattened, comments dropped',
-    report.config.notCarried.join(',') === 'operator.name,theme.name');
+    report.config.carried.length === 3 && stores.config.getInt('auth.session.sliding-seconds') === 1800 && stores.config.getInt('backup.max-backups') === 3);
+  check('config: the operator contact is carried, nested shape flattened (yourphr#593)', stores.config.getString('operator.name') === 'Nerds by the Hour');
+  check('config: everything else is LISTED as not carried, comments dropped',
+    report.config.notCarried.join(',') === 'theme.name');
 
   check('VERIFY: every (user, type) id list agrees and the migration is ok',
     report.ok && report.verify.disagreements.length === 0 && report.verify.agreed === 4 && report.verify.typesCompared === 4 && report.verify.usersCompared.join(',') === 'jim,pat',

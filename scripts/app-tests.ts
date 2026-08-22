@@ -106,6 +106,27 @@ async function main(): Promise<void> {
   const conditions = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition`, authed(aliceToken))).json()) as { data: unknown[] };
   check('signed-in record read returns the synced records', conditions.data.length === 3);
 
+  // --- the two calls every page makes (yourphr#593) ---
+  type Job = { id: string; user_id: string; job_type: string; job_status: string; created_at: string; data: { source_id: string; summary: { outcome: string; total_resources: number } } };
+  const aliceJobs = (await (await fetch(`${base}/api/secure/jobs`, authed(aliceToken))).json()) as { data: Job[] };
+  const job = aliceJobs.data[0];
+  check('/secure/jobs lists the caller\'s sync job in Go\'s BackgroundJob shape',
+    aliceJobs.data.length === 1 && job?.job_type === 'SYNC' && job.job_status === 'STATUS_DONE' && job.user_id === 'alice'
+      && job.data.source_id.startsWith('source-') && job.data.summary.outcome === 'success' && job.data.summary.total_resources === 4 && !Number.isNaN(Date.parse(job.created_at)));
+  const adminJobs = (await (await fetch(`${base}/api/secure/jobs`, authed(adminToken))).json()) as { data: Job[] };
+  check('jobs are per-user: the admin, who owns no source, sees none', adminJobs.data.length === 0);
+  const failedOnly = (await (await fetch(`${base}/api/secure/jobs?status=STATUS_FAILED`, authed(aliceToken))).json()) as { data: Job[] };
+  const badPage = await fetch(`${base}/api/secure/jobs?page=-1`, authed(aliceToken));
+  check('Go\'s status filter and paging are honoured (nothing failed; a bad page is refused)', failedOnly.data.length === 0 && badPage.status === 400);
+
+  app.config.set('operator.name', 'Nerds by the Hour');
+  app.config.set('operator.contact_email', 'ops@example.org');
+  const instance = (await (await fetch(`${base}/api/secure/instance`, authed(aliceToken))).json()) as { data: Record<string, unknown> };
+  const publicInstance = (await (await fetch(`${base}/api/instance/public`)).json()) as { data: Record<string, unknown> };
+  check('/secure/instance names the operator with the contact email; /instance/public withholds the email (yourphr#459)',
+    instance.data['operator.name'] === 'Nerds by the Hour' && instance.data['operator.contact_email'] === 'ops@example.org' && instance.data['demo.admin.session'] === false
+      && publicInstance.data['operator.name'] === 'Nerds by the Hour' && !('operator.contact_email' in publicInstance.data));
+
   const meds = (await (await fetch(`${base}/api/secure/medications/reconciled`, authed(aliceToken))).json()) as { data: { name: string; state: string }[] };
   check('medications/reconciled serves the reconciled list over the wire',
     meds.data.length === 1 && meds.data[0]!.name === 'Lisinopril 10 MG' && meds.data[0]!.state === 'Active');

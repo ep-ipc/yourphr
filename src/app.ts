@@ -25,7 +25,7 @@ import { ConfigStore } from './config/index.js';
 import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
 import { AuthStore } from './auth/index.js';
 import { ProviderCatalog, type CatalogWrite } from './catalog/index.js';
-import { SourceStore, runSyncPass } from './worker/index.js';
+import { SourceStore, runSyncPass, type JobSummary } from './worker/index.js';
 import { backupDatabase } from './backup/index.js';
 import { buildIps } from './ips/index.js';
 import { provenanceFor } from './provenance/index.js';
@@ -129,6 +129,40 @@ export function openStores(dataDir: string, env: Record<string, string | undefin
   };
 }
 
+/**
+ * A recorded sync job in the shape of Go's BackgroundJob + BackgroundJobSyncData (yourphr#593), which
+ * is what the Angular shell and /background-jobs read. Only what the row holds: the job id is the
+ * row id, the user is the caller (the join proved ownership), and a recorded job is DONE or FAILED —
+ * never READY/LOCKED, because this stack records outcomes, not a queue. brand_id is empty (no brand
+ * here), the summary carries the counts the worker kept.
+ */
+export function backgroundJobShape(job: JobSummary, username: string): Record<string, unknown> {
+  const iso = (seconds: number): string => new Date(seconds * 1000).toISOString();
+  const done = job.outcome === 'success';
+  return {
+    id: String(job.id ?? ''),
+    created_at: iso(job.startedAt),
+    updated_at: iso(job.finishedAt),
+    user_id: username,
+    job_type: 'SYNC',
+    job_status: done ? 'STATUS_DONE' : 'STATUS_FAILED',
+    locked_time: iso(job.startedAt),
+    done_time: iso(job.finishedAt),
+    retries: 0,
+    data: {
+      source_id: `source-${job.sourceId}`,
+      brand_id: '',
+      ...(job.error ? { error_data: { error: job.error } } : {}),
+      summary: {
+        outcome: done ? 'success' : 'failed',
+        duration_ms: Math.max(0, job.finishedAt - job.startedAt) * 1000,
+        total_resources: job.received,
+        ...(job.error ? { error_message: job.error } : {}),
+      },
+    },
+  };
+}
+
 export interface App {
   server: ReturnType<typeof createYourPhrServer>;
   config: ConfigStore;
@@ -182,6 +216,15 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     return reconcile(inputs);
   };
 
+  // The instance keys Go publishes that this stack has a value for. A key this stack does not have
+  // (theme, demo, signup, the wider password policy) is ABSENT, and the Angular app's mapper already
+  // defaults an absent key — nothing is invented to fill Go's list.
+  const publicInstanceKeys = (): Record<string, unknown> => ({
+    'operator.name': config.getString('operator.name'),
+    'operator.contact_url': config.getString('operator.contact_url'),
+    'password.min_length': config.getInt('auth.password.min-length'),
+  });
+
   const sourceDisplay = (sourceId: string): string => {
     const numeric = Number(sourceId.replace('source-', ''));
     return sources.list().find((s) => s.id === numeric)?.display ?? '';
@@ -195,7 +238,22 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     modules: {
       // Only what an anonymous caller may know; the password minimum is published so the UI can say
       // it before the server refuses (yourphr#506's shape).
-      publicInstance: () => ({ 'password.min_length': config.getInt('auth.password.min-length') }),
+      publicInstance: publicInstanceKeys,
+      instanceForUser: () => ({
+        ...publicInstanceKeys(),
+        'operator.contact_email': config.getString('operator.contact_email'), // signed-in only (yourphr#459)
+        'demo.admin.session': false, // this stack has no demo admin; the UI reads strictly true
+      }),
+      jobsForUser: (username, query) => {
+        // Go's filters, honestly mapped: SYNC is the only job type here; STATUS_DONE/STATUS_FAILED are
+        // the only statuses a recorded job can have, so READY/LOCKED match nothing rather than something.
+        if (query.jobType && query.jobType !== 'SYNC') return [];
+        let outcome: 'success' | 'failure' | undefined;
+        if (query.status === 'STATUS_DONE') outcome = 'success';
+        else if (query.status === 'STATUS_FAILED') outcome = 'failure';
+        else if (query.status) return [];
+        return sources.jobsForUser(username, { limit: query.limit, offset: query.page * query.limit, outcome }).map((job) => backgroundJobShape(job, username));
+      },
       ips: (repo) => buildIps(repo, new Date()).then((d) => d.bundle),
       provenanceFor: (repo, resourceType, id) =>
         provenanceFor({ db: repo.db, userId: repo.userId ?? '', sourceDisplay }, resourceType, id),
