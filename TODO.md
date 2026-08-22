@@ -12,11 +12,12 @@
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
+- [#607](https://github.com/jwilleke/yourphr/issues/607) — [BUG] go build fails on main: vendor/modules.txt out of step with go.mod since the logrus bump (#565)
 - [#605](https://github.com/jwilleke/yourphr/issues/605) — [SPIKE] Parity: medical-history graph — POST /secure/resource/graph/MedicalHistory
 - [#604](https://github.com/jwilleke/yourphr/issues/604) — [SPIKE] Parity: users page — list, create, admin password reset
 - [#603](https://github.com/jwilleke/yourphr/issues/603) — [SPIKE] Parity: provider-catalog admin page and sandbox page
 - [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
-- [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — checks pending)* — no linked issue (external; architecture declined, search goal carried by its own P1 issue)
+- [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — required checks pending)* — no linked issue (external; architecture declined, search goal carried by its own P1 issue)
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
 - [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
@@ -33,12 +34,12 @@
 
 ## 🟡 P2
 
-- [#606](https://github.com/jwilleke/yourphr/issues/606) — [SPIKE] Parity: the glossary — GET /api/glossary/code on the labs page
 - [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] yarn build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#461](https://github.com/jwilleke/yourphr/issues/461) — [FEATURE] Encrypted database backups (and lift the encryption/backup exclusion)
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#606](https://github.com/jwilleke/yourphr/issues/606) — [SPIKE] Parity: the glossary — GET /api/glossary/code on the labs page
 - [#552](https://github.com/jwilleke/yourphr/issues/552) — [CHORE] Port the DICOM viewer to dwv 0.36 — removed APIs and a build path that no longer exists
 - [#551](https://github.com/jwilleke/yourphr/issues/551) — [CHORE] Migrate 647 *ngIf uses to Angular built-in control flow (@if/@for)
 - [#543](https://github.com/jwilleke/yourphr/issues/543) — [SPIKE] Phase 5: cut over, keep both, or stop — decided once, not by drift
@@ -100,11 +101,11 @@
 ## 🔵 In review
 
 - [#602](https://github.com/jwilleke/yourphr/issues/602) — [SPIKE] Parity: admin dashboard, database, logs and configuration pages
+- [#597](https://github.com/jwilleke/yourphr/issues/597) — [SPIKE] Parity: a real admin role — the migrated operator must reach the admin pages
 - [#596](https://github.com/jwilleke/yourphr/issues/596) — [SPIKE] Parity: account page and legal — access log, legal consent, privacy and terms text, password change, sign out everywhere
 - [#595](https://github.com/jwilleke/yourphr/issues/595) — [SPIKE] Parity: dashboard and record pages — recent, reconciled conditions, classified allergies/immunizations, labs query, favorites
 - [#594](https://github.com/jwilleke/yourphr/issues/594) — [SPIKE] Parity: the Sources page — list, connectable catalog, events stream, per-source actions
 - [#593](https://github.com/jwilleke/yourphr/issues/593) — [SPIKE] Parity: the app shell — /api/secure/instance and /api/secure/jobs on every page
-- [#597](https://github.com/jwilleke/yourphr/issues/597) — [SPIKE] Parity: a real admin role — the migrated operator must reach the admin pages
 - [#592](https://github.com/jwilleke/yourphr/issues/592) — [BUG] /settings sends `Authorization: Bearer null` and signs the user out — reads a localStorage token that has not existed since #118
 - [#587](https://github.com/jwilleke/yourphr/issues/587) — [SPIKE] Phase 5: package and deploy the spike — image, release tagging, Flux entry
 - [#586](https://github.com/jwilleke/yourphr/issues/586) — [SPIKE] Phase 5: one-command, per-user, verified migration tool
