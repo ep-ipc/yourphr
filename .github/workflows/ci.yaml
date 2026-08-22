@@ -111,3 +111,37 @@ jobs:
 
       - name: The process (boot from environment, /healthz, static, refusals, clean shutdown)
         run: npm run process
+
+  # E2E (yourphr#610): Playwright drives the BUILT Angular app — the bundle the image serves, pulled
+  # from the product image rather than rebuilt here — against a booted spike with synthetic data.
+  e2e:
+    name: E2E (Playwright over the built Angular app)
+    runs-on: ubuntu-latest
+    env:
+      FRONTEND_IMAGE: ghcr.io/jwilleke/yourphr:2.10.3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - name: Extract the built Angular app from the product image
+        run: |
+          id=$(docker create "$FRONTEND_IMAGE")
+          docker cp "$id:/opt/fasten/web" "$RUNNER_TEMP/web"
+          docker rm "$id" >/dev/null
+          test -f "$RUNNER_TEMP/web/index.html"
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Journeys
+        run: npm run e2e
+        env:
+          SPIKE_E2E_WEB_DIR: ${{ runner.temp }}/web
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 3

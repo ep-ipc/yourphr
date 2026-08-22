@@ -22,3 +22,6 @@ private/
 .continue/
 .agents/
 coverage/
+e2e/.admin-pass
+playwright-report/
+test-results/
