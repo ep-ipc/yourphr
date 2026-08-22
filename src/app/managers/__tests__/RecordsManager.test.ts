@@ -151,4 +151,35 @@ describe('RecordsManager — the one door, scoped to whoever is asking', () => {
     const bare = new RecordsManager(new Engine(), new FakeRecordsProvider());
     await expect(bare.favorites(alice, 'Practitioner')).rejects.toMatchObject({ status: 501 });
   });
+
+  it('the MedicalHistory graph: each requested encounter with everything reachable through references, both ways, Binary excluded, newest first', async () => {
+    const ref = (r: string) => ({ reference: r });
+    provider.seed('alice', 'source-1', { resourceType: 'Encounter', id: 'e1', period: { start: '2024-03-01' }, participant: [{ individual: ref('Practitioner/dr-1') }], serviceProvider: ref('Organization/org-1'), diagnosis: [{ condition: ref('Condition/c1') }] } as Resource);
+    provider.seed('alice', 'source-1', { resourceType: 'Practitioner', id: 'dr-1', name: [{ text: 'Dr One' }] } as Resource);
+    provider.seed('alice', 'source-1', { resourceType: 'Organization', id: 'org-1', name: 'Clinic' } as Resource);
+    provider.seed('alice', 'source-1', { resourceType: 'Observation', id: 'ob-e1', status: 'final', code: { text: 'BP' }, effectiveDateTime: '2024-03-02', encounter: ref('Encounter/e1') } as Resource);
+    provider.seed('alice', 'source-1', { resourceType: 'DocumentReference', id: 'doc-1', status: 'current', date: '2024-03-01', context: { encounter: [ref('Encounter/e1')] }, content: [{ attachment: { url: 'Binary/bin-1' } }] } as Resource);
+    provider.seed('alice', 'source-1', { resourceType: 'Binary', id: 'bin-1', contentType: 'text/plain' } as Resource);
+    provider.seed('alice', 'source-1', { resourceType: 'Encounter', id: 'e2', period: { start: '2024-05-01' }, reasonReference: [ref('Condition/missing')] } as Resource);
+    provider.seed('bob', 'source-9', { resourceType: 'Encounter', id: 'e-bob', period: { start: '2024-01-01' } } as Resource);
+    const ids = [
+      { source_id: 'source-1', source_resource_type: 'Encounter', source_resource_id: 'e1' },
+      { source_id: 'source-1', source_resource_type: 'Encounter', source_resource_id: 'e2' },
+      { source_id: 'source-9', source_resource_type: 'Encounter', source_resource_id: 'e-bob' }, // not alice's: absent, never someone else's record
+    ];
+    const graph = await records.graph(alice, 'MedicalHistory', ids);
+    expect(Object.keys(graph.results)).toEqual(['Encounter']);
+    const encounters = graph.results['Encounter']!;
+    expect(encounters.map((e) => e['source_resource_id'])).toEqual(['e2', 'e1']);
+    const e1 = encounters[1]!;
+    const relatedIds = (e1['related_resources'] as Record<string, unknown>[]).map((r) => `${r['source_resource_type']}/${r['source_resource_id']}`);
+    expect(relatedIds).toEqual(expect.arrayContaining(['Practitioner/dr-1', 'Organization/org-1', 'Condition/c1', 'Observation/ob-e1', 'DocumentReference/doc-1']));
+    expect(relatedIds).not.toContain('Binary/bin-1');
+    expect(relatedIds.indexOf('Condition/c1')).toBeLessThan(relatedIds.indexOf('Observation/ob-e1')); // newest first: c1 was recorded 2024-07-01, the observation 2024-03-02
+    expect((e1['related_resources'] as Record<string, unknown>[])[0]).toMatchObject({ source_id: 'source-1', resource_raw: expect.objectContaining({ resourceType: 'Condition', id: 'c1' }) });
+    expect((encounters[0]!['related_resources'] as unknown[])).toEqual([]); // a dangling reference is not invented
+    await expect(records.graph(alice, 'AddressBook', ids)).rejects.toMatchObject({ status: 400 });
+    await expect(records.graph(alice, 'MedicalHistory', [])).rejects.toMatchObject({ status: 400 });
+    await expect(records.graph(ApiContext.anonymous(engine), 'MedicalHistory', ids)).rejects.toMatchObject({ status: 401 });
+  });
 });

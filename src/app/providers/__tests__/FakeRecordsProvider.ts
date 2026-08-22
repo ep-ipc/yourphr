@@ -72,6 +72,24 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
     const r = this.rows.get(this.key(userId, resourceType, id));
     return r ? this.indexValues(r.resource, param).filter((v) => v.includes('|')) : [];
   }
+  /** References found anywhere in the stored JSON — what the search index holds for reference parameters. */
+  private refsOf(resource: unknown, out = new Set<string>()): Set<string> {
+    if (Array.isArray(resource)) resource.forEach((v) => this.refsOf(v, out));
+    else if (resource && typeof resource === 'object') {
+      const o = resource as Record<string, unknown>;
+      if (typeof o['reference'] === 'string' && /^[A-Z][A-Za-z]+\/[A-Za-z0-9.-]+$/.test(o['reference'])) out.add(o['reference']);
+      Object.values(o).forEach((v) => this.refsOf(v, out));
+    }
+    return out;
+  }
+  async referencesFrom(userId: string, resourceType: string, id: string): Promise<string[]> {
+    const r = this.rows.get(this.key(userId, resourceType, id));
+    return r ? [...this.refsOf(r.resource)] : [];
+  }
+  async referencedBy(userId: string, reference: string): Promise<{ resourceType: string; id: string }[]> {
+    return this.mine(userId).filter((r) => this.refsOf(r.resource).has(reference)).map((r) => ({ resourceType: r.resourceType, id: r.id }));
+  }
+
   writer(userId: string, sourceId: string): RecordsWriter {
     return {
       upsert: async (resource) => {

@@ -13,6 +13,7 @@ import { dirname } from 'node:path';
 import { backupDatabase, stageInstanceRestore } from './sqlite-backup.js';
 import { BaseRecordsProvider, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
 
+const REFERENCE_SHAPE = /^[A-Z][A-Za-z]+\/[A-Za-z0-9.-]{1,64}$/;
 const PARAM_NAME = /^[a-z][a-z0-9-]*$/i;
 const DATE_PREFIX = /^(eq|ne|gt|ge|lt|le|sa|eb|ap)(\d.*)$/;
 
@@ -154,6 +155,19 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
     return (this.anyDb()
       .prepare("SELECT value FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ? AND code = ? AND value LIKE '%|%'")
       .all(resourceType, id, userId, param) as { value: string }[]).map((v) => v.value);
+  }
+
+  async referencesFrom(userId: string, resourceType: string, id: string): Promise<string[]> {
+    // A reference value is "Type/id"; a token is "system|code"; dates and strings carry neither shape.
+    return (this.anyDb()
+      .prepare("SELECT DISTINCT value FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ? AND value GLOB '[A-Z]*/*' AND value NOT LIKE '%|%' AND value NOT LIKE '% %'")
+      .all(resourceType, id, userId) as { value: string }[]).map((v) => v.value).filter((v) => REFERENCE_SHAPE.test(v));
+  }
+
+  async referencedBy(userId: string, reference: string): Promise<{ resourceType: string; id: string }[]> {
+    return (this.anyDb()
+      .prepare('SELECT DISTINCT resource_type, resource_id FROM search_index WHERE user_id = ? AND value = ?')
+      .all(userId, reference) as { resource_type: string; resource_id: string }[]).map((r) => ({ resourceType: r.resource_type, id: r.resource_id }));
   }
 
   writer(userId: string, sourceId: string): RecordsWriter {

@@ -204,6 +204,7 @@ export function dateFor(resource: any): string | null {
     resource.created ||
     resource.dateAsserted ||
     resource.period?.start ||
+    resource.period?.end || // a visit with only an end still happened then
     null // never meta.lastUpdated: when THIS instance stored it is not when anything happened
   );
 }
@@ -927,6 +928,26 @@ export function createYourPhrServer(options: ServerOptions) {
       // attribution is shown under the legacy `sourceId` the contract harnesses pin.
       const fallbackSource = options.sourceId ?? 'spike';
       const attributed = (row: Record<string, unknown>): Record<string, unknown> => (row['source_id'] === '' ? {...row, source_id: fallbackSource} : row);
+
+      // POST /api/secure/resource/graph/:graphType (yourphr#605) — the medical-history page's encounter graph.
+      const graphMatch = url.pathname.match(/^\/api\/secure\/resource\/graph\/([^/]+)$/);
+      if (graphMatch && req.method === 'POST') {
+        const body = await readJsonBody(req);
+        if (!body) {
+          send(res, 400, {success: false, error: 'invalid request'});
+          return;
+        }
+        const ids = Array.isArray(body['resource_ids']) ? (body['resource_ids'] as Record<string, unknown>[]) : [];
+        const graph = await engine.managers.records.graph(ctx, decodeURIComponent(graphMatch[1]!), ids);
+        for (const list of Object.values(graph.results)) {
+          for (const row of list) {
+            Object.assign(row, attributed(row));
+            row['related_resources'] = (row['related_resources'] as Record<string, unknown>[]).map(attributed);
+          }
+        }
+        send(res, 200, {success: true, data: graph});
+        return;
+      }
 
       // GET /api/secure/resource/fhir?sourceResourceType=Condition[&sourceID=…]
       if (url.pathname === '/api/secure/resource/fhir' && req.method === 'GET') {

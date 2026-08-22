@@ -51,6 +51,10 @@ export abstract class BaseRecordsProvider {
   abstract indexedSearch(userId: string, resourceType: string, where: IndexCondition[]): Promise<StoredRecord[]>;
   /** The indexed `system|code` values of one record's parameter — the labels a grouped aggregation counts by. */
   abstract indexedValues(userId: string, resourceType: string, id: string, param: string): Promise<string[]>;
+  /** The references one record makes, as "Type/id" strings (yourphr#605) — the graph's out-edges. */
+  abstract referencesFrom(userId: string, resourceType: string, id: string): Promise<string[]>;
+  /** The records that reference "Type/id" (yourphr#605) — the graph's in-edges. */
+  abstract referencedBy(userId: string, reference: string): Promise<{ resourceType: string; id: string }[]>;
 
   // --- writes ---
   abstract writer(userId: string, sourceId: string): RecordsWriter;

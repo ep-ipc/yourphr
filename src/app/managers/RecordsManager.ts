@@ -235,6 +235,54 @@ export class RecordsManager extends BaseManager {
     return n;
   }
 
+  // --- the resource graph (yourphr#605): Go's MedicalHistory graph, scoped to what the page reads ---
+
+  /**
+   * POST /secure/resource/graph/MedicalHistory. Go builds a directed graph of every record (vertices)
+   * and reference (edges), reverses edges into the graph's "source" types so Encounters are roots,
+   * then flattens each requested root: every record reachable from it, in either direction, except
+   * Binary, deduplicated, newest first. Here the edges are the search index's reference values —
+   * a query, not a crawl — walked both ways from each requested record. Only MedicalHistory exists;
+   * the page asks for its Encounters and reads `related_resources` off each.
+   */
+  async graph(ctx: ApiContext, graphType: string, ids: { source_id?: string; source_resource_type?: string; source_resource_id?: string }[]): Promise<{ results: Record<string, Record<string, unknown>[]> }> {
+    const userId = this.who(ctx);
+    if (graphType !== 'MedicalHistory') throw new ApiError(400, `unsupported graph type ${JSON.stringify(graphType)} — only MedicalHistory exists here`);
+    if (!Array.isArray(ids) || ids.length === 0) throw new ApiError(400, 'resource_ids is required');
+    const byDateDesc = (a: Record<string, unknown>, b: Record<string, unknown>): number => String(b['sort_date'] ?? '').localeCompare(String(a['sort_date'] ?? ''));
+    const results: Record<string, Record<string, unknown>[]> = {};
+    for (const id of ids) {
+      const resourceType = String(id.source_resource_type ?? '');
+      const resourceId = String(id.source_resource_id ?? '');
+      if (!resourceType || !resourceId) continue;
+      const root = await this.provider.read(userId, resourceType, resourceId);
+      if (!root) continue; // not this account's, or gone — silently absent, as Go's IN query leaves it
+      const rootKey = `${resourceType}/${resourceId}`;
+      const visited = new Set<string>([rootKey]);
+      const queue = [rootKey];
+      const related: Record<string, unknown>[] = [];
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        const [type, rid] = current.split('/') as [string, string];
+        const neighbours = new Set<string>(await this.provider.referencesFrom(userId, type, rid));
+        for (const r of await this.provider.referencedBy(userId, current)) neighbours.add(`${r.resourceType}/${r.id}`);
+        for (const next of neighbours) {
+          if (visited.has(next) || next.startsWith('Binary/')) continue;
+          visited.add(next);
+          const [nType, nId] = next.split('/') as [string, string];
+          const stored = await this.provider.read(userId, nType, nId);
+          if (!stored) continue; // a dangling reference: the record was never synced
+          related.push(toResourceFhir(stored.resource, stored.sourceId));
+          queue.push(next);
+        }
+      }
+      related.sort(byDateDesc);
+      (results[resourceType] ??= []).push({ ...toResourceFhir(root.resource, root.sourceId), related_resources: related });
+    }
+    for (const list of Object.values(results)) list.sort(byDateDesc);
+    return { results };
+  }
+
   // --- favourites (yourphr#616): an annotation on a record, through the same door ---
 
   /** Only Practitioner is starred — the one kind the UI stars, so a typo cannot star the world. */
