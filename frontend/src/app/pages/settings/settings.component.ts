@@ -44,11 +44,8 @@ export class SettingsComponent implements OnInit {
   }
 
   loadCurrentUser(): void {
-    const token = localStorage.getItem('token');
 
-    this.http.get<any>('/api/secure/account/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
+    this.http.get<any>('/api/secure/account/me').subscribe({
       next: (response) => {
         if (response && response.success) {
           this.currentUser = response.data;
@@ -61,7 +58,6 @@ export class SettingsComponent implements OnInit {
   }
 
   generateAccessToken(): void {
-    const token = localStorage.getItem('token');
 
     console.log('Generating access token...');
     this.isLoading = true;
@@ -74,9 +70,7 @@ export class SettingsComponent implements OnInit {
       body.expiration = this.newDeviceExpiration;
     }
 
-    this.http.post<any>('/api/secure/access/token', body, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
+    this.http.post<any>('/api/secure/access/token', body).subscribe({
       next: (response) => {
         console.log('Generate token response:', response);
         if (response.success) {
@@ -124,11 +118,8 @@ export class SettingsComponent implements OnInit {
   }
 
   getServerDiscovery(): void {
-    const token = localStorage.getItem('token');
 
-    this.http.get<any>('/api/secure/sync/discovery', {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
+    this.http.get<any>('/api/secure/sync/discovery').subscribe({
       next: (response) => {
         if (response.success) {
           this.serverInfo = response.data;
@@ -179,11 +170,8 @@ export class SettingsComponent implements OnInit {
   }
 
   loadTokens(): void {
-    const token = localStorage.getItem('token');
 
-    this.http.get<any>('/api/secure/access/token', {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({
+    this.http.get<any>('/api/secure/access/token').subscribe({
       next: (response) => {
         const list = response && response.success ? (response.data || []) : [];
         this.tokens = list.map((t: any) => ({
@@ -204,12 +192,10 @@ export class SettingsComponent implements OnInit {
 
 
   deleteToken(tokenId: string): void {
-    const token = localStorage.getItem('token');
 
     if (confirm('Are you sure you want to delete this access token?')) {
       this.http.delete<any>('/api/secure/access/token', { 
-        body: { token_id: tokenId },
-        headers: { Authorization: `Bearer ${token}` } 
+        body: { token_id: tokenId }
       }).subscribe({
         next: () => {
           this.loadTokens();
