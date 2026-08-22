@@ -47,6 +47,10 @@
     "process": "tsx scripts/process-tests.ts",
     "records": "tsx scripts/records-tests.ts",
     "framework": "tsx scripts/framework-tests.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:changed": "vitest run --changed",
     "check:store": "bash scripts/check-store-boundary.sh"
   },
   "dependencies": {
@@ -60,8 +64,11 @@
     "marked": "^18.0.10"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "tsx": "^4.19.2",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }

@@ -38,6 +38,8 @@ jobs:
         run: npm run check:store
       - name: Framework skeleton (typed registry, boot order, guards)
         run: npm run framework
+      - name: Unit tests with coverage floors on src/framework and src/app (yourphr#610)
+        run: npm run test:coverage
 
       - name: SSRF guard
         run: npm run ssrf

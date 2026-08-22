@@ -21,3 +21,4 @@ private/
 .kit-check/
 .continue/
 .agents/
+coverage/
