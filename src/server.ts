@@ -67,6 +67,22 @@ export interface ServerModules {
   provenanceFor?: (repo: SqliteFhirRepository, resourceType: string, id: string) => unknown;
   /** GET /api/secure/medications/reconciled (yourphr#580). */
   medications?: (repo: SqliteFhirRepository) => Promise<unknown>;
+  /** The dashboard and record pages (yourphr#595): classified lists, recent activity, the typed query. */
+  records?: {
+    recent: (repo: SqliteFhirRepository, limit: number) => unknown[];
+    conditions: (repo: SqliteFhirRepository) => unknown[];
+    allergies: (repo: SqliteFhirRepository) => unknown[];
+    immunizations: (repo: SqliteFhirRepository) => unknown[];
+    /** Throws on a malformed query — the caller gets 400 with the reason. */
+    query: (repo: SqliteFhirRepository, body: Record<string, unknown>) => unknown[];
+  };
+  /** GET/POST/DELETE /api/secure/user/favorites (yourphr#595): the caller's starred practitioners. */
+  favorites?: {
+    list: (username: string, resourceType: string) => unknown[];
+    add: (username: string, fav: { source_id: string; resource_type: string; resource_id: string }) => void;
+    remove: (username: string, fav: { source_id: string; resource_type: string; resource_id: string }) => boolean;
+    supports: (resourceType: string) => boolean;
+  };
   /** Admin surface (yourphr#582): gate decides who counts as the operator. */
   /** What an anonymous caller may know about this instance (GET /api/instance/public). */
   publicInstance?: () => Record<string, unknown>;
@@ -152,12 +168,16 @@ export function toResourceFhir(resource: Resource, sourceId: string): Record<str
   };
 }
 
-function titleFor(resource: any): string {
+export function titleFor(resource: any): string {
   return (
     resource.code?.text ||
     resource.code?.coding?.[0]?.display ||
     resource.type?.[0]?.text ||
     resource.type?.coding?.[0]?.display ||
+    resource.medicationCodeableConcept?.text ||
+    resource.medicationCodeableConcept?.coding?.[0]?.display ||
+    resource.vaccineCode?.text ||
+    resource.vaccineCode?.coding?.[0]?.display ||
     resource.description ||
     resource.name?.[0]?.text ||
     resource.name ||
@@ -165,16 +185,22 @@ function titleFor(resource: any): string {
   );
 }
 
-function dateFor(resource: any): string | null {
+export function dateFor(resource: any): string | null {
   return (
     resource.effectiveDateTime ||
+    resource.effectivePeriod?.start ||
+    resource.issued ||
     resource.onsetDateTime ||
     resource.recordedDate ||
+    resource.occurrenceDateTime ||
+    resource.performedDateTime ||
+    resource.performedPeriod?.start ||
+    resource.authoredOn ||
     resource.date ||
     resource.created ||
+    resource.dateAsserted ||
     resource.period?.start ||
-    resource.meta?.lastUpdated ||
-    null
+    null // never meta.lastUpdated: when THIS instance stored it is not when anything happened
   );
 }
 
@@ -477,6 +503,73 @@ export function createYourPhrServer(options: ServerOptions) {
       if (modules?.medications && url.pathname === '/api/secure/medications/reconciled' && req.method === 'GET') {
         send(res, 200, {success: true, data: await modules.medications(repo)});
         return;
+      }
+
+      // --- the dashboard and record pages (yourphr#595) ---
+      if (modules?.records) {
+        const records = modules.records;
+        if (url.pathname === '/api/secure/resources/recent' && req.method === 'GET') {
+          const limit = Number(url.searchParams.get('limit') ?? 5);
+          send(res, 200, {success: true, data: records.recent(repo, Number.isInteger(limit) && limit > 0 ? limit : 5)});
+          return;
+        }
+        if (url.pathname === '/api/secure/conditions/reconciled' && req.method === 'GET') {
+          send(res, 200, {success: true, data: records.conditions(repo)});
+          return;
+        }
+        if (url.pathname === '/api/secure/allergies/classified' && req.method === 'GET') {
+          send(res, 200, {success: true, data: records.allergies(repo)});
+          return;
+        }
+        if (url.pathname === '/api/secure/immunizations/classified' && req.method === 'GET') {
+          send(res, 200, {success: true, data: records.immunizations(repo)});
+          return;
+        }
+        if (url.pathname === '/api/secure/query' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          if (!body || typeof body['from'] !== 'string') {
+            send(res, 400, {success: false, error: 'query must name a resource type in "from"'});
+            return;
+          }
+          try {
+            send(res, 200, {success: true, data: records.query(repo, body)});
+          } catch (err) {
+            send(res, 400, {success: false, error: (err as Error).message});
+          }
+          return;
+        }
+      }
+      if (modules?.favorites && url.pathname === '/api/secure/user/favorites') {
+        const favorites = modules.favorites;
+        if (req.method === 'GET') {
+          const resourceType = url.searchParams.get('resource_type') ?? '';
+          if (!favorites.supports(resourceType)) {
+            send(res, 400, {success: false, error: 'only Practitioner resources are supported'});
+            return;
+          }
+          send(res, 200, {success: true, data: favorites.list(sessionUser, resourceType)});
+          return;
+        }
+        if (req.method === 'POST' || req.method === 'DELETE') {
+          const body = await readJsonBody(req);
+          const str = (k: string): string => (typeof body?.[k] === 'string' ? (body[k] as string) : '');
+          const fav = {source_id: str('source_id'), resource_type: str('resource_type'), resource_id: str('resource_id')};
+          if (!fav.source_id || !fav.resource_type || !fav.resource_id) {
+            send(res, 400, {success: false, error: 'invalid request payload'});
+            return;
+          }
+          if (!favorites.supports(fav.resource_type)) {
+            send(res, 400, {success: false, error: 'only Practitioner resources are supported'});
+            return;
+          }
+          if (req.method === 'POST') {
+            favorites.add(sessionUser, fav);
+            send(res, 200, {success: true, data: fav});
+          } else {
+            send(res, 200, {success: true, data: {removed: favorites.remove(sessionUser, fav)}});
+          }
+          return;
+        }
       }
       if (modules?.admin && url.pathname.startsWith('/api/secure/admin/')) {
         // Operator-only. The gate is a role check, not a route secret: a non-admin gets 403 with

@@ -140,6 +140,31 @@ async function main(): Promise<void> {
   const prov = (await (await fetch(`${base}/api/secure/resource/provenance/Condition/condition-1`, authed(aliceToken))).json()) as { data: { sourceDisplay: string } };
   check('provenance names the source, by display name, over the wire', prov.data.sourceDisplay === 'Fake Regional Health');
 
+  // --- the dashboard and record pages (yourphr#595) ---
+  const recent = (await (await fetch(`${base}/api/secure/resources/recent?limit=2`, authed(aliceToken))).json()) as { data: { source_id: string; source_resource_type: string; title: string; date?: string }[] };
+  check('/resources/recent serves Go\'s list items, limited, attributed to the source',
+    recent.data.length === 2 && recent.data.every((r) => r.source_id === 'source-1' && r.date === '2024-01-10' && r.title.startsWith('synthetic')));
+  const reconciled = (await (await fetch(`${base}/api/secure/conditions/reconciled`, authed(aliceToken))).json()) as { data: { title: string; tier: string; state: string; sourceId: string }[] };
+  check('/conditions/reconciled classifies the synced conditions (no coding, no status: clinician tier, Unknown state)',
+    reconciled.data.length === 3 && reconciled.data.every((c) => c.tier === 'clinician' && c.state === 'Unknown' && c.sourceId === 'source-1'));
+  const allergies = (await (await fetch(`${base}/api/secure/allergies/classified`, authed(aliceToken))).json()) as { data: unknown[] };
+  const immunizations = (await (await fetch(`${base}/api/secure/immunizations/classified`, authed(aliceToken))).json()) as { data: unknown[] };
+  check('/allergies/classified and /immunizations/classified answer (empty lists here — nothing was synced of those types)',
+    Array.isArray(allergies.data) && allergies.data.length === 0 && Array.isArray(immunizations.data) && immunizations.data.length === 0);
+  const queried = (await (await fetch(`${base}/api/secure/query`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${aliceToken}` },
+    body: JSON.stringify({ select: ['*'], from: 'Condition', where: {}, limit: 2 }) })).json()) as { data: { source_resource_type: string }[] };
+  const badQuery = await fetch(`${base}/api/secure/query`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${aliceToken}` }, body: JSON.stringify({ from: 'nope' }) });
+  check('POST /query answers resource_fhir rows; a malformed query is 400', queried.data.length === 2 && queried.data[0]?.source_resource_type === 'Condition' && badQuery.status === 400);
+  const favBody = { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-1' };
+  const favAdd = await fetch(`${base}/api/secure/user/favorites`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${aliceToken}` }, body: JSON.stringify(favBody) });
+  const favList = (await (await fetch(`${base}/api/secure/user/favorites?resource_type=Practitioner`, authed(aliceToken))).json()) as { data: { resource_id: string }[] };
+  const adminFavList = (await (await fetch(`${base}/api/secure/user/favorites?resource_type=Practitioner`, authed(adminToken))).json()) as { data: unknown[] };
+  const favDel = await fetch(`${base}/api/secure/user/favorites`, { method: 'DELETE', headers: { 'content-type': 'application/json', authorization: `Bearer ${aliceToken}` }, body: JSON.stringify(favBody) });
+  const favGone = (await (await fetch(`${base}/api/secure/user/favorites?resource_type=Practitioner`, authed(aliceToken))).json()) as { data: unknown[] };
+  const favWrongType = await fetch(`${base}/api/secure/user/favorites?resource_type=Patient`, authed(aliceToken));
+  check('favourites: POST, GET (per user), DELETE in Go\'s shapes; only Practitioner accepted',
+    favAdd.status === 200 && favList.data.map((f) => f.resource_id).join(',') === 'dr-1' && adminFavList.data.length === 0 && favDel.status === 200 && favGone.data.length === 0 && favWrongType.status === 400);
+
   // --- the Sources page (yourphr#594) ---
   type Src = { id: string; display: string; user_id: string; access_token: string; updated_at?: string; latest_background_job?: { job_status: string } };
   const aliceSources = (await (await fetch(`${base}/api/secure/source`, authed(aliceToken))).json()) as { data: Src[] };

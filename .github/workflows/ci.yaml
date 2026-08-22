@@ -85,6 +85,8 @@ jobs:
 
       - name: Medication reconciliation (dedup, state honesty, conflicts surfaced)
         run: npm run medication
+      - name: Record pages (conditions, allergies, immunizations, recent, favourites, the typed query)
+        run: npm run records
 
       - name: Dynamic Client Registration (endpoint gauntlet, refusals, persistence)
         run: npm run dcr

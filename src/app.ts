@@ -27,6 +27,11 @@ import { AuthStore } from './auth/index.js';
 import { ProviderCatalog, type CatalogWrite } from './catalog/index.js';
 import { SourceStore, runSyncPass, syncSource, type ConnectedSource, type JobSummary } from './worker/index.js';
 import { EventBus } from './events/index.js';
+import { reconcileConditions, type InputResource } from './conditions/index.js';
+import { classifyAllergies } from './allergies/index.js';
+import { classifyImmunizations } from './immunizations/index.js';
+import { recentResources, runQuery, type QueryRequest } from './query/index.js';
+import { FavoriteStore } from './favorites/index.js';
 import { backupDatabase } from './backup/index.js';
 import { buildIps } from './ips/index.js';
 import { provenanceFor } from './provenance/index.js';
@@ -101,6 +106,7 @@ export interface Stores {
   auth: AuthStore;
   catalog: ProviderCatalog;
   sources: SourceStore;
+  favorites: FavoriteStore;
   repoForUser: (userId: string) => SqliteFhirRepository;
   repos: Map<string, SqliteFhirRepository>;
   close: () => void;
@@ -135,6 +141,7 @@ export function openStores(dataDir: string, env: Record<string, string | undefin
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
   const catalog = new ProviderCatalog(db);
   const sources = new SourceStore(db);
+  const favorites = new FavoriteStore(db);
   const recordsPath = join(dataDir, 'records.db');
   const repos = new Map<string, SqliteFhirRepository>();
   const repoForUser = (userId: string): SqliteFhirRepository => {
@@ -147,7 +154,7 @@ export function openStores(dataDir: string, env: Record<string, string | undefin
   };
 
   return {
-    config, db, dbKey, auth, catalog, sources, repoForUser, repos,
+    config, db, dbKey, auth, catalog, sources, favorites, repoForUser, repos,
     close: () => {
       for (const repo of repos.values()) repo.db.close();
       db.close();
@@ -230,7 +237,7 @@ export interface App {
 
 export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): App {
   const stores = openStores(dataDir, options.env ?? process.env);
-  const { config, auth, catalog, sources, repoForUser } = stores;
+  const { config, auth, catalog, sources, favorites, repoForUser } = stores;
 
   // Bootstrap the first admin on an empty install — after auth exists, before anything serves.
   const bootstrap = auth.bootstrapAdmin(dataDir);
@@ -268,6 +275,13 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     }
     return reconcile(inputs);
   };
+
+  /** Every live record of one type for the repository's user, as the classifiers take them. */
+  const inputsOf = (repo: SqliteFhirRepository, resourceType: string): InputResource[] =>
+    (repo.db
+      .prepare('SELECT id, source_id, content FROM resources WHERE resource_type = ? AND user_id = ? AND deleted = 0 ORDER BY id')
+      .all(resourceType, repo.userId ?? '') as { id: string; source_id: string; content: string }[])
+      .map((r) => ({ sourceResourceType: resourceType, sourceResourceId: r.id, sourceId: r.source_id, raw: JSON.parse(r.content) as unknown }));
 
   // The instance keys Go publishes that this stack has a value for. A key this stack does not have
   // (theme, demo, signup, the wider password policy) is ABSENT, and the Angular app's mapper already
@@ -402,6 +416,19 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
       provenanceFor: (repo, resourceType, id) =>
         provenanceFor({ db: repo.db, userId: repo.userId ?? '', sourceDisplay }, resourceType, id),
       medications,
+      records: {
+        recent: (repo, limit) => recentResources(repo, limit),
+        conditions: (repo) => reconcileConditions(inputsOf(repo, 'Condition')),
+        allergies: (repo) => classifyAllergies(inputsOf(repo, 'AllergyIntolerance')),
+        immunizations: (repo) => classifyImmunizations(inputsOf(repo, 'Immunization')),
+        query: (repo, body) => runQuery(repo, body as unknown as QueryRequest),
+      },
+      favorites: {
+        list: (username, resourceType) => favorites.list(username, resourceType),
+        add: (username, fav) => favorites.add(username, fav),
+        remove: (username, fav) => favorites.remove(username, fav),
+        supports: (resourceType) => FavoriteStore.supports(resourceType),
+      },
       admin: {
         isAdmin: (username) => auth.isAdmin(username),
         configSnapshot: () => config.snapshot(),
