@@ -13,6 +13,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assembleApp } from '../src/app.js';
+import { ApiContext } from '../src/framework/ApiContext.js';
 import { startFakeProvider, listenFake } from '../scripts/lib/fake-provider.js';
 import { ADMIN_PASS_FILE, E2E_PASS, E2E_PORT, E2E_PW_PASS, E2E_PW_USER, E2E_RESET_PASS, E2E_RESET_USER, E2E_USER } from './constants.js';
 
@@ -40,9 +41,10 @@ writeFileSync(ADMIN_PASS_FILE, readFileSync(app.bootstrapPasswordFile!, 'utf8'),
 
 // The household: a member with a connected, synced source; one who will change a password; one
 // whose password the admin resets.
-app.auth.createUser(E2E_USER, E2E_PASS);
-app.auth.createUser(E2E_PW_USER, E2E_PW_PASS);
-app.auth.createUser(E2E_RESET_USER, E2E_RESET_PASS);
+const seed = ApiContext.system('e2e-seed', 'admin', app.engine);
+await app.users.createUser(seed, E2E_USER, E2E_PASS);
+await app.users.createUser(seed, E2E_PW_USER, E2E_PW_PASS);
+await app.users.createUser(seed, E2E_RESET_USER, E2E_RESET_PASS);
 app.account.setConsentAcceptedAt(E2E_USER, new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'));
 app.sources.add({
   userId: E2E_USER, display: 'Fake Regional Health', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'fake-cid',

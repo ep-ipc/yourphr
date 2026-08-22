@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 # Where the store and the driver may legitimately live.
 ALLOW_DRIVER='^src/framework/|^src/app/providers/|^src/SqliteFhirRepository\.ts'
 # Not yet converted to managers over providers — each line is a #608 child:
-#   src/auth          Users + Sessions        src/worker   Sources + Jobs      src/catalog   Catalog
+#   src/worker        Sources + Jobs          src/catalog  Catalog
 #   src/favorites     folds into Records      src/account  Users (consent) + Audit
 #   src/admin         Backups (coordinator)   src/migrations  engine-owned schema ledger
 #   src/backup        Backups provider        src/config   ConfigurationManager's store
@@ -26,7 +26,7 @@ ALLOW_DRIVER='^src/framework/|^src/app/providers/|^src/SqliteFhirRepository\.ts'
 #   src/app.ts        opens the app database until the engine owns the shared connection
 #   src/sync          repositoryWriter for the harnesses that hand a repository in (retire with Sources)
 #   src/dcr           DynamicClientStore — Sources (dynamic client registration rides with the source)
-ALLOW_TRANSITIONAL='^src/(auth|worker|catalog|favorites|account|admin|migrations|backup|config|migrate|sync|ips|dcr)/|^src/app\.ts'
+ALLOW_TRANSITIONAL='^src/(worker|catalog|favorites|account|admin|migrations|backup|config|migrate|sync|ips|dcr)/|^src/app\.ts'
 
 # A type-only import cannot reach a store; it only names the shape a legacy option accepts.
 driver_hits=$(

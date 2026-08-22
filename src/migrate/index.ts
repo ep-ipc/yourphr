@@ -18,6 +18,13 @@
 import type Database from 'better-sqlite3-multiple-ciphers';
 import type { SourceStore } from '../worker/index.js';
 import type { AccountStore, AccessEvent } from '../account/index.js';
+import type { LegacyUser } from '../framework/managers/UsersManager.js';
+
+/** Reads the users table of a Go (GORM) YourPHR database file. */
+export function readGoUsers(goDb: InstanceType<typeof Database>): LegacyUser[] {
+  const rows = goDb.prepare("SELECT username, password, COALESCE(token_generation, 0) AS token_generation, COALESCE(role, 'user') AS role FROM users WHERE deleted_at IS NULL").all() as Record<string, unknown>[];
+  return rows.map((r) => ({ username: String(r['username']), passwordHash: String(r['password']), tokenGeneration: Number(r['token_generation']), role: String(r['role']) }));
+}
 
 /** The core set a wildcard grant maps to — the types the record screens actually use. */
 export const WILDCARD_RESOURCE_TYPES = [

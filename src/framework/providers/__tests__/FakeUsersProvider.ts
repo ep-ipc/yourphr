@@ -1,0 +1,24 @@
+/** An in-memory users provider (yourphr#611): what the Users and Sessions managers are unit-tested over. */
+import { BaseUsersProvider, type UserRecord } from '../BaseUsersProvider.js';
+
+export class FakeUsersProvider extends BaseUsersProvider {
+  readonly rows = new Map<string, UserRecord>();
+  initialized = false;
+  async initialize(): Promise<void> { this.initialized = true; }
+  async create(record: Omit<UserRecord, 'createdAt'> & { createdAt?: string }): Promise<void> {
+    if (this.rows.has(record.username)) throw new Error('UNIQUE constraint failed: auth_users.username');
+    this.rows.set(record.username, { ...record, createdAt: record.createdAt ?? '2026-01-01T00:00:00Z' });
+  }
+  async get(username: string): Promise<UserRecord | undefined> { return this.rows.get(username); }
+  async list(): Promise<UserRecord[]> { return [...this.rows.values()]; }
+  async count(): Promise<number> { return this.rows.size; }
+  async setPasswordHash(username: string, hash: string, bumpGeneration: boolean): Promise<boolean> {
+    const r = this.rows.get(username);
+    if (!r) return false;
+    r.passwordHash = hash;
+    if (bumpGeneration) r.tokenGeneration++;
+    return true;
+  }
+  async bumpGeneration(username: string): Promise<void> { const r = this.rows.get(username); if (r) r.tokenGeneration++; }
+  async delete(username: string): Promise<boolean> { return this.rows.delete(username); }
+}

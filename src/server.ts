@@ -22,7 +22,7 @@ import {createReadStream, existsSync, statSync} from 'node:fs';
 import {dirname, extname, join, resolve, sep} from 'node:path';
 import type {Resource, ResourceType} from '@medplum/fhirtypes';
 import type {SqliteFhirRepository} from './SqliteFhirRepository.js';
-import type {AuthStore} from './auth/index.js';
+
 import {sseFrame, type EventBus} from './events/index.js';
 import {Engine} from './framework/Engine.js';
 import {ApiContext, ApiError} from './framework/ApiContext.js';
@@ -51,7 +51,6 @@ function readCookie(header: string | undefined, name: string): string {
 }
 
 export interface ServerAuth {
-  store: AuthStore;
   /** Lifetime of the session cookie — the session's absolute cap; default 12h like DefaultSessionPolicy. */
   cookieMaxAgeSeconds?: number;
   /** Mark the cookie Secure. False behind a TLS-terminating proxy that talks plain HTTP to us (Go's web.listen.https.enabled posture). */
@@ -81,7 +80,6 @@ export interface ServerModules {
   };
   /** The provider catalog (yourphr#603): admin CRUD, the sandbox list, authorize + connect. */
   catalog?: {
-    isAdmin: (username: string) => boolean;
     list: () => unknown[];
     get: (id: string) => unknown | undefined;
     /** Throws on a refusal (message is the reason). */
@@ -91,7 +89,7 @@ export interface ServerModules {
     sandbox: () => unknown[];
     /** Resolves Go's authorize answer; rejects with a status-bearing error. */
     authorize: (username: string, id: string, body: Record<string, unknown>) => Promise<unknown>;
-    connect: (username: string, id: string, body: Record<string, unknown>) => Promise<{ source: unknown; data: unknown }>;
+    connect: (ctx: ApiContext, id: string, body: Record<string, unknown>) => Promise<{ source: unknown; data: unknown }>;
   };
   /** The account page and the legal pages (yourphr#596). */
   account?: {
@@ -100,11 +98,12 @@ export interface ServerModules {
     accessLog: (username: string) => unknown[];
     /** Called for every listed GET a signed-in user makes; the store folds it into a day bucket. */
     recordAccess: (username: string, pathname: string) => void;
-    legalConsent: (username: string) => unknown;
-    grantConsent: (username: string) => unknown;
-    revokeConsent: (username: string) => unknown;
-    changePassword: (username: string, current: string, next: string) => { ok: true; token?: string } | { ok: false; status: number; error: string };
-    signOutEverywhere: (username: string) => void;
+    legalConsent: (ctx: ApiContext) => unknown;
+    grantConsent: (ctx: ApiContext) => unknown;
+    revokeConsent: (ctx: ApiContext) => unknown;
+    /** Throws ApiError (401 wrong current, 400 policy); resolves the fresh session token. */
+    changePassword: (ctx: ApiContext, current: string, next: string) => Promise<string | undefined>;
+    signOutEverywhere: (ctx: ApiContext) => Promise<void>;
     deleteAccount: (ctx: ApiContext) => Promise<void>;
   };
   /** GET/POST/DELETE /api/secure/user/favorites (yourphr#595): the caller's starred practitioners. */
@@ -140,7 +139,6 @@ export interface ServerModules {
     events: EventBus;
   };
   admin?: {
-    isAdmin: (username: string) => boolean;
     /** GET /admin/config in Go's AdminConfigResponse shape (yourphr#602). */
     configSnapshot: () => unknown;
     configReveal: (key: string) => unknown | undefined;
@@ -149,10 +147,10 @@ export interface ServerModules {
     configReset: (key: string) => boolean;
     catalogList: () => unknown;
     backupNow: () => Promise<unknown>;
-    createUser: (username: string, password: string, role?: string) => void;
+    createUser: (ctx: ApiContext, username: string, password: string, role?: string) => Promise<void>;
     /** The Users page (yourphr#604). */
-    listUsers: () => unknown[];
-    resetUserPassword: (username: string) => { username: string; password: string } | undefined;
+    listUsers: (ctx: ApiContext) => Promise<unknown[]>;
+    resetUserPassword: (ctx: ApiContext, username: string) => Promise<{ username: string; password: string }>;
     instanceSettings: () => { name: string; contact_email: string; contact_url: string };
     setInstanceSettings: (s: { name: string; contact_email: string; contact_url: string }) => void;
     metrics: () => unknown;
@@ -404,7 +402,7 @@ export function createYourPhrServer(options: ServerOptions) {
         const body = await readJsonBody(req);
         const username = typeof body?.['username'] === 'string' ? (body['username'] as string) : '';
         const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
-        const result = auth.store.signIn(username, password, {
+        const result = await engine.managers.sessions.signIn(username, { password }, {
           remoteAddr: req.socket.remoteAddress ?? '',
           xff: typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : undefined,
         });
@@ -430,7 +428,7 @@ export function createYourPhrServer(options: ServerOptions) {
         const header = req.headers['authorization'] ?? '';
         const bearer = typeof header === 'string' && header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
         const token = bearer !== '' ? bearer : readCookie(req.headers['cookie'], SESSION_COOKIE);
-        const session = token ? auth.store.verifySession(token) : ({ok: false} as const);
+        const session = token ? await engine.managers.sessions.verify(token) : ({ok: false} as const);
         if (!session.ok) {
           send(res, 401, {success: false, error: 'unauthorized'});
           return;
@@ -439,9 +437,9 @@ export function createYourPhrServer(options: ServerOptions) {
           res.setHeader('X-Renewed-Token', session.renewed);
           res.setHeader('Set-Cookie', sessionCookie(session.renewed, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
         }
-        sessionUser = session.username;
+        sessionUser = session.principal.username;
         // Who is asking, for every manager call this request makes (yourphr#608).
-        ctx = ApiContext.from({username: session.username, role: auth.store.roleOf(session.username) ?? 'user'}, engine);
+        ctx = ApiContext.from(session.principal, engine);
       }
 
       // The access log (yourphr#596): a listed GET by a signed-in user is an access of their record.
@@ -457,15 +455,15 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent' && req.method === 'GET') {
-          send(res, 200, {success: true, data: account.legalConsent(sessionUser)});
+          send(res, 200, {success: true, data: account.legalConsent(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent/grant' && req.method === 'POST') {
-          send(res, 200, {success: true, data: account.grantConsent(sessionUser)});
+          send(res, 200, {success: true, data: account.grantConsent(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent/revoke' && req.method === 'POST') {
-          send(res, 200, {success: true, data: account.revokeConsent(sessionUser)});
+          send(res, 200, {success: true, data: account.revokeConsent(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/password' && req.method === 'POST') {
@@ -476,22 +474,18 @@ export function createYourPhrServer(options: ServerOptions) {
             send(res, 400, {success: false, error: 'invalid request'});
             return;
           }
-          const changed = account.changePassword(sessionUser, current, next);
-          if (!changed.ok) {
-            send(res, changed.status, {success: false, error: changed.error});
-            return;
-          }
+          const token = await account.changePassword(ctx, current, next); // ApiError -> the error boundary
           // The generation bump ended this session too; a fresh one rides back on the cookie, as Go does.
-          if (changed.token) {
-            res.setHeader('Set-Cookie', sessionCookie(changed.token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
-            send(res, 200, {success: true, data: changed.token});
+          if (token) {
+            res.setHeader('Set-Cookie', sessionCookie(token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
+            send(res, 200, {success: true, data: token});
           } else {
             send(res, 200, {success: true});
           }
           return;
         }
         if (url.pathname === '/api/secure/account/sign-out-everywhere' && req.method === 'POST') {
-          account.signOutEverywhere(sessionUser);
+          await account.signOutEverywhere(ctx);
           res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
           send(res, 200, {success: true});
           return;
@@ -510,7 +504,7 @@ export function createYourPhrServer(options: ServerOptions) {
       if (auth && url.pathname === '/api/secure/account/me' && req.method === 'GET') {
         send(res, 200, {success: true, data: {
           id: sessionUser, username: sessionUser, full_name: '', email: '', picture: '',
-          role: options.modules?.admin?.isAdmin(sessionUser) ? 'admin' : 'user',
+          role: ctx.role,
           demo_account: false, last_login: null, login_count: 0,
         }});
         return;
@@ -543,12 +537,12 @@ export function createYourPhrServer(options: ServerOptions) {
       // --- the Users page (yourphr#604): the admin's list, create, and password reset ---
       if (modules?.admin && (url.pathname === '/api/secure/users' || /^\/api\/secure\/users\/[^/]+\/password$/.test(url.pathname))) {
         // Go answers a non-admin here with 401 "Unauthorized"; the page treats both as "not for you".
-        if (!modules.admin.isAdmin(sessionUser)) {
+        if (!ctx.isAdmin()) {
           send(res, 401, {success: false, error: 'Unauthorized'});
           return;
         }
         if (url.pathname === '/api/secure/users' && req.method === 'GET') {
-          send(res, 200, {success: true, data: modules.admin.listUsers()});
+          send(res, 200, {success: true, data: await modules.admin.listUsers(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/users' && req.method === 'POST') {
@@ -560,13 +554,7 @@ export function createYourPhrServer(options: ServerOptions) {
             send(res, 400, {success: false, error: 'username and password are required'});
             return;
           }
-          try {
-            modules.admin.createUser(username, password, role);
-          } catch (err) {
-            const message = (err as Error).message;
-            send(res, 400, {success: false, error: /UNIQUE constraint/i.test(message) ? 'User already exists' : message});
-            return;
-          }
+          await modules.admin.createUser(ctx, username, password, role); // ApiError (400) -> the error boundary
           // Go echoes the user it made. This stack stores no full_name or email — they are absent,
           // not invented; id is the username, as /account/me already says.
           send(res, 200, {success: true, data: {id: username, username, role}});
@@ -574,8 +562,7 @@ export function createYourPhrServer(options: ServerOptions) {
         }
         const resetMatch = url.pathname.match(/^\/api\/secure\/users\/([^/]+)\/password$/);
         if (resetMatch && req.method === 'POST') {
-          const reset = modules.admin.resetUserPassword(decodeURIComponent(resetMatch[1]!));
-          reset === undefined ? send(res, 404, {success: false, error: 'no such user'}) : send(res, 200, {success: true, data: reset});
+          send(res, 200, {success: true, data: await modules.admin.resetUserPassword(ctx, decodeURIComponent(resetMatch[1]!))});
           return;
         }
       }
@@ -588,7 +575,7 @@ export function createYourPhrServer(options: ServerOptions) {
           send(res, e.status ?? 400, {success: false, error: e.message, ...(e.extra ?? {})});
         };
         if (url.pathname === '/api/secure/provider-catalog/sandbox' && req.method === 'GET') {
-          if (!cat.isAdmin(sessionUser)) { send(res, 403, {success: false, error: 'admin role required'}); return; }
+          if (!ctx.isAdmin()) { send(res, 403, {success: false, error: 'admin role required'}); return; }
           send(res, 200, {success: true, data: cat.sandbox()});
           return;
         }
@@ -599,7 +586,7 @@ export function createYourPhrServer(options: ServerOptions) {
             if (connectMatch[2] === 'authorize') {
               send(res, 200, {success: true, ...(await cat.authorize(sessionUser, decodeURIComponent(connectMatch[1]!), body)) as Record<string, unknown>});
             } else {
-              const r = await cat.connect(sessionUser, decodeURIComponent(connectMatch[1]!), body);
+              const r = await cat.connect(ctx, decodeURIComponent(connectMatch[1]!), body);
               send(res, 200, {success: true, source: r.source, data: r.data});
             }
           } catch (err) {
@@ -609,7 +596,7 @@ export function createYourPhrServer(options: ServerOptions) {
         }
         if (url.pathname !== '/api/secure/provider-catalog/connectable') {
           // Everything else is the admin's: the catalog is instance configuration.
-          if (!cat.isAdmin(sessionUser)) { send(res, 403, {success: false, error: 'admin role required to manage the provider catalog'}); return; }
+          if (!ctx.isAdmin()) { send(res, 403, {success: false, error: 'admin role required to manage the provider catalog'}); return; }
           if (url.pathname === '/api/secure/provider-catalog' && req.method === 'GET') {
             send(res, 200, {success: true, data: cat.list()});
             return;
@@ -819,7 +806,7 @@ export function createYourPhrServer(options: ServerOptions) {
       if (modules?.admin && url.pathname.startsWith('/api/secure/admin/')) {
         // Operator-only. The gate is a role check, not a route secret: a non-admin gets 403 with
         // no detail about what lives here.
-        if (!modules.admin.isAdmin(sessionUser)) {
+        if (!ctx.isAdmin()) {
           send(res, 403, {success: false, error: 'admin role required'});
           return;
         }
@@ -993,12 +980,7 @@ export function createYourPhrServer(options: ServerOptions) {
           const body = await readJsonBody(req);
           const username = typeof body?.['username'] === 'string' ? (body['username'] as string) : '';
           const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
-          try {
-            modules.admin.createUser(username, password);
-          } catch (err) {
-            send(res, 400, {success: false, error: (err as Error).message});
-            return;
-          }
+          await modules.admin.createUser(ctx, username, password);
           send(res, 200, {success: true});
           return;
         }

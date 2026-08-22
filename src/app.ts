@@ -23,7 +23,10 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { ConfigStore, envNameFor, type ConfigValue } from './config/index.js';
 import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
-import { AuthStore, GENERIC_SIGNIN_ERROR } from './auth/index.js';
+import { UsersManager } from './framework/managers/UsersManager.js';
+import { SessionsManager } from './framework/managers/SessionsManager.js';
+import { SqliteUsersProvider } from './framework/providers/SqliteUsersProvider.js';
+import { PasswordAuthProvider } from './framework/providers/PasswordAuthProvider.js';
 import { ProviderCatalog, catalogEntryShape, connectableShape, connectionPolicy, type CatalogEntry, type CatalogWrite } from './catalog/index.js';
 import { Engine } from './framework/Engine.js';
 import { ConfigurationManager } from './framework/ConfigurationManager.js';
@@ -130,7 +133,8 @@ export interface Stores {
   db: InstanceType<typeof Database>;
   /** '' when the database is unencrypted. */
   dbKey: string;
-  auth: AuthStore;
+  users: UsersManager;
+  sessions: SessionsManager;
   catalog: ProviderCatalog;
   sources: SourceStore;
   favorites: FavoriteStore;
@@ -154,6 +158,8 @@ export async function openStores(dataDir: string, env: Record<string, string | u
 
   // 2. The app database + migrations before anything opens for business.
   const dbKey = config.getString('database.encryption.key');
+  const engine = new Engine();
+  const engineRef = (): Engine => engine;
   applyStagedRestore(dataDir, config.getString('database.location'), (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
   const db = new Database(join(dataDir, config.getString('database.location')));
   if (dbKey !== '') {
@@ -162,31 +168,33 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   }
   runMigrations(db, APP_MIGRATIONS);
 
-  // 3. Auth, policies from configuration.
-  const auth = new AuthStore(db, {
-    sessionKey: randomBytes(32),
-    session: { slidingSeconds: config.getInt('auth.session.sliding-seconds'), absoluteSeconds: config.getInt('auth.session.absolute-seconds') },
-    throttle: { maxFailures: config.getInt('auth.throttle.max-failures'), windowSeconds: config.getInt('auth.throttle.window-seconds') },
-    minPasswordLength: config.getInt('auth.password.min-length'),
-    trustedProxies: config.getStringList('auth.trusted-proxies'),
-  });
-
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
   const catalog = new ProviderCatalog(db);
   const sources = new SourceStore(db);
   const favorites = new FavoriteStore(db);
   const account = new AccountStore(db);
+  // 3. Accounts and sessions as managers over providers (yourphr#611): user storage in the app
+  // database, passwords by the scrypt provider, the factor list from configuration.
+  const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider(), account);
+  const sessions = new SessionsManager(engineRef(), [new PasswordAuthProvider()], {
+    sessionKey: randomBytes(32),
+    session: { slidingSeconds: config.getInt('auth.session.sliding-seconds'), absoluteSeconds: config.getInt('auth.session.absolute-seconds') },
+    throttle: { maxFailures: config.getInt('auth.throttle.max-failures'), windowSeconds: config.getInt('auth.throttle.window-seconds') },
+    trustedProxies: config.getStringList('auth.trusted-proxies'),
+    factors: config.getStringList('auth.factors'),
+  });
   // 6. The engine: managers in validated dependency order (yourphr#608). Configuration first,
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
-  const engine = new Engine();
   engine.register('configuration', new ConfigurationManager(engine, config));
+  engine.register('users', users);
+  engine.register('sessions', sessions);
   engine.register('records', new RecordsManager(engine, recordsProvider));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
 
   return {
-    config, db, dbKey, auth, catalog, sources, favorites, account, engine, records: engine.managers.records, recordsProvider,
+    config, db, dbKey, users, sessions, catalog, sources, favorites, account, engine, records: engine.managers.records, recordsProvider,
     close: async () => {
       await engine.shutdown();
       db.close();
@@ -259,7 +267,8 @@ export interface App {
   server: ReturnType<typeof createYourPhrServer>;
   engine: Engine;
   config: ConfigStore;
-  auth: AuthStore;
+  users: UsersManager;
+  sessions: SessionsManager;
   catalog: ProviderCatalog;
   sources: SourceStore;
   account: AccountStore;
@@ -271,12 +280,12 @@ export interface App {
 
 export async function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): Promise<App> {
   const stores = await openStores(dataDir, options.env ?? process.env);
-  const { config, auth, catalog, sources, favorites, account, engine, records } = stores;
+  const { config, users, sessions, catalog, sources, favorites, account, engine, records } = stores;
   /** The worker and the migration tool act for an account as a named system principal. */
   const systemCtx = (name: string, username: string): ApiContext => ApiContext.system(name, username, engine);
 
-  // Bootstrap the first admin on an empty install — after auth exists, before anything serves.
-  const bootstrap = auth.bootstrapAdmin(dataDir);
+  // Bootstrap the first admin on an empty install — after the managers exist, before anything serves.
+  const bootstrap = await users.bootstrapAdmin(dataDir);
 
   // Provision-then-preserve.
   if (options.seeds) {
@@ -415,7 +424,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
 
   const server = createYourPhrServer({
     engine,
-    auth: { store: auth, cookieMaxAgeSeconds: config.getInt('auth.session.absolute-seconds'), secureCookies: config.getBool('web.secure-cookies') },
+    auth: { cookieMaxAgeSeconds: config.getInt('auth.session.absolute-seconds'), secureCookies: config.getBool('web.secure-cookies') },
     webDir: options.webDir,
     version: options.version,
     modules: {
@@ -493,7 +502,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
       provenanceFor: (ctx, resourceType, id) => records.provenance(ctx, resourceType, id),
       medications: (ctx) => records.medications(ctx),
       catalog: {
-        isAdmin: (username) => auth.isAdmin(username),
         list: () => catalog.list().map(catalogEntryShape),
         get: (id) => {
           const e = catalogById(id);
@@ -543,9 +551,10 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           const verifier = generateVerifier();
           return { authorize_url: client.authorizeUrl(endpoints, state, verifier), state, code_verifier: verifier, redirect_uri: redirectUri };
         },
-        connect: async (username, id, body) => {
+        connect: async (ctx, id, body) => {
+          const username = ctx.username;
           const e = enabledCatalogEntry(id);
-          if (connectionPolicy(e).requiresUserConsent && account.consentAcceptedAt(username) === '') {
+          if (connectionPolicy(e).requiresUserConsent && users.consentAcceptedAt(ctx) === '') {
             throw Object.assign(withStatus(403, 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting a medical source.'),
               { extra: { error_code: 'legal_consent_required', privacy_policy_url: '/privacy', terms_of_service_url: '/terms' } });
           }
@@ -610,44 +619,38 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           const category = accessCategoryFor(pathname);
           if (category) account.recordAccess(username, username, category);
         },
-        legalConsent: (username) => consentStatus(account.consentAcceptedAt(username)),
-        grantConsent: (username) => {
+        legalConsent: (ctx) => consentStatus(users.consentAcceptedAt(ctx)),
+        grantConsent: (ctx) => {
           const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-          account.setConsentAcceptedAt(username, now);
+          users.setConsent(ctx, now);
           return consentStatus(now);
         },
-        revokeConsent: (username) => {
-          account.setConsentAcceptedAt(username, '');
+        revokeConsent: (ctx) => {
+          users.setConsent(ctx, '');
           // Go's rule: revoking the consent disconnects the sources that required it.
           let disconnected = 0;
           for (const s of sources.list()) {
-            if (s.userId !== username || !providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType)) continue;
+            if (s.userId !== ctx.username || !providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType)) continue;
             sources.clearTokens(s.id);
             disconnected++;
           }
           return { ...consentStatus(''), medicare_sources_disconnected: disconnected };
         },
-        changePassword: (username, current, next) => {
-          const changed = auth.changePassword(username, current, next);
-          if (!changed.ok) {
-            // Go: wrong current password is 401 with its own message; a policy refusal is 400 with the reason.
-            return changed.error === GENERIC_SIGNIN_ERROR
-              ? { ok: false, status: 401, error: 'current password is incorrect' }
-              : { ok: false, status: 400, error: changed.error ?? 'password change did not apply' };
-          }
-          return { ok: true, token: auth.issueSession(username) };
+        changePassword: async (ctx, current, next) => {
+          await users.changePassword(ctx, current, next); // 401 wrong current, 400 policy — as ApiError
+          return sessions.issueFor(ctx.username);
         },
-        signOutEverywhere: (username) => auth.revokeAllSessions(username),
+        signOutEverywhere: (ctx) => sessions.revokeAll(ctx),
         deleteAccount: async (ctx) => {
           // Everything the account owns, then the account: its sources, every record (the Records
-          // manager removes rows, index and history and drops the handle), favourites, consent,
-          // the access log, the sessions.
+          // manager removes rows, index and history and drops the handle), favourites, the access
+          // log, then the account itself (consent goes with it).
           const username = ctx.username;
           for (const s of sources.list().filter((s) => s.userId === username)) sources.remove(s.id);
           await records.removeAll(ctx);
           for (const fav of favorites.list(username, 'Practitioner')) favorites.remove(username, fav);
           account.deleteUser(username);
-          auth.deleteUser(username);
+          await users.deleteSelf(ctx);
         },
       },
       favorites: {
@@ -657,7 +660,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
         supports: (resourceType) => FavoriteStore.supports(resourceType),
       },
       admin: {
-        isAdmin: (username) => auth.isAdmin(username),
         configSnapshot: () => ({
           entries: config.snapshot().map((row) => {
             const spec = config.specOf(row.key)!;
@@ -709,11 +711,10 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
         },
         catalogList: () => catalog.list(),
         backupNow,
-        createUser: (username, password, role) => auth.createUser(username, password, role === 'admin' ? 'admin' : 'user'),
-        listUsers: () => auth.listUsers().map((u) => ({ id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0 })),
-        resetUserPassword: (username) => {
-          const password = auth.adminResetPassword(username);
-          if (password === undefined) return undefined;
+        createUser: (ctx, username, password, role) => users.createUser(ctx, username, password, role === 'admin' ? 'admin' : 'user'),
+        listUsers: async (ctx) => (await users.listUsers(ctx)).map((u) => ({ id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0 })),
+        resetUserPassword: async (ctx, username) => {
+          const password = await users.adminResetPassword(ctx, username);
           appLog.info(`admin reset the password for ${username}; every session of that account ended`);
           return { username, password };
         },
@@ -749,7 +750,8 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     server,
     engine,
     config,
-    auth,
+    users,
+    sessions,
     catalog,
     sources,
     account,

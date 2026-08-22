@@ -12,6 +12,7 @@ import { basename, join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { stageRestore } from '../src/backup/index.js';
 import { assembleApp, sourceShape } from '../src/app.js';
+import { ApiContext } from '../src/framework/ApiContext.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
     app.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(app.server.address() as { port: number }).port}`));
   });
 
+  const sys = ApiContext.system('harness', 'admin', app.engine);
   check('boot provisioned the first admin with a 0600 password file (empty install)',
     !!app.bootstrapPasswordFile && existsSync(app.bootstrapPasswordFile));
 
@@ -77,7 +79,7 @@ async function main(): Promise<void> {
   check('the admin user-create route enforces the password policy', shortPw.status === 400);
   const created = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'alice', password: 'a-long-enough-password' }) });
   check('the admin creates a user over the wire', created.status === 200);
-  check('and that user is a user, not an admin (yourphr#597)', app.auth.roleOf('alice') === 'user');
+  check('and that user is a user, not an admin (yourphr#597)', (await app.users.roleOf('alice')) === 'user');
 
   const aliceToken = ((await (await signIn('alice', 'a-long-enough-password')).json()) as { data: string }).data;
 
@@ -156,7 +158,7 @@ async function main(): Promise<void> {
   check('authorize: no relay here — a redirect_uri is required (501 says so); with one, a PKCE S256 authorize URL, state and verifier come back',
     noRedirect.status === 501 && authz.status === 200 && authzUrl.pathname === '/authorize' && authzUrl.searchParams.get('code_challenge_method') === 'S256' && authzUrl.searchParams.get('state') === authz.body.state
       && authzUrl.searchParams.get('client_id') === 'fake-cid' && (authz.body.code_verifier ?? '').length > 20 && authz.body.redirect_uri === 'http://localhost/sources/callback');
-  app.auth.createUser('carol', 'carols-long-enough-password');
+  await app.users.createUser(sys, 'carol', 'carols-long-enough-password');
   const carolToken = ((await (await signIn('carol', 'carols-long-enough-password')).json()) as { data: string }).data;
   const consentGate = await catJson(`/api/secure/provider-catalog/${fakeId}/connect`, carolToken, { method: 'POST', body: JSON.stringify({ code: 'good-code', state: authz.body.state, code_verifier: authz.body.code_verifier, redirect_uri: authz.body.redirect_uri }) });
   check('connect refuses until the legal consent is accepted (Go\'s gate, with its error_code)', consentGate.status === 403 && consentGate.body.error_code === 'legal_consent_required');
@@ -281,7 +283,7 @@ async function main(): Promise<void> {
   const aliceAdmin = await fetch(`${base}/api/secure/admin/config`, authed(aliceToken));
   check('a non-admin gets 403 from the admin surface', aliceAdmin.status === 403);
   // The gate is the ROLE, not the name (yourphr#597): an admin called anything else gets in.
-  app.auth.createUser('ops', 'an-operator-password', 'admin');
+  await app.users.createUser(sys, 'ops', 'an-operator-password', 'admin');
   const opsToken = ((await (await signIn('ops', 'an-operator-password')).json()) as { data: string }).data;
   const opsMe = (await (await fetch(`${base}/api/secure/account/me`, authed(opsToken))).json()) as { data: { role: string } };
   const opsAdmin = await fetch(`${base}/api/secure/admin/config`, authed(opsToken));
@@ -298,7 +300,7 @@ async function main(): Promise<void> {
     backup.data.sizeBytes > 0 && !backupBytes.includes('synthetic Condition') && !backupBytes.subarray(0, 16).includes('SQLite format 3'));
 
   check('the migration ledger exists from first boot (downgrade refusal has ground to stand on)',
-    (app.auth as unknown as { db?: unknown }) !== undefined && existsSync(join(dir, 'spike.db')));
+    existsSync(join(dir, 'spike.db')));
 
   // --- the account page and the legal pages (yourphr#596) ---
   type LegalDoc = { kind: string; html: string; digest: string; source: string; path?: string };
@@ -353,16 +355,16 @@ async function main(): Promise<void> {
   check('sign out everywhere ends every session including this one, clears the cookie, and the new password signs back in',
     signedOut.status === 200 && /fasten_session=;.*Max-Age=0/.test(signedOut.headers.get('set-cookie') ?? '') && afterSignOut.status === 401 && backIn.status === 200);
 
-  app.auth.createUser('zed', 'zeds-long-enough-password');
+  await app.users.createUser(sys, 'zed', 'zeds-long-enough-password');
   const zedToken = ((await (await signIn('zed', 'zeds-long-enough-password')).json()) as { data: string }).data;
   app.sources.add({ userId: 'zed', display: 'Zed Clinic', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pz', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999 });
   await app.syncNow(1_000_200);
   const zedHad = ((await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition`, authed(zedToken))).json()) as { data: unknown[] }).data.length;
   const zedDeleted = await fetch(`${base}/api/secure/account/me`, { method: 'DELETE', ...authed(zedToken) });
   const zedAgain = await signIn('zed', 'zeds-long-enough-password');
-  const zedRows = (app.auth as unknown as { db: { prepare: (q: string) => { get: (...a: unknown[]) => { n: number } } } }).db.prepare("SELECT COUNT(*) AS n FROM connected_sources WHERE user_id = 'zed'").get().n;
+  const zedRows = app.sources.list().filter((s) => s.userId === 'zed').length;
   check('deleting the account removes its sources, records, and the account itself; the password no longer signs in',
-    zedHad === 3 && zedDeleted.status === 200 && zedAgain.status === 401 && app.auth.roleOf('zed') === undefined && zedRows === 0);
+    zedHad === 3 && zedDeleted.status === 200 && zedAgain.status === 401 && (await app.users.roleOf('zed')) === undefined && zedRows === 0);
 
   // --- the Users page (yourphr#604) ---
   type ListedUser = { id: string; username: string; role: string; created_at: string };
@@ -379,7 +381,7 @@ async function main(): Promise<void> {
   const madeAdmin = await fetch(`${base}/api/secure/users`, createBody({ username: 'ops2', role: 'admin' }));
   check('create takes the page\'s body (full_name/email not stored — absent, not invented); duplicates and weak passwords are 400; role is honoured',
     madeDave.status === 200 && madeDaveBody.data.username === 'dave' && madeDaveBody.data.role === 'user' && duplicate.status === 400 && ((await duplicate.json()) as { error: string }).error === 'User already exists'
-      && weak.status === 400 && madeAdmin.status === 200 && app.auth.roleOf('ops2') === 'admin' && app.auth.roleOf('dave') === 'user');
+      && weak.status === 400 && madeAdmin.status === 200 && (await app.users.roleOf('ops2')) === 'admin' && (await app.users.roleOf('dave')) === 'user');
   const daveToken = ((await (await signIn('dave', 'daves-long-enough-password')).json()) as { data: string }).data;
   const resetDave = (await (await fetch(`${base}/api/secure/users/dave/password`, { method: 'POST', ...authed(adminToken) })).json()) as { data: { username: string; password: string } };
   const daveOldSession = await fetch(`${base}/api/secure/account/me`, authed(daveToken));
@@ -489,17 +491,17 @@ async function main(): Promise<void> {
     const rDir = mkdtempSync(join(tmpdir(), 'spike-app-restore-'));
     const env = { SPIKE_DATABASE_ENCRYPTION_KEY: 'k1', SPIKE_BACKUP_ENCRYPTION_KEY: 'bk', SPIKE_TEST_ALLOW_INTERNAL: '1' };
     const a = await assembleApp(rDir, { env });
-    a.auth.createUser('keeper', 'keepers-long-enough-password');
+    await a.users.createUser(ApiContext.system('harness', 'admin', a.engine), 'keeper', 'keepers-long-enough-password');
     const rBase = await new Promise<string>((resolve) => { a.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(a.server.address() as { port: number }).port}`)); });
     const bootPw = readFileSync(a.bootstrapPasswordFile!, 'utf8').trim();
     const tok = ((await (await fetch(`${rBase}/api/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: bootPw }) })).json()) as { data: string }).data;
     const b = (await (await fetch(`${rBase}/api/secure/admin/database/backup`, { method: 'POST', headers: { authorization: `Bearer ${tok}` } })).json()) as { data: { filename: string } };
-    a.auth.createUser('latecomer', 'latecomers-long-enough-password');
+    await a.users.createUser(ApiContext.system('harness', 'admin', a.engine), 'latecomer', 'latecomers-long-enough-password');
     const staged = (await (await fetch(`${rBase}/api/secure/admin/database/restore`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` }, body: JSON.stringify({ backup_name: b.data.filename, confirm: true }) })).json()) as { data: { staged: boolean } };
     await a.close();
     const after = await assembleApp(rDir, { env });
     check('a confirmed restore is STAGED, applied on the next start, and the previous databases are kept as *.pre-restore',
-      staged.data.staged === true && after.auth.roleOf('keeper') === 'user' && after.auth.roleOf('latecomer') === undefined && existsSync(join(rDir, 'spike.db.pre-restore')) && existsSync(join(rDir, 'records.db.pre-restore')));
+      staged.data.staged === true && (await after.users.roleOf('keeper')) === 'user' && (await after.users.roleOf('latecomer')) === undefined && existsSync(join(rDir, 'spike.db.pre-restore')) && existsSync(join(rDir, 'records.db.pre-restore')));
     await after.close();
     rmSync(rDir, { recursive: true, force: true });
   }
@@ -517,8 +519,8 @@ async function main(): Promise<void> {
     old.close();
     const upgraded = await assembleApp(oldDir, { env: { SPIKE_TEST_ALLOW_INTERNAL: '1' } });
     check('a pre-role database boots, and bootstrap does not run (the table was populated)', !upgraded.bootstrapPasswordFile);
-    check('the account named admin — the admin until now — is recorded as one', upgraded.auth.roleOf('admin') === 'admin');
-    check('every other pre-existing account is a user', upgraded.auth.roleOf('pat') === 'user');
+    check('the account named admin — the admin until now — is recorded as one', (await upgraded.users.roleOf('admin')) === 'admin');
+    check('every other pre-existing account is a user', (await upgraded.users.roleOf('pat')) === 'user');
     const oldSource = upgraded.sources.list()[0];
     check('a pre-column source reads with platform_type and environment UNKNOWN (yourphr#594), and is served without them',
       oldSource?.platformType === '' && oldSource.environment === '' && !('platform_type' in sourceShape(oldSource, undefined)) && !('environment' in sourceShape(oldSource, undefined)));

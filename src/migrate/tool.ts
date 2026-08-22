@@ -26,8 +26,8 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Resource, ResourceType } from '@medplum/fhirtypes';
-import { readGoUsers, importLegacyUsers, type ImportReport as UserImportReport } from '../auth/index.js';
-import { readGoSources, importLegacySources, readGoAccountData, importLegacyAccountData, type SourceImportReport, type AccountImportReport } from './index.js';
+import { readGoUsers, readGoSources, importLegacySources, readGoAccountData, importLegacyAccountData, type SourceImportReport, type AccountImportReport } from './index.js';
+import type { ImportReport as UserImportReport } from '../framework/managers/UsersManager.js';
 import type { CatalogWrite, ProviderCatalog } from '../catalog/index.js';
 import type { ConfigStore, ConfigValue } from '../config/index.js';
 import type { Stores } from '../app.js';
@@ -561,7 +561,7 @@ export async function migrateFromGo(goDb: GoDb, stores: Stores, options: Migrati
   const selected = new Set(selectedUsers.map((u) => u.username));
 
   log(`users: ${selectedUsers.length} of ${liveUsers.length} live accounts selected`);
-  const users = { ...importLegacyUsers(stores.auth, readGoUsers(goDb).filter((u) => selected.has(u.username))), goLive: liveUsers.length };
+  const users = { ...(await stores.users.importLegacy(ApiContext.system('migration', '', stores.engine), readGoUsers(goDb).filter((u) => selected.has(u.username)))), goLive: liveUsers.length };
   log('account data (legal consent, access log)');
   const account = importLegacyAccountData(stores.account, readGoAccountData(goDb).filter((d) => selected.has(d.username)));
 

@@ -1,9 +1,8 @@
 /**
- * Phase 3 harness (yourphr#541): sign-in, sessions, revocation, throttling, trusted proxy,
- * enumeration resistance, password policy. Loopback only, synthetic accounts, no PHI.
- *
- * The acceptance test that matters most is the yourphr#508/#528 one: A PASSWORD CHANGE ENDS
- * ANOTHER SESSION — verified against the database counter, not the token's own claims.
+ * Authentication and sessions (yourphr#541, now the Users + Sessions managers of yourphr#611):
+ * sign-in, revocation, sliding TTL, throttling, the trusted-proxy rule, the password policy, the
+ * token internals, the wire, bootstrap and recovery, and the Go account migration — each
+ * decision the Go stack paid to learn, checked by trying to break it.
  *
  *   npm run auth
  */
@@ -12,21 +11,23 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
+import bcryptjs from 'bcryptjs';
+import { Engine } from '../src/framework/Engine.js';
+import { ApiContext } from '../src/framework/ApiContext.js';
+import { ConfigurationManager } from '../src/framework/ConfigurationManager.js';
+import { ConfigStore } from '../src/config/index.js';
+import { UsersManager } from '../src/framework/managers/UsersManager.js';
+import { SessionsManager, GENERIC_SIGNIN_ERROR, decodeToken, issueToken, clientIp, Throttle } from '../src/framework/managers/SessionsManager.js';
+import { SqliteUsersProvider } from '../src/framework/providers/SqliteUsersProvider.js';
+import { PasswordAuthProvider, hashPassword, verifyPassword, isLegacyBcrypt } from '../src/framework/providers/PasswordAuthProvider.js';
+import { BaseAuthProvider, type AuthResult } from '../src/framework/providers/BaseAuthProvider.js';
+import type { UserRecord } from '../src/framework/providers/BaseUsersProvider.js';
+import { AccountStore } from '../src/account/index.js';
+import { readGoUsers } from '../src/migrate/index.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 import { createYourPhrServer } from '../src/server.js';
-import bcryptjs from 'bcryptjs';
-import {
-  AuthStore,
-  importLegacyUsers,
-  isLegacyBcrypt,
-  readGoUsers,
-  GENERIC_SIGNIN_ERROR,
-  clientIp,
-  decodeToken,
-  hashPassword,
-  issueToken,
-  verifyPassword,
-} from '../src/auth/index.js';
+import { RecordsManager } from '../src/app/managers/RecordsManager.js';
+import { SqliteRecordsProvider } from '../src/app/providers/SqliteRecordsProvider.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -34,15 +35,26 @@ function check(name: string, ok: boolean, detail = ''): void {
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 }
 
-function newStore(overrides: Partial<ConstructorParameters<typeof AuthStore>[1]> = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'spike-auth-'));
-  const db = new Database(join(dir, 'auth.db'));
-  const store = new AuthStore(db, { sessionKey: randomBytes(32), ...overrides });
-  return { store, close: () => { db.close(); rmSync(dir, { recursive: true, force: true }); } };
-}
-
-const REQ = { remoteAddr: '198.51.100.7' };
 const PASSWORD = 'a-long-enough-password';
+const REQ = { remoteAddr: '198.51.100.7' };
+
+/** A users + sessions engine over a temp app database, with the policies a test asks for. */
+async function boot(options: { session?: { slidingSeconds: number; absoluteSeconds: number }; throttle?: { maxFailures: number; windowSeconds: number }; trustedProxies?: string[]; minPassword?: number; sessionKey?: Buffer; factors?: string[] } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'spike-auth-'));
+  const db = new Database(join(dir, 'app.db'));
+  const engine = new Engine();
+  const config = new ConfigStore(dir, undefined, options.minPassword === undefined ? {} : { SPIKE_AUTH_PASSWORD_MIN_LENGTH: String(options.minPassword) });
+  const account = new AccountStore(db);
+  const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider(), account);
+  const sessions = new SessionsManager(engine, [new PasswordAuthProvider()], { sessionKey: options.sessionKey ?? randomBytes(32), session: options.session, throttle: options.throttle, trustedProxies: options.trustedProxies, factors: options.factors });
+  const recordsFile = join(dir, 'records.db');
+  engine.register('configuration', new ConfigurationManager(engine, config)).register('users', users).register('sessions', sessions)
+    .register('records', new RecordsManager(engine, new SqliteRecordsProvider(recordsFile, undefined)));
+  await engine.initialize();
+  const sys = ApiContext.system('harness', 'admin', engine);
+  const as = (username: string): ApiContext => ApiContext.from({ username, role: 'user' }, engine);
+  return { dir, db, engine, users, sessions, sys, as, recordsFile, close: async () => { await engine.shutdown(); db.close(); rmSync(dir, { recursive: true, force: true }); } };
+}
 
 async function main(): Promise<void> {
   // --- password hashing ---
@@ -55,307 +67,247 @@ async function main(): Promise<void> {
 
   // --- sign-in + sessions ---
   {
-    const { store, close } = newStore();
-    store.createUser('alice', PASSWORD);
-
-    const bad = store.signIn('alice', 'wrong-but-long-enough', REQ);
-    const missing = store.signIn('nobody', PASSWORD, REQ);
-    check('wrong password and unknown user return the SAME generic error',
-      !bad.ok && !missing.ok && bad.error === GENERIC_SIGNIN_ERROR && missing.error === bad.error);
-
-    const good = store.signIn('alice', PASSWORD, REQ);
-    check('a correct sign-in issues a session token', good.ok);
-    if (!good.ok) throw new Error('cannot continue');
-
-    const verified = store.verifySession(good.token);
-    check('the session verifies and names the user', verified.ok && verified.username === 'alice');
-
-    // Tampering: flip one character of the payload — the HMAC must catch it.
-    const tampered = good.token.startsWith('A') ? 'B' + good.token.slice(1) : 'A' + good.token.slice(1);
-    check('a tampered token is refused', !store.verifySession(tampered).ok);
-    close();
+    const t = await boot();
+    await t.users.createUser(t.sys, 'alice', PASSWORD);
+    const ok = await t.sessions.signIn('alice', { password: PASSWORD }, REQ);
+    check('a correct sign-in yields a session token', ok.ok);
+    const bad = await t.sessions.signIn('alice', { password: 'wrong-but-long-enough' }, REQ);
+    const ghost = await t.sessions.signIn('nobody', { password: PASSWORD }, REQ);
+    check('a wrong password and an unknown user get the SAME generic error (yourphr#104)', !bad.ok && !ghost.ok && bad.error === GENERIC_SIGNIN_ERROR && ghost.error === GENERIC_SIGNIN_ERROR);
+    const v = await t.sessions.verify((ok as { token: string }).token);
+    check('the token verifies to its principal, role included', v.ok && v.principal.username === 'alice' && v.principal.role === 'user' && v.principal.tokenGeneration === 0);
+    check('a tampered token is refused', !(await t.sessions.verify((ok as { token: string }).token.slice(0, -2) + 'xx')).ok);
+    check('garbage is refused', !(await t.sessions.verify('not.a.token')).ok && !(await t.sessions.verify('')).ok);
+    await t.close();
   }
 
   // --- revocation: the acceptance test (yourphr#508 / #528) ---
   {
-    const { store, close } = newStore();
-    store.createUser('alice', PASSWORD);
-    const phone = store.signIn('alice', PASSWORD, REQ);
-    const laptop = store.signIn('alice', PASSWORD, REQ);
-    if (!phone.ok || !laptop.ok) throw new Error('setup sign-ins failed');
-
-    const changed = store.changePassword('alice', PASSWORD, 'a-brand-new-long-password');
-    check('a password change succeeds with the current password', changed.ok);
-    check('A PASSWORD CHANGE ENDS THE OTHER SESSION', !store.verifySession(phone.token).ok && !store.verifySession(laptop.token).ok);
-
-    const fresh = store.signIn('alice', 'a-brand-new-long-password', REQ);
-    check('the new password signs in and the new session verifies', fresh.ok && store.verifySession((fresh as { token: string }).token).ok);
-
-    check('a stolen session is NOT enough to change the password',
-      !store.changePassword('alice', 'not-the-current-password', 'attacker-chosen-password').ok);
-
-    if (fresh.ok) {
-      store.revokeAllSessions('alice');
-      check('sign-out-everywhere ends the current session too', !store.verifySession(fresh.token).ok);
-    }
-    close();
+    const t = await boot();
+    await t.users.createUser(t.sys, 'alice', PASSWORD);
+    const before = (await t.sessions.signIn('alice', { password: PASSWORD }, REQ)) as { token: string };
+    await t.users.changePassword(t.as('alice'), PASSWORD, 'a-different-long-password');
+    check('a password change ENDS the existing session (the generation moved)', !(await t.sessions.verify(before.token)).ok);
+    const after = (await t.sessions.signIn('alice', { password: 'a-different-long-password' }, REQ)) as { token: string };
+    check('the new password signs in and the new session verifies', (await t.sessions.verify(after.token)).ok);
+    await t.sessions.revokeAll(t.as('alice'));
+    check('sign-out-everywhere ends every session without a password change', !(await t.sessions.verify(after.token)).ok);
+    const again = (await t.sessions.signIn('alice', { password: 'a-different-long-password' }, REQ)) as { token: string };
+    check('and a fresh sign-in works afterwards, carrying the new generation', (await t.sessions.verify(again.token)).ok && ((await t.sessions.verify(again.token)) as { principal: { tokenGeneration: number } }).principal.tokenGeneration === 2);
+    let refused = false;
+    try { await t.users.changePassword(t.as('alice'), 'not-the-current-one-long', 'another-long-password-1'); } catch { refused = true; }
+    check('a password change needs the CURRENT password', refused);
+    await t.close();
   }
 
   // --- sliding TTL + absolute cap (yourphr#445) ---
   {
-    const { store, close } = newStore({ session: { slidingSeconds: 100, absoluteSeconds: 250 } });
-    store.createUser('alice', PASSWORD);
-    const t0 = 1_000_000;
-    const signedIn = store.signIn('alice', PASSWORD, REQ, t0);
-    if (!signedIn.ok) throw new Error('sign-in failed');
-    let token = signedIn.token;
-
-    check('idle past the sliding window is refused', !store.verifySession(token, t0 + 101).ok);
-
-    // Active use: renew inside the window, repeatedly, up to — but never past — the cap.
-    let alive = true;
-    for (let t = t0 + 60; t < t0 + 260; t += 60) {
-      const v = store.verifySession(token, t);
-      if (!v.ok) { alive = t >= t0 + 250 ? alive : false; break; }
-      if (v.renewed) token = v.renewed;
-    }
-    check('activity renews the session inside the window', alive);
-    check('the absolute cap fires even for an active session', !store.verifySession(token, t0 + 250).ok);
-    close();
+    const t = await boot({ session: { slidingSeconds: 100, absoluteSeconds: 250 } });
+    await t.users.createUser(t.sys, 'alice', PASSWORD);
+    const token = ((await t.sessions.signIn('alice', { password: PASSWORD }, REQ, 1000)) as { token: string }).token;
+    check('inside the window: valid, not renewed', (await t.sessions.verify(token, 1040)).ok && !((await t.sessions.verify(token, 1040)) as { renewed?: string }).renewed);
+    const late = await t.sessions.verify(token, 1060);
+    check('past the renewal half: valid AND a fresh token is returned', late.ok && !!late.renewed);
+    check('the original expires at its sliding deadline', !(await t.sessions.verify(token, 1100)).ok);
+    const renewed = (late as { renewed: string }).renewed;
+    check('the renewed token is valid past the old deadline', (await t.sessions.verify(renewed, 1120)).ok);
+    const chain = await t.sessions.verify(renewed, 1140);
+    const last = (chain as { renewed?: string }).renewed ?? renewed;
+    check('renewal never extends past the absolute cap', !(await t.sessions.verify(last, 1250)).ok && decodeToken(t.sessions['sessionKey' as never] as Buffer, last)!.exp <= 1250);
+    await t.close();
   }
 
   // --- throttling (yourphr#509) + trusted proxy (yourphr#529) ---
   {
-    const { store, close } = newStore({ throttle: { maxFailures: 3, windowSeconds: 600 } });
-    store.createUser('alice', PASSWORD);
-    const t0 = 2_000_000;
-    for (let i = 0; i < 3; i++) {
-      store.signIn('alice', 'wrong-but-long-enough', REQ, t0 + i);
-    }
-    const throttled = store.signIn('alice', PASSWORD, REQ, t0 + 5);
-    check('the account throttles after repeated failures — even with the RIGHT password', !throttled.ok);
-    check('the throttle refusal is the same generic message', !throttled.ok && throttled.error === GENERIC_SIGNIN_ERROR);
-
-    const otherAccountSameIp = store.signIn('nobody', 'wrong-but-long-enough', { remoteAddr: REQ.remoteAddr }, t0 + 6);
-    check('the shared IP is throttled across accounts (per-IP key)', !otherAccountSameIp.ok);
-
-    const laterOk = store.signIn('alice', PASSWORD, REQ, t0 + 700);
-    check('the window passes and sign-in works again', laterOk.ok);
-    close();
-  }
-  {
-    const { store, close } = newStore({ throttle: { maxFailures: 2, windowSeconds: 600 }, trustedProxies: ['10.0.0.1'] });
-    store.createUser('alice', PASSWORD);
-    const t0 = 3_000_000;
-    // An attacker rotating X-Forwarded-For from an UNTRUSTED address must still burn ONE IP bucket.
-    // Deliberately a DIFFERENT username per attempt, so the account throttle cannot mask a broken
-    // per-IP key — only the IP bucket can stop this pattern.
-    store.signIn('user-one', 'wrong-but-long-enough', { remoteAddr: '203.0.113.9', xff: '1.1.1.1' }, t0);
-    store.signIn('user-two', 'wrong-but-long-enough', { remoteAddr: '203.0.113.9', xff: '2.2.2.2' }, t0 + 1);
-    const spoofed = store.signIn('alice', PASSWORD, { remoteAddr: '203.0.113.9', xff: '3.3.3.3' }, t0 + 2);
-    check('X-Forwarded-For from an untrusted peer is IGNORED (spoofing cannot dodge the throttle)', !spoofed.ok);
-    check('clientIp believes the rightmost hop only via a trusted proxy',
-      clientIp('10.0.0.1', '9.9.9.9, 8.8.8.8', ['10.0.0.1']) === '8.8.8.8' &&
-      clientIp('203.0.113.9', '9.9.9.9', ['10.0.0.1']) === '203.0.113.9');
-    close();
+    const t = await boot({ throttle: { maxFailures: 3, windowSeconds: 60 }, trustedProxies: ['10.0.0.1'] });
+    await t.users.createUser(t.sys, 'alice', PASSWORD);
+    await t.users.createUser(t.sys, 'bob', PASSWORD);
+    for (let i = 0; i < 3; i++) await t.sessions.signIn('alice', { password: 'wrong-but-long-enough' }, { remoteAddr: '203.0.113.5' }, 100 + i);
+    const locked = await t.sessions.signIn('alice', { password: PASSWORD }, { remoteAddr: '203.0.113.9' }, 110);
+    check('three failures lock the ACCOUNT — even the right password from another address is refused', !locked.ok && locked.error === GENERIC_SIGNIN_ERROR);
+    const bobFromSameIp = await t.sessions.signIn('bob', { password: PASSWORD }, { remoteAddr: '203.0.113.5' }, 111);
+    check('the IP that failed three times is locked too: bob cannot sign in from it', !bobFromSameIp.ok);
+    const bobElsewhere = await t.sessions.signIn('bob', { password: PASSWORD }, { remoteAddr: '203.0.113.77' }, 112);
+    check('but bob signs in from a clean address', bobElsewhere.ok);
+    check('the lock lifts when the window passes', (await t.sessions.signIn('alice', { password: PASSWORD }, { remoteAddr: '203.0.113.9' }, 200)).ok);
+    check('X-Forwarded-For is ignored from an untrusted peer', clientIp('198.51.100.7', '1.2.3.4', ['10.0.0.1']) === '198.51.100.7');
+    check('and believed from a declared proxy — the LAST hop', clientIp('10.0.0.1', '1.2.3.4, 5.6.7.8', ['10.0.0.1']) === '5.6.7.8');
+    const th = new Throttle({ maxFailures: 2, windowSeconds: 10 });
+    th.recordFailure('k', 1); th.recordFailure('k', 2);
+    check('the throttle window slides', th.isLimited('k', 5) && !th.isLimited('k', 13));
+    await t.close();
   }
 
   // --- password policy (yourphr#506) ---
   {
-    const { store, close } = newStore();
-    let refused = false;
-    try {
-      store.createUser('bob', 'short');
-    } catch {
-      refused = true;
-    }
-    check('a too-short password is refused at create', refused);
-    store.createUser('bob', PASSWORD);
-    check('a too-short password is refused at change', !store.changePassword('bob', PASSWORD, 'short').ok);
-    close();
+    const t = await boot({ minPassword: 12 });
+    let short = '';
+    try { await t.users.createUser(t.sys, 'bob', 'short'); } catch (err) { short = (err as Error).message; }
+    check('a password under the minimum is refused at creation, with the rule stated', short.includes('at least 12'));
+    await t.users.createUser(t.sys, 'bob', PASSWORD);
+    let shortChange = '';
+    try { await t.users.changePassword(t.as('bob'), PASSWORD, 'tiny'); } catch (err) { shortChange = (err as Error).message; }
+    check('and at change', shortChange.includes('at least 12'));
+    let badName = '';
+    try { await t.users.createUser(t.sys, 'Bad Name!', PASSWORD); } catch (err) { badName = (err as Error).message; }
+    check('usernames are constrained', badName.includes('username must be'));
+    let dup = '';
+    try { await t.users.createUser(t.sys, 'bob', PASSWORD); } catch (err) { dup = (err as Error).message; }
+    check('a duplicate account is refused by name', dup === 'User already exists');
+    await t.close();
   }
 
   // --- token internals: no algorithm agility to abuse ---
   {
     const key = randomBytes(32);
-    const claims = { u: 'alice', g: 0, iat: 0, exp: 10, cap: 20 };
-    const token = issueToken(key, claims);
-    check('a token decodes under its own key', decodeToken(key, token)?.u === 'alice');
-    check('a token is refused under a different key', decodeToken(randomBytes(32), token) === undefined);
-    check('a payload signed with an empty signature is refused', decodeToken(key, token.split('.')[0] + '.') === undefined);
+    const token = issueToken(key, { u: 'alice', g: 0, iat: 1, exp: 100, cap: 200 });
+    check('a token is payload.signature, nothing else', token.split('.').length === 2);
+    check('the signature is keyed: another key refuses it', decodeToken(randomBytes(32), token) === undefined);
+    const [payload] = token.split('.');
+    check('claims without the required fields are refused', decodeToken(key, `${Buffer.from('{"u":"x"}').toString('base64url')}.${token.split('.')[1]}`) === undefined && !!payload);
+  }
+
+  // --- all-of factors (the doc's MFA-bypass warning), proven against a fake second factor ---
+  {
+    class Totp extends BaseAuthProvider {
+      readonly name = 'totp';
+      hash(credential: string): string { return credential; }
+      async authenticate(username: string, credential: string, stored: UserRecord | undefined, nowSeconds: number): Promise<AuthResult> {
+        if (!stored || credential !== '123456') return { ok: false, reason: 'bad code' };
+        return { ok: true, subject: username, provider: 'totp', factors: ['totp'], issuedAt: nowSeconds, tokenGeneration: stored.tokenGeneration };
+      }
+    }
+    const dir = mkdtempSync(join(tmpdir(), 'spike-auth-mfa-'));
+    const db = new Database(join(dir, 'app.db'));
+    const engine = new Engine();
+    const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider(), new AccountStore(db));
+    const sessions = new SessionsManager(engine, [new PasswordAuthProvider(), new Totp()], { factors: ['password', 'totp'] });
+    engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir))).register('users', users).register('sessions', sessions);
+    await engine.initialize();
+    await users.createUser(ApiContext.system('harness', 'admin', engine), 'alice', PASSWORD);
+    const passwordOnly = await sessions.signIn('alice', { password: PASSWORD }, REQ);
+    const both = await sessions.signIn('alice', { password: PASSWORD, totp: '123456' }, REQ);
+    const wrongCode = await sessions.signIn('alice', { password: PASSWORD, totp: '000000' }, REQ);
+    check('ALL-OF: with two factors configured, the password alone does NOT sign in — never "try each until one succeeds"', !passwordOnly.ok && both.ok && !wrongCode.ok);
+    let missing = '';
+    try {
+      const e2 = new Engine();
+      e2.register('configuration', new ConfigurationManager(e2, new ConfigStore(dir)));
+      e2.register('users', new UsersManager(e2, new SqliteUsersProvider(db), new PasswordAuthProvider(), new AccountStore(db)));
+      e2.register('sessions', new SessionsManager(e2, [new PasswordAuthProvider()], { factors: ['password', 'totp'] }));
+      await e2.initialize();
+    } catch (err) { missing = (err as Error).message; }
+    check('a factor nobody provides refuses to BOOT rather than sign nobody in', missing.includes('no such auth provider'));
+    await engine.shutdown(); db.close(); rmSync(dir, { recursive: true, force: true });
   }
 
   // --- the wire (yourphr#541): auth enforced by the HTTP layer, not by configuration ---
   {
-    const dir = mkdtempSync(join(tmpdir(), 'spike-auth-http-'));
-    const db = new Database(join(dir, 'auth.db'));
-    const store = new AuthStore(db, {
-      sessionKey: randomBytes(32),
-      session: { slidingSeconds: 20, absoluteSeconds: 120 }, // renewal zone [10s,20s) — wide enough for a slow CI runner
-    });
-    store.createUser('alice', PASSWORD);
-    store.createUser('bob', PASSWORD);
+    const t = await boot({ session: { slidingSeconds: 20, absoluteSeconds: 3600 } });
+    await t.users.createUser(t.sys, 'alice', PASSWORD);
+    await t.users.createUser(t.sys, 'bob', PASSWORD);
+    const aliceRepo = new SqliteFhirRepository({ file: t.recordsFile, userId: 'alice', sourceId: 'source-1' });
+    const bobRepo = new SqliteFhirRepository({ file: t.recordsFile, userId: 'bob', sourceId: 'source-1' });
+    await aliceRepo.updateResource({ resourceType: 'Condition', id: 'alice-cond', code: { text: 'alice only' } } as never);
+    await bobRepo.updateResource({ resourceType: 'Condition', id: 'bob-cond', code: { text: 'bob only' } } as never);
+    aliceRepo.db.close(); bobRepo.db.close();
 
-    // One shared record db, two per-user repositories — the #537 isolation model.
-    const recordsFile = join(dir, 'records.db');
-    const repos = new Map<string, SqliteFhirRepository>();
-    const repoFor = (u: string) => {
-      let r = repos.get(u);
-      if (!r) { r = new SqliteFhirRepository({ file: recordsFile, userId: u }); repos.set(u, r); }
-      return r;
-    };
-    await repoFor('alice').updateResource({ resourceType: 'Condition', id: 'alice-cond', code: { text: 'alice only' } } as never);
-    await repoFor('bob').updateResource({ resourceType: 'Condition', id: 'bob-cond', code: { text: 'bob only' } } as never);
-
-    const server = createYourPhrServer({ repo: repoFor('alice'), auth: { store } });
+    const server = createYourPhrServer({ engine: t.engine, auth: {} });
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     const port = (server.address() as { port: number }).port;
     const base = `http://127.0.0.1:${port}`;
     const LIST = '/api/secure/resource/fhir?sourceResourceType=Condition';
-
-    const noToken = await fetch(base + LIST);
-    check('the wire: no token is 401, not a record list', noToken.status === 401);
-    const garbage = await fetch(base + LIST, { headers: { authorization: 'Bearer not-a-token' } });
-    check('the wire: a garbage token is 401', garbage.status === 401);
-
-    const signIn = async (u: string, p: string) =>
-      fetch(base + '/api/auth/signin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
-
+    check('the wire: no token is 401, not a record list', (await fetch(base + LIST)).status === 401);
+    check('the wire: a garbage token is 401', (await fetch(base + LIST, { headers: { authorization: 'Bearer not-a-token' } })).status === 401);
+    const signIn = async (u: string, p: string) => fetch(base + '/api/auth/signin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
     const aliceBad = await signIn('alice', 'wrong-but-long-enough');
     check('the wire: a wrong password is 401 with the generic error', aliceBad.status === 401 && ((await aliceBad.json()) as { error: string }).error === GENERIC_SIGNIN_ERROR);
-
     const aliceToken = ((await (await signIn('alice', PASSWORD)).json()) as { data: string }).data;
     const bobToken = ((await (await signIn('bob', PASSWORD)).json()) as { data: string }).data;
     const authed = (token: string) => ({ headers: { authorization: `Bearer ${token}` } });
-
     const aliceList = (await (await fetch(base + LIST, authed(aliceToken))).json()) as { data: { source_resource_id: string }[] };
     const bobList = (await (await fetch(base + LIST, authed(bobToken))).json()) as { data: { source_resource_id: string }[] };
     check('the wire: each session sees ONLY its own records (isolation enforced by the session)',
-      aliceList.data.length === 1 && aliceList.data[0]?.source_resource_id === 'alice-cond' &&
-      bobList.data.length === 1 && bobList.data[0]?.source_resource_id === 'bob-cond');
-
-    // Past the renewal half of a 20s sliding window, a valid request carries a fresh token.
-    // (Was a 4s window with a 3.2s sleep — a slow CI runner pushed the request past expiry and
-    // the check flaked red. The zone is now 10 seconds wide.)
+      aliceList.data.length === 1 && aliceList.data[0]?.source_resource_id === 'alice-cond' && bobList.data.length === 1 && bobList.data[0]?.source_resource_id === 'bob-cond');
     await new Promise((r) => setTimeout(r, 11_000));
-    const renewing = await fetch(base + LIST, authed(aliceToken));
-    check('the wire: a use near expiry returns X-Renewed-Token', renewing.status === 200 && !!renewing.headers.get('x-renewed-token'));
-
-    store.changePassword('bob', PASSWORD, 'a-brand-new-long-password');
-    const evicted = await fetch(base + LIST, authed(bobToken));
-    check('the wire: a password change 401s the live session mid-flight', evicted.status === 401);
-
+    const renewedResponse = await fetch(base + LIST, authed(aliceToken));
+    check('the wire: past the renewal half, a fresh token rides back in X-Renewed-Token', renewedResponse.status === 200 && !!renewedResponse.headers.get('x-renewed-token'));
+    await t.sessions.revokeAll(t.as('alice'));
+    check('the wire: after sign-out-everywhere the token is 401 mid-flight', (await fetch(base + LIST, authed(aliceToken))).status === 401);
     server.close();
-    for (const r of repos.values()) r.db.close();
-    db.close();
-    rmSync(dir, { recursive: true, force: true });
+    await t.close();
   }
 
   // --- bootstrap provisioning (yourphr#504) + recovery (yourphr#510) ---
   {
-    const dir = mkdtempSync(join(tmpdir(), 'spike-auth-boot-'));
-    const db = new Database(join(dir, 'auth.db'));
-    const store = new AuthStore(db, { sessionKey: randomBytes(32) });
-
-    const first = store.bootstrapAdmin(dir);
+    const t = await boot();
+    const first = await t.users.bootstrapAdmin(t.dir);
     check('bootstrap on an empty table creates the admin and a 0600 password file',
-      first.created && !!first.passwordFile && existsSync(first.passwordFile) &&
-      (statSync(first.passwordFile).mode & 0o777) === 0o600);
-
-    const second = store.bootstrapAdmin(dir);
+      first.created && !!first.passwordFile && existsSync(first.passwordFile) && (statSync(first.passwordFile).mode & 0o777) === 0o600);
+    const second = await t.users.bootstrapAdmin(t.dir);
     check('bootstrap is one-way: a second call on a populated table is a no-op', !second.created && !second.passwordFile);
-
     const bootPassword = readFileSync(first.passwordFile as string, 'utf8').trim();
-    const signedIn = store.signIn('admin', bootPassword, REQ);
+    const signedIn = await t.sessions.signIn('admin', { password: bootPassword }, REQ);
     check('the bootstrap password signs in', signedIn.ok);
-    check('the bootstrap account is created with the admin ROLE, not recognised by name (yourphr#597)', store.roleOf('admin') === 'admin');
-    const minted = store.issueSession('admin');
-    check('a session can be minted for an existing account (after a password change) and verifies; never for a stranger (yourphr#596)',
-      !!minted && store.verifySession(minted).ok && store.issueSession('nobody') === undefined);
-    store.createUser('temp', 'a-temporary-long-password');
-    const tempSession = store.issueSession('temp');
-    store.changePassword('temp', 'a-temporary-long-password', 'a-brand-new-long-password');
-    check('the minted session dies with the generation bump of a password change', !!tempSession && !store.verifySession(tempSession).ok);
-    check('deleting the account removes it; a second delete reports nothing to delete', store.deleteUser('temp') && !store.deleteUser('temp') && store.roleOf('temp') === undefined);
-    check('the password file is DELETED after the first successful sign-in (backups must not carry it)',
-      !existsSync(first.passwordFile as string));
-
-    // Lockout: the admin loses the password; an attacker holds a live session.
-    const attacker = store.signIn('admin', bootPassword, REQ);
-    check('setup: the attacker session is live before recovery', !attacker.ok || store.verifySession((attacker as { token: string }).token).ok);
-
-    const recovered = store.recoverAccess(dir, 'admin');
+    check('the bootstrap account is created with the admin ROLE, not recognised by name (yourphr#597)', (await t.users.roleOf('admin')) === 'admin');
+    check('and the password file is gone after that first sign-in (yourphr#466)', !existsSync(first.passwordFile as string));
+    const minted = await t.sessions.issueFor('admin');
+    check('a session can be minted for an existing account (after a password change) and verifies; never for a stranger',
+      !!minted && (await t.sessions.verify(minted)).ok && (await t.sessions.issueFor('nobody')) === undefined);
+    const attacker = (await t.sessions.signIn('admin', { password: bootPassword }, REQ)) as { token: string };
+    const recovered = await t.users.recoverAccess(t.dir, 'admin');
     check('recovery writes a fresh 0600 password file', existsSync(recovered.passwordFile) && (statSync(recovered.passwordFile).mode & 0o777) === 0o600);
     const newPassword = readFileSync(recovered.passwordFile, 'utf8').trim();
-    check('the recovered password signs in and the OLD one no longer does',
-      store.signIn('admin', newPassword, REQ).ok && !store.signIn('admin', bootPassword, REQ).ok);
-    if (signedIn.ok) {
-      check('recovery evicts every pre-recovery session', !store.verifySession(signedIn.token).ok);
-    }
-
-    let unknownRefused = false;
-    try { store.recoverAccess(dir, 'nobody'); } catch { unknownRefused = true; }
-    check('recovery for an unknown account is refused, not silently created', unknownRefused);
-
-    db.close();
-    rmSync(dir, { recursive: true, force: true });
+    check('recovery ENDS the attacker\'s session (generation bump)', !(await t.sessions.verify(attacker.token)).ok);
+    check('and the recovery password signs in', (await t.sessions.signIn('admin', { password: newPassword }, REQ)).ok);
+    let nobody = '';
+    try { await t.users.recoverAccess(t.dir, 'nobody'); } catch (err) { nobody = (err as Error).message; }
+    check('recovery of an unknown account is refused by name', nobody.includes('no such account'));
+    await t.users.createUser(t.sys, 'temp', 'a-temporary-long-password');
+    check('deleting the account removes it; a second delete reports nothing to delete', (await t.users.deleteSelf(t.as('temp'))) && !(await t.users.deleteSelf(t.as('temp'))) && (await t.users.roleOf('temp')) === undefined);
+    const listed = await t.users.listUsers(ApiContext.from({ username: 'admin', role: 'admin' }, t.engine));
+    check('the admin lists accounts with roles and never a hash', listed.some((u) => u.username === 'admin' && u.role === 'admin') && listed.every((u) => !('passwordHash' in u)));
+    let memberLists = '';
+    try { await t.users.listUsers(t.as('alice')); } catch (err) { memberLists = String((err as { status?: number }).status); }
+    check('a member cannot list accounts (403)', memberLists === '403');
+    await t.close();
   }
 
   // --- Go account migration: bcrypt verify-then-rehash (yourphr#583) ---
   {
-    const dir = mkdtempSync(join(tmpdir(), 'spike-auth-migrate-'));
-    // A synthetic Go database: the GORM users table shape, one admin + one user + one deleted.
-    const goDb = new Database(join(dir, 'go.db'));
+    const t = await boot();
+    const goDb = new Database(join(t.dir, 'go.db'));
     goDb.exec(`CREATE TABLE users (username TEXT, password TEXT, token_generation INTEGER, role TEXT, deleted_at TEXT)`);
-    const bcryptHash = bcryptjs.hashSync('go-era-password-long', 8); // cost rides in the hash; 8 keeps the harness fast
+    const bcryptHash = bcryptjs.hashSync('go-era-password-long', 8);
     goDb.prepare("INSERT INTO users VALUES ('jim', ?, 3, 'admin', NULL)").run(bcryptHash);
     goDb.prepare("INSERT INTO users VALUES ('mary', ?, 0, 'user', NULL)").run(bcryptjs.hashSync('marys-password-long', 8));
     goDb.prepare("INSERT INTO users VALUES ('ghost', 'x', 0, 'user', '2026-01-01')").run();
-
-    const appDb = new Database(join(dir, 'app.db'));
-    const store = new AuthStore(appDb, { sessionKey: randomBytes(32) });
-    store.createUser('mary', 'already-here-password'); // pre-existing spike account with the same name
-
+    await t.users.createUser(t.sys, 'mary', 'already-here-password');
     const legacy = readGoUsers(goDb);
     check('the Go reader skips soft-deleted accounts', legacy.length === 2);
-
-    const report = importLegacyUsers(store, legacy);
-    check('import is one-way: the existing account is skipped and reported, never overwritten',
-      report.imported.join(',') === 'jim' && report.skippedExisting.join(',') === 'mary');
+    const report = await t.users.importLegacy(ApiContext.system('migration', '', t.engine), legacy);
+    check('import is one-way: the existing account is skipped and reported, never overwritten', report.imported.join(',') === 'jim' && report.skippedExisting.join(',') === 'mary');
     check('Go admins are reported for the role wiring', report.admins.join(',') === 'jim');
-    check('the Go role is CARRIED: the operator there is the operator here (yourphr#597)',
-      store.roleOf('jim') === 'admin' && store.isAdmin('jim'));
-    check('a skipped account keeps its own role (one-way means the role too)', store.roleOf('mary') === 'user' && !store.isAdmin('mary'));
-    check('an unknown account has no role', store.roleOf('nobody') === undefined && !store.isAdmin('nobody'));
-
-    const storedBefore = (appDb.prepare("SELECT password_hash FROM auth_users WHERE username = 'jim'").get() as { password_hash: string }).password_hash;
+    check('the Go role is CARRIED: the operator there is the operator here (yourphr#597)', (await t.users.roleOf('jim')) === 'admin');
+    check('a skipped account keeps its own role', (await t.users.roleOf('mary')) === 'user');
+    const storedBefore = (await t.users.record('jim'))!.passwordHash;
     check('the imported hash is the bcrypt hash, verbatim', isLegacyBcrypt(storedBefore));
-
-    const wrong = store.signIn('jim', 'not-the-password-long', REQ);
-    const stillBcrypt = (appDb.prepare("SELECT password_hash FROM auth_users WHERE username = 'jim'").get() as { password_hash: string }).password_hash;
-    check('a WRONG password neither signs in nor rehashes', !wrong.ok && isLegacyBcrypt(stillBcrypt));
-
-    const first = store.signIn('jim', 'go-era-password-long', REQ);
+    const wrong = await t.sessions.signIn('jim', { password: 'not-the-password-long' }, REQ);
+    check('a WRONG password neither signs in nor rehashes', !wrong.ok && isLegacyBcrypt((await t.users.record('jim'))!.passwordHash));
+    const first = await t.sessions.signIn('jim', { password: 'go-era-password-long' }, REQ);
     check('THE GO PASSWORD SIGNS IN — nobody resets anything', first.ok);
-    const storedAfter = (appDb.prepare("SELECT password_hash FROM auth_users WHERE username = 'jim'").get() as { password_hash: string }).password_hash;
-    check('and the hash is now scrypt (upgrade-on-login, one verification, in place)',
-      storedAfter.startsWith('scrypt$') && !isLegacyBcrypt(storedAfter));
-    const second = store.signIn('jim', 'go-era-password-long', REQ);
-    check('the second sign-in verifies via scrypt', second.ok);
-    if (first.ok) {
-      check('the pre-rehash session still verifies (no generation bump — the password did not change)',
-        store.verifySession(first.token).ok);
-    }
-
-    // The carried generation: a token minted below it is already revoked.
-    const staleClaims = { u: 'jim', g: 1, iat: 0, exp: 9_999_999_999, cap: 9_999_999_999 };
-    const stale = issueToken((store as unknown as { config: { sessionKey: Buffer } }).config.sessionKey, staleClaims);
-    check('a Go-side revocation stays revoked: generation carried through the import',
-      !store.verifySession(stale).ok);
-
+    const storedAfter = (await t.users.record('jim'))!.passwordHash;
+    check('and the hash is now scrypt (upgrade-on-login, one verification, in place)', storedAfter.startsWith('scrypt$') && !isLegacyBcrypt(storedAfter));
+    check('the upgraded hash did NOT bump the generation — the migrated session survives', (await t.sessions.verify((first as { token: string }).token)).ok && (await t.users.record('jim'))!.tokenGeneration === 3);
+    check('a later sign-in verifies against the scrypt hash', (await t.sessions.signIn('jim', { password: 'go-era-password-long' }, REQ)).ok);
+    let notBcrypt = '';
+    try { await t.users.importLegacy(ApiContext.system('migration', '', t.engine), [{ username: 'zed', passwordHash: 'scrypt$x', tokenGeneration: 0, role: 'user' }]); } catch (err) { notBcrypt = (err as Error).message; }
+    check('an import refuses a hash that is not a Go bcrypt hash', notBcrypt.includes('not a Go bcrypt hash'));
+    let notSystem = '';
+    try { await t.users.importLegacy(t.as('alice'), []); } catch (err) { notSystem = String((err as { status?: number }).status); }
+    check('the import is a system operation — a person cannot run it', notSystem === '403');
     goDb.close();
-    appDb.close();
-    rmSync(dir, { recursive: true, force: true });
+    await t.close();
   }
 
   const failed = results.filter((r) => !r.ok);
@@ -363,7 +315,4 @@ async function main(): Promise<void> {
   if (failed.length) process.exit(1);
 }
 
-main().catch((err) => {
-  console.error(`auth harness failed: ${(err as Error).message}`);
-  process.exit(1);
-});
+main().catch((err) => { console.error(`auth harness failed: ${(err as Error).stack ?? (err as Error).message}`); process.exit(1); });

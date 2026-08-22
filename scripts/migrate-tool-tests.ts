@@ -19,7 +19,7 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import bcrypt from 'bcryptjs';
 import { openStores } from '../src/app.js';
 import { CATALOG_FIELDS_NOT_CARRIED, migrateFromGo, openGoDatabase, verifyAgainstGo } from '../src/migrate/tool.js';
-import { isLegacyBcrypt } from '../src/auth/index.js';
+import { isLegacyBcrypt } from '../src/framework/providers/PasswordAuthProvider.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
     report.account.consentsCarried.join(',') === 'jim' && report.account.accessEventsImported === 2 && stores.account.consentAcceptedAt('jim') === '2026-03-01T10:00:00Z'
       && stores.account.consentAcceptedAt('pat') === '' && stores.account.listAccess('jim').map((e) => `${e.day}:${e.category}:${e.count}`).join(',') === '2026-04-02:Summary:1,2026-04-01:Conditions:3'
       && stores.account.listAccess('ghost').length === 0);
-  const signIn = stores.auth.signIn('jim', PASSWORD, { remoteAddr: '127.0.0.1', xff: undefined });
+  const signIn = await stores.sessions.signIn('jim', { password: PASSWORD }, { remoteAddr: '127.0.0.1', xff: undefined });
   const storedHash = (stores.db.prepare('SELECT password_hash FROM auth_users WHERE username = ?').get('jim') as { password_hash: string }).password_hash;
   check('a migrated account signs in with its Go password and is rehashed on the way (yourphr#583)', signIn.ok && !isLegacyBcrypt(storedHash));
 

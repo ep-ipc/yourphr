@@ -57,6 +57,8 @@ export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
   'auth.throttle.window-seconds': { default: 900, description: 'The throttle window.' },
   'auth.password.min-length': { default: 12, description: 'Server-enforced password minimum (yourphr#506).' },
   'auth.trusted-proxies': { default: [] as string[], description: 'Direct peers whose X-Forwarded-For is believed (yourphr#529). Empty = believe nobody.' },
+  'auth.providers': { default: ['password'] as string[], description: 'The authentication providers available (any-of alternatives). Only password exists today (yourphr#611).' },
+  'auth.factors': { default: ['password'] as string[], description: 'The factors EVERY sign-in must pass (all-of; password AND totp, never try-each). A factor with no provider refuses to boot.' },
   'sync.max-pages': { default: 500, description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
   'backup.destination': { default: '', description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
   'backup.max-backups': { default: 7, description: 'Retention: newest N backups are kept; 0 disables pruning.' },
