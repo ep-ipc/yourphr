@@ -13,7 +13,6 @@
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#608](https://github.com/jwilleke/yourphr/issues/608) — [SPIKE] Architecture: build on the ngdpbase model throughout — engine, managers as the only door, config-bound providers, request context (the agreed architecture doc, applied)
-- [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
 - [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — required checks pending)* — no linked issue (external; architecture declined, search goal carried by its own P1 issue)
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
@@ -97,6 +96,7 @@
 
 ## 🔵 In review
 
+- [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
 - [#605](https://github.com/jwilleke/yourphr/issues/605) — [SPIKE] Parity: medical-history graph — POST /secure/resource/graph/MedicalHistory
 - [#617](https://github.com/jwilleke/yourphr/issues/617) — [SPIKE] #608 child: the app database's shared connection and schema ledger, engine-owned — DatabaseManager over SqliteDatabaseProvider; src/migrations moves below the door
 - [#616](https://github.com/jwilleke/yourphr/issues/616) — [SPIKE] #608 child: Favourites fold into Records — FavoriteStore retired behind RecordsManager over a favourites provider
