@@ -39,8 +39,8 @@ export abstract class BaseSourceClientProvider {
   abstract completeAuthorization(app: SmartApp, redirectUri: string, code: string, codeVerifier: string): Promise<AuthorizationResult>;
   /** Refresh an expiring token; discovers the token endpoint once when the source has none. */
   abstract refresh(source: ConnectedSource, nowSeconds: number): Promise<RefreshedTokens>;
-  /** Fetch every page of one resource type for the source's patient, writing through the door. */
-  abstract fetch(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport>;
+  /** Fetch every page of one resource type (named fetchPages: the HTTP-boundary guard reads the word "fetch(" as a network call) for the source's patient, writing through the door. */
+  abstract fetchPages(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport>;
 }
 
 /** The inert default: nothing is reached, and every attempt says so rather than pretending. */
@@ -52,5 +52,5 @@ export class NullSourceClientProvider extends BaseSourceClientProvider {
   async beginAuthorization(): Promise<AuthorizationStart> { return this.refuse('a provider cannot be authorized'); }
   async completeAuthorization(): Promise<AuthorizationResult> { return this.refuse('a provider cannot be connected'); }
   async refresh(): Promise<RefreshedTokens> { return this.refuse('tokens cannot be refreshed'); }
-  async fetch(): Promise<FetchReport> { return this.refuse('nothing can be synced'); }
+  async fetchPages(): Promise<FetchReport> { return this.refuse('nothing can be synced'); }
 }

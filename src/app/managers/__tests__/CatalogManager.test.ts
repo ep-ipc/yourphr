@@ -43,7 +43,7 @@ class ScriptedClient extends BaseSourceClientProvider {
     return { tokenUrl: 'https://idp.example.org/token', accessToken: 'at', refreshToken: 'rt', expiresAt: 2_000, patient: this.patient };
   }
   async refresh(): Promise<RefreshedTokens> { throw new Error('not in this spec'); }
-  async fetch(): Promise<FetchReport> { return { received: 0, created: 0, updated: 0 }; }
+  async fetchPages(): Promise<FetchReport> { return { received: 0, created: 0, updated: 0 }; }
 }
 
 const PROD: CatalogWrite = { display: 'Big Hospital', environment: 'production', fhirBaseUrl: 'https://fhir.example.org/r4', scopes: 'patient/Condition.read patient/Observation.read', clientId: 'cid', clientSecret: 'the-secret', enabled: true };

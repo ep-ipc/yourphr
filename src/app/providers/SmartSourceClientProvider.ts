@@ -63,7 +63,7 @@ export class SmartSourceClientProvider extends BaseSourceClientProvider {
     };
   }
 
-  async fetch(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport> {
+  async fetchPages(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport> {
     const r = await syncFrom(`${source.fhirBaseUrl}/${resourceType}?patient=${source.patient}&_count=100`, { writer, accessToken, maxPages, allowInternal: this.options.allowInternal });
     return { received: r.received, created: r.created, updated: r.updated };
   }

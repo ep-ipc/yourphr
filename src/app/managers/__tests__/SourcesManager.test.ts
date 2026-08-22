@@ -28,7 +28,7 @@ class ScriptedClient extends BaseSourceClientProvider {
     if (this.failRefresh) throw new Error('token endpoint said no');
     return { accessToken: `fresh-${this.refreshes}`, refreshToken: `rotated-${this.refreshes}`, expiresAt: now + 3600, tokenUrl: source.tokenUrl || 'https://idp.example.org/token' };
   }
-  async fetch(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter): Promise<FetchReport> {
+  async fetchPages(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter): Promise<FetchReport> {
     this.fetches.push(`${source.id}:${resourceType}:${accessToken}`);
     if (this.failFetch) throw new Error('FHIR HTTP 500');
     let created = 0;

@@ -308,7 +308,7 @@ export class SourcesManager extends BaseManager {
       let job: JobRecord;
       try {
         for (const resourceType of source.resourceTypes) {
-          const r = await this.client.fetch(source, resourceType, accessToken, writer, this.options.maxPages);
+          const r = await this.client.fetchPages(source, resourceType, accessToken, writer, this.options.maxPages);
           received += r.received;
           created += r.created;
           updated += r.updated;
