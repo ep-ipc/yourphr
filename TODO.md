@@ -12,7 +12,6 @@
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
-- [#607](https://github.com/jwilleke/yourphr/issues/607) — [BUG] go build fails on main: vendor/modules.txt out of step with go.mod since the logrus bump (#565)
 - [#605](https://github.com/jwilleke/yourphr/issues/605) — [SPIKE] Parity: medical-history graph — POST /secure/resource/graph/MedicalHistory
 - [#604](https://github.com/jwilleke/yourphr/issues/604) — [SPIKE] Parity: users page — list, create, admin password reset
 - [#603](https://github.com/jwilleke/yourphr/issues/603) — [SPIKE] Parity: provider-catalog admin page and sandbox page
@@ -100,6 +99,7 @@
 
 ## 🔵 In review
 
+- [#607](https://github.com/jwilleke/yourphr/issues/607) — [CHORE] govulncheck in CI — the Go side had no vulnerability scan (local vendor/ staleness was a red herring)
 - [#602](https://github.com/jwilleke/yourphr/issues/602) — [SPIKE] Parity: admin dashboard, database, logs and configuration pages
 - [#597](https://github.com/jwilleke/yourphr/issues/597) — [SPIKE] Parity: a real admin role — the migrated operator must reach the admin pages
 - [#596](https://github.com/jwilleke/yourphr/issues/596) — [SPIKE] Parity: account page and legal — access log, legal consent, privacy and terms text, password change, sign out everywhere
