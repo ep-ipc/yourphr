@@ -98,6 +98,7 @@
 
 ## 🔵 In review
 
+- [#612](https://github.com/jwilleke/yourphr/issues/612) — [SPIKE] #608 child: Sources + Jobs managers — worker store → SourcesManager/JobsManager over providers, SMART client as an optional config-bound provider with an inert default
 - [#611](https://github.com/jwilleke/yourphr/issues/611) — [SPIKE] #608 child: Users + Sessions managers over PasswordAuthProvider — AuthResult with token generation, any-of/all-of cardinality, the MFA-bypass test
 - [#610](https://github.com/jwilleke/yourphr/issues/610) — [SPIKE] #608 child: unit tests (vitest, per manager over fake providers, coverage floor) and E2E tests (Playwright over the built Angular app)
 - [#609](https://github.com/jwilleke/yourphr/issues/609) — [SPIKE] #608 child: framework skeleton (Engine, BaseManager, ApiContext, ConfigurationManager, store-boundary lint) + RecordsManager over SqliteRecordsProvider
