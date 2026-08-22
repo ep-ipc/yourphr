@@ -235,6 +235,32 @@ export class RecordsManager extends BaseManager {
     return n;
   }
 
+  // --- find anything by words (yourphr#599) ---
+
+  /**
+   * GET /secure/resources/search?q=…: the caller's records whose human-readable text matches every
+   * word, best match first, in the dashboard's ResourceListItem shape plus a snippet. Under two
+   * characters answers nothing (Go's rule for the same box). Isolation is the owner seam: the
+   * provider searches one account's text and nothing else.
+   */
+  async searchText(ctx: ApiContext, q: string, page: { limit?: number; page?: number } = {}): Promise<(RecentItem & { snippet: string })[]> {
+    const userId = this.who(ctx);
+    const query = q.trim();
+    if (query.length < 2) return [];
+    const limit = Math.min(Math.max(page.limit ?? 20, 1), 100);
+    const offset = Math.max(page.page ?? 0, 0) * limit;
+    const hits = await this.provider.textSearch(userId, query, { limit, offset });
+    const items: (RecentItem & { snippet: string })[] = [];
+    for (const hit of hits) {
+      const stored = await this.provider.read(userId, hit.resourceType, hit.id);
+      if (!stored) continue;
+      const shaped = toResourceFhir(stored.resource, stored.sourceId);
+      const date = String(shaped['sort_date'] ?? '').slice(0, 10);
+      items.push({ source_id: stored.sourceId, source_resource_type: stored.resourceType, source_resource_id: stored.id, title: String(shaped['sort_title'] ?? '') || stored.resourceType, ...(date ? { date } : {}), snippet: hit.snippet });
+    }
+    return items;
+  }
+
   // --- the resource graph (yourphr#605): Go's MedicalHistory graph, scoped to what the page reads ---
 
   /**

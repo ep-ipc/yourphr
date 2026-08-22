@@ -115,6 +115,10 @@ async function main(): Promise<void> {
     instance.data['operator.name'] === 'Nerds by the Hour' && instance.data['operator.contact_email'] === 'ops@example.org' && instance.data['demo.admin.session'] === false
       && publicInstance.data['operator.name'] === 'Nerds by the Hour' && !('operator.contact_email' in publicInstance.data));
 
+  const found = (await (await fetch(`${base}/api/secure/resources/search?q=lisinopril`, authed(aliceToken))).json()) as { data: { title: string; snippet: string; source_resource_type: string }[] };
+  const adminFound = (await (await fetch(`${base}/api/secure/resources/search?q=lisinopril`, authed(adminToken))).json()) as { data: unknown[] };
+  check('find anything by words: a member finds their own record by a word in it, with a snippet; another account finds nothing (yourphr#599)',
+    found.data.length >= 1 && found.data[0]!.title.includes('Lisinopril') && /\[Lisinopril\]/.test(found.data[0]!.snippet) && adminFound.data.length === 0);
   const meds = (await (await fetch(`${base}/api/secure/medications/reconciled`, authed(aliceToken))).json()) as { data: { name: string; state: string }[] };
   check('medications/reconciled serves the reconciled list over the wire',
     meds.data.length === 1 && meds.data[0]!.name === 'Lisinopril 10 MG' && meds.data[0]!.state === 'Active');

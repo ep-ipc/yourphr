@@ -6,6 +6,7 @@
  */
 import type { Bundle, Resource } from '@medplum/fhirtypes';
 import type { SearchRequest, WithId } from '@medplum/core';
+import { textFor } from '../record-text.js';
 import { BaseRecordsProvider, type IndexCondition, type RecordsWriter, type StoredRecord } from '../BaseRecordsProvider.js';
 
 interface Row extends StoredRecord { userId: string; versions: number; firstSeen: string }
@@ -72,6 +73,16 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
     const r = this.rows.get(this.key(userId, resourceType, id));
     return r ? this.indexValues(r.resource, param).filter((v) => v.includes('|')) : [];
   }
+  async textSearch(userId: string, q: string, page: { limit: number; offset: number }): Promise<{ resourceType: string; id: string; snippet: string }[]> {
+    const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return [];
+    return this.mine(userId)
+      .map((r) => ({ r, text: textFor(r.resource).toLowerCase() }))
+      .filter(({ text }) => terms.every((t) => text.includes(t)))
+      .slice(page.offset, page.offset + page.limit)
+      .map(({ r, text }) => ({ resourceType: r.resourceType, id: r.id, snippet: text.slice(0, 60) }));
+  }
+
   /** References found anywhere in the stored JSON — what the search index holds for reference parameters. */
   private refsOf(resource: unknown, out = new Set<string>()): Set<string> {
     if (Array.isArray(resource)) resource.forEach((v) => this.refsOf(v, out));

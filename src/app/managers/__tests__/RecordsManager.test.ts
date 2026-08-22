@@ -182,4 +182,20 @@ describe('RecordsManager — the one door, scoped to whoever is asking', () => {
     await expect(records.graph(alice, 'MedicalHistory', [])).rejects.toMatchObject({ status: 400 });
     await expect(records.graph(ApiContext.anonymous(engine), 'MedicalHistory', ids)).rejects.toMatchObject({ status: 401 });
   });
+
+  it('find anything by words: every word must match the record\'s own text, best first with a snippet; user A never sees user B', async () => {
+    provider.seed('alice', 'source-1', { resourceType: 'MedicationStatement', id: 'm1', status: 'active', medicationCodeableConcept: { text: 'Metformin 500 MG oral tablet', coding: [{ system: 'http://www.nlm.nih.gov/research/umls/rxnorm', code: '860975' }] }, effectiveDateTime: '2023-06-01', note: [{ text: 'take with the evening meal' }] } as Resource);
+    provider.seed('alice', 'source-1', { resourceType: 'DocumentReference', id: 'doc-c', status: 'current', date: '2023-02-10', type: { text: 'Cardiology consult note' }, description: 'Follow-up after the stress test' } as Resource);
+    provider.seed('bob', 'source-9', { resourceType: 'MedicationStatement', id: 'm-bob', status: 'active', medicationCodeableConcept: { text: 'Metformin 1000 MG' } } as Resource);
+    const hits = await records.searchText(alice, 'metformin');
+    expect(hits.map((h) => h.source_resource_id)).toEqual(['m1']);
+    expect(hits[0]).toMatchObject({ source_id: 'source-1', source_resource_type: 'MedicationStatement', title: 'Metformin 500 MG oral tablet', date: '2023-06-01', snippet: expect.stringContaining('metformin') });
+    expect((await records.searchText(alice, 'cardiology 2023')).map((h) => h.source_resource_id)).toEqual(['doc-c']);
+    expect(await records.searchText(alice, 'evening meal')).toHaveLength(1);
+    expect(await records.searchText(alice, '860975')).toEqual([]); // a bare code is not a word a person knows
+    expect(await records.searchText(alice, 'm')).toEqual([]); // under two characters: nothing, as Go's box
+    expect((await records.searchText(bob, 'metformin')).map((h) => h.source_resource_id)).toEqual(['m-bob']);
+    expect(await records.searchText(alice, 'metformin', { limit: 1, page: 1 })).toEqual([]);
+    await expect(records.searchText(ApiContext.anonymous(engine), 'metformin')).rejects.toMatchObject({ status: 401 });
+  });
 });

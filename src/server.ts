@@ -693,6 +693,15 @@ export function createYourPhrServer(options: ServerOptions) {
       // --- the dashboard and record pages (yourphr#595) ---
       if (modules?.records) {
         const records = modules.records;
+        // Find anything by words (yourphr#599): the dashboard's search box.
+        if ((url.pathname === '/api/secure/resources/search' || url.pathname === '/api/secure/search') && req.method === 'GET') {
+          const limit = Number(url.searchParams.get('limit') ?? 20);
+          const page = Number(url.searchParams.get('page') ?? 0);
+          const items = await engine.managers.records.searchText(ctx, url.searchParams.get('q') ?? '', { limit: Number.isInteger(limit) ? limit : 20, page: Number.isInteger(page) ? page : 0 });
+          const fallback = options.sourceId ?? 'spike';
+          send(res, 200, {success: true, data: items.map((i) => (i.source_id === '' ? {...i, source_id: fallback} : i))});
+          return;
+        }
         if (url.pathname === '/api/secure/resources/recent' && req.method === 'GET') {
           const limit = Number(url.searchParams.get('limit') ?? 5);
           send(res, 200, {success: true, data: await records.recent(ctx, Number.isInteger(limit) && limit > 0 ? limit : 5)});

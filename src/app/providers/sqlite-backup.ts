@@ -37,7 +37,7 @@ const SUFFIX = '-yourphr-spike-backup.db';
 /** What one of our artifacts is called — the backup-storage provider lists by it. */
 export const BACKUP_SUFFIX = SUFFIX;
 /** Tables that live in records.db; everything else in a backup belongs to the app database. */
-export const RECORDS_TABLES = new Set(['resources', 'resource_history', 'search_index']);
+export const RECORDS_TABLES = new Set(['resources', 'resource_history', 'search_index', 'search_text']);
 /** The staged halves a restore writes next to the live files; applied at the next start. */
 export const STAGED_RECORDS = 'records.db.staged';
 export const STAGED_APP = 'spike.db.staged';
@@ -49,16 +49,23 @@ export const STAGED_APP = 'spike.db.staged';
  * spelled out.
  */
 function exportInto(db: InstanceType<typeof Database>, schema: string, only?: (table: string) => boolean): void {
-  const objects = (db
+  const allObjects = (db
     .prepare(
       "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END"
     )
-    .all() as { type: string; name: string; tbl_name: string; sql: string }[])
-    .filter((o) => !only || only(o.tbl_name));
+    .all() as { type: string; name: string; tbl_name: string; sql: string }[]);
+  // A virtual table (FTS5, yourphr#599) owns shadow tables named <table>_data, _idx, _content,
+  // _docsize, _config: recreating the virtual table recreates them, and recreating them by hand is
+  // refused ("object name reserved"). Their rows come back through the INSERT into the virtual
+  // table — so they are skipped whether or not the virtual table itself is in this half.
+  const virtual = allObjects.filter((o) => /^CREATE VIRTUAL TABLE/i.test(o.sql)).map((o) => o.name);
+  const shadow = (name: string): boolean => virtual.some((v) => name.startsWith(`${v}_`));
+  const objects = allObjects.filter((o) => !only || only(o.tbl_name));
 
   db.exec('BEGIN');
   try {
     for (const object of objects) {
+      if (shadow(object.name)) continue;
       // Re-point the DDL at the attached schema. CREATE TABLE x -> CREATE TABLE "schema".x is the
       // one rewrite sqlcipher_export performs; sqlite_master SQL never carries a schema prefix.
       const ddl = object.sql.replace(

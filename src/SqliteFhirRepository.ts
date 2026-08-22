@@ -28,6 +28,7 @@ import type { Filter, SearchRequest, WithId } from '@medplum/core';
 import { readJson } from '@medplum/definitions';
 import { FhirRepository, type RepositoryMode } from '@medplum/fhir-router';
 import type { Bundle, Reference, Resource, ResourceType, SearchParameter } from '@medplum/fhirtypes';
+import { textFor } from './app/providers/record-text.js';
 import Database from 'better-sqlite3-multiple-ciphers';
 import fhirpath from 'fhirpath';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -164,6 +165,13 @@ export class SqliteFhirRepository extends FhirRepository {
       );
 
       CREATE INDEX IF NOT EXISTS idx_search_lookup ON search_index (resource_type, code, value, user_id);
+
+      -- Find anything by words (yourphr#599): the record's human-readable text, inside the same
+      -- encrypted file, fed by the same write path as the search index. Never the raw JSON.
+      CREATE VIRTUAL TABLE IF NOT EXISTS search_text USING fts5(
+        resource_type UNINDEXED, resource_id UNINDEXED, user_id UNINDEXED, body,
+        tokenize = 'porter unicode61'
+      );
     `);
   }
 
@@ -187,6 +195,11 @@ export class SqliteFhirRepository extends FhirRepository {
       'DELETE FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ?'
     );
     del.run(resource.resourceType, resource.id, owner);
+    this.db.prepare('DELETE FROM search_text WHERE resource_type = ? AND resource_id = ? AND user_id = ?').run(resource.resourceType, resource.id, owner);
+    const body = textFor(resource);
+    if (body !== '') {
+      this.db.prepare('INSERT INTO search_text (resource_type, resource_id, user_id, body) VALUES (?, ?, ?, ?)').run(resource.resourceType, resource.id, owner, body);
+    }
 
     const insert = this.db.prepare(
       'INSERT OR IGNORE INTO search_index (resource_type, resource_id, user_id, code, value) VALUES (?, ?, ?, ?, ?)'
@@ -227,6 +240,7 @@ export class SqliteFhirRepository extends FhirRepository {
       .prepare('SELECT content FROM resources WHERE deleted = 0 AND user_id = ?')
       .all(owner) as {content: string}[];
     this.db.prepare('DELETE FROM search_index WHERE user_id = ?').run(owner);
+    this.db.prepare('DELETE FROM search_text WHERE user_id = ?').run(owner);
     for (const row of rows) {
       this.indexResource(JSON.parse(row.content) as WithId<Resource>);
     }
@@ -371,6 +385,9 @@ export class SqliteFhirRepository extends FhirRepository {
         .run(resourceType, id, this.userId ?? '');
       this.db
         .prepare('DELETE FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ?')
+        .run(resourceType, id, this.userId ?? '');
+      this.db
+        .prepare('DELETE FROM search_text WHERE resource_type = ? AND resource_id = ? AND user_id = ?')
         .run(resourceType, id, this.userId ?? '');
     });
     tx();

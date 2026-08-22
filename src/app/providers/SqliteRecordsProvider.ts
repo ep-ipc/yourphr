@@ -11,6 +11,7 @@ import type { SearchRequest, WithId } from '@medplum/core';
 import { SqliteFhirRepository } from '../../SqliteFhirRepository.js';
 import { dirname } from 'node:path';
 import { backupDatabase, stageInstanceRestore } from './sqlite-backup.js';
+import { ftsQuery } from './record-text.js';
 import { BaseRecordsProvider, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
 
 const REFERENCE_SHAPE = /^[A-Z][A-Za-z]+\/[A-Za-z0-9.-]{1,64}$/;
@@ -157,6 +158,18 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
       .all(resourceType, id, userId, param) as { value: string }[]).map((v) => v.value);
   }
 
+  async textSearch(userId: string, q: string, page: { limit: number; offset: number }): Promise<{ resourceType: string; id: string; snippet: string }[]> {
+    const match = ftsQuery(q);
+    if (match === '') return [];
+    const rows = this.anyDb()
+      .prepare(`SELECT t.resource_type, t.resource_id, snippet(search_text, 3, '[', ']', '…', 12) AS snippet
+                FROM search_text t JOIN resources r ON r.resource_type = t.resource_type AND r.id = t.resource_id AND r.user_id = t.user_id
+                WHERE t.user_id = ? AND search_text MATCH ? AND r.deleted = 0
+                ORDER BY bm25(search_text) LIMIT ? OFFSET ?`)
+      .all(userId, match, page.limit, page.offset) as { resource_type: string; resource_id: string; snippet: string }[];
+    return rows.map((r) => ({ resourceType: r.resource_type, id: r.resource_id, snippet: r.snippet }));
+  }
+
   async referencesFrom(userId: string, resourceType: string, id: string): Promise<string[]> {
     // A reference value is "Type/id"; a token is "system|code"; dates and strings carry neither shape.
     return (this.anyDb()
@@ -195,9 +208,11 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
     const remove = db.transaction((): number => {
       const rows = db.prepare('SELECT resource_type, id FROM resources WHERE user_id = ? AND source_id = ?').all(userId, sourceId) as { resource_type: string; id: string }[];
       const delIndex = db.prepare('DELETE FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ?');
+      const delText = db.prepare('DELETE FROM search_text WHERE resource_type = ? AND resource_id = ? AND user_id = ?');
       const delHistory = db.prepare('DELETE FROM resource_history WHERE resource_type = ? AND id = ?');
       for (const r of rows) {
         delIndex.run(r.resource_type, r.id, userId);
+        delText.run(r.resource_type, r.id, userId);
         delHistory.run(r.resource_type, r.id);
       }
       return db.prepare('DELETE FROM resources WHERE user_id = ? AND source_id = ?').run(userId, sourceId).changes;
@@ -212,6 +227,7 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
       const delHistory = db.prepare('DELETE FROM resource_history WHERE resource_type = ? AND id = ?');
       for (const r of rows) delHistory.run(r.resource_type, r.id);
       db.prepare('DELETE FROM search_index WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM search_text WHERE user_id = ?').run(userId);
       return db.prepare('DELETE FROM resources WHERE user_id = ?').run(userId).changes;
     });
     return remove();

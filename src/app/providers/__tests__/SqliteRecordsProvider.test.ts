@@ -69,3 +69,28 @@ describe('SqliteRecordsProvider — PHI storage over SQLCipher, scoped per accou
     expect(b.sizeBytes).toBeGreaterThan(0);
   });
 });
+
+describe('SqliteRecordsProvider — find anything by words (yourphr#599)', () => {
+  it('indexes the record\'s own text into FTS5 on the same write, searches per owner with a snippet, and forgets a deleted record', async () => {
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'spike-fts-spec-'));
+    const provider = new SqliteRecordsProvider(join(dir, 'records.db'), 'at-rest-key');
+    await provider.initialize();
+    const alice = provider.writer('alice', 'source-1');
+    const bob = provider.writer('bob', 'source-9');
+    await alice.upsert({ resourceType: 'MedicationStatement', id: 'm1', status: 'active', medicationCodeableConcept: { text: 'Metformin 500 MG oral tablet' }, effectiveDateTime: '2023-06-01' } as never);
+    await alice.upsert({ resourceType: 'DocumentReference', id: 'd1', status: 'current', type: { text: 'Cardiology consult note' }, date: '2023-02-10' } as never);
+    await bob.upsert({ resourceType: 'MedicationStatement', id: 'm9', status: 'active', medicationCodeableConcept: { text: 'Metformin 1000 MG' } } as never);
+    expect((await provider.textSearch('alice', 'metformin', { limit: 10, offset: 0 })).map((h) => h.id)).toEqual(['m1']);
+    expect((await provider.textSearch('alice', 'metformin', { limit: 10, offset: 0 }))[0]?.snippet).toMatch(/\[Metformin\]/);
+    expect((await provider.textSearch('alice', 'cardio', { limit: 10, offset: 0 })).map((h) => h.id)).toEqual(['d1']); // the last word is a prefix
+    expect((await provider.textSearch('bob', 'metformin', { limit: 10, offset: 0 })).map((h) => h.id)).toEqual(['m9']);
+    expect(await provider.textSearch('alice', '"; DROP TABLE resources; --', { limit: 10, offset: 0 })).toEqual([]);
+    await provider.removeBySource('alice', 'source-1');
+    expect(await provider.textSearch('alice', 'metformin', { limit: 10, offset: 0 })).toEqual([]);
+    await provider.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
