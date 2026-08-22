@@ -382,6 +382,41 @@ Against the phases already filed under [#544](https://github.com/jwilleke/yourph
 - __Backup__ stops being a feature and becomes part of every manager's contract — the only way the encryption/backup exclusion stops being permanent ([#461](https://github.com/jwilleke/yourphr/issues/461)), and the reason a default install currently has no backup at all ([#545](https://github.com/jwilleke/yourphr/issues/545)).
 - __The two Go leaks__ named above are worth fixing whether or not any of this happens, since they are second doors to live data today.
 
+## Framework recommendations
+
+> __Status: decided 2026-08-22__, after re-reading this document against `jwilleke/ngdpbase` `src/WikiEngine.ts`, `src/core/Engine.ts`, `src/managers/BaseManager.ts`, `src/context/ApiContext.ts` and the routes that use them. Recorded here so the adoption copies the __pattern__ and not the implementation details that ngdpbase itself has outgrown. Tracked by [#608](https://github.com/jwilleke/yourphr/issues/608).
+
+### The verdict
+
+The shape is sound and well known: managers are application services (one door per resource), providers are adapters (ports and adapters), the engine is the composition root, the context is the request principal. For a PHR the three ideas above are what make audit, authorization, backup and encryption *truthful* rather than decorative, and none of them is fashion.
+
+As an application architecture for one maintainer it is strong — coherent, proven at 101k lines, and already in the maintainer's head, which this document counts as a constraint rather than a preference. As a __reusable framework__ it is not yet proven, and this document already says why: the seams that would prove it (the `resource → scope` resolver, the permission registry contents versus its mechanism, the zero-framework-edits test) have never met a second application. YourPHR is that second application. So the rule stands: copy the pattern into YourPHR first, extract the package second.
+
+### Five mechanisms to tighten while copying
+
+Each of these keeps `Engine` / `BaseManager` / `Base<X>Provider` / `ApiContext` as names and as roles, and changes only how the guarantee is enforced. Every one is visible in ngdpbase today.
+
+| As built in ngdpbase | Weakness | YourPHR does instead |
+|---|---|---|
+| `engine.getManager<T>('Name')` returns `T \| undefined`; the generic is a cast | A typo is a runtime `undefined`, not a compile error; 423 call sites each trust `!` or branch; dependencies hide inside method bodies (the service-locator criticism) | A __typed registry__: `engine.managers.records`, an interface-keyed map, so a missing manager fails at compile time and a handler's dependencies are visible in its signature |
+| Managers registered in hand-written source order; nothing validates the order | A manager reading configuration before it is ready silently takes defaults (line 182 above) | Managers __declare their dependencies__; the engine validates a topological boot order and refuses a cycle |
+| `WikiEngine.context` + `setContext()` — a process-global context slot | Request state on a singleton; the session-scoped trap this document names, one concurrent request from a cross-user leak | __No global context.__ `RequestContext.from(req, engine)` is created per request and dies with it |
+| Provider loading is a convention every manager repeats (read key, default, PascalCase, dynamic import); any load error falls back to `Null` | Enforced by everyone remembering; a required capability can go inert at boot ([#546](https://github.com/jwilleke/yourphr/issues/546)) | __One provider factory__ `(capability, config) → instance` with dynamic import; each capability declares __required__ or __optional__; the resolved set is logged at boot; required refuses to boot |
+| `UserManager` at 1,600 lines | "One door" read as "one class" — the god-object failure this document already names | One manager per __resource__, the provider behind it does the work; an __interface per manager__ so tests inject a fake without an engine |
+
+Plus the one rule that outlives the document: __the store-boundary lint__ — only `managers/` may import a store or the driver, and nothing outside a manager may dereference `ctx.engine`. Delete the rule, prove CI goes red.
+
+### The context rule, decided (question 1 of the adoption)
+
+Point 2 of the model says the context is passed into managers and managers are not reached through it; line 221 allows the engine on the context; ngdpbase as built reaches managers through the context freely. The resolution:
+
+- The engine/manager registry is taken __as built__: handlers are constructed with the engine and ask it for managers; managers hold the engine and reach siblings through it.
+- Point 2 is the __manager-side__ rule: the context is passed __into__ every manager call and says who is asking (subject, role, token generation, request incidentals). A manager never reads `ctx.engine`.
+- The context may carry the engine for handler convenience (line 221), and the lint rule above is what stops that convenience from becoming a bypass.
+- The global context slot is not copied.
+
+The remaining adoption questions (scope and ordering of the work, the framework/application split in the tree, the Records manager over the repository, the auth result and provider cardinality, which capabilities are required, whether the migration tool goes through managers, naming) are answered on [#608](https://github.com/jwilleke/yourphr/issues/608) as they are decided, and folded back here.
+
 ## The honest risk
 
 __Structure is not free__, and managers and providers are justified by different things — conflating the two tests is how this goes wrong in both directions at once.
