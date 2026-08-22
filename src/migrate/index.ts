@@ -56,6 +56,8 @@ export interface LegacySource {
   /** unix seconds, 0 when Go never recorded one (treated as expired -> first pass refreshes). */
   expiresAt: number;
   environment: string;
+  /** Go's platform_type ('ehr', 'manual', 'fasten', ...); '' when the Go schema has no such column. */
+  platformType: string;
 }
 
 /**
@@ -64,13 +66,18 @@ export interface LegacySource {
  * disconnected.
  */
 export function readGoSources(goDb: InstanceType<typeof Database>): LegacySource[] {
+  // The Angular app names a source by platform_type when display is empty (manual uploads, the
+  // fasten platform), so it is carried (yourphr#594). Read as '' when the column is absent rather
+  // than failing — an older Go schema is a legitimate input.
+  const hasPlatformType = (goDb.pragma('table_info(source_credentials)') as { name: string }[]).some((c) => c.name === 'platform_type');
   const rows = goDb
     .prepare(
       `SELECT s.id AS id, u.username AS username, s.display AS display, s.api_endpoint_base_url AS base,
               COALESCE(s.client_id, '') AS client_id, COALESCE(s.patient, '') AS patient,
               COALESCE(s.scopes, '') AS scopes, COALESCE(s.access_token, '') AS access_token,
               COALESCE(s.refresh_token, '') AS refresh_token, COALESCE(s.expires_at, 0) AS expires_at,
-              COALESCE(s.environment, 'production') AS environment
+              COALESCE(s.environment, 'production') AS environment,
+              ${hasPlatformType ? "COALESCE(s.platform_type, '')" : "''"} AS platform_type
        FROM source_credentials s JOIN users u ON u.id = s.user_id
        WHERE s.deleted_at IS NULL AND u.deleted_at IS NULL`
     )
@@ -87,6 +94,7 @@ export function readGoSources(goDb: InstanceType<typeof Database>): LegacySource
     refreshToken: String(r['refresh_token']),
     expiresAt: Number(r['expires_at']),
     environment: String(r['environment']),
+    platformType: String(r['platform_type']),
   }));
 }
 
@@ -131,6 +139,8 @@ export function importLegacySources(store: SourceStore, sources: LegacySource[])
       accessToken: source.accessToken,
       refreshToken: source.refreshToken,
       expiresAt: source.expiresAt,
+      platformType: source.platformType,
+      environment: source.environment,
     });
     existing.set(key, added.id);
     report.idMap[source.id] = added.id;

@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { assembleApp } from '../src/app.js';
+import { assembleApp, sourceShape } from '../src/app.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -245,11 +245,16 @@ async function main(): Promise<void> {
     old.prepare("INSERT INTO auth_users VALUES ('admin', 'x', 0, '2026-08-20'), ('pat', 'x', 0, '2026-08-20')").run();
     old.exec(`CREATE TABLE schema_migrations (id TEXT PRIMARY KEY, description TEXT NOT NULL, applied_at TEXT NOT NULL)`);
     old.prepare("INSERT INTO schema_migrations VALUES ('20260820200000', 'baseline', '2026-08-20')").run();
+    old.exec(`CREATE TABLE connected_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, display TEXT NOT NULL, fhir_base_url TEXT NOT NULL, token_url TEXT NOT NULL, client_id TEXT NOT NULL, patient TEXT NOT NULL, resource_types TEXT NOT NULL, access_token TEXT NOT NULL, refresh_token TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL DEFAULT 0, last_sync_at INTEGER NOT NULL DEFAULT 0)`);
+    old.prepare("INSERT INTO connected_sources (user_id, display, fhir_base_url, token_url, client_id, patient, resource_types, access_token) VALUES ('pat', 'Old Source', 'https://x.example.org', '', 'c', 'p', 'Condition', 't')").run();
     old.close();
     const upgraded = assembleApp(oldDir, { env: { SPIKE_TEST_ALLOW_INTERNAL: '1' } });
     check('a pre-role database boots, and bootstrap does not run (the table was populated)', !upgraded.bootstrapPasswordFile);
     check('the account named admin — the admin until now — is recorded as one', upgraded.auth.roleOf('admin') === 'admin');
     check('every other pre-existing account is a user', upgraded.auth.roleOf('pat') === 'user');
+    const oldSource = upgraded.sources.list()[0];
+    check('a pre-column source reads with platform_type and environment UNKNOWN (yourphr#594), and is served without them',
+      oldSource?.platformType === '' && oldSource.environment === '' && !('platform_type' in sourceShape(oldSource, undefined)) && !('environment' in sourceShape(oldSource, undefined)));
     upgraded.close();
     rmSync(oldDir, { recursive: true, force: true });
   }

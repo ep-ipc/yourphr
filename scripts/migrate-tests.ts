@@ -80,14 +80,23 @@ async function main(): Promise<void> {
   goDb.prepare("INSERT INTO source_credentials VALUES ('src-3', 'u-2', 'Ghosts Source', 'https://y.example.org', 'c', 'p', 'patient/*.read', 'a', 'r', 0, 'production', NULL)").run();
   goDb.prepare("INSERT INTO source_credentials VALUES ('src-4', 'u-1', 'No Refresh', ?, 'c2', 'pat2', 'patient/Condition.read', 'tok2', '', 50, 'sandbox', NULL)").run(base);
 
+  const noColumn = readGoSources(goDb);
+  check('a Go schema without platform_type reads as unknown, not as a failure', noColumn.length === 2 && noColumn.every((s) => s.platformType === ''));
+  goDb.exec(`ALTER TABLE source_credentials ADD COLUMN platform_type TEXT`);
+  goDb.exec(`UPDATE source_credentials SET platform_type = 'ehr' WHERE id = 'src-1'`);
+  goDb.exec(`UPDATE source_credentials SET platform_type = 'manual' WHERE id = 'src-4'`);
   const legacy = readGoSources(goDb);
   check('the reader joins usernames and skips soft-deleted sources AND users',
     legacy.length === 2 && legacy.every((s) => s.username === 'jim'));
+  check('platform_type and environment are read (the Sources page names and groups by them, yourphr#594)',
+    legacy.find((s) => s.id === 'src-4')?.platformType === 'manual' && legacy.find((s) => s.id === 'src-1')?.environment === 'sandbox');
 
   const appDb = new Database(join(dir, 'app.db'));
   const store = new SourceStore(appDb);
   const report = importLegacySources(store, legacy);
   check('import lands both live sources', report.imported.length === 2);
+  check('and carries platform_type + environment onto the spike rows',
+    store.list().find((s) => s.display === 'No Refresh')?.platformType === 'manual' && store.list().find((s) => s.display === 'Epic (Sandbox)')?.environment === 'sandbox');
   check('the Go id -> spike id map covers every live source (yourphr#586 needs it to attribute records)',
     Object.keys(report.idMap).sort().join(',') === 'src-1,src-4' && store.list().every((s) => Object.values(report.idMap).includes(s.id)));
   check('a source with no refresh token is REPORTED as needs-reconnect, not silently doomed',

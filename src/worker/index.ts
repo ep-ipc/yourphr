@@ -33,6 +33,13 @@ export interface ConnectedSource {
   /** unix seconds; 0 = unknown, treated as expired so the first pass refreshes. */
   expiresAt: number;
   lastSyncAt: number;
+  /**
+   * Go's platform_type ('ehr', 'manual', 'fasten', ...) and environment ('production' | 'sandbox'),
+   * carried because the Angular app NAMES a source by platform type when display is empty and
+   * splits the Sources page by environment (yourphr#594). '' when unknown — never guessed.
+   */
+  platformType: string;
+  environment: string;
 }
 
 export interface JobSummary {
@@ -65,6 +72,8 @@ export class SourceStore {
       access_token TEXT NOT NULL,
       refresh_token TEXT NOT NULL DEFAULT '',
       expires_at INTEGER NOT NULL DEFAULT 0,
+      platform_type TEXT NOT NULL DEFAULT '',
+      environment TEXT NOT NULL DEFAULT '',
       last_sync_at INTEGER NOT NULL DEFAULT 0
     )`);
     db.exec(`CREATE TABLE IF NOT EXISTS sync_jobs (
@@ -80,15 +89,16 @@ export class SourceStore {
     )`);
   }
 
-  add(source: Omit<ConnectedSource, 'id' | 'lastSyncAt'>): ConnectedSource {
+  add(source: Omit<ConnectedSource, 'id' | 'lastSyncAt' | 'platformType' | 'environment'> & Partial<Pick<ConnectedSource, 'platformType' | 'environment'>>): ConnectedSource {
     const info = this.db
       .prepare(
-        `INSERT INTO connected_sources (user_id, display, fhir_base_url, token_url, client_id, patient, resource_types, access_token, refresh_token, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO connected_sources (user_id, display, fhir_base_url, token_url, client_id, patient, resource_types, access_token, refresh_token, expires_at, platform_type, environment)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         source.userId, source.display, source.fhirBaseUrl, source.tokenUrl, source.clientId,
-        source.patient, source.resourceTypes.join(','), source.accessToken, source.refreshToken, source.expiresAt
+        source.patient, source.resourceTypes.join(','), source.accessToken, source.refreshToken, source.expiresAt,
+        source.platformType ?? '', source.environment ?? ''
       );
     return this.list().find((s) => s.id === Number(info.lastInsertRowid))!;
   }
@@ -127,6 +137,8 @@ export class SourceStore {
       refreshToken: r['refresh_token'] as string,
       expiresAt: r['expires_at'] as number,
       lastSyncAt: r['last_sync_at'] as number,
+      platformType: (r['platform_type'] as string | undefined) ?? '',
+      environment: (r['environment'] as string | undefined) ?? '',
     }));
   }
 

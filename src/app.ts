@@ -65,6 +65,31 @@ const APP_MIGRATIONS: Migration[] = [
       db.exec(`UPDATE auth_users SET role = 'admin' WHERE username = 'admin'`);
     },
   },
+  {
+    id: '20260822120000',
+    description: 'connected_sources.platform_type + environment (yourphr#594) — what the Sources page names and groups by; unknown for rows that predate the columns',
+    up: (db) => {
+      // Frozen pre-column shape, so ADD COLUMN has a table on a fresh database (the constructor
+      // creates it, with the columns, a step later).
+      db.exec(`CREATE TABLE IF NOT EXISTS connected_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        display TEXT NOT NULL,
+        fhir_base_url TEXT NOT NULL,
+        token_url TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        patient TEXT NOT NULL,
+        resource_types TEXT NOT NULL,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT NOT NULL DEFAULT '',
+        expires_at INTEGER NOT NULL DEFAULT 0,
+        last_sync_at INTEGER NOT NULL DEFAULT 0
+      )`);
+      const columns = (db.pragma('table_info(connected_sources)') as { name: string }[]).map((c) => c.name);
+      if (!columns.includes('platform_type')) addColumnWithDefault(db, 'connected_sources', 'platform_type', 'TEXT', '');
+      if (!columns.includes('environment')) addColumnWithDefault(db, 'connected_sources', 'environment', 'TEXT', '');
+    },
+  },
 ];
 
 /** Everything that owns data, opened the one way the server opens it. */
@@ -169,8 +194,8 @@ export function backgroundJobShape(job: JobSummary, username: string): Record<st
  * Explore and the dashboard read. The public id is `source-<n>`, the same string every record of
  * that source carries in its source_id column, so /explore/:source and ?sourceID line up. Secrets
  * are Go's "[REDACTED]" when present and '' when the source is disconnected; fields this stack does
- * not hold (environment, brand, portal, platform, created_at) are absent, not invented — the
- * Angular code already defaults every one of them.
+ * not hold (brand, portal, created_at; platform_type and environment when the row has none) are
+ * absent, not invented — the Angular code already defaults every one of them.
  */
 export function sourceShape(source: ConnectedSource, latestJob: JobSummary | undefined): Record<string, unknown> {
   const redact = (secret: string): string => (secret === '' ? '' : '[REDACTED]');
@@ -179,6 +204,8 @@ export function sourceShape(source: ConnectedSource, latestJob: JobSummary | und
     ...(source.lastSyncAt > 0 ? { updated_at: new Date(source.lastSyncAt * 1000).toISOString() } : {}),
     user_id: source.userId,
     display: source.display,
+    ...(source.platformType !== '' ? { platform_type: source.platformType } : {}),
+    ...(source.environment !== '' ? { environment: source.environment } : {}),
     patient: source.patient,
     client_id: source.clientId,
     api_endpoint_base_url: source.fhirBaseUrl,
