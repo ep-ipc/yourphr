@@ -25,12 +25,13 @@ import { ConfigStore } from './config/index.js';
 import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
 import { AuthStore } from './auth/index.js';
 import { ProviderCatalog, type CatalogWrite } from './catalog/index.js';
-import { SourceStore, runSyncPass, type JobSummary } from './worker/index.js';
+import { SourceStore, runSyncPass, syncSource, type ConnectedSource, type JobSummary } from './worker/index.js';
+import { EventBus } from './events/index.js';
 import { backupDatabase } from './backup/index.js';
 import { buildIps } from './ips/index.js';
 import { provenanceFor } from './provenance/index.js';
 import { reconcile, type MedInput } from './medication/index.js';
-import { createYourPhrServer } from './server.js';
+import { createYourPhrServer, toResourceFhir } from './server.js';
 import { SqliteFhirRepository } from './SqliteFhirRepository.js';
 import { randomBytes } from 'node:crypto';
 
@@ -163,6 +164,31 @@ export function backgroundJobShape(job: JobSummary, username: string): Record<st
   };
 }
 
+/**
+ * A connected source in the shape of Go's SourceCredential (yourphr#594) — what the Sources page,
+ * Explore and the dashboard read. The public id is `source-<n>`, the same string every record of
+ * that source carries in its source_id column, so /explore/:source and ?sourceID line up. Secrets
+ * are Go's "[REDACTED]" when present and '' when the source is disconnected; fields this stack does
+ * not hold (environment, brand, portal, platform, created_at) are absent, not invented — the
+ * Angular code already defaults every one of them.
+ */
+export function sourceShape(source: ConnectedSource, latestJob: JobSummary | undefined): Record<string, unknown> {
+  const redact = (secret: string): string => (secret === '' ? '' : '[REDACTED]');
+  return {
+    id: `source-${source.id}`,
+    ...(source.lastSyncAt > 0 ? { updated_at: new Date(source.lastSyncAt * 1000).toISOString() } : {}),
+    user_id: source.userId,
+    display: source.display,
+    patient: source.patient,
+    client_id: source.clientId,
+    api_endpoint_base_url: source.fhirBaseUrl,
+    access_token: redact(source.accessToken),
+    refresh_token: redact(source.refreshToken),
+    expires_at: source.expiresAt,
+    ...(latestJob ? { latest_background_job: backgroundJobShape(latestJob, source.userId) } : {}),
+  };
+}
+
 export interface App {
   server: ReturnType<typeof createYourPhrServer>;
   config: ConfigStore;
@@ -225,6 +251,31 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     'password.min_length': config.getInt('auth.password.min-length'),
   });
 
+  const events = new EventBus();
+
+  /** The caller's source, by its public id — undefined for another user's or a malformed id. */
+  const owned = (username: string, publicId: string): ConnectedSource | undefined => {
+    const m = publicId.match(/^source-(\d+)$/);
+    if (!m) return undefined;
+    const s = sources.byId(Number(m[1]));
+    return s && s.userId === username ? s : undefined;
+  };
+
+  /** Removes every record a source wrote for this user: rows, their index, their history. Returns the row count. */
+  const removeSourceRecords = (repo: SqliteFhirRepository, username: string, publicId: string): number => {
+    const remove = repo.db.transaction((): number => {
+      const rows = repo.db.prepare('SELECT resource_type, id FROM resources WHERE user_id = ? AND source_id = ?').all(username, publicId) as { resource_type: string; id: string }[];
+      const delIndex = repo.db.prepare('DELETE FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ?');
+      const delHistory = repo.db.prepare('DELETE FROM resource_history WHERE resource_type = ? AND id = ?');
+      for (const r of rows) {
+        delIndex.run(r.resource_type, r.id, username);
+        delHistory.run(r.resource_type, r.id);
+      }
+      return repo.db.prepare('DELETE FROM resources WHERE user_id = ? AND source_id = ?').run(username, publicId).changes;
+    });
+    return remove();
+  };
+
   const sourceDisplay = (sourceId: string): string => {
     const numeric = Number(sourceId.replace('source-', ''));
     return sources.list().find((s) => s.id === numeric)?.display ?? '';
@@ -253,6 +304,72 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
         else if (query.status === 'STATUS_FAILED') outcome = 'failure';
         else if (query.status) return [];
         return sources.jobsForUser(username, { limit: query.limit, offset: query.page * query.limit, outcome }).map((job) => backgroundJobShape(job, username));
+      },
+      sources: {
+        list: (username) => sources.list().filter((s) => s.userId === username).map((s) => sourceShape(s, sources.latestJob(s.id))),
+        get: (username, id) => {
+          const s = owned(username, id);
+          return s ? sourceShape(s, sources.latestJob(s.id)) : undefined;
+        },
+        summary: (username, id, repo) => {
+          const s = owned(username, id);
+          if (!s) return undefined;
+          const counts = (repo.db
+            .prepare('SELECT resource_type, COUNT(*) AS count FROM resources WHERE user_id = ? AND source_id = ? AND deleted = 0 GROUP BY resource_type ORDER BY resource_type')
+            .all(username, id) as { resource_type: string; count: number }[])
+            .map((r) => ({ source_id: id, resource_type: r.resource_type, count: r.count }));
+          const patientRow = repo.db
+            .prepare("SELECT content FROM resources WHERE user_id = ? AND source_id = ? AND resource_type = 'Patient' AND deleted = 0 ORDER BY last_updated DESC LIMIT 1")
+            .get(username, id) as { content: string } | undefined;
+          return {
+            source: sourceShape(s, sources.latestJob(s.id)),
+            resource_type_counts: counts,
+            patient: patientRow ? toResourceFhir(JSON.parse(patientRow.content), id) : null,
+          };
+        },
+        sync: async (username, id) => {
+          const s = owned(username, id);
+          if (!s) return undefined;
+          events.publish(username, { event_type: 'source_sync', source_id: id });
+          const job = await syncSource(workerDeps, s);
+          events.publish(username, { event_type: 'source_complete', source_id: id });
+          if (job.outcome !== 'success') throw new Error(job.error || 'sync failed');
+          // Go answers with its upsert summary; the page prints data as "N row(s) effected".
+          return { source: sourceShape(sources.byId(s.id) ?? s, job), data: job.created + job.updated };
+        },
+        disconnect: (username, id) => {
+          const s = owned(username, id);
+          if (!s) return false;
+          sources.clearTokens(s.id);
+          return true;
+        },
+        removeData: (username, id, repo) => (owned(username, id) ? removeSourceRecords(repo, username, id) : undefined),
+        remove: (username, id, repo) => {
+          const s = owned(username, id);
+          if (!s) return undefined;
+          const rows = removeSourceRecords(repo, username, id);
+          sources.remove(s.id);
+          return rows;
+        },
+        exportBundle: (username, id, repo) => {
+          const s = owned(username, id);
+          if (!s) return undefined;
+          const rows = repo.db
+            .prepare('SELECT content FROM resources WHERE user_id = ? AND source_id = ? AND deleted = 0 ORDER BY resource_type, id')
+            .all(username, id) as { content: string }[];
+          const entry = rows.map((r) => ({ resource: JSON.parse(r.content) as unknown }));
+          const slug = s.display.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'source';
+          const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          return { filename: `yourphr-${slug}-${stamp}.json`, bundle: { resourceType: 'Bundle', type: 'collection', total: entry.length, entry } };
+        },
+        // The catalog's connectable entries in Go's ConnectableProvider shape. The consent and
+        // pre-connect fields are not carried (yourphr#586) and read as "none" here; the connect
+        // flow itself is yourphr#603's.
+        connectable: () => catalog.connectable().map((e) => ({
+          id: String(e.id), display: e.display, brand_logo_url: '', requires_user_consent: false,
+          pre_connect_profile: '', medicare_class: false, requires_legal_consent: false,
+        })),
+        events,
       },
       ips: (repo) => buildIps(repo, new Date()).then((d) => d.bundle),
       provenanceFor: (repo, resourceType, id) =>

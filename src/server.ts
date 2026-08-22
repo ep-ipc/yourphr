@@ -23,6 +23,7 @@ import {extname, join, resolve, sep} from 'node:path';
 import type {Resource, ResourceType} from '@medplum/fhirtypes';
 import {SqliteFhirRepository} from './SqliteFhirRepository.js';
 import type {AuthStore} from './auth/index.js';
+import {sseFrame, type EventBus} from './events/index.js';
 
 /**
  * The Go cookie name, on purpose: a browser that moves between the two stacks during the cut-over
@@ -73,6 +74,24 @@ export interface ServerModules {
   instanceForUser?: (username: string) => Record<string, unknown>;
   /** GET /api/secure/jobs (yourphr#593): the caller's sync jobs in Go's BackgroundJob shape. */
   jobsForUser?: (username: string, query: { limit: number; page: number; status?: string; jobType?: string }) => unknown[];
+  /**
+   * The Sources page (yourphr#594): the caller's connected sources in Go's SourceCredential shape,
+   * the per-source actions, the connectable catalog and the event stream. Every per-source call
+   * answers undefined for a source the caller does not own — 404, never 403, so ids are not probed.
+   */
+  sources?: {
+    list: (username: string) => unknown[];
+    get: (username: string, id: string) => unknown | undefined;
+    summary: (username: string, id: string, repo: SqliteFhirRepository) => unknown | undefined;
+    /** Resolves to Go's {source, data} or undefined; rejects when the sync itself failed. */
+    sync: (username: string, id: string) => Promise<{ source: unknown; data: unknown } | undefined>;
+    disconnect: (username: string, id: string) => boolean;
+    removeData: (username: string, id: string, repo: SqliteFhirRepository) => number | undefined;
+    remove: (username: string, id: string, repo: SqliteFhirRepository) => number | undefined;
+    exportBundle: (username: string, id: string, repo: SqliteFhirRepository) => { filename: string; bundle: unknown } | undefined;
+    connectable: () => unknown[];
+    events: EventBus;
+  };
   admin?: {
     isAdmin: (username: string) => boolean;
     configSnapshot: () => unknown;
@@ -360,6 +379,87 @@ export function createYourPhrServer(options: ServerOptions) {
         send(res, 200, {success: true, data: modules.jobsForUser(sessionUser, query)});
         return;
       }
+
+      // --- the Sources page (yourphr#594) ---
+      if (modules?.sources) {
+        const src = modules.sources;
+        if (url.pathname === '/api/secure/source' && req.method === 'GET') {
+          send(res, 200, {success: true, data: src.list(sessionUser)});
+          return;
+        }
+        if (url.pathname === '/api/secure/provider-catalog/connectable' && req.method === 'GET') {
+          send(res, 200, {success: true, data: src.connectable()});
+          return;
+        }
+        if (url.pathname === '/api/secure/events/stream' && req.method === 'GET') {
+          // Server-sent events, Go's framing (event:message, JSON data). A keep-alive every 15s so
+          // an idle connection survives a proxy; the subscription ends when the client goes away.
+          res.writeHead(200, {'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no'});
+          res.write(sseFrame({event_type: 'keep_alive'}));
+          const unsubscribe = src.events.subscribe(sessionUser, (event) => res.write(sseFrame(event)));
+          const keepAlive = setInterval(() => res.write(sseFrame({event_type: 'keep_alive'})), 15_000);
+          const close = (): void => { clearInterval(keepAlive); unsubscribe(); res.end(); };
+          req.on('close', close);
+          res.on('error', close);
+          return;
+        }
+        const sourceMatch = url.pathname.match(/^\/api\/secure\/source\/([^/]+)(?:\/(summary|sync|disconnect|remove-data|export))?$/);
+        if (sourceMatch) {
+          const id = decodeURIComponent(sourceMatch[1]!);
+          const action = sourceMatch[2];
+          const notFound = (): void => send(res, 404, {success: false, error: 'source not found'});
+          if (!action && req.method === 'GET') {
+            const source = src.get(sessionUser, id);
+            source === undefined ? notFound() : send(res, 200, {success: true, data: source});
+            return;
+          }
+          if (!action && req.method === 'DELETE') {
+            const rows = src.remove(sessionUser, id, repo);
+            rows === undefined ? notFound() : send(res, 200, {success: true, data: rows});
+            return;
+          }
+          if (action === 'summary' && req.method === 'GET') {
+            const summary = src.summary(sessionUser, id, repo);
+            summary === undefined ? notFound() : send(res, 200, {success: true, data: summary});
+            return;
+          }
+          if (action === 'sync' && req.method === 'POST') {
+            let result: { source: unknown; data: unknown } | undefined;
+            try {
+              result = await src.sync(sessionUser, id);
+            } catch (err) {
+              send(res, 500, {success: false, error: `record sync failed: ${(err as Error).message}`});
+              return;
+            }
+            result === undefined ? notFound() : send(res, 200, {success: true, source: result.source, data: result.data});
+            return;
+          }
+          if (action === 'disconnect' && req.method === 'POST') {
+            src.disconnect(sessionUser, id) ? send(res, 200, {success: true, data: {disconnected: true}}) : notFound();
+            return;
+          }
+          if (action === 'remove-data' && req.method === 'POST') {
+            const rows = src.removeData(sessionUser, id, repo);
+            rows === undefined ? notFound() : send(res, 200, {success: true, data: rows});
+            return;
+          }
+          if (action === 'export' && req.method === 'GET') {
+            const exported = src.exportBundle(sessionUser, id, repo);
+            if (exported === undefined) {
+              notFound();
+              return;
+            }
+            const body = JSON.stringify(exported.bundle, null, 2);
+            res.writeHead(200, {
+              'Content-Type': 'application/fhir+json',
+              'Content-Disposition': `attachment; filename=${exported.filename}`,
+              'Content-Length': Buffer.byteLength(body),
+            });
+            res.end(body);
+            return;
+          }
+        }
+      }
       if (modules?.ips && url.pathname === '/api/secure/summary/ips' && req.method === 'GET') {
         send(res, 200, {success: true, data: await modules.ips(repo)});
         return;
@@ -424,9 +524,19 @@ export function createYourPhrServer(options: ServerOptions) {
           count: Number(url.searchParams.get('limit') ?? 100000),
           total: 'accurate',
         });
+        // Which provider each record came from is stored per row (yourphr#594); ?sourceID narrows
+        // the list to one provider, which is how /explore/:source reads a single source's records.
+        const sourceOf = new Map(
+          (repo.db.prepare('SELECT id, source_id FROM resources WHERE resource_type = ? AND user_id = ?').all(resourceType, repo.userId ?? '') as {id: string; source_id: string}[])
+            .map((r) => [r.id, r.source_id === '' ? sourceId : r.source_id])
+        );
+        const wanted = url.searchParams.get('sourceID');
         send(res, 200, {
           success: true,
-          data: (bundle.entry ?? []).map((entry) => toResourceFhir(entry.resource as Resource, sourceId)),
+          data: (bundle.entry ?? [])
+            .map((entry) => entry.resource as Resource)
+            .filter((r) => !wanted || sourceOf.get(r.id ?? '') === wanted)
+            .map((r) => toResourceFhir(r, sourceOf.get(r.id ?? '') ?? sourceId)),
         });
         return;
       }
@@ -438,13 +548,13 @@ export function createYourPhrServer(options: ServerOptions) {
         // YourPHR addresses a record by (source, id) without naming the type, so the type has to be
         // found. A FHIR-native store addresses by (type, id) — another seam the adapter absorbs.
         const row = repo.db
-          .prepare('SELECT resource_type, content FROM resources WHERE id = ? AND user_id = ? AND deleted = 0')
-          .get(resourceId, repo.userId ?? '') as {resource_type: string; content: string} | undefined;
+          .prepare('SELECT resource_type, source_id, content FROM resources WHERE id = ? AND user_id = ? AND deleted = 0')
+          .get(resourceId, repo.userId ?? '') as {resource_type: string; source_id: string; content: string} | undefined;
         if (!row) {
           send(res, 404, {success: false, error: 'not found'});
           return;
         }
-        send(res, 200, {success: true, data: toResourceFhir(JSON.parse(row.content), sourceId)});
+        send(res, 200, {success: true, data: toResourceFhir(JSON.parse(row.content), row.source_id === '' ? sourceId : row.source_id)});
         return;
       }
 
@@ -459,7 +569,7 @@ export function createYourPhrServer(options: ServerOptions) {
           success: true,
           data: {
             resource_type_counts: rows,
-            sources: [{id: sourceId, display: 'spike'}],
+            sources: options.modules?.sources ? options.modules.sources.list(sessionUser) : [{id: sourceId, display: 'spike'}],
             patients: [],
           },
         });

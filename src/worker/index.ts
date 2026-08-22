@@ -93,6 +93,26 @@ export class SourceStore {
     return this.list().find((s) => s.id === Number(info.lastInsertRowid))!;
   }
 
+  byId(id: number): ConnectedSource | undefined {
+    return this.list().find((s) => s.id === id);
+  }
+
+  /** Disconnect (yourphr#594, Go's #437): the tokens go, the records stay; the worker skips it. */
+  clearTokens(id: number): void {
+    this.db.prepare("UPDATE connected_sources SET access_token = '', refresh_token = '', expires_at = 0 WHERE id = ?").run(id);
+  }
+
+  /** Removes the source and its job history. The records are the repository's to remove. */
+  remove(id: number): void {
+    this.db.prepare('DELETE FROM sync_jobs WHERE source_id = ?').run(id);
+    this.db.prepare('DELETE FROM connected_sources WHERE id = ?').run(id);
+  }
+
+  latestJob(sourceId: number): JobSummary | undefined {
+    const row = this.db.prepare('SELECT * FROM sync_jobs WHERE source_id = ? ORDER BY id DESC LIMIT 1').get(sourceId) as Record<string, unknown> | undefined;
+    return row ? this.toSummaries([row])[0] : undefined;
+  }
+
   list(): ConnectedSource[] {
     return (this.db.prepare('SELECT * FROM connected_sources ORDER BY id').all() as Record<string, unknown>[]).map((r) => ({
       id: r['id'] as number,
@@ -197,10 +217,40 @@ export async function runSyncPass(deps: WorkerDeps, now = Math.floor(Date.now() 
   const log = deps.log ?? (() => undefined);
 
   for (const source of deps.store.list()) {
+    if (isDisconnected(source)) {
+      continue; // disconnected on purpose (yourphr#594): nothing to refresh, nothing to fetch with
+    }
+    const job = await syncSource(deps, source, now, (line) => log(line), (n) => { report.refreshAttempted += n; }, () => { report.refreshed++; });
+    if (job.outcome === 'success') report.synced++;
+    else report.failed++;
+  }
+
+  log(`token-refresh: attempted ${report.refreshAttempted}, refreshed ${report.refreshed}`);
+  return report;
+}
+
+/** No access token and no refresh token: the source was disconnected, not merely expired. */
+export function isDisconnected(source: ConnectedSource): boolean {
+  return source.accessToken === '' && source.refreshToken === '';
+}
+
+/**
+ * One source, refresh-then-sync, the job recorded either way. Shared by the worker pass and the
+ * Sources page's "sync now" (yourphr#594) so a manual sync is the scheduled one, run early.
+ */
+export async function syncSource(
+  deps: WorkerDeps,
+  source: ConnectedSource,
+  now = Math.floor(Date.now() / 1000),
+  log: (line: string) => void = deps.log ?? (() => undefined),
+  onRefreshAttempt: (n: number) => void = () => undefined,
+  onRefreshed: () => void = () => undefined
+): Promise<JobSummary> {
+  {
     // --- refresh, only near expiry, accounted separately ---
     let accessToken = source.accessToken;
     if (source.expiresAt < now + REFRESH_MARGIN_SECONDS) {
-      report.refreshAttempted++;
+      onRefreshAttempt(1);
       if (source.refreshToken === '') {
         log(`token-refresh: source ${source.id} (${source.display}): access token expired and no refresh token is available; reconnect the source`);
       } else {
@@ -229,7 +279,7 @@ export async function runSyncPass(deps: WorkerDeps, now = Math.floor(Date.now() 
             token.refreshToken ?? source.refreshToken, // some providers rotate, some repeat — keep whichever is newest
             token.expiresAt ? Math.floor(token.expiresAt.getTime() / 1000) : now + 3600
           );
-          report.refreshed++;
+          onRefreshed();
         } catch (err) {
           log(`token-refresh: source ${source.id} (${source.display}): ${(err as Error).message}`);
         }
@@ -256,17 +306,16 @@ export async function runSyncPass(deps: WorkerDeps, now = Math.floor(Date.now() 
         updated += result.updated;
       }
       deps.store.markSynced(source.id, now);
-      deps.store.recordJob({ sourceId: source.id, outcome: 'success', received, created, updated, error: '', startedAt, finishedAt: now });
-      report.synced++;
+      const job: JobSummary = { sourceId: source.id, outcome: 'success', received, created, updated, error: '', startedAt, finishedAt: now };
+      deps.store.recordJob(job);
+      return deps.store.latestJob(source.id) ?? job;
     } catch (err) {
-      deps.store.recordJob({
+      const job: JobSummary = {
         sourceId: source.id, outcome: 'failure', received, created, updated,
         error: (err as Error).message.slice(0, 512), startedAt, finishedAt: now,
-      });
-      report.failed++;
+      };
+      deps.store.recordJob(job);
+      return deps.store.latestJob(source.id) ?? job;
     }
   }
-
-  log(`token-refresh: attempted ${report.refreshAttempted}, refreshed ${report.refreshed}`);
-  return report;
 }

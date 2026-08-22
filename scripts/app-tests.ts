@@ -52,7 +52,10 @@ async function main(): Promise<void> {
       SPIKE_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key',
       SPIKE_TEST_ALLOW_INTERNAL: '1',
     },
-    seeds: [{ display: 'Seeded Sandbox', environment: 'sandbox', fhirBaseUrl: 'https://fhir.example.org/r4', scopes: 's', clientId: 'seed-cid' }],
+    seeds: [
+      { display: 'Seeded Sandbox', environment: 'sandbox', fhirBaseUrl: 'https://fhir.example.org/r4', scopes: 's', clientId: 'seed-cid' },
+      { display: 'Seeded Production', environment: 'production', fhirBaseUrl: 'https://fhir.example.org/r4', scopes: 's', clientId: 'prod-cid', enabled: true },
+    ],
   });
   const base = await new Promise<string>((resolve) => {
     app.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(app.server.address() as { port: number }).port}`));
@@ -136,6 +139,76 @@ async function main(): Promise<void> {
 
   const prov = (await (await fetch(`${base}/api/secure/resource/provenance/Condition/condition-1`, authed(aliceToken))).json()) as { data: { sourceDisplay: string } };
   check('provenance names the source, by display name, over the wire', prov.data.sourceDisplay === 'Fake Regional Health');
+
+  // --- the Sources page (yourphr#594) ---
+  type Src = { id: string; display: string; user_id: string; access_token: string; updated_at?: string; latest_background_job?: { job_status: string } };
+  const aliceSources = (await (await fetch(`${base}/api/secure/source`, authed(aliceToken))).json()) as { data: Src[] };
+  const src = aliceSources.data[0];
+  check('/secure/source lists the caller\'s source in Go\'s shape with its last job and a redacted token',
+    aliceSources.data.length === 1 && src?.id === 'source-1' && src.display === 'Fake Regional Health' && src.user_id === 'alice'
+      && src.access_token === '[REDACTED]' && src.latest_background_job?.job_status === 'STATUS_DONE' && !!src.updated_at);
+  const adminSources = (await (await fetch(`${base}/api/secure/source`, authed(adminToken))).json()) as { data: Src[] };
+  const adminPeeks = await fetch(`${base}/api/secure/source/source-1`, authed(adminToken));
+  check('sources are per-user: another account sees none and gets 404, not 403, on the id', adminSources.data.length === 0 && adminPeeks.status === 404);
+
+  const bySource = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition&sourceID=source-1`, authed(aliceToken))).json()) as { data: { source_id: string }[] };
+  const byOther = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition&sourceID=source-9`, authed(aliceToken))).json()) as { data: unknown[] };
+  check('records carry their real source_id and ?sourceID narrows the list (how /explore/:source reads)',
+    bySource.data.length === 3 && bySource.data.every((r) => r.source_id === 'source-1') && byOther.data.length === 0);
+
+  const summary = (await (await fetch(`${base}/api/secure/source/source-1/summary`, authed(aliceToken))).json()) as { data: { resource_type_counts: { resource_type: string; count: number }[]; patient: unknown } };
+  check('the source summary counts by type, Go\'s rows, and has no patient to invent',
+    summary.data.resource_type_counts.map((c) => `${c.resource_type}:${c.count}`).join(',') === 'Condition:3,MedicationStatement:1' && summary.data.patient === null);
+
+  const dashboard = (await (await fetch(`${base}/api/secure/summary`, authed(aliceToken))).json()) as { data: { sources: Src[] } };
+  check('the dashboard summary lists the real sources, not a placeholder', dashboard.data.sources.length === 1 && dashboard.data.sources[0]?.id === 'source-1');
+
+  // The event stream: Go's framing, a keep-alive first, then the sync events around a manual sync.
+  const streamAbort = new AbortController();
+  const stream = await fetch(`${base}/api/secure/events/stream`, { ...authed(aliceToken), signal: streamAbort.signal });
+  const reader = stream.body!.getReader();
+  const readFrame = async (): Promise<string> => new TextDecoder().decode((await reader.read()).value);
+  const first = await readFrame();
+  check('the event stream opens as text/event-stream with a keep_alive frame in Go\'s framing',
+    stream.headers.get('content-type') === 'text/event-stream' && first === 'event:message\ndata:{"event_type":"keep_alive"}\n\n');
+  const synced = await fetch(`${base}/api/secure/source/source-1/sync`, { method: 'POST', ...authed(aliceToken) });
+  const syncBody = (await synced.json()) as { success: boolean; source: Src; data: number };
+  const frames = (await readFrame()) + (stream.body ? '' : '');
+  const more = frames.includes('source_complete') ? frames : frames + (await readFrame());
+  check('a manual sync answers Go\'s {source, data} and the stream saw source_sync then source_complete',
+    synced.status === 200 && syncBody.source.id === 'source-1' && typeof syncBody.data === 'number'
+      && more.indexOf('"event_type":"source_sync"') !== -1 && more.indexOf('"event_type":"source_complete"') > more.indexOf('"event_type":"source_sync"'));
+  streamAbort.abort();
+  const aliceJobsAfter = (await (await fetch(`${base}/api/secure/jobs`, authed(aliceToken))).json()) as { data: Job[] };
+  check('the manual sync is recorded as a job like a scheduled one', aliceJobsAfter.data.length === 2);
+
+  const exported = await fetch(`${base}/api/secure/source/source-1/export`, authed(aliceToken));
+  const bundle = (await exported.json()) as { resourceType: string; type: string; total: number; entry: unknown[] };
+  check('export is a FHIR collection Bundle download of that source\'s records',
+    exported.headers.get('content-type') === 'application/fhir+json' && /attachment; filename=yourphr-fake-regional-health-\d{8}\.json/.test(exported.headers.get('content-disposition') ?? '')
+      && bundle.resourceType === 'Bundle' && bundle.type === 'collection' && bundle.total === 4 && bundle.entry.length === 4);
+
+  const disconnected = await fetch(`${base}/api/secure/source/source-1/disconnect`, { method: 'POST', ...authed(aliceToken) });
+  const afterDisconnect = app.sources.byId(1)!;
+  await app.syncNow(1_000_100);
+  const jobsAfterDisconnect = (await (await fetch(`${base}/api/secure/jobs`, authed(aliceToken))).json()) as { data: Job[] };
+  check('disconnect clears the tokens, keeps the records, and the worker skips the source',
+    disconnected.status === 200 && afterDisconnect.accessToken === '' && afterDisconnect.refreshToken === '' && jobsAfterDisconnect.data.length === 2
+      && ((await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition`, authed(aliceToken))).json()) as { data: unknown[] }).data.length === 3);
+
+  const removed = (await (await fetch(`${base}/api/secure/source/source-1/remove-data`, { method: 'POST', ...authed(aliceToken) })).json()) as { data: number };
+  const afterRemove = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition`, authed(aliceToken))).json()) as { data: unknown[] };
+  check('remove-data deletes that source\'s records (rows reported) and the source stays listed', removed.data === 4 && afterRemove.data.length === 0
+      && ((await (await fetch(`${base}/api/secure/source`, authed(aliceToken))).json()) as { data: Src[] }).data.length === 1);
+
+  const deleted = await fetch(`${base}/api/secure/source/source-1`, { method: 'DELETE', ...authed(aliceToken) });
+  check('DELETE removes the source itself; it is gone from the list and its id 404s',
+    deleted.status === 200 && ((await (await fetch(`${base}/api/secure/source`, authed(aliceToken))).json()) as { data: Src[] }).data.length === 0
+      && (await fetch(`${base}/api/secure/source/source-1`, authed(aliceToken))).status === 404);
+
+  const connectable = (await (await fetch(`${base}/api/secure/provider-catalog/connectable`, authed(aliceToken))).json()) as { data: { id: string; display: string; brand_logo_url: string }[] };
+  check('the connectable catalog is served in Go\'s ConnectableProvider shape — enabled production entries, sandboxes stay admin-only',
+    connectable.data.length === 1 && connectable.data[0]?.display === 'Seeded Production' && typeof connectable.data[0].id === 'string' && connectable.data[0].brand_logo_url === '');
 
   // Admin surface: gated, masked, working.
   const aliceAdmin = await fetch(`${base}/api/secure/admin/config`, authed(aliceToken));
