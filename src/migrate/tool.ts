@@ -87,7 +87,8 @@ export function readGoUserIds(goDb: GoDb): GoUser[] {
 // ---------------------------------------------------------------------------------------------
 
 /** Go catalog columns with no counterpart here. Reported, never silently dropped. */
-export const CATALOG_FIELDS_NOT_CARRIED = ['platform_type', 'brand_logo_url', 'consent_policy', 'pre_connect_profile'] as const;
+/** Once the four Go-only columns; carried since yourphr#603. Kept (empty) so the report can say so. */
+export const CATALOG_FIELDS_NOT_CARRIED = [] as const;
 
 export interface LegacyCatalogEntry {
   display: string;
@@ -98,6 +99,10 @@ export interface LegacyCatalogEntry {
   clientSecret: string;
   enabled: boolean;
   authorizeUrlOverride: string;
+  platformType: string;
+  brandLogoUrl: string;
+  consentPolicy: string;
+  preConnectProfile: string;
 }
 
 export function readGoCatalog(goDb: GoDb): LegacyCatalogEntry[] {
@@ -115,6 +120,10 @@ export function readGoCatalog(goDb: GoDb): LegacyCatalogEntry[] {
     clientSecret: str(r, 'client_secret'),
     enabled: r['enabled'] === 1 || r['enabled'] === true || r['enabled'] === 'true' || r['enabled'] === '1',
     authorizeUrlOverride: str(r, 'authorize_url_override'),
+    platformType: str(r, 'platform_type'),
+    brandLogoUrl: str(r, 'brand_logo_url'),
+    consentPolicy: str(r, 'consent_policy'),
+    preConnectProfile: str(r, 'pre_connect_profile'),
   }));
 }
 
@@ -147,6 +156,10 @@ export function importLegacyCatalog(catalog: ProviderCatalog, entries: LegacyCat
       clientSecret: e.clientSecret,
       enabled: e.enabled,
       authorizeUrlOverride: e.authorizeUrlOverride,
+      platformType: e.platformType,
+      brandLogoUrl: e.brandLogoUrl,
+      consentPolicy: e.consentPolicy,
+      preConnectProfile: e.preConnectProfile,
       allowInternal: options.allowInternal ?? false,
     };
     try {
@@ -590,7 +603,7 @@ export function formatReport(r: MigrationReport): string {
   section('catalog');
   lines.push(`  imported ${r.catalog.imported.length}, already present ${r.catalog.skippedExisting.length}, rejected ${r.catalog.rejected.length}`);
   for (const x of r.catalog.rejected) lines.push(`    REJECTED ${x.display}: ${x.reason}`);
-  lines.push(`  not carried (no counterpart here): ${r.catalog.notCarried.join(', ')}`);
+  if (r.catalog.notCarried.length) lines.push(`  not carried (no counterpart here): ${r.catalog.notCarried.join(', ')}`);
 
   section('sources');
   lines.push(`  imported ${r.sources.imported.length}, already present ${r.sources.skippedExisting.length}`);

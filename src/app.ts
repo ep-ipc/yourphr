@@ -24,7 +24,10 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import { ConfigStore, envNameFor, type ConfigValue } from './config/index.js';
 import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
 import { AuthStore, GENERIC_SIGNIN_ERROR } from './auth/index.js';
-import { ProviderCatalog, type CatalogWrite } from './catalog/index.js';
+import { ProviderCatalog, catalogEntryShape, connectableShape, connectionPolicy, type CatalogEntry, type CatalogWrite } from './catalog/index.js';
+import { SmartClient, generateVerifier } from './smart/index.js';
+import { resourceTypesFromScopes } from './migrate/index.js';
+import { randomUUID } from 'node:crypto';
 import { SourceStore, runSyncPass, syncSource, type ConnectedSource, type JobSummary } from './worker/index.js';
 import { EventBus } from './events/index.js';
 import { reconcileConditions, type InputResource } from './conditions/index.js';
@@ -98,6 +101,27 @@ const APP_MIGRATIONS: Migration[] = [
       const columns = (db.pragma('table_info(connected_sources)') as { name: string }[]).map((c) => c.name);
       if (!columns.includes('platform_type')) addColumnWithDefault(db, 'connected_sources', 'platform_type', 'TEXT', '');
       if (!columns.includes('environment')) addColumnWithDefault(db, 'connected_sources', 'environment', 'TEXT', '');
+    },
+  },
+  {
+    id: '20260822150000',
+    description: 'provider_catalog.platform_type + brand_logo_url + consent_policy + pre_connect_profile (yourphr#603) — what the admin page writes and the connection policy reads',
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS provider_catalog (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        display TEXT NOT NULL UNIQUE,
+        environment TEXT NOT NULL,
+        fhir_base_url TEXT NOT NULL,
+        scopes TEXT NOT NULL,
+        client_id TEXT NOT NULL DEFAULT '',
+        client_secret TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 0,
+        authorize_url_override TEXT NOT NULL DEFAULT ''
+      )`);
+      const columns = (db.pragma('table_info(provider_catalog)') as { name: string }[]).map((c) => c.name);
+      for (const column of ['platform_type', 'brand_logo_url', 'consent_policy', 'pre_connect_profile']) {
+        if (!columns.includes(column)) addColumnWithDefault(db, 'provider_catalog', column, 'TEXT', '');
+      }
     },
   },
 ];
@@ -237,6 +261,7 @@ export interface App {
   auth: AuthStore;
   catalog: ProviderCatalog;
   sources: SourceStore;
+  account: AccountStore;
   bootstrapPasswordFile?: string;
   syncNow: (now?: number) => Promise<unknown>;
   backupNow: () => unknown;
@@ -314,6 +339,39 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
   const PUBLIC_KEYS = new Set(['operator.name', 'operator.contact_url', 'auth.password.min-length']);
 
   const withStatus = (status: number, message: string): Error & { status: number } => Object.assign(new Error(message), { status });
+
+  const catalogById = (publicId: string): CatalogEntry | undefined => (/^\d+$/.test(publicId) ? catalog.byId(Number(publicId)) : undefined);
+  const enabledCatalogEntry = (publicId: string): CatalogEntry => {
+    const e = catalogById(publicId);
+    if (!e || !e.enabled) throw withStatus(404, 'no such enabled catalog entry');
+    return e;
+  };
+  /** Go's providerCatalogRequest -> a CatalogWrite; an update keeps what the body does not say. */
+  const catalogWriteFrom = (body: Record<string, unknown>, existing?: CatalogEntry): CatalogWrite => {
+    const str = (k: string, fallback = ''): string => (typeof body[k] === 'string' ? (body[k] as string).trim() : fallback);
+    const environment = str('environment', existing?.environment ?? 'production') === 'sandbox' ? 'sandbox' : 'production';
+    return {
+      display: str('display', existing?.display ?? ''),
+      environment,
+      fhirBaseUrl: str('api_endpoint_base_url', existing?.fhirBaseUrl ?? ''),
+      scopes: str('scopes', existing?.scopes ?? ''),
+      clientId: str('client_id', existing?.clientId ?? ''),
+      clientSecret: str('client_secret'),
+      enabled: typeof body['enabled'] === 'boolean' ? (body['enabled'] as boolean) : existing?.enabled ?? false,
+      authorizeUrlOverride: str('authorize_url_override', existing?.authorizeUrlOverride ?? ''),
+      platformType: str('platform_type', existing?.platformType ?? '') || 'ehr',
+      brandLogoUrl: str('brand_logo_url', existing?.brandLogoUrl ?? ''),
+      consentPolicy: str('consent_policy', existing?.consentPolicy ?? ''),
+      preConnectProfile: str('pre_connect_profile', existing?.preConnectProfile ?? ''),
+      allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
+    };
+  };
+  const smartClientFor = (e: CatalogEntry, redirectUri: string): SmartClient =>
+    new SmartClient({
+      fhirBaseUrl: e.fhirBaseUrl, clientId: e.clientId, clientSecret: catalog.clientSecretFor(e.id) || undefined,
+      redirectUri, scopes: e.scopes.split(/\s+/).filter(Boolean),
+      allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
+    });
 
   /** Go's AdminMetricsResponse over sync_jobs: no scrape endpoint here, counters from the job history. */
   const adminMetrics = (): Record<string, unknown> => {
@@ -465,19 +523,116 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
           const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
           return { filename: `yourphr-${slug}-${stamp}.json`, bundle: { resourceType: 'Bundle', type: 'collection', total: entry.length, entry } };
         },
-        // The catalog's connectable entries in Go's ConnectableProvider shape. The consent and
-        // pre-connect fields are not carried (yourphr#586) and read as "none" here; the connect
-        // flow itself is yourphr#603's.
-        connectable: () => catalog.connectable().map((e) => ({
-          id: String(e.id), display: e.display, brand_logo_url: '', requires_user_consent: false,
-          pre_connect_profile: '', medicare_class: false, requires_legal_consent: false,
-        })),
+        // The catalog's connectable entries in Go's ConnectableProvider shape, policy resolved by
+        // Go's rules (yourphr#603).
+        connectable: () => catalog.connectable().map(connectableShape),
         events,
       },
       ips: (repo) => buildIps(repo, new Date()).then((d) => d.bundle),
       provenanceFor: (repo, resourceType, id) =>
         provenanceFor({ db: repo.db, userId: repo.userId ?? '', sourceDisplay }, resourceType, id),
       medications,
+      catalog: {
+        isAdmin: (username) => auth.isAdmin(username),
+        list: () => catalog.list().map(catalogEntryShape),
+        get: (id) => {
+          const e = catalogById(id);
+          return e ? catalogEntryShape(e) : undefined;
+        },
+        create: (body) => {
+          const write = catalogWriteFrom(body);
+          if (!write.display || !write.fhirBaseUrl || !write.clientId) throw withStatus(400, 'display, api_endpoint_base_url, and client_id are required');
+          try {
+            return catalogEntryShape(catalog.create(write));
+          } catch (err) {
+            throw withStatus(400, (err as Error).message);
+          }
+        },
+        update: (id, body) => {
+          const e = catalogById(id);
+          if (!e) return undefined;
+          const write = catalogWriteFrom(body, e);
+          try {
+            return catalogEntryShape(catalog.update(e.id, write));
+          } catch (err) {
+            throw withStatus(400, (err as Error).message);
+          }
+        },
+        remove: (id) => {
+          const e = catalogById(id);
+          return e ? catalog.remove(e.id) : false;
+        },
+        // Sandboxes are for the admin to try a provider before a member meets it (the Sandbox page).
+        sandbox: () => catalog.list().filter((e) => e.enabled && e.environment === 'sandbox').map(connectableShape),
+        authorize: async (_username, id, body) => {
+          const e = enabledCatalogEntry(id);
+          const redirectUri = typeof body['redirect_uri'] === 'string' ? (body['redirect_uri'] as string).trim() : '';
+          if (redirectUri === '') {
+            // Go derives the callback from its SMART relay; there is no relay in this stack (the product's #408).
+            throw withStatus(501, 'no SMART relay in this stack — supply redirect_uri (this deployment\'s /sources/callback/<state> page)');
+          }
+          const client = smartClientFor(e, redirectUri);
+          let endpoints;
+          try {
+            endpoints = await client.discover();
+          } catch (err) {
+            throw withStatus(502, `SMART discovery failed: ${(err as Error).message}`);
+          }
+          if (e.authorizeUrlOverride !== '') endpoints = { ...endpoints, authorization: e.authorizeUrlOverride };
+          const state = randomUUID();
+          const verifier = generateVerifier();
+          return { authorize_url: client.authorizeUrl(endpoints, state, verifier), state, code_verifier: verifier, redirect_uri: redirectUri };
+        },
+        connect: async (username, id, body) => {
+          const e = enabledCatalogEntry(id);
+          if (connectionPolicy(e).requiresUserConsent && account.consentAcceptedAt(username) === '') {
+            throw Object.assign(withStatus(403, 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting a medical source.'),
+              { extra: { error_code: 'legal_consent_required', privacy_policy_url: '/privacy', terms_of_service_url: '/terms' } });
+          }
+          const str = (k: string): string => (typeof body[k] === 'string' ? (body[k] as string).trim() : '');
+          const verifier = str('code_verifier');
+          const code = str('code');
+          if (verifier === '') throw withStatus(400, 'code_verifier is required');
+          if (code === '' && str('state') === '') throw withStatus(400, 'one of code or state is required');
+          if (code === '') throw withStatus(501, 'no SMART relay in this stack — the callback page must send the authorization code');
+          const redirectUri = str('redirect_uri');
+          if (redirectUri === '') throw withStatus(400, 'redirect_uri is required (the one the authorization used)');
+          const client = smartClientFor(e, redirectUri);
+          let endpoints;
+          try {
+            endpoints = await client.discover();
+          } catch (err) {
+            throw withStatus(502, `SMART discovery failed: ${(err as Error).message}`);
+          }
+          let token;
+          try {
+            token = await client.exchangeCode(endpoints, code, verifier);
+          } catch (err) {
+            throw withStatus(502, `token exchange failed: ${(err as Error).message}`);
+          }
+          const patient = (token.patient ?? '').trim();
+          if (patient === '') throw withStatus(502, 'token had no patient id — this stack does not yet resolve one from the FHIR API');
+          const patientFacing = connectableShape(e)['display'] as string;
+          const display = patientFacing === e.display && str('display') !== '' ? str('display') : patientFacing;
+          const source = sources.add({
+            userId: username, display, fhirBaseUrl: e.fhirBaseUrl, tokenUrl: endpoints.token, clientId: e.clientId, patient,
+            resourceTypes: resourceTypesFromScopes(e.scopes), accessToken: token.accessToken, refreshToken: token.refreshToken ?? '',
+            expiresAt: token.expiresAt ? Math.floor(token.expiresAt.getTime() / 1000) : 0,
+            platformType: e.platformType || 'ehr', environment: e.environment,
+          });
+          // The initial import runs in the background, as Go's does; the page follows it on the event stream.
+          void (async () => {
+            events.publish(username, { event_type: 'source_sync', source_id: `source-${source.id}` });
+            try {
+              await syncSource(workerDeps, source);
+            } catch (err) {
+              appLog.error(`initial sync failed for source ${source.id}: ${(err as Error).message}`);
+            }
+            events.publish(username, { event_type: 'source_complete', source_id: `source-${source.id}` });
+          })();
+          return { source: sourceShape(source, undefined), data: { status: 'import_started' } };
+        },
+      },
       records: {
         recent: (repo, limit) => recentResources(repo, limit),
         conditions: (repo) => reconcileConditions(inputsOf(repo, 'Condition')),
@@ -636,6 +791,7 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     auth,
     catalog,
     sources,
+    account,
     bootstrapPasswordFile: bootstrap.passwordFile,
     syncNow: (now?: number) => runSyncPass(workerDeps, now),
     backupNow,

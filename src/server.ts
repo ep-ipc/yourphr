@@ -76,6 +76,20 @@ export interface ServerModules {
     /** Throws on a malformed query — the caller gets 400 with the reason. */
     query: (repo: SqliteFhirRepository, body: Record<string, unknown>) => unknown[];
   };
+  /** The provider catalog (yourphr#603): admin CRUD, the sandbox list, authorize + connect. */
+  catalog?: {
+    isAdmin: (username: string) => boolean;
+    list: () => unknown[];
+    get: (id: string) => unknown | undefined;
+    /** Throws on a refusal (message is the reason). */
+    create: (body: Record<string, unknown>) => unknown;
+    update: (id: string, body: Record<string, unknown>) => unknown | undefined;
+    remove: (id: string) => boolean;
+    sandbox: () => unknown[];
+    /** Resolves Go's authorize answer; rejects with a status-bearing error. */
+    authorize: (username: string, id: string, body: Record<string, unknown>) => Promise<unknown>;
+    connect: (username: string, id: string, body: Record<string, unknown>) => Promise<{ source: unknown; data: unknown }>;
+  };
   /** The account page and the legal pages (yourphr#596). */
   account?: {
     /** GET /api/legal/:kind — public. Throws when an operator override is unusable. */
@@ -502,6 +516,71 @@ export function createYourPhrServer(options: ServerOptions) {
         };
         send(res, 200, {success: true, data: modules.jobsForUser(sessionUser, query)});
         return;
+      }
+
+      // --- the provider catalog (yourphr#603): admin curates, members connect ---
+      if (modules?.catalog && url.pathname.startsWith('/api/secure/provider-catalog')) {
+        const cat = modules.catalog;
+        const fail = (err: unknown): void => {
+          const e = err as Error & { status?: number; extra?: Record<string, unknown> };
+          send(res, e.status ?? 400, {success: false, error: e.message, ...(e.extra ?? {})});
+        };
+        if (url.pathname === '/api/secure/provider-catalog/sandbox' && req.method === 'GET') {
+          if (!cat.isAdmin(sessionUser)) { send(res, 403, {success: false, error: 'admin role required'}); return; }
+          send(res, 200, {success: true, data: cat.sandbox()});
+          return;
+        }
+        const connectMatch = url.pathname.match(/^\/api\/secure\/provider-catalog\/([^/]+)\/(authorize|connect)$/);
+        if (connectMatch && req.method === 'POST') {
+          const body = (await readJsonBody(req)) ?? {};
+          try {
+            if (connectMatch[2] === 'authorize') {
+              send(res, 200, {success: true, ...(await cat.authorize(sessionUser, decodeURIComponent(connectMatch[1]!), body)) as Record<string, unknown>});
+            } else {
+              const r = await cat.connect(sessionUser, decodeURIComponent(connectMatch[1]!), body);
+              send(res, 200, {success: true, source: r.source, data: r.data});
+            }
+          } catch (err) {
+            fail(err);
+          }
+          return;
+        }
+        if (url.pathname !== '/api/secure/provider-catalog/connectable') {
+          // Everything else is the admin's: the catalog is instance configuration.
+          if (!cat.isAdmin(sessionUser)) { send(res, 403, {success: false, error: 'admin role required to manage the provider catalog'}); return; }
+          if (url.pathname === '/api/secure/provider-catalog' && req.method === 'GET') {
+            send(res, 200, {success: true, data: cat.list()});
+            return;
+          }
+          if (url.pathname === '/api/secure/provider-catalog' && req.method === 'POST') {
+            const body = await readJsonBody(req);
+            if (!body) { send(res, 400, {success: false, error: 'invalid request'}); return; }
+            try { send(res, 200, {success: true, data: cat.create(body)}); } catch (err) { fail(err); }
+            return;
+          }
+          const idMatch = url.pathname.match(/^\/api\/secure\/provider-catalog\/([^/]+)$/);
+          if (idMatch) {
+            const id = decodeURIComponent(idMatch[1]!);
+            if (req.method === 'GET') {
+              const entry = cat.get(id);
+              entry === undefined ? send(res, 404, {success: false, error: 'no such catalog entry'}) : send(res, 200, {success: true, data: entry});
+              return;
+            }
+            if (req.method === 'PUT') {
+              const body = await readJsonBody(req);
+              if (!body) { send(res, 400, {success: false, error: 'invalid request'}); return; }
+              try {
+                const entry = cat.update(id, body);
+                entry === undefined ? send(res, 404, {success: false, error: 'no such catalog entry'}) : send(res, 200, {success: true, data: entry});
+              } catch (err) { fail(err); }
+              return;
+            }
+            if (req.method === 'DELETE') {
+              send(res, 200, {success: true, data: {deleted: cat.remove(id) ? 1 : 0}});
+              return;
+            }
+          }
+        }
       }
 
       // The SMART relay card (yourphr#602) — before the per-source routes, whose :id would swallow it.

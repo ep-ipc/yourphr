@@ -26,6 +26,25 @@ function startFakeProvider(token: string) {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(body));
     };
+    // SMART discovery + token endpoint (yourphr#603): enough for authorize -> connect -> first sync.
+    if (url.pathname === '/.well-known/smart-configuration') {
+      const origin = `http://${req.headers.host}`;
+      send(200, { authorization_endpoint: `${origin}/authorize`, token_endpoint: `${origin}/token` });
+      return;
+    }
+    if (url.pathname === '/token' && req.method === 'POST') {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const form = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+        if (form.get('grant_type') === 'authorization_code' && form.get('code') === 'good-code' && (form.get('code_verifier') ?? '').length > 20) {
+          send(200, { access_token: token, refresh_token: 'ref', token_type: 'bearer', expires_in: 3600, patient: 'pa' });
+        } else {
+          send(400, { error: 'invalid_grant' });
+        }
+      });
+      return;
+    }
     if ((req.headers['authorization'] ?? '') !== `Bearer ${token}`) {
       send(401, { error: 'nope' });
       return;
@@ -140,6 +159,66 @@ async function main(): Promise<void> {
 
   const prov = (await (await fetch(`${base}/api/secure/resource/provenance/Condition/condition-1`, authed(aliceToken))).json()) as { data: { sourceDisplay: string } };
   check('provenance names the source, by display name, over the wire', prov.data.sourceDisplay === 'Fake Regional Health');
+
+  // --- the provider catalog (yourphr#603): the admin curates, a member connects ---
+  const catJson = async (path: string, tok: string, init: RequestInit = {}) => {
+    const r = await fetch(`${base}${path}`, { ...init, headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}`, ...(init.headers ?? {}) } });
+    return { status: r.status, body: (await r.json()) as { success: boolean; data: any; source?: any; error?: string; error_code?: string; authorize_url?: string; state?: string; code_verifier?: string; redirect_uri?: string } };
+  };
+  const listed = await catJson('/api/secure/provider-catalog', adminToken);
+  const seededSandbox = listed.body.data.find((e: { display: string }) => e.display === 'Seeded Sandbox');
+  const aliceLists = await fetch(`${base}/api/secure/provider-catalog`, authed(aliceToken));
+  check('the admin lists the catalog in Go\'s entry shape (no secret, has_client_secret instead); a member gets 403',
+    listed.status === 200 && listed.body.data.length === 2 && seededSandbox?.id && seededSandbox.api_endpoint_base_url === 'https://fhir.example.org/r4' && seededSandbox.has_client_secret === false
+      && !('client_secret' in seededSandbox) && seededSandbox.platform_type === 'ehr' && seededSandbox.consent_policy === 'required' && aliceLists.status === 403);
+  const catCreated = await catJson('/api/secure/provider-catalog', adminToken, { method: 'POST', body: JSON.stringify({
+    display: 'Fake Regional (Sandbox)', environment: 'sandbox', api_endpoint_base_url: fakeBase, scopes: 'launch/patient patient/Condition.read patient/MedicationStatement.read',
+    client_id: 'fake-cid', client_secret: 'fake-secret', enabled: true, brand_logo_url: 'https://logo.example.org/f.png', consent_policy: 'skip', pre_connect_profile: 'none' }) });
+  const missingFields = await catJson('/api/secure/provider-catalog', adminToken, { method: 'POST', body: JSON.stringify({ display: 'Nope' }) });
+  const fakeId = String(catCreated.body.data?.id ?? '');
+  check('create: Go\'s request body, required fields enforced, the four policy fields stored',
+    catCreated.status === 200 && fakeId !== '' && catCreated.body.data.has_client_secret === true && catCreated.body.data.brand_logo_url === 'https://logo.example.org/f.png'
+      && catCreated.body.data.consent_policy === 'skip' && catCreated.body.data.pre_connect_profile === 'none' && missingFields.status === 400);
+  const updated = await catJson(`/api/secure/provider-catalog/${fakeId}`, adminToken, { method: 'PUT', body: JSON.stringify({ display: 'Fake Regional (Sandbox)', environment: 'sandbox', api_endpoint_base_url: fakeBase, scopes: 'launch/patient patient/Condition.read', client_id: 'fake-cid', client_secret: '', enabled: true, consent_policy: 'required' }) });
+  const fetched = await catJson(`/api/secure/provider-catalog/${fakeId}`, adminToken);
+  check('update: an empty client_secret keeps the stored one; the entry reads back', updated.status === 200 && fetched.body.data.has_client_secret === true && fetched.body.data.scopes === 'launch/patient patient/Condition.read' && fetched.body.data.consent_policy === 'required');
+  const sandboxList = await catJson('/api/secure/provider-catalog/sandbox', adminToken);
+  const connectableNow = (await (await fetch(`${base}/api/secure/provider-catalog/connectable`, authed(aliceToken))).json()) as { data: { id: string; display: string; requires_user_consent: boolean; pre_connect_profile: string; medicare_class: boolean }[] };
+  check('the sandbox list is the enabled sandbox entries in ConnectableProvider shape with Go\'s policy; production stays in connectable',
+    sandboxList.body.data.map((e: { display: string }) => e.display).join('|') === 'Fake Regional (Sandbox)' // the seeded sandbox is not enabled
+      && sandboxList.body.data.find((e: { id: string }) => e.id === fakeId)?.requires_user_consent === true && sandboxList.body.data.find((e: { id: string }) => e.id === fakeId)?.pre_connect_profile === 'none'
+      && connectableNow.data.length === 1 && connectableNow.data[0]?.display === 'Seeded Production');
+  const noRedirect = await catJson(`/api/secure/provider-catalog/${fakeId}/authorize`, aliceToken, { method: 'POST', body: '{}' });
+  const authz = await catJson(`/api/secure/provider-catalog/${fakeId}/authorize`, aliceToken, { method: 'POST', body: JSON.stringify({ redirect_uri: 'http://localhost/sources/callback' }) });
+  const authzUrl = new URL(authz.body.authorize_url ?? 'http://x/');
+  check('authorize: no relay here — a redirect_uri is required (501 says so); with one, a PKCE S256 authorize URL, state and verifier come back',
+    noRedirect.status === 501 && authz.status === 200 && authzUrl.pathname === '/authorize' && authzUrl.searchParams.get('code_challenge_method') === 'S256' && authzUrl.searchParams.get('state') === authz.body.state
+      && authzUrl.searchParams.get('client_id') === 'fake-cid' && (authz.body.code_verifier ?? '').length > 20 && authz.body.redirect_uri === 'http://localhost/sources/callback');
+  app.auth.createUser('carol', 'carols-long-enough-password');
+  const carolToken = ((await (await signIn('carol', 'carols-long-enough-password')).json()) as { data: string }).data;
+  const consentGate = await catJson(`/api/secure/provider-catalog/${fakeId}/connect`, carolToken, { method: 'POST', body: JSON.stringify({ code: 'good-code', state: authz.body.state, code_verifier: authz.body.code_verifier, redirect_uri: authz.body.redirect_uri }) });
+  check('connect refuses until the legal consent is accepted (Go\'s gate, with its error_code)', consentGate.status === 403 && consentGate.body.error_code === 'legal_consent_required');
+  app.account.setConsentAcceptedAt('carol', '2026-08-22T00:00:00Z');
+  const badCode = await catJson(`/api/secure/provider-catalog/${fakeId}/connect`, carolToken, { method: 'POST', body: JSON.stringify({ code: 'bad-code', state: authz.body.state, code_verifier: authz.body.code_verifier, redirect_uri: authz.body.redirect_uri }) });
+  const connected = await catJson(`/api/secure/provider-catalog/${fakeId}/connect`, carolToken, { method: 'POST', body: JSON.stringify({ code: 'good-code', state: authz.body.state, code_verifier: authz.body.code_verifier, redirect_uri: authz.body.redirect_uri }) });
+  const newSourceId = String(connected.body.source?.id ?? '');
+  check('connect exchanges the code (a bad one is 502), stores the source from the catalog entry, and answers Go\'s {source, data: import_started}',
+    badCode.status === 502 && connected.status === 200 && connected.body.data.status === 'import_started' && newSourceId.startsWith('source-')
+      && connected.body.source.display === 'Fake Regional (Sandbox)' && connected.body.source.environment === 'sandbox' && connected.body.source.platform_type === 'ehr' && connected.body.source.patient === 'pa');
+  let importedJob: { job_status: string } | undefined;
+  for (let i = 0; i < 40 && !importedJob; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    const jobs = (await (await fetch(`${base}/api/secure/jobs`, authed(carolToken))).json()) as { data: { job_status: string; data: { source_id: string } }[] };
+    importedJob = jobs.data.find((j) => j.data.source_id === newSourceId);
+  }
+  const newConditions = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition&sourceID=${newSourceId}`, authed(carolToken))).json()) as { data: unknown[] };
+  check('the initial import ran in the background: a job for the new source, its records attributed to it', importedJob?.job_status === 'STATUS_DONE' && newConditions.data.length === 3);
+  const catRemoved = await catJson(`/api/secure/provider-catalog/${fakeId}`, adminToken, { method: 'DELETE' });
+  const catGone = await catJson(`/api/secure/provider-catalog/${fakeId}`, adminToken);
+  check('delete removes the entry; the connected source is unaffected', catRemoved.body.data.deleted === 1 && catGone.status === 404
+      && ((await (await fetch(`${base}/api/secure/source/${newSourceId}`, authed(carolToken))).json()) as { success: boolean }).success === true);
+  const aliceSourcesStill = (await (await fetch(`${base}/api/secure/source`, authed(aliceToken))).json()) as { data: unknown[] };
+  check('carol\'s connection is hers alone — alice still sees only her own source', aliceSourcesStill.data.length === 1);
 
   // --- the dashboard and record pages (yourphr#595) ---
   const recent = (await (await fetch(`${base}/api/secure/resources/recent?limit=2`, authed(aliceToken))).json()) as { data: { source_id: string; source_resource_type: string; title: string; date?: string }[] };
