@@ -245,7 +245,7 @@ export class CatalogManager extends BaseManager {
   async connect(ctx: ApiContext, publicId: string, body: Record<string, unknown>): Promise<{ source: Record<string, unknown>; data: Record<string, unknown> }> {
     ctx.requireAuthenticated();
     const e = await this.enabledEntry(publicId);
-    if (connectionPolicy(e).requiresUserConsent && this.engine.managers.users.consentAcceptedAt(ctx) === '') {
+    if (connectionPolicy(e).requiresUserConsent && (await this.engine.managers.users.consentAcceptedAt(ctx)) === '') {
       throw new ApiError(403, 'Accept the Privacy Policy and Terms of Service on Account Profile before connecting a medical source.',
         { error_code: 'legal_consent_required', privacy_policy_url: '/privacy', terms_of_service_url: '/terms' });
     }

@@ -29,4 +29,7 @@ export abstract class BaseUsersProvider {
   abstract setPasswordHash(username: string, hash: string, bumpGeneration: boolean): Promise<boolean>;
   abstract bumpGeneration(username: string): Promise<void>;
   abstract delete(username: string): Promise<boolean>;
+  /** The legal consent (yourphr#614): when the person accepted the Privacy Policy and Terms, RFC3339 UTC; '' = revoked or never. */
+  abstract consentAcceptedAt(username: string): Promise<string>;
+  abstract setConsentAcceptedAt(username: string, acceptedAt: string): Promise<void>;
 }

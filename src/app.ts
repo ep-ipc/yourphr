@@ -42,7 +42,9 @@ import { NullSourceClientProvider, type BaseSourceClientProvider } from './app/p
 export { sourceShape, backgroundJobShape };
 import { EventBus } from './events/index.js';
 import { FavoriteStore } from './favorites/index.js';
-import { AccountStore, accessCategoryFor, providerRequiresLegalConsent } from './account/index.js';
+import { providerRequiresLegalConsent } from './account/index.js';
+import { AuditManager } from './framework/managers/AuditManager.js';
+import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { loadLegalDocument, parseLegalKind } from './legal/index.js';
 import { AdminOps, applyStagedRestore } from './admin/index.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
@@ -147,7 +149,8 @@ export interface Stores {
   /** The per-member event stream the Sources page follows. */
   events: EventBus;
   favorites: FavoriteStore;
-  account: AccountStore;
+  /** The access log (yourphr#614) — required; refuses to boot unhealthy. */
+  audit: AuditManager;
   /** The composition root (yourphr#608): managers, in validated boot order. */
   engine: Engine;
   /** The one door to records (yourphr#609). */
@@ -155,6 +158,12 @@ export interface Stores {
   /** The PHI-storage provider — for the migration tool's verification gate, which reads below the manager on purpose. */
   recordsProvider: SqliteRecordsProvider;
   close: () => Promise<void>;
+}
+
+/** The audit provider configuration names: only 'sqlite' exists; anything else is a refusal, never a silent Null. */
+function auditProviderFor(name: string, db: InstanceType<typeof Database>): SqliteAuditProvider {
+  if (name === 'sqlite') return new SqliteAuditProvider(db);
+  throw new Error(`audit.provider: unknown provider '${name}' (sqlite) — refusing to boot with auditing off`);
 }
 
 /** The source-client provider configuration names: 'smart' loads the SMART client; 'null' loads nothing; anything else refuses to boot. */
@@ -189,10 +198,9 @@ export async function openStores(dataDir: string, env: Record<string, string | u
 
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
   const favorites = new FavoriteStore(db);
-  const account = new AccountStore(db);
   // 3. Accounts and sessions as managers over providers (yourphr#611): user storage in the app
   // database, passwords by the scrypt provider, the factor list from configuration.
-  const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider(), account);
+  const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider());
   const sessions = new SessionsManager(engineRef(), [new PasswordAuthProvider()], {
     sessionKey: randomBytes(32),
     session: { slidingSeconds: config.getInt('auth.session.sliding-seconds'), absoluteSeconds: config.getInt('auth.session.absolute-seconds') },
@@ -204,6 +212,8 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
   engine.register('configuration', new ConfigurationManager(engine, config));
+  // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.
+  engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('audit.provider'), db)));
   engine.register('users', users);
   engine.register('sessions', sessions);
   engine.register('records', new RecordsManager(engine, recordsProvider));
@@ -222,12 +232,12 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(db), sourceClient, { allowInternal, log: (line) => appLog.warn(line) }));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
-  const { records, sources, jobs, catalog } = engine.managers;
+  const { records, sources, jobs, catalog, audit } = engine.managers;
   // The Records manager names a source for the records that carry its id — asked of the Sources door.
   records.sourceDisplay = (sourceId) => sources.displayOf(sourceId);
 
   return {
-    config, db, dbKey, users, sessions, catalog, sources, jobs, events, favorites, account, engine, records, recordsProvider,
+    config, db, dbKey, users, sessions, catalog, sources, jobs, events, favorites, audit, engine, records, recordsProvider,
     close: async () => {
       await engine.shutdown();
       db.close();
@@ -244,7 +254,7 @@ export interface App {
   catalog: CatalogManager;
   sources: SourcesManager;
   jobs: JobsManager;
-  account: AccountStore;
+  audit: AuditManager;
   bootstrapPasswordFile?: string;
   syncNow: (now?: number) => Promise<unknown>;
   backupNow: () => Promise<unknown>;
@@ -253,7 +263,7 @@ export interface App {
 
 export async function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): Promise<App> {
   const stores = await openStores(dataDir, options.env ?? process.env);
-  const { config, users, sessions, catalog, sources, favorites, account, engine, records, events } = stores;
+  const { config, users, sessions, catalog, sources, favorites, audit, engine, records, events } = stores;
   /** The worker and the migration tool act for an account as a named system principal. */
   const systemCtx = (name: string, username: string): ApiContext => ApiContext.system(name, username, engine);
 
@@ -337,19 +347,14 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           const parsed = parseLegalKind(kind);
           return parsed ? loadLegalDocument(dataDir, parsed) : undefined;
         },
-        accessLog: (username) => account.listAccess(username),
-        recordAccess: (username, pathname) => {
-          const category = accessCategoryFor(pathname);
-          if (category) account.recordAccess(username, username, category);
-        },
-        legalConsent: (ctx) => consentStatus(users.consentAcceptedAt(ctx)),
-        grantConsent: (ctx) => {
+        legalConsent: async (ctx) => consentStatus(await users.consentAcceptedAt(ctx)),
+        grantConsent: async (ctx) => {
           const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-          users.setConsent(ctx, now);
+          await users.setConsent(ctx, now);
           return consentStatus(now);
         },
         revokeConsent: async (ctx) => {
-          users.setConsent(ctx, '');
+          await users.setConsent(ctx, '');
           // Go's rule: revoking the consent disconnects the sources that required it.
           const disconnected = await sources.disconnectWhere(ctx, (s) => providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType));
           return { ...consentStatus(''), medicare_sources_disconnected: disconnected };
@@ -367,7 +372,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           await sources.removeAll(ctx);
           await records.removeAll(ctx);
           for (const fav of favorites.list(username, 'Practitioner')) favorites.remove(username, fav);
-          account.deleteUser(username);
+          await audit.removeForUser(ctx);
           await users.deleteSelf(ctx);
         },
       },
@@ -472,7 +477,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     catalog,
     sources,
     jobs: stores.jobs,
-    account,
+    audit,
     bootstrapPasswordFile: bootstrap.passwordFile,
     syncNow: (now?: number) => sources.pass(now),
     backupNow,

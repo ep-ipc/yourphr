@@ -23,6 +23,10 @@ export class SqliteUsersProvider extends BaseUsersProvider {
   constructor(private readonly db: InstanceType<typeof Database>) {
     super();
     db.exec(AUTH_USERS_SCHEMA);
+    db.exec(`CREATE TABLE IF NOT EXISTS legal_consent (
+      user_id TEXT PRIMARY KEY,
+      accepted_at TEXT NOT NULL DEFAULT ''
+    )`);
   }
 
   async initialize(): Promise<void> { /* the schema is ensured in the constructor, before any migration-dependent caller */ }
@@ -62,5 +66,16 @@ export class SqliteUsersProvider extends BaseUsersProvider {
 
   async delete(username: string): Promise<boolean> {
     return this.db.prepare('DELETE FROM auth_users WHERE username = ?').run(username).changes > 0;
+  }
+
+  async consentAcceptedAt(username: string): Promise<string> {
+    const row = this.db.prepare('SELECT accepted_at FROM legal_consent WHERE user_id = ?').get(username) as { accepted_at: string } | undefined;
+    return (row?.accepted_at ?? '').trim();
+  }
+
+  async setConsentAcceptedAt(username: string, acceptedAt: string): Promise<void> {
+    this.db
+      .prepare('INSERT INTO legal_consent (user_id, accepted_at) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET accepted_at = excluded.accepted_at')
+      .run(username, acceptedAt);
   }
 }

@@ -22,7 +22,6 @@ import { SqliteUsersProvider } from '../src/framework/providers/SqliteUsersProvi
 import { PasswordAuthProvider, hashPassword, verifyPassword, isLegacyBcrypt } from '../src/framework/providers/PasswordAuthProvider.js';
 import { BaseAuthProvider, type AuthResult } from '../src/framework/providers/BaseAuthProvider.js';
 import type { UserRecord } from '../src/framework/providers/BaseUsersProvider.js';
-import { AccountStore } from '../src/account/index.js';
 import { readGoUsers } from '../src/migrate/index.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 import { createYourPhrServer } from '../src/server.js';
@@ -44,8 +43,7 @@ async function boot(options: { session?: { slidingSeconds: number; absoluteSecon
   const db = new Database(join(dir, 'app.db'));
   const engine = new Engine();
   const config = new ConfigStore(dir, undefined, options.minPassword === undefined ? {} : { SPIKE_AUTH_PASSWORD_MIN_LENGTH: String(options.minPassword) });
-  const account = new AccountStore(db);
-  const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider(), account);
+  const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider());
   const sessions = new SessionsManager(engine, [new PasswordAuthProvider()], { sessionKey: options.sessionKey ?? randomBytes(32), session: options.session, throttle: options.throttle, trustedProxies: options.trustedProxies, factors: options.factors });
   const recordsFile = join(dir, 'records.db');
   engine.register('configuration', new ConfigurationManager(engine, config)).register('users', users).register('sessions', sessions)
@@ -180,7 +178,7 @@ async function main(): Promise<void> {
     const dir = mkdtempSync(join(tmpdir(), 'spike-auth-mfa-'));
     const db = new Database(join(dir, 'app.db'));
     const engine = new Engine();
-    const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider(), new AccountStore(db));
+    const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider());
     const sessions = new SessionsManager(engine, [new PasswordAuthProvider(), new Totp()], { factors: ['password', 'totp'] });
     engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir))).register('users', users).register('sessions', sessions);
     await engine.initialize();
@@ -193,7 +191,7 @@ async function main(): Promise<void> {
     try {
       const e2 = new Engine();
       e2.register('configuration', new ConfigurationManager(e2, new ConfigStore(dir)));
-      e2.register('users', new UsersManager(e2, new SqliteUsersProvider(db), new PasswordAuthProvider(), new AccountStore(db)));
+      e2.register('users', new UsersManager(e2, new SqliteUsersProvider(db), new PasswordAuthProvider()));
       e2.register('sessions', new SessionsManager(e2, [new PasswordAuthProvider()], { factors: ['password', 'totp'] }));
       await e2.initialize();
     } catch (err) { missing = (err as Error).message; }

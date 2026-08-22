@@ -17,6 +17,7 @@
  * does not hold. That is the finding; the cost is real but bounded, and it is far smaller than
  * rewriting 76.8k lines of Angular.
  */
+import { accessCategoryFor } from './account/index.js';
 import {createServer, IncomingMessage, ServerResponse} from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
 import {dirname, extname, join, resolve, sep} from 'node:path';
@@ -82,11 +83,8 @@ export interface ServerModules {
   account?: {
     /** GET /api/legal/:kind — public. Throws when an operator override is unusable. */
     legalDocument: (kind: string) => unknown | undefined;
-    accessLog: (username: string) => unknown[];
-    /** Called for every listed GET a signed-in user makes; the store folds it into a day bucket. */
-    recordAccess: (username: string, pathname: string) => void;
-    legalConsent: (ctx: ApiContext) => unknown;
-    grantConsent: (ctx: ApiContext) => unknown;
+    legalConsent: (ctx: ApiContext) => Promise<unknown> | unknown;
+    grantConsent: (ctx: ApiContext) => Promise<unknown> | unknown;
     revokeConsent: (ctx: ApiContext) => Promise<unknown> | unknown;
     /** Throws ApiError (401 wrong current, 400 policy); resolves the fresh session token. */
     changePassword: (ctx: ApiContext, current: string, next: string) => Promise<string | undefined>;
@@ -408,24 +406,26 @@ export function createYourPhrServer(options: ServerOptions) {
         ctx = ApiContext.from(session.principal, engine);
       }
 
-      // The access log (yourphr#596): a listed GET by a signed-in user is an access of their record.
-      if (auth && options.modules?.account && req.method === 'GET') {
-        options.modules.account.recordAccess(sessionUser, url.pathname);
+      // The access log (yourphr#596, #614): a listed GET by a signed-in user is an access of their
+      // record, kept by the Audit manager BEFORE the read is served — one that cannot be kept fails here.
+      if (auth && engine.has('audit') && req.method === 'GET') {
+        const category = accessCategoryFor(url.pathname);
+        if (category) await engine.managers.audit.record(ctx, category);
       }
 
       // --- the account page (yourphr#596) ---
       if (auth && options.modules?.account && url.pathname.startsWith('/api/secure/account/')) {
         const account = options.modules.account;
-        if (url.pathname === '/api/secure/account/access-log' && req.method === 'GET') {
-          send(res, 200, {success: true, data: account.accessLog(sessionUser)});
+        if (engine.has('audit') && url.pathname === '/api/secure/account/access-log' && req.method === 'GET') {
+          send(res, 200, {success: true, data: await engine.managers.audit.list(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent' && req.method === 'GET') {
-          send(res, 200, {success: true, data: account.legalConsent(ctx)});
+          send(res, 200, {success: true, data: await account.legalConsent(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent/grant' && req.method === 'POST') {
-          send(res, 200, {success: true, data: account.grantConsent(ctx)});
+          send(res, 200, {success: true, data: await account.grantConsent(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent/revoke' && req.method === 'POST') {

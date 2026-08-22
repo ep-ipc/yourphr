@@ -119,13 +119,14 @@ async function main(): Promise<void> {
   const goDb = openGoDatabase(goPath);
   const stores = await openStores(dataDir, {});
   const report = await migrateFromGo(goDb, stores, { goDataDir: goRoot, allowInternalUrls: true });
+  const asUser = (u: string) => ApiContext.system('test', u, stores.engine);
 
   check('users: both live accounts imported, the soft-deleted one left behind',
     report.users.imported.sort().join(',') === 'jim,pat' && report.users.goLive === 2 && report.users.admins.join(',') === 'jim');
   check('account data: the legal consent and the access log carry whole, per live user (yourphr#596)',
-    report.account.consentsCarried.join(',') === 'jim' && report.account.accessEventsImported === 2 && stores.account.consentAcceptedAt('jim') === '2026-03-01T10:00:00Z'
-      && stores.account.consentAcceptedAt('pat') === '' && stores.account.listAccess('jim').map((e) => `${e.day}:${e.category}:${e.count}`).join(',') === '2026-04-02:Summary:1,2026-04-01:Conditions:3'
-      && stores.account.listAccess('ghost').length === 0);
+    report.account.consentsCarried.join(',') === 'jim' && report.account.accessEventsImported === 2 && (await stores.users.consentAcceptedAt(asUser('jim'))) === '2026-03-01T10:00:00Z'
+      && (await stores.users.consentAcceptedAt(asUser('pat'))) === '' && (await stores.audit.list(asUser('jim'))).map((e) => `${e.day}:${e.category}:${e.count}`).join(',') === '2026-04-02:Summary:1,2026-04-01:Conditions:3'
+      && (await stores.audit.list(asUser('ghost'))).length === 0);
   const signIn = await stores.sessions.signIn('jim', { password: PASSWORD }, { remoteAddr: '127.0.0.1', xff: undefined });
   const storedHash = (stores.db.prepare('SELECT password_hash FROM auth_users WHERE username = ?').get('jim') as { password_hash: string }).password_hash;
   check('a migrated account signs in with its Go password and is rehashed on the way (yourphr#583)', signIn.ok && !isLegacyBcrypt(storedHash));

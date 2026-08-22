@@ -23,7 +23,6 @@ class Totp extends BaseAuthProvider {
   }
 }
 
-const consent = () => { const m = new Map<string, string>(); return { consentAcceptedAt: (u: string) => m.get(u) ?? '', setConsentAcceptedAt: (u: string, at: string) => { m.set(u, at); } }; };
 const REQ = { remoteAddr: '198.51.100.7' };
 const PW = 'a-long-enough-password';
 let dir: string;
@@ -37,7 +36,7 @@ async function boot(factors: string[] = ['password'], providers: BaseAuthProvide
   dir = mkdtempSync(join(tmpdir(), 'spike-us-'));
   engine = new Engine();
   provider = new FakeUsersProvider();
-  users = new UsersManager(engine, provider, new PasswordAuthProvider(), consent());
+  users = new UsersManager(engine, provider, new PasswordAuthProvider());
   sessions = new SessionsManager(engine, providers, { factors, session: { slidingSeconds: 100, absoluteSeconds: 250 }, throttle: { maxFailures: 2, windowSeconds: 60 } });
   engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir))).register('users', users).register('sessions', sessions);
   await engine.initialize();
@@ -86,9 +85,9 @@ describe('UsersManager — accounts, roles, policy, consent, bootstrap and recov
   it('consent folds into Users and goes with the account', async () => {
     await users.createUser(sys, 'alice', PW);
     const alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);
-    expect(users.consentAcceptedAt(alice)).toBe('');
-    users.setConsent(alice, '2026-03-01T10:00:00Z');
-    expect(users.consentAcceptedAt(alice)).toBe('2026-03-01T10:00:00Z');
+    expect(await users.consentAcceptedAt(alice)).toBe('');
+    await users.setConsent(alice, '2026-03-01T10:00:00Z');
+    expect(await users.consentAcceptedAt(alice)).toBe('2026-03-01T10:00:00Z');
     expect(await users.deleteSelf(alice)).toBe(true);
     expect(await users.record('alice')).toBeUndefined();
   });

@@ -21,7 +21,6 @@ import { SqliteCatalogProvider } from '../../src/app/providers/SqliteCatalogProv
 import { UsersManager } from '../../src/framework/managers/UsersManager.js';
 import { SqliteUsersProvider } from '../../src/framework/providers/SqliteUsersProvider.js';
 import { PasswordAuthProvider } from '../../src/framework/providers/PasswordAuthProvider.js';
-import { AccountStore } from '../../src/account/index.js';
 
 export interface SourcesHarness {
   engine: Engine;
@@ -41,7 +40,7 @@ export async function bootSources(appDb: InstanceType<typeof Database>, recordsF
   engine.register('records', new RecordsManager(engine, new SqliteRecordsProvider(recordsFile, undefined)));
   engine.register('jobs', new JobsManager(engine, new SqliteJobsProvider(appDb)));
   engine.register('sources', new SourcesManager(engine, new SqliteSourcesProvider(appDb), client, { maxPages: options.maxPages ?? 10, log: options.log }));
-  engine.register('users', new UsersManager(engine, new SqliteUsersProvider(appDb), new PasswordAuthProvider(), new AccountStore(appDb)));
+  engine.register('users', new UsersManager(engine, new SqliteUsersProvider(appDb), new PasswordAuthProvider()));
   // The SSRF rule stays ON for catalog writes; a harness passes allowInternal per entry.
   engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(appDb), client, { allowInternal: false, log: options.log }));
   await engine.initialize();

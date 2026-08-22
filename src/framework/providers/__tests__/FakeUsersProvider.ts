@@ -21,4 +21,7 @@ export class FakeUsersProvider extends BaseUsersProvider {
   }
   async bumpGeneration(username: string): Promise<void> { const r = this.rows.get(username); if (r) r.tokenGeneration++; }
   async delete(username: string): Promise<boolean> { return this.rows.delete(username); }
+  readonly consent = new Map<string, string>();
+  async consentAcceptedAt(username: string): Promise<string> { return this.consent.get(username) ?? ''; }
+  async setConsentAcceptedAt(username: string, acceptedAt: string): Promise<void> { this.consent.set(username, acceptedAt); }
 }

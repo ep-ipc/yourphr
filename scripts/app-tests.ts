@@ -163,7 +163,7 @@ async function main(): Promise<void> {
   const carolToken = ((await (await signIn('carol', 'carols-long-enough-password')).json()) as { data: string }).data;
   const consentGate = await catJson(`/api/secure/provider-catalog/${fakeId}/connect`, carolToken, { method: 'POST', body: JSON.stringify({ code: 'good-code', state: authz.body.state, code_verifier: authz.body.code_verifier, redirect_uri: authz.body.redirect_uri }) });
   check('connect refuses until the legal consent is accepted (Go\'s gate, with its error_code)', consentGate.status === 403 && consentGate.body.error_code === 'legal_consent_required');
-  app.account.setConsentAcceptedAt('carol', '2026-08-22T00:00:00Z');
+  await app.users.setConsent(ApiContext.system('test', 'carol', app.engine), '2026-08-22T00:00:00Z');
   const badCode = await catJson(`/api/secure/provider-catalog/${fakeId}/connect`, carolToken, { method: 'POST', body: JSON.stringify({ code: 'bad-code', state: authz.body.state, code_verifier: authz.body.code_verifier, redirect_uri: authz.body.redirect_uri }) });
   const connected = await catJson(`/api/secure/provider-catalog/${fakeId}/connect`, carolToken, { method: 'POST', body: JSON.stringify({ code: 'good-code', state: authz.body.state, code_verifier: authz.body.code_verifier, redirect_uri: authz.body.redirect_uri }) });
   const newSourceId = String(connected.body.source?.id ?? '');

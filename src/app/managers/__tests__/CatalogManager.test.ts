@@ -66,11 +66,7 @@ async function boot(sourceClient: BaseSourceClientProvider): Promise<void> {
   provider = new FakeCatalogProvider();
   sourcesProvider = new FakeSourcesProvider();
   lines = [];
-  const consent = new Map<string, string>();
-  users = new UsersManager(engine, new FakeUsersProvider(), new PasswordAuthProvider(), {
-    consentAcceptedAt: (u) => consent.get(u) ?? '',
-    setConsentAcceptedAt: (u, at) => { consent.set(u, at); },
-  });
+  users = new UsersManager(engine, new FakeUsersProvider(), new PasswordAuthProvider());
   engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir)))
     .register('users', users)
     .register('records', new RecordsManager(engine, new FakeRecordsProvider()))
@@ -189,7 +185,7 @@ describe('CatalogManager — a member connects', () => {
   it('connect gates on the legal consent when the policy requires it, with Go\'s error code', async () => {
     await expect(catalog.connect(alice, '1', { code_verifier: 'v', code: 'c', redirect_uri: 'https://app/cb' }))
       .rejects.toMatchObject({ status: 403, extra: { error_code: 'legal_consent_required' } });
-    users.setConsent(alice, '2026-01-01T00:00:00Z');
+    await users.setConsent(alice, '2026-01-01T00:00:00Z');
     const r = await catalog.connect(alice, '1', { code_verifier: 'v', code: 'c', redirect_uri: 'https://app/cb' });
     expect(r.data).toEqual({ status: 'import_started' });
     expect(r.source).toMatchObject({ id: 'source-1', display: 'Big Hospital', user_id: 'alice', platform_type: 'ehr', environment: 'production', patient: 'p-123' });
@@ -204,7 +200,7 @@ describe('CatalogManager — a member connects', () => {
   });
 
   it('validates the callback body in Go\'s order, and turns a client failure into a 502 the page can show', async () => {
-    users.setConsent(alice, '2026-01-01T00:00:00Z');
+    await users.setConsent(alice, '2026-01-01T00:00:00Z');
     await expect(catalog.connect(alice, '1', {})).rejects.toMatchObject({ status: 400, message: 'code_verifier is required' });
     await expect(catalog.connect(alice, '1', { code_verifier: 'v' })).rejects.toMatchObject({ status: 400, message: 'one of code or state is required' });
     await expect(catalog.connect(alice, '1', { code_verifier: 'v', state: 's' })).rejects.toMatchObject({ status: 501 });

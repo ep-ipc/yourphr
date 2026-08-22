@@ -59,6 +59,7 @@ export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
   'auth.trusted-proxies': { default: [] as string[], description: 'Direct peers whose X-Forwarded-For is believed (yourphr#529). Empty = believe nobody.' },
   'auth.providers': { default: ['password'] as string[], description: 'The authentication providers available (any-of alternatives). Only password exists today (yourphr#611).' },
   'auth.factors': { default: ['password'] as string[], description: 'The factors EVERY sign-in must pass (all-of; password AND totp, never try-each). A factor with no provider refuses to boot.' },
+  'audit.provider': { default: 'sqlite', description: "Where the patient-visible access log is kept. REQUIRED (yourphr#614): there is no inert default — an unknown or unhealthy provider refuses to boot rather than run with auditing off." },
   'sources.client.provider': { default: 'smart', description: "How connected sources are reached: 'smart' (SMART on FHIR over the guarded HTTP client) or 'null' (an instance that never syncs — nothing fetched, every sync says why). Optional capability (yourphr#612)." },
   'sync.max-pages': { default: 500, description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
   'backup.destination': { default: '', description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },

@@ -543,7 +543,7 @@ export async function migrateFromGo(goDb: GoDb, stores: Stores, options: Migrati
   log(`users: ${selectedUsers.length} of ${liveUsers.length} live accounts selected`);
   const users = { ...(await stores.users.importLegacy(ApiContext.system('migration', '', stores.engine), readGoUsers(goDb).filter((u) => selected.has(u.username)))), goLive: liveUsers.length };
   log('account data (legal consent, access log)');
-  const account = importLegacyAccountData(stores.account, readGoAccountData(goDb).filter((d) => selected.has(d.username)));
+  const account = await importLegacyAccountData(stores.users, stores.audit, stores.engine, readGoAccountData(goDb).filter((d) => selected.has(d.username)));
 
   const migrationCtx = ApiContext.system('migration', 'migration', stores.engine);
   log('catalog');

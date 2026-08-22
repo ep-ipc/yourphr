@@ -17,8 +17,11 @@
  */
 import type Database from 'better-sqlite3-multiple-ciphers';
 import type { SourcesManager, SourceImportReport } from '../app/managers/SourcesManager.js';
-import type { ApiContext } from '../framework/ApiContext.js';
-import type { AccountStore, AccessEvent } from '../account/index.js';
+import type { AccessEvent } from '../framework/providers/BaseAuditProvider.js';
+import type { UsersManager } from '../framework/managers/UsersManager.js';
+import type { AuditManager } from '../framework/managers/AuditManager.js';
+import { ApiContext } from '../framework/ApiContext.js';
+import type { Engine } from '../framework/Engine.js';
 import type { LegacyUser } from '../framework/managers/UsersManager.js';
 
 /** Reads the users table of a Go (GORM) YourPHR database file. */
@@ -172,18 +175,18 @@ export interface AccountImportReport {
   accessEventsSkipped: number;
 }
 
-/** One-way: a consent already recorded here is kept; an access bucket already present is kept. */
-export function importLegacyAccountData(store: AccountStore, data: LegacyAccountData[]): AccountImportReport {
+/** One-way, as the migration principal acting for each account: a consent already recorded here is kept; an access bucket already present is kept. */
+export async function importLegacyAccountData(users: UsersManager, audit: AuditManager, engine: Engine, data: LegacyAccountData[]): Promise<AccountImportReport> {
   const report: AccountImportReport = { consentsCarried: [], accessEventsImported: 0, accessEventsSkipped: 0 };
   for (const d of data) {
-    if (d.consentAcceptedAt !== '' && store.consentAcceptedAt(d.username) === '') {
-      store.setConsentAcceptedAt(d.username, d.consentAcceptedAt);
+    const ctx = ApiContext.system('migration', d.username, engine);
+    if (d.consentAcceptedAt !== '' && (await users.consentAcceptedAt(ctx)) === '') {
+      await users.setConsent(ctx, d.consentAcceptedAt);
       report.consentsCarried.push(d.username);
     }
-    for (const event of d.accessEvents) {
-      if (store.importAccessEvent(d.username, event)) report.accessEventsImported++;
-      else report.accessEventsSkipped++;
-    }
+    const r = await audit.importLegacy(ctx, d.accessEvents);
+    report.accessEventsImported += r.imported;
+    report.accessEventsSkipped += r.skipped;
   }
   return report;
 }

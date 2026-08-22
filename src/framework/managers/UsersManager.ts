@@ -24,12 +24,6 @@ declare module '../Engine.js' {
   }
 }
 
-/** Where the consent timestamp lives — the account store until Audit is a manager of its own. */
-export interface ConsentStore {
-  consentAcceptedAt(userId: string): string;
-  setConsentAcceptedAt(userId: string, acceptedAt: string): void;
-}
-
 export interface LegacyUser {
   username: string;
   /** The bcrypt hash exactly as Go stored it. */
@@ -51,7 +45,7 @@ export class UsersManager extends BaseManager {
   private bootstrapFile?: string;
   private bootstrapUsername?: string;
 
-  constructor(engine: Engine, private readonly provider: BaseUsersProvider, private readonly passwords: BaseAuthProvider, private readonly consent: ConsentStore) {
+  constructor(engine: Engine, private readonly provider: BaseUsersProvider, private readonly passwords: BaseAuthProvider) {
     super(engine);
   }
 
@@ -147,20 +141,20 @@ export class UsersManager extends BaseManager {
   /** The caller deletes their own account (the rest of what they own is the app's to remove first). */
   async deleteSelf(ctx: ApiContext): Promise<boolean> {
     ctx.requireAuthenticated();
-    this.consent.setConsentAcceptedAt(ctx.username, '');
+    await this.provider.setConsentAcceptedAt(ctx.username, '');
     return this.provider.delete(ctx.username);
   }
 
   // --- legal consent (folded in: one small table, one owner) ---
 
-  consentAcceptedAt(ctx: ApiContext): string {
+  consentAcceptedAt(ctx: ApiContext): Promise<string> {
     ctx.requireAuthenticated();
-    return this.consent.consentAcceptedAt(ctx.username);
+    return this.provider.consentAcceptedAt(ctx.username);
   }
 
-  setConsent(ctx: ApiContext, acceptedAt: string): void {
+  setConsent(ctx: ApiContext, acceptedAt: string): Promise<void> {
     ctx.requireAuthenticated();
-    this.consent.setConsentAcceptedAt(ctx.username, acceptedAt);
+    return this.provider.setConsentAcceptedAt(ctx.username, acceptedAt);
   }
 
   // --- bootstrap and recovery: the proof is filesystem access, not a session ---
