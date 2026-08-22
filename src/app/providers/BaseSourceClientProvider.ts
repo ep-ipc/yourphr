@@ -39,7 +39,7 @@ export abstract class BaseSourceClientProvider {
   abstract completeAuthorization(app: SmartApp, redirectUri: string, code: string, codeVerifier: string): Promise<AuthorizationResult>;
   /** Refresh an expiring token; discovers the token endpoint once when the source has none. */
   abstract refresh(source: ConnectedSource, nowSeconds: number): Promise<RefreshedTokens>;
-  /** Fetch every page of one resource type (named fetchPages: the HTTP-boundary guard reads the word "fetch(" as a network call) for the source's patient, writing through the door. */
+  /** Every page of one resource type for the source's patient, written through the door. (Not named after the browser API on purpose: the HTTP-boundary guard reads that word as a network call.) */
   abstract fetchPages(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport>;
 }
 
