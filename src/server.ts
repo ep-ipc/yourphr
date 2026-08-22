@@ -19,7 +19,7 @@
  */
 import {createServer, IncomingMessage, ServerResponse} from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
-import {extname, join, resolve, sep} from 'node:path';
+import {dirname, extname, join, resolve, sep} from 'node:path';
 import type {Resource, ResourceType} from '@medplum/fhirtypes';
 import {SqliteFhirRepository} from './SqliteFhirRepository.js';
 import type {AuthStore} from './auth/index.js';
@@ -124,10 +124,28 @@ export interface ServerModules {
   };
   admin?: {
     isAdmin: (username: string) => boolean;
+    /** GET /admin/config in Go's AdminConfigResponse shape (yourphr#602). */
     configSnapshot: () => unknown;
+    configReveal: (key: string) => unknown | undefined;
+    /** Throws with a status-bearing error: 400 unknown/invalid, 409 env-pinned. */
+    configSet: (key: string, value: unknown) => void;
+    configReset: (key: string) => boolean;
     catalogList: () => unknown;
     backupNow: () => unknown;
     createUser: (username: string, password: string) => void;
+    instanceSettings: () => { name: string; contact_email: string; contact_url: string };
+    setInstanceSettings: (s: { name: string; contact_email: string; contact_url: string }) => void;
+    metrics: () => unknown;
+    databaseInfo: () => unknown;
+    /** Returns the file path of a fresh backup for streaming. */
+    backupFile: () => { file: string; name: string; sizeBytes: number };
+    setSchedule: (body: Record<string, unknown>) => unknown;
+    testDestination: (destination: string) => unknown;
+    browse: (path: string) => unknown;
+    stageRestore: (backupName: string) => unknown;
+    logs: () => { level: string; valid_levels: string[]; lines: string[] };
+    setLogLevel: (level: string) => string;
+    relayConfig: () => unknown;
   };
 }
 
@@ -486,6 +504,12 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // The SMART relay card (yourphr#602) — before the per-source routes, whose :id would swallow it.
+      if (modules?.admin && url.pathname === '/api/secure/source/relay-config' && req.method === 'GET') {
+        send(res, 200, {success: true, data: modules.admin.relayConfig()});
+        return;
+      }
+
       // --- the Sources page (yourphr#594) ---
       if (modules?.sources) {
         const src = modules.sources;
@@ -658,8 +682,162 @@ export function createYourPhrServer(options: ServerOptions) {
           send(res, 403, {success: false, error: 'admin role required'});
           return;
         }
+        const admin = modules.admin;
+        const withStatus = (err: unknown): { status: number; error: string } => {
+          const e = err as Error & { status?: number };
+          return {status: e.status ?? 400, error: e.message};
+        };
         if (url.pathname === '/api/secure/admin/config' && req.method === 'GET') {
-          send(res, 200, {success: true, data: modules.admin.configSnapshot()});
+          send(res, 200, {success: true, data: admin.configSnapshot()});
+          return;
+        }
+        const reveal = url.pathname.match(/^\/api\/secure\/admin\/config\/reveal\/([^/]+)$/);
+        if (reveal && req.method === 'GET') {
+          const revealed = admin.configReveal(decodeURIComponent(reveal[1]!));
+          revealed === undefined ? send(res, 404, {success: false, error: 'unknown configuration key'}) : send(res, 200, {success: true, data: revealed});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/config' && req.method === 'PUT') {
+          const body = await readJsonBody(req);
+          const key = typeof body?.['key'] === 'string' ? (body['key'] as string).trim().toLowerCase() : '';
+          if (!body || key === '' || !('value' in body)) {
+            send(res, 400, {success: false, error: 'invalid request'});
+            return;
+          }
+          try {
+            admin.configSet(key, body['value']);
+            send(res, 200, {success: true, data: {key}});
+          } catch (err) {
+            const e = withStatus(err);
+            send(res, e.status, {success: false, error: e.error});
+          }
+          return;
+        }
+        const resetKey = url.pathname.match(/^\/api\/secure\/admin\/config\/([^/]+)$/);
+        if (resetKey && req.method === 'DELETE') {
+          try {
+            send(res, 200, {success: true, data: {key: decodeURIComponent(resetKey[1]!), cleared: admin.configReset(decodeURIComponent(resetKey[1]!).toLowerCase())}});
+          } catch (err) {
+            const e = withStatus(err);
+            send(res, e.status, {success: false, error: e.error});
+          }
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/instance' && req.method === 'GET') {
+          send(res, 200, {success: true, data: admin.instanceSettings()});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/instance' && req.method === 'PUT') {
+          const body = await readJsonBody(req);
+          if (!body) {
+            send(res, 400, {success: false, error: 'invalid request'});
+            return;
+          }
+          const str = (k: string): string => (typeof body[k] === 'string' ? (body[k] as string).trim() : '');
+          const settings = {name: str('name'), contact_email: str('contact_email'), contact_url: str('contact_url')};
+          if (settings.contact_email !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(settings.contact_email)) {
+            send(res, 400, {success: false, error: 'contact_email is not an email address'});
+            return;
+          }
+          if (settings.contact_url !== '' && !/^https?:\/\//.test(settings.contact_url)) {
+            send(res, 400, {success: false, error: 'contact_url must start with http:// or https://'});
+            return;
+          }
+          try {
+            admin.setInstanceSettings(settings);
+          } catch (err) {
+            send(res, 500, {success: false, error: `save failed: ${(err as Error).message}`});
+            return;
+          }
+          send(res, 200, {success: true, data: settings});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/metrics' && req.method === 'GET') {
+          send(res, 200, {success: true, data: admin.metrics()});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/database' && req.method === 'GET') {
+          send(res, 200, {success: true, data: admin.databaseInfo()});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/database/backup' && req.method === 'POST') {
+          try {
+            const b = admin.backupFile();
+            send(res, 200, {success: true, data: {filename: b.name, path: b.file, destination: dirname(b.file), size_bytes: b.sizeBytes}});
+          } catch (err) {
+            send(res, 400, {success: false, error: (err as Error).message});
+          }
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/database/backup/download' && req.method === 'POST') {
+          let b: { file: string; name: string; sizeBytes: number };
+          try {
+            b = admin.backupFile();
+          } catch (err) {
+            send(res, 400, {success: false, error: (err as Error).message});
+            return;
+          }
+          res.writeHead(200, {'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename=${b.name}`, 'Content-Length': b.sizeBytes});
+          createReadStream(b.file).pipe(res);
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/database/schedule' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          if (!body) {
+            send(res, 400, {success: false, error: 'invalid request'});
+            return;
+          }
+          try {
+            send(res, 200, {success: true, data: admin.setSchedule(body)});
+          } catch (err) {
+            send(res, 400, {success: false, error: (err as Error).message});
+          }
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/database/backup/test' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          send(res, 200, {success: true, data: admin.testDestination(typeof body?.['destination'] === 'string' ? (body['destination'] as string) : '')});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/database/browse' && req.method === 'GET') {
+          try {
+            send(res, 200, {success: true, data: admin.browse(url.searchParams.get('path') ?? '')});
+          } catch (err) {
+            send(res, 400, {success: false, error: (err as Error).message});
+          }
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/database/restore' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          const name = typeof body?.['backup_name'] === 'string' ? (body['backup_name'] as string) : '';
+          if (!body || name === '') {
+            send(res, 400, {success: false, error: 'invalid request'});
+            return;
+          }
+          if (body['confirm'] !== true) {
+            send(res, 400, {success: false, error: 'restore must be confirmed'});
+            return;
+          }
+          try {
+            send(res, 200, {success: true, data: admin.stageRestore(name)});
+          } catch (err) {
+            const message = (err as Error).message;
+            send(res, message.startsWith('no such backup') ? 404 : 400, {success: false, error: message});
+          }
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/logs' && req.method === 'GET') {
+          send(res, 200, {success: true, data: admin.logs()});
+          return;
+        }
+        if (url.pathname === '/api/secure/admin/log-level' && req.method === 'PUT') {
+          const body = await readJsonBody(req);
+          const level = typeof body?.['level'] === 'string' ? (body['level'] as string) : '';
+          try {
+            send(res, 200, {success: true, data: {level: admin.setLogLevel(level)}});
+          } catch (err) {
+            send(res, 400, {success: false, error: (err as Error).message});
+          }
           return;
         }
         if (url.pathname === '/api/secure/admin/catalog' && req.method === 'GET') {

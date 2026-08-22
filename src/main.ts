@@ -12,6 +12,7 @@ import { accessSync, constants, existsSync, mkdirSync, readFileSync } from 'node
 import { join } from 'node:path';
 import { assembleApp } from './app.js';
 import { ConfigStore, envNameFor } from './config/index.js';
+import { appLog } from './log/index.js';
 
 const EX_CONFIG = 78;
 
@@ -45,7 +46,7 @@ const port = bootstrap.getInt('web.listen.port');
 const host = bootstrap.getString('web.listen.host');
 const intervalSeconds = bootstrap.getInt('sync.interval-seconds');
 if (bootstrap.getString('database.encryption.key') === '') {
-  console.warn(`WARNING: ${envNameFor('database.encryption.key')} is not set — the database and the tokens in it are stored in the clear`);
+  appLog.warn(`${envNameFor('database.encryption.key')} is not set — the database and the tokens in it are stored in the clear`);
 }
 
 const version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
@@ -58,15 +59,15 @@ const app = assembleApp(dataDir, {
 });
 
 if (app.bootstrapPasswordFile) {
-  console.log(`first start: bootstrap admin created; its password is in ${app.bootstrapPasswordFile} (mode 0600) — sign in once and change it`);
+  appLog.info(`first start: bootstrap admin created; its password is in ${app.bootstrapPasswordFile} (mode 0600) — sign in once and change it`);
 }
 
 app.server.listen(port, host, () => {
-  console.log(`yourphr-ts-spike ${version} listening on ${host}:${port}; data in ${dataDir}; ${webDir === '' ? 'API only' : `serving ${webDir}`}; worker ${intervalSeconds > 0 ? `every ${intervalSeconds}s` : 'off'}`);
+  appLog.info(`yourphr-ts-spike ${version} listening on ${host}:${port}; data in ${dataDir}; ${webDir === '' ? 'API only' : `serving ${webDir}`}; worker ${intervalSeconds > 0 ? `every ${intervalSeconds}s` : 'off'}`);
 });
 
 const shutdown = (signal: string): void => {
-  console.log(`${signal}: closing`);
+  appLog.info(`${signal}: closing`);
   app.close();
   process.exit(0);
 };

@@ -8,8 +8,9 @@
 import { createServer, type ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
+import { stageRestore } from '../src/backup/index.js';
 import { assembleApp, sourceShape } from '../src/app.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
@@ -244,9 +245,9 @@ async function main(): Promise<void> {
   const opsMe = (await (await fetch(`${base}/api/secure/account/me`, authed(opsToken))).json()) as { data: { role: string } };
   const opsAdmin = await fetch(`${base}/api/secure/admin/config`, authed(opsToken));
   check('an admin not named admin reaches the admin surface — the gate reads the role column', opsMe.data.role === 'admin' && opsAdmin.status === 200);
-  const snapshot = (await (await fetch(`${base}/api/secure/admin/config`, authed(adminToken))).json()) as { data: { key: string; value: unknown; source: string }[] };
-  const secretRow = snapshot.data.find((r) => r.key === 'database.encryption.key');
-  check('the config snapshot masks secrets and names sources', secretRow?.value === '••••' && secretRow?.source === 'environment');
+  const snapshot = (await (await fetch(`${base}/api/secure/admin/config`, authed(adminToken))).json()) as { data: { entries: { key: string; value: unknown; masked: boolean; from_env: boolean }[] } };
+  const secretRow = snapshot.data.entries.find((r) => r.key === 'database.encryption.key');
+  check('the config snapshot masks secrets and says where a value comes from', secretRow?.value === '••••' && secretRow?.masked === true && secretRow?.from_env === true);
   const catalogList = (await (await fetch(`${base}/api/secure/admin/catalog`, authed(adminToken))).json()) as { data: { display: string }[] };
   check('the seeded catalog is visible to the admin', catalogList.data.some((e) => e.display === 'Seeded Sandbox'));
 
@@ -322,9 +323,120 @@ async function main(): Promise<void> {
   check('deleting the account removes its sources, records, and the account itself; the password no longer signs in',
     zedHad === 3 && zedDeleted.status === 200 && zedAgain.status === 401 && app.auth.roleOf('zed') === undefined && zedRows === 0);
 
+  // --- the admin dashboard, database, logs and configuration pages (yourphr#602) ---
+  const adminJson = async (path: string, init: RequestInit = {}) => {
+    const r = await fetch(`${base}${path}`, { ...init, headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}`, ...(init.headers ?? {}) } });
+    return { status: r.status, body: (await r.json()) as { success: boolean; data: Record<string, any>; error?: string } };
+  };
+  const relay = await adminJson('/api/secure/source/relay-config');
+  check('relay-config answers honestly: no relay here, not configured, not ready', relay.status === 200 && relay.body.data['configured'] === false && relay.body.data['ready'] === false);
+
+  const instanceBefore = await adminJson('/api/secure/admin/instance');
+  const badEmail = await adminJson('/api/secure/admin/instance', { method: 'PUT', body: JSON.stringify({ name: 'Ops', contact_email: 'not-an-email', contact_url: '' }) });
+  const setInstance = await adminJson('/api/secure/admin/instance', { method: 'PUT', body: JSON.stringify({ name: ' Ops Team ', contact_email: 'ops@example.org', contact_url: 'https://example.org/help' }) });
+  const instanceAfter = await adminJson('/api/secure/admin/instance');
+  check('the Instance card reads and writes the operator contact (trimmed, validated); /secure/instance sees it at once',
+    instanceBefore.body.data['name'] === 'Nerds by the Hour' && badEmail.status === 400 && setInstance.status === 200 && instanceAfter.body.data['name'] === 'Ops Team'
+      && ((await (await fetch(`${base}/api/secure/instance`, authed(adminToken))).json()) as { data: Record<string, unknown> }).data['operator.contact_url'] === 'https://example.org/help');
+
+  app.sources.add({ userId: 'alice', display: 'Fake Regional Health Again', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pa', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999, platformType: 'ehr', environment: 'sandbox' });
+  await app.syncNow(1_000_400);
+  const metrics = await adminJson('/api/secure/admin/metrics');
+  check('the Metrics card: no scrape endpoint (said so), counters and recent jobs from the sync history',
+    metrics.body.data['scrape_enabled'] === false && metrics.body.data['process']['jobs_total']['success|ehr|sandbox'] >= 1 && metrics.body.data['recent_jobs'].length >= 1
+      && metrics.body.data['recent_jobs'][0]['job_status'] === 'STATUS_DONE' && typeof metrics.body.data['recent_jobs'][0]['summary']['total_resources'] === 'number');
+
+  const dbInfo = await adminJson('/api/secure/admin/database');
+  check('the Database card: both files, counts, integrity, encryption, destination, schedule, health — Go\'s shape',
+    dbInfo.body.data['encryption_enabled'] === true && dbInfo.body.data['integrity_ok'] === true && dbInfo.body.data['users'] >= 3 && dbInfo.body.data['sources'] >= 1
+      && dbInfo.body.data['size_bytes'] > 0 && dbInfo.body.data['backups_unavailable'] === '' && dbInfo.body.data['schedule']['days'] === 'daily' && dbInfo.body.data['backup_health']['schedule_enabled'] === false
+      && Array.isArray(dbInfo.body.data['backups']));
+  const took = await adminJson('/api/secure/admin/database/backup', { method: 'POST' });
+  const backupPath = String(took.body.data['path']);
+  const appHalf = stageRestore(backupPath, 'travelling-copy-key', join(dir, 'probe-app.db'), '', (t) => t === 'auth_users' || t === 'connected_sources');
+  const recordsHalf = stageRestore(backupPath, 'travelling-copy-key', join(dir, 'probe-records.db'), '', (t) => t === 'resources');
+  const probe = new Database(join(dir, 'probe-app.db'));
+  const probeUsers = (probe.prepare('SELECT COUNT(*) AS n FROM auth_users').get() as { n: number }).n;
+  probe.close();
+  check('a backup from the page holds the INSTANCE — accounts and sources as well as the records — in one encrypted file',
+    took.status === 200 && existsSync(backupPath) && appHalf.tables >= 2 && recordsHalf.tables >= 1 && probeUsers >= 3);
+  const dbInfoAfter = await adminJson('/api/secure/admin/database');
+  check('the backup is listed with its size and time, and health now reports a success',
+    dbInfoAfter.body.data['backups'].some((b: { name: string; size_bytes: number; modified: string }) => backupPath.endsWith(b.name) && b.size_bytes > 0 && !!b.modified)
+      && dbInfoAfter.body.data['backup_health']['ok'] === true && dbInfoAfter.body.data['backup_health']['last_success_path'] === backupPath);
+  const download = await fetch(`${base}/api/secure/admin/database/backup/download`, { method: 'POST', ...authed(adminToken) });
+  const downloaded = Buffer.from(await download.arrayBuffer());
+  check('download streams a fresh backup as an attachment, ciphertext',
+    download.status === 200 && /attachment; filename=.*-yourphr-spike-backup\.db/.test(download.headers.get('content-disposition') ?? '') && downloaded.length > 0 && !downloaded.subarray(0, 16).includes('SQLite format 3'));
+  const badTime = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '25:00', days: 'daily', destination: '', max_backups: 3 }) });
+  const scheduled = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '02:30', days: 'weekly', destination: '', max_backups: 3 }) });
+  check('the schedule is validated (HH:MM, daily|weekly) and stored in the settings store',
+    badTime.status === 400 && scheduled.status === 200 && scheduled.body.data['days'] === 'weekly' && app.config.getString('backup.schedule.time') === '02:30' && app.config.getBool('backup.schedule.enabled'));
+  const testOk = await adminJson('/api/secure/admin/database/backup/test', { method: 'POST', body: JSON.stringify({ destination: dir }) });
+  const testBad = await adminJson('/api/secure/admin/database/backup/test', { method: 'POST', body: JSON.stringify({ destination: join(dir, 'does-not-exist') }) });
+  const browse = await adminJson(`/api/secure/admin/database/browse?path=${encodeURIComponent(dir)}`);
+  check('a destination is proven writable before a schedule relies on it; the folder browser lists one level',
+    testOk.body.data['writable'] === true && testBad.body.data['writable'] === false && !!testBad.body.data['error'] && browse.body.data['dirs'].includes('backups') && browse.body.data['parent'] !== '');
+  const unconfirmed = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: basename(backupPath), confirm: false }) });
+  const missing = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: 'nope-yourphr-spike-backup.db', confirm: true }) });
+  const traversal = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: '../spike.db', confirm: true }) });
+  check('a restore must be confirmed and must name a backup in the destination — no path escapes', unconfirmed.status === 400 && missing.status === 404 && traversal.status === 404);
+
+  const logsBefore = await adminJson('/api/secure/admin/logs');
+  const badLevel = await adminJson('/api/secure/admin/log-level', { method: 'PUT', body: JSON.stringify({ level: 'loud' }) });
+  const debugLevel = await adminJson('/api/secure/admin/log-level', { method: 'PUT', body: JSON.stringify({ level: 'debug' }) });
+  const logsAfter = await adminJson('/api/secure/admin/logs');
+  check('the Logs page: level, the selectable levels, recent lines; a level change applies at once and is itself logged',
+    logsBefore.body.data['level'] === 'info' && logsBefore.body.data['valid_levels'].length === 4 && badLevel.status === 400 && debugLevel.body.data['level'] === 'debug'
+      && logsAfter.body.data['level'] === 'debug' && logsAfter.body.data['lines'].some((l: string) => l.includes('log level')));
+
+  const cfg = await adminJson('/api/secure/admin/config');
+  const entries = cfg.body.data['entries'] as { key: string; value: unknown; masked: boolean; source: string; public: boolean; from_env: boolean; env_var: string; default: unknown }[];
+  const secret = entries.find((e) => e.key === 'backup.encryption.key')!;
+  const pub = entries.find((e) => e.key === 'auth.password.min-length')!;
+  check('the Configuration page gets Go\'s shape: entries with masked/source/public/from_env/env_var/default, the custom config path',
+    Array.isArray(entries) && typeof cfg.body.data['custom_config_path'] === 'string' && secret.masked && secret.from_env && secret.env_var === 'SPIKE_BACKUP_ENCRYPTION_KEY' && pub.public === true && pub.source === 'default');
+  const revealed = await adminJson('/api/secure/admin/config/reveal/backup.encryption.key');
+  const revealUnknown = await adminJson('/api/secure/admin/config/reveal/nope.key');
+  check('reveal returns the real value of a masked key (and is logged); an unknown key is 404',
+    revealed.body.data['value'] === 'travelling-copy-key' && revealUnknown.status === 404 && ((await adminJson('/api/secure/admin/logs')).body.data['lines'] as string[]).some((l) => l.includes('revealed configuration value for backup.encryption.key')));
+  const setOk = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'sync.max-pages', value: '250' }) });
+  const setEnv = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'database.encryption.key', value: 'x' }) });
+  const setUnknown = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'nope.key', value: 1 }) });
+  const setBootstrap = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'web.listen.port', value: 9 }) });
+  const setBadType = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'sync.max-pages', value: 'lots' }) });
+  check('set: coerced to the shipped type and stored; env-pinned is 409; unknown, bootstrap and wrong-typed are 400',
+    setOk.status === 200 && app.config.getInt('sync.max-pages') === 250 && setEnv.status === 409 && setUnknown.status === 400 && setBootstrap.status === 400 && setBadType.status === 400);
+  const reset = await adminJson('/api/secure/admin/config/sync.max-pages', { method: 'DELETE' });
+  const resetAgain = await adminJson('/api/secure/admin/config/sync.max-pages', { method: 'DELETE' });
+  check('reset clears the override (reported), and the default is back', reset.body.data['cleared'] === true && resetAgain.body.data['cleared'] === false && app.config.getInt('sync.max-pages') === 500);
+  const nonAdminDb = await fetch(`${base}/api/secure/admin/database`, authed(opsToken));
+  const strangerDb = await fetch(`${base}/api/secure/admin/database`, { headers: { authorization: `Bearer ${((await (await signIn('alice', 'another-long-enough-password')).json()) as { data: string }).data}` } });
+  check('every admin card is behind the role gate', nonAdminDb.status === 200 && strangerDb.status === 403);
+
   fake.close();
   app.close();
   rmSync(dir, { recursive: true, force: true });
+
+  // --- a staged restore is applied on the next start (yourphr#602) ---
+  {
+    const rDir = mkdtempSync(join(tmpdir(), 'spike-app-restore-'));
+    const env = { SPIKE_DATABASE_ENCRYPTION_KEY: 'k1', SPIKE_BACKUP_ENCRYPTION_KEY: 'bk', SPIKE_TEST_ALLOW_INTERNAL: '1' };
+    const a = assembleApp(rDir, { env });
+    a.auth.createUser('keeper', 'keepers-long-enough-password');
+    const rBase = await new Promise<string>((resolve) => { a.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(a.server.address() as { port: number }).port}`)); });
+    const bootPw = readFileSync(a.bootstrapPasswordFile!, 'utf8').trim();
+    const tok = ((await (await fetch(`${rBase}/api/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: bootPw }) })).json()) as { data: string }).data;
+    const b = (await (await fetch(`${rBase}/api/secure/admin/database/backup`, { method: 'POST', headers: { authorization: `Bearer ${tok}` } })).json()) as { data: { filename: string } };
+    a.auth.createUser('latecomer', 'latecomers-long-enough-password');
+    const staged = (await (await fetch(`${rBase}/api/secure/admin/database/restore`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` }, body: JSON.stringify({ backup_name: b.data.filename, confirm: true }) })).json()) as { data: { staged: boolean } };
+    a.close();
+    const after = assembleApp(rDir, { env });
+    check('a confirmed restore is STAGED, applied on the next start, and the previous databases are kept as *.pre-restore',
+      staged.data.staged === true && after.auth.roleOf('keeper') === 'user' && after.auth.roleOf('latecomer') === undefined && existsSync(join(rDir, 'spike.db.pre-restore')) && existsSync(join(rDir, 'records.db.pre-restore')));
+    after.close();
+    rmSync(rDir, { recursive: true, force: true });
+  }
 
   // --- a database from before the role column (yourphr#597): nobody is demoted, the named admin stays one ---
   {

@@ -60,6 +60,9 @@ export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
   'sync.max-pages': { default: 500, description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
   'backup.destination': { default: '', description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
   'backup.max-backups': { default: 7, description: 'Retention: newest N backups are kept; 0 disables pruning.' },
+  'backup.schedule.enabled': { default: false, description: 'Run scheduled backups from this process (yourphr#602).' },
+  'backup.schedule.time': { default: '02:00', description: 'When the scheduled backup runs, HH:MM, server-local time.' },
+  'backup.schedule.days': { default: 'daily', description: "'daily' or 'weekly' (weekly = Sundays)." },
   'operator.name': { default: '', description: 'Who runs this instance — shown on the contact, privacy and help pages (yourphr#593). Public.' },
   'operator.contact_email': { default: '', description: 'How a signed-in member reaches the operator. Withheld from anonymous callers (yourphr#459).' },
   'operator.contact_url': { default: '', description: 'A contact page or form for this instance. Public.' },
@@ -151,6 +154,35 @@ export class ConfigStore {
   }
 
   /** Overlay keys the catalogue does not know — reported, never silently dropped (yourphr#473). */
+  /** Removes an override so the key reads its default (or the environment) again. False when there was none. */
+  clear(key: string): boolean {
+    if (!this.spec[key]) {
+      throw new Error(`unknown configuration key: ${key}`);
+    }
+    if (this.overlayBroken) {
+      throw new Error(`${this.overlayPath} exists but cannot be parsed — refusing to overwrite it`);
+    }
+    if (!(key in this.overlay)) return false;
+    delete this.overlay[key];
+    mkdirSync(dirname(this.overlayPath), { recursive: true });
+    writeFileSync(this.overlayPath, JSON.stringify(this.overlay, null, 2) + '\n', { mode: 0o600 });
+    return true;
+  }
+
+  /** Where the overrides live, so an operator can find the file. */
+  customConfigPath(): string {
+    return this.overlayPath;
+  }
+
+  specOf(key: string): ConfigKeySpec | undefined {
+    return this.spec[key];
+  }
+
+  /** The raw (unmasked) value — for the admin reveal, which is a logged, deliberate act. */
+  reveal(key: string): ConfigValue {
+    return this.raw(key);
+  }
+
   unknownKeys(): string[] {
     if (this.overlayBroken) {
       return [`<unreadable: ${this.overlayPath}>`];

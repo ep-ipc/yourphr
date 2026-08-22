@@ -21,7 +21,7 @@
  */
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { ConfigStore } from './config/index.js';
+import { ConfigStore, envNameFor, type ConfigValue } from './config/index.js';
 import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
 import { AuthStore, GENERIC_SIGNIN_ERROR } from './auth/index.js';
 import { ProviderCatalog, type CatalogWrite } from './catalog/index.js';
@@ -34,6 +34,9 @@ import { recentResources, runQuery, type QueryRequest } from './query/index.js';
 import { FavoriteStore } from './favorites/index.js';
 import { AccountStore, accessCategoryFor, providerRequiresLegalConsent } from './account/index.js';
 import { loadLegalDocument, parseLegalKind } from './legal/index.js';
+import { AdminOps, applyStagedRestore } from './admin/index.js';
+import { appLog, VALID_LEVELS } from './log/index.js';
+import { basename } from 'node:path';
 import { backupDatabase } from './backup/index.js';
 import { buildIps } from './ips/index.js';
 import { provenanceFor } from './provenance/index.js';
@@ -120,11 +123,12 @@ export function openStores(dataDir: string, env: Record<string, string | undefin
   const config = new ConfigStore(dataDir, undefined, env);
   const unknown = config.unknownKeys();
   if (unknown.length > 0) {
-    console.warn(`config: keys with no effect: ${unknown.join(', ')}`); // yourphr#473 — reported, not dropped
+    appLog.warn(`config: keys with no effect: ${unknown.join(', ')}`); // yourphr#473 — reported, not dropped
   }
 
   // 2. The app database + migrations before anything opens for business.
   const dbKey = config.getString('database.encryption.key');
+  applyStagedRestore(dataDir, config.getString('database.location'), (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
   const db = new Database(join(dataDir, config.getString('database.location')));
   if (dbKey !== '') {
     db.pragma("cipher='sqlcipher'");
@@ -257,14 +261,22 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     : undefined;
   timer?.unref?.();
 
-  const backupNow = () => {
-    const destination = config.getString('backup.destination') || join(dataDir, 'backups');
-    return backupDatabase(repoForUser('__any__'), {
-      destination,
-      backupKey: config.getString('backup.encryption.key'), // '' refuses — backups are always encrypted
-      maxBackups: config.getInt('backup.max-backups'),
-    });
-  };
+  const adminOps = new AdminOps({ dataDir, config, appDb: stores.db, sources, recordsRepo: () => repoForUser('__any__') });
+  const backupNow = () => adminOps.backupNow();
+  // The scheduler (yourphr#602): once a minute, is a backup due? Outcome recorded by backupNow.
+  let lastScheduledMinute: string | undefined;
+  const scheduleTimer = options.workerIntervalMs === undefined ? undefined : setInterval(() => {
+    const now = new Date();
+    if (!adminOps.scheduleDue(now, lastScheduledMinute)) return;
+    lastScheduledMinute = now.toISOString().slice(0, 16);
+    try {
+      const r = adminOps.backupNow();
+      appLog.info(`scheduled backup written: ${r.file} (${r.sizeBytes} bytes)`);
+    } catch (err) {
+      appLog.error(`scheduled backup failed: ${(err as Error).message}`);
+    }
+  }, 60_000);
+  scheduleTimer?.unref?.();
 
   const medications = async (repo: SqliteFhirRepository) => {
     const inputs: MedInput[] = [];
@@ -297,6 +309,44 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
   });
 
   const events = new EventBus();
+
+  /** The keys /api/instance/public publishes — Go's `public` list, as far as this stack has values. */
+  const PUBLIC_KEYS = new Set(['operator.name', 'operator.contact_url', 'auth.password.min-length']);
+
+  const withStatus = (status: number, message: string): Error & { status: number } => Object.assign(new Error(message), { status });
+
+  /** Go's AdminMetricsResponse over sync_jobs: no scrape endpoint here, counters from the job history. */
+  const adminMetrics = (): Record<string, unknown> => {
+    const bySource = new Map(sources.list().map((s) => [s.id, s]));
+    const jobs = stores.db.prepare('SELECT * FROM sync_jobs ORDER BY id DESC').all() as { id: number; source_id: number; outcome: string; received: number; error: string; started_at: number; finished_at: number }[];
+    const jobsTotal: Record<string, number> = {};
+    const resourcesTotal: Record<string, number> = {};
+    let durationCount = 0;
+    let durationSum = 0;
+    for (const j of jobs) {
+      const s = bySource.get(j.source_id);
+      const key = `${j.outcome === 'success' ? 'success' : 'failed'}|${s?.platformType || 'unknown'}|${s?.environment || 'unknown'}`;
+      jobsTotal[key] = (jobsTotal[key] ?? 0) + 1;
+      resourcesTotal[key] = (resourcesTotal[key] ?? 0) + j.received;
+      durationCount++;
+      durationSum += Math.max(0, j.finished_at - j.started_at);
+    }
+    const iso = (seconds: number): string => new Date(seconds * 1000).toISOString();
+    return {
+      scrape_enabled: false,
+      scrape_path: '/metrics',
+      scrape_note: 'This stack exposes no Prometheus scrape endpoint; the counters below come from the sync job history.',
+      process: { jobs_total: jobsTotal, resources_total: resourcesTotal, duration_count: durationCount, duration_sum_seconds: durationSum },
+      recent_jobs: jobs.slice(0, 10).map((j) => ({
+        id: String(j.id),
+        job_status: j.outcome === 'success' ? 'STATUS_DONE' : 'STATUS_FAILED',
+        created_at: iso(j.started_at),
+        done_time: iso(j.finished_at),
+        source_id: `source-${j.source_id}`,
+        summary: { outcome: j.outcome === 'success' ? 'success' : 'failed', duration_ms: Math.max(0, j.finished_at - j.started_at) * 1000, total_resources: j.received, ...(j.error ? { error_message: j.error } : {}) },
+      })),
+    };
+  };
 
   /** Go's LegalConsentStatus, from the stored timestamp ('' = not accepted). */
   const consentStatus = (acceptedAt: string): Record<string, unknown> => ({
@@ -500,10 +550,82 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
       },
       admin: {
         isAdmin: (username) => auth.isAdmin(username),
-        configSnapshot: () => config.snapshot(),
+        configSnapshot: () => ({
+          entries: config.snapshot().map((row) => {
+            const spec = config.specOf(row.key)!;
+            const masked = row.value === '••••';
+            return {
+              key: row.key,
+              value: row.value,
+              masked,
+              source: row.source === 'custom' ? 'custom' : 'default',
+              public: PUBLIC_KEYS.has(row.key),
+              promoted: false,
+              default: spec.secret && String(spec.default) !== '' ? '••••' : spec.default,
+              from_env: row.source === 'environment',
+              env_var: envNameFor(row.key),
+              description: row.description,
+              bootstrap: spec.bootstrap === true,
+            };
+          }),
+          custom_config_path: config.customConfigPath(),
+          warnings: [],
+        }),
+        configReveal: (key) => {
+          const spec = config.specOf(key);
+          if (!spec) return undefined;
+          appLog.info(`admin revealed configuration value for ${key}`);
+          return { key, value: config.reveal(key), default: spec.default };
+        },
+        configSet: (key, value) => {
+          const spec = config.specOf(key);
+          if (!spec) throw withStatus(400, `unknown configuration key ${JSON.stringify(key)} — only keys this stack describes can be set`);
+          if (config.isSetByEnvironment(key)) throw withStatus(409, `${key} is set by the environment variable ${envNameFor(key)}, which takes precedence over this screen — change it in your deployment configuration instead`);
+          let coerced: ConfigValue;
+          try {
+            coerced = coerceToShippedType(value, spec.default);
+          } catch (err) {
+            throw withStatus(400, `${key}: ${(err as Error).message}`);
+          }
+          try {
+            config.set(key, coerced);
+          } catch (err) {
+            throw withStatus(400, (err as Error).message);
+          }
+          appLog.info(`admin set configuration ${key}`);
+        },
+        configReset: (key) => {
+          const spec = config.specOf(key);
+          if (!spec) throw withStatus(400, `unknown configuration key ${JSON.stringify(key)}`);
+          return config.clear(key);
+        },
         catalogList: () => catalog.list(),
         backupNow,
         createUser: (username, password) => auth.createUser(username, password),
+        instanceSettings: () => ({ name: config.getString('operator.name'), contact_email: config.getString('operator.contact_email'), contact_url: config.getString('operator.contact_url') }),
+        setInstanceSettings: (s) => {
+          config.set('operator.name', s.name);
+          config.set('operator.contact_email', s.contact_email);
+          config.set('operator.contact_url', s.contact_url);
+        },
+        metrics: () => adminMetrics(),
+        databaseInfo: () => adminOps.databaseInfo(),
+        backupFile: () => {
+          const r = adminOps.backupNow();
+          return { file: r.file, name: basename(r.file), sizeBytes: r.sizeBytes };
+        },
+        setSchedule: (body) => adminOps.setSchedule(body as never),
+        testDestination: (destination) => adminOps.testDestination(destination),
+        browse: (path) => adminOps.browse(path),
+        stageRestore: (name) => adminOps.stageRestore(name),
+        logs: () => ({ level: appLog.currentLevel(), valid_levels: VALID_LEVELS, lines: appLog.recent() }),
+        setLogLevel: (level) => {
+          const set = appLog.setLevel(level);
+          appLog.info(`admin changed server log level to ${JSON.stringify(set)}`);
+          return set;
+        },
+        // No SMART relay in this stack (the product's #408 is not ported): honestly not configured.
+        relayConfig: () => ({ callback_url: '', configured: false, ready: false, public_url: '', poll_url: '', secret: '' }),
       },
     },
   });
@@ -519,8 +641,31 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     backupNow,
     close: () => {
       if (timer) clearInterval(timer);
+      if (scheduleTimer) clearInterval(scheduleTimer);
       server.close();
       stores.close();
     },
   };
+}
+
+/** Go's coerceToShippedType: the stored value keeps the type of the shipped default. */
+export function coerceToShippedType(value: unknown, shipped: ConfigValue): ConfigValue {
+  if (typeof shipped === 'boolean') {
+    if (typeof value === 'boolean') return value;
+    if (value === 'true' || value === 'false') return value === 'true';
+    throw new Error('expected true or false');
+  }
+  if (typeof shipped === 'number') {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (typeof value === 'boolean' || value === '' || !Number.isFinite(n)) throw new Error('expected a number');
+    return n;
+  }
+  if (Array.isArray(shipped)) {
+    if (Array.isArray(value)) return value.map(String);
+    if (typeof value === 'string') return value.split(',').map((v) => v.trim()).filter(Boolean);
+    throw new Error('expected a list');
+  }
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  throw new Error('expected text');
 }

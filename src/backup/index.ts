@@ -28,7 +28,7 @@
  *   - Restore STAGES: the backup is opened under its key, integrity-checked, exported to a fresh
  *     file under the TARGET key, and the caller swaps files. Never on top of a live database.
  */
-import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
@@ -41,12 +41,13 @@ const SUFFIX = '-yourphr-spike-backup.db';
  * gives the transaction a stable read view. This is sqlcipher_export()'s documented behavior,
  * spelled out.
  */
-function exportInto(db: InstanceType<typeof Database>, schema: string): void {
-  const objects = db
+function exportInto(db: InstanceType<typeof Database>, schema: string, only?: (table: string) => boolean): void {
+  const objects = (db
     .prepare(
-      "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END"
+      "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END"
     )
-    .all() as { type: string; name: string; sql: string }[];
+    .all() as { type: string; name: string; tbl_name: string; sql: string }[])
+    .filter((o) => !only || only(o.tbl_name));
 
   db.exec('BEGIN');
   try {
@@ -90,22 +91,39 @@ export interface BackupResult {
  */
 export function backupDatabase(
   repo: SqliteFhirRepository,
-  options: { destination: string; backupKey: string; maxBackups?: number; now?: Date }
+  options: {
+    destination: string;
+    backupKey: string;
+    maxBackups?: number;
+    now?: Date;
+    /**
+     * Other databases that belong in the same backup (yourphr#602): the app database with the
+     * accounts, sources, tokens and catalog. A backup of the records alone is not a backup of
+     * the instance. Table names must not collide — they do not, by construction.
+     */
+    alsoExport?: InstanceType<typeof Database>[];
+  }
 ): BackupResult {
   const backupKey = options.backupKey.trim();
   if (backupKey === '') {
     throw new Error('a backup key is required — backups are always encrypted (see backup.encryption.key)');
   }
   mkdirSync(options.destination, { recursive: true });
-  const file = join(options.destination, backupFileName(options.now ?? new Date()));
+  // Second-precision names collide when two backups are taken back to back (a backup, then the
+  // restore that backs up first); the second gets a suffix rather than an ATTACH onto the first.
+  const stem = backupFileName(options.now ?? new Date()).slice(0, -SUFFIX.length);
+  let file = join(options.destination, stem + SUFFIX);
+  for (let n = 2; existsSync(file); n++) file = join(options.destination, `${stem}-${n}${SUFFIX}`);
 
   // ATTACH cannot bind the KEY clause, so the key is escaped inline exactly as the repository
   // escapes its own key pragma. The filename IS bindable and stays bound.
-  repo.db.prepare(`ATTACH DATABASE ? AS backup KEY ${quoteKey(backupKey)}`).run(file);
-  try {
-    exportInto(repo.db, 'backup');
-  } finally {
-    repo.db.prepare('DETACH DATABASE backup').run();
+  for (const db of [repo.db, ...(options.alsoExport ?? [])]) {
+    db.prepare(`ATTACH DATABASE ? AS backup KEY ${quoteKey(backupKey)}`).run(file);
+    try {
+      exportInto(db, 'backup');
+    } finally {
+      db.prepare('DETACH DATABASE backup').run();
+    }
   }
 
   const pruned: string[] = [];
@@ -121,12 +139,20 @@ export function backupDatabase(
 }
 
 /** Backups in `dir`, newest first (the date-first names make name order time order). */
-export function listBackups(dir: string): { name: string; sizeBytes: number }[] {
+export function listBackups(dir: string): { name: string; sizeBytes: number; modified: string }[] {
+  if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith(SUFFIX))
     .sort()
     .reverse()
-    .map((name) => ({ name, sizeBytes: statSync(join(dir, name)).size }));
+    .map((name) => {
+      const st = statSync(join(dir, name));
+      return { name, sizeBytes: st.size, modified: st.mtime.toISOString() };
+    });
+}
+
+export function isBackupFileName(name: string): boolean {
+  return name.endsWith(SUFFIX) && !name.includes('/') && !name.includes('\\') && !name.includes('..');
 }
 
 export interface RestoreResult {
@@ -143,7 +169,9 @@ export function stageRestore(
   backupFile: string,
   backupKey: string,
   stagedFile: string,
-  targetKey: string
+  targetKey: string,
+  /** Which tables belong in this staged file — a backup holds two databases' worth (see backupDatabase). */
+  only?: (table: string) => boolean
 ): RestoreResult {
   const db = new Database(backupFile, { readonly: false });
   try {
@@ -160,7 +188,7 @@ export function stageRestore(
     }
     db.prepare(`ATTACH DATABASE ? AS staged KEY ${quoteKey(targetKey)}`).run(stagedFile);
     try {
-      exportInto(db, 'staged');
+      exportInto(db, 'staged', only);
     } finally {
       db.prepare('DETACH DATABASE staged').run();
     }
