@@ -41,7 +41,7 @@ import { SqliteJobsProvider } from './framework/providers/SqliteJobsProvider.js'
 import { NullSourceClientProvider, type BaseSourceClientProvider } from './app/providers/BaseSourceClientProvider.js';
 export { sourceShape, backgroundJobShape };
 import { EventBus } from './events/index.js';
-import { FavoriteStore } from './favorites/index.js';
+import { SqliteFavoritesProvider } from './app/providers/SqliteFavoritesProvider.js';
 import { providerRequiresLegalConsent } from './account/index.js';
 import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
@@ -151,7 +151,6 @@ export interface Stores {
   jobs: JobsManager;
   /** The per-member event stream the Sources page follows. */
   events: EventBus;
-  favorites: FavoriteStore;
   /** The access log (yourphr#614) — required; refuses to boot unhealthy. */
   audit: AuditManager;
   /** Backups (yourphr#615): schedule, health, staged restore over optional storage. */
@@ -209,7 +208,6 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   runMigrations(db, APP_MIGRATIONS);
 
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
-  const favorites = new FavoriteStore(db);
   // 3. Accounts and sessions as managers over providers (yourphr#611): user storage in the app
   // database, passwords by the scrypt provider, the factor list from configuration.
   const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider());
@@ -228,7 +226,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('audit.provider'), db)));
   engine.register('users', users);
   engine.register('sessions', sessions);
-  const recordsManager = new RecordsManager(engine, recordsProvider);
+  const recordsManager = new RecordsManager(engine, recordsProvider, new SqliteFavoritesProvider(db));
   engine.register('records', recordsManager);
   // Backups (yourphr#615): the coordinator over OPTIONAL storage; the records door is the exporter.
   engine.register('backups', new BackupManager(engine, backupProviderFor(config.getString('backup.storage.provider')), { dataDir, exporter: recordsManager, alsoExport: [db] }));
@@ -252,7 +250,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   records.sourceDisplay = (sourceId) => sources.displayOf(sourceId);
 
   return {
-    config, db, dbKey, users, sessions, catalog, sources, jobs, events, favorites, audit, backups, engine, records, recordsProvider,
+    config, db, dbKey, users, sessions, catalog, sources, jobs, events, audit, backups, engine, records, recordsProvider,
     close: async () => {
       await engine.shutdown();
       db.close();
@@ -279,7 +277,7 @@ export interface App {
 
 export async function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): Promise<App> {
   const stores = await openStores(dataDir, options.env ?? process.env);
-  const { config, users, sessions, catalog, sources, favorites, audit, backups, engine, records, events } = stores;
+  const { config, users, sessions, catalog, sources, audit, backups, engine, records, events } = stores;
   /** The worker and the migration tool act for an account as a named system principal. */
   const systemCtx = (name: string, username: string): ApiContext => ApiContext.system(name, username, engine);
 
@@ -387,16 +385,9 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           const username = ctx.username;
           await sources.removeAll(ctx);
           await records.removeAll(ctx);
-          for (const fav of favorites.list(username, 'Practitioner')) favorites.remove(username, fav);
           await audit.removeForUser(ctx);
           await users.deleteSelf(ctx);
         },
-      },
-      favorites: {
-        list: (username, resourceType) => favorites.list(username, resourceType),
-        add: (username, fav) => favorites.add(username, fav),
-        remove: (username, fav) => favorites.remove(username, fav),
-        supports: (resourceType) => FavoriteStore.supports(resourceType),
       },
       admin: {
         configSnapshot: () => ({

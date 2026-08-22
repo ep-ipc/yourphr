@@ -92,12 +92,6 @@ export interface ServerModules {
     deleteAccount: (ctx: ApiContext) => Promise<void>;
   };
   /** GET/POST/DELETE /api/secure/user/favorites (yourphr#595): the caller's starred practitioners. */
-  favorites?: {
-    list: (username: string, resourceType: string) => unknown[];
-    add: (username: string, fav: { source_id: string; resource_type: string; resource_id: string }) => void;
-    remove: (username: string, fav: { source_id: string; resource_type: string; resource_id: string }) => boolean;
-    supports: (resourceType: string) => boolean;
-  };
   /** Admin surface (yourphr#582): gate decides who counts as the operator. */
   /** What an anonymous caller may know about this instance (GET /api/instance/public). */
   publicInstance?: () => Record<string, unknown>;
@@ -729,35 +723,19 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
       }
-      if (modules?.favorites && url.pathname === '/api/secure/user/favorites') {
-        const favorites = modules.favorites;
+      // Favourites (yourphr#616): an annotation on a record, through the Records door.
+      if (url.pathname === '/api/secure/user/favorites') {
+        const records = engine.managers.records;
         if (req.method === 'GET') {
-          const resourceType = url.searchParams.get('resource_type') ?? '';
-          if (!favorites.supports(resourceType)) {
-            send(res, 400, {success: false, error: 'only Practitioner resources are supported'});
-            return;
-          }
-          send(res, 200, {success: true, data: favorites.list(sessionUser, resourceType)});
+          send(res, 200, {success: true, data: await records.favorites(ctx, url.searchParams.get('resource_type') ?? '')});
           return;
         }
         if (req.method === 'POST' || req.method === 'DELETE') {
           const body = await readJsonBody(req);
           const str = (k: string): string => (typeof body?.[k] === 'string' ? (body[k] as string) : '');
           const fav = {source_id: str('source_id'), resource_type: str('resource_type'), resource_id: str('resource_id')};
-          if (!fav.source_id || !fav.resource_type || !fav.resource_id) {
-            send(res, 400, {success: false, error: 'invalid request payload'});
-            return;
-          }
-          if (!favorites.supports(fav.resource_type)) {
-            send(res, 400, {success: false, error: 'only Practitioner resources are supported'});
-            return;
-          }
-          if (req.method === 'POST') {
-            favorites.add(sessionUser, fav);
-            send(res, 200, {success: true, data: fav});
-          } else {
-            send(res, 200, {success: true, data: {removed: favorites.remove(sessionUser, fav)}});
-          }
+          if (req.method === 'POST') send(res, 200, {success: true, data: await records.addFavorite(ctx, fav)});
+          else send(res, 200, {success: true, data: {removed: await records.removeFavorite(ctx, fav)}});
           return;
         }
       }

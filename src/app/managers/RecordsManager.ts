@@ -15,6 +15,7 @@ import type { SearchRequest, WithId } from '@medplum/core';
 import { BaseManager, type BackupData } from '../../framework/BaseManager.js';
 import type { Engine } from '../../framework/Engine.js';
 import { ApiError, type ApiContext } from '../../framework/ApiContext.js';
+import type { BaseFavoritesProvider, Favorite } from '../providers/BaseFavoritesProvider.js';
 import type { BaseRecordsProvider, RecordsWriter, StoredRecord } from '../providers/BaseRecordsProvider.js';
 import { reconcileConditions, type ClassifiedCondition, type InputResource } from '../../conditions/index.js';
 import { classifyAllergies, type ClassifiedAllergy } from '../../allergies/index.js';
@@ -59,12 +60,13 @@ export class RecordsManager extends BaseManager {
   /** Maps a source id to its display name; '' when unknown — never invent. Set by the app until Sources is a manager. */
   sourceDisplay: (sourceId: string) => Promise<string> | string = () => '';
 
-  constructor(engine: Engine, private readonly provider: BaseRecordsProvider) {
+  constructor(engine: Engine, private readonly provider: BaseRecordsProvider, private readonly favoritesProvider?: BaseFavoritesProvider) {
     super(engine);
   }
 
   override async initialize(config: Record<string, unknown> = {}): Promise<void> {
     await this.provider.initialize();
+    await this.favoritesProvider?.initialize();
     await super.initialize(config);
   }
 
@@ -228,8 +230,45 @@ export class RecordsManager extends BaseManager {
   async removeAll(ctx: ApiContext): Promise<number> {
     const userId = this.who(ctx);
     const n = await this.provider.removeAll(userId);
+    await this.favoritesProvider?.removeAll(userId);
     await this.provider.release(userId);
     return n;
+  }
+
+  // --- favourites (yourphr#616): an annotation on a record, through the same door ---
+
+  /** Only Practitioner is starred — the one kind the UI stars, so a typo cannot star the world. */
+  static supportsFavorites(resourceType: string): boolean {
+    return resourceType === 'Practitioner';
+  }
+
+  private favorites_(): BaseFavoritesProvider {
+    if (!this.favoritesProvider) throw new ApiError(501, 'favourites are not available on this instance');
+    return this.favoritesProvider;
+  }
+
+  private checkFavorite(fav: Favorite): void {
+    if (!fav.source_id || !fav.resource_type || !fav.resource_id) throw new ApiError(400, 'invalid request payload');
+    if (!RecordsManager.supportsFavorites(fav.resource_type)) throw new ApiError(400, 'only Practitioner resources are supported');
+  }
+
+  async favorites(ctx: ApiContext, resourceType: string): Promise<Favorite[]> {
+    const userId = this.who(ctx);
+    if (!RecordsManager.supportsFavorites(resourceType)) throw new ApiError(400, 'only Practitioner resources are supported');
+    return this.favorites_().list(userId, resourceType);
+  }
+
+  async addFavorite(ctx: ApiContext, fav: Favorite, at = new Date()): Promise<Favorite> {
+    const userId = this.who(ctx);
+    this.checkFavorite(fav);
+    await this.favorites_().add(userId, fav, at);
+    return fav;
+  }
+
+  async removeFavorite(ctx: ApiContext, fav: Favorite): Promise<boolean> {
+    const userId = this.who(ctx);
+    this.checkFavorite(fav);
+    return this.favorites_().remove(userId, fav);
   }
 
   // --- writes: the worker and the migration tool ---

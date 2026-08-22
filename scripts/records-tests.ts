@@ -18,7 +18,7 @@ import { Engine } from '../src/framework/Engine.js';
 import { ApiContext, ApiError } from '../src/framework/ApiContext.js';
 import { RecordsManager, type AggregationRow } from '../src/app/managers/RecordsManager.js';
 import { SqliteRecordsProvider } from '../src/app/providers/SqliteRecordsProvider.js';
-import { FavoriteStore } from '../src/favorites/index.js';
+import { SqliteFavoritesProvider } from '../src/app/providers/SqliteFavoritesProvider.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -111,8 +111,9 @@ async function main(): Promise<void> {
   await repo.createResource({ resourceType: 'Condition', id: 'c1', code: { text: 'Sprain' }, recordedDate: '2024-07-01' } as Resource);
   await other.createResource(obs('o9', '718-7', 'Hemoglobin', '2025-01-01'));
   // The door (yourphr#609): the typed query and the recent list are Records-manager methods over the provider.
+  const app = new Database(join(dir, 'app.db'));
   const engine = new Engine();
-  engine.register('records', new RecordsManager(engine, new SqliteRecordsProvider(file, undefined)));
+  engine.register('records', new RecordsManager(engine, new SqliteRecordsProvider(file, undefined), new SqliteFavoritesProvider(app)));
   await engine.initialize();
   const records = engine.managers.records;
   const ctx = ApiContext.from({ username: 'alice', role: 'user' }, engine);
@@ -140,17 +141,19 @@ async function main(): Promise<void> {
     recent.map((r) => `${r.source_resource_type}/${r.source_resource_id}@${r.date}`).join(',') === 'Observation/o4@2024-09-10,Condition/c1@2024-07-01,DiagnosticReport/d2@2024-06-11'
       && recent[0]?.title === 'Blood pressure' && recent[0].source_id === 'source-1');
 
-  const app = new Database(join(dir, 'app.db'));
-  const favorites = new FavoriteStore(app);
-  favorites.add('alice', { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-1' });
-  favorites.add('alice', { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-1' }); // twice: still one
-  favorites.add('bob', { source_id: 'source-9', resource_type: 'Practitioner', resource_id: 'dr-2' });
+  // Favourites through the same door (yourphr#616).
+  const favAlice = ApiContext.from({ username: 'alice', role: 'user' }, engine);
+  const favBob = ApiContext.from({ username: 'bob', role: 'user' }, engine);
+  const dr1 = { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-1' };
+  await records.addFavorite(favAlice, dr1);
+  await records.addFavorite(favAlice, dr1); // twice: still one
+  await records.addFavorite(favBob, { source_id: 'source-9', resource_type: 'Practitioner', resource_id: 'dr-2' });
   check('favourites are per user and idempotent',
-    favorites.list('alice', 'Practitioner').map((f) => f.resource_id).join(',') === 'dr-1' && favorites.list('bob', 'Practitioner').length === 1);
+    (await records.favorites(favAlice, 'Practitioner')).map((f) => f.resource_id).join(',') === 'dr-1' && (await records.favorites(favBob, 'Practitioner')).length === 1);
+  let patientRefused = false;
+  try { await records.favorites(favAlice, 'Patient'); } catch (err) { patientRefused = err instanceof ApiError && err.status === 400; }
   check('removing one reports whether it was there; Practitioner is the only kind accepted',
-    favorites.remove('alice', { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-1' }) === true
-      && favorites.remove('alice', { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-1' }) === false
-      && FavoriteStore.supports('Practitioner') && !FavoriteStore.supports('Patient'));
+    (await records.removeFavorite(favAlice, dr1)) === true && (await records.removeFavorite(favAlice, dr1)) === false && RecordsManager.supportsFavorites('Practitioner') && patientRefused);
 
   app.close();
   await engine.shutdown();

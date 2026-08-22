@@ -4,6 +4,7 @@ import { Engine } from '../../../framework/Engine.js';
 import { ApiContext, ApiError } from '../../../framework/ApiContext.js';
 import { RecordsManager, type AggregationRow } from '../RecordsManager.js';
 import { FakeRecordsProvider } from '../../providers/__tests__/FakeRecordsProvider.js';
+import { FakeFavoritesProvider } from '../../providers/__tests__/FakeFavoritesProvider.js';
 
 const LOINC = 'http://loinc.org';
 const SNOMED = 'http://snomed.info/sct';
@@ -11,6 +12,7 @@ const obs = (id: string, code: string, display: string, date: string, system = L
   ({ resourceType: 'Observation', id, status: 'final', code: { coding: [{ system, code, display }] }, effectiveDateTime: date } as Resource);
 
 let provider: FakeRecordsProvider;
+let favorites: FakeFavoritesProvider;
 let engine: Engine;
 let records: RecordsManager;
 let alice: ApiContext;
@@ -18,8 +20,9 @@ let bob: ApiContext;
 
 beforeEach(async () => {
   provider = new FakeRecordsProvider();
+  favorites = new FakeFavoritesProvider();
   engine = new Engine();
-  records = new RecordsManager(engine, provider);
+  records = new RecordsManager(engine, provider, favorites);
   engine.register('records', records);
   await engine.initialize();
   alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);
@@ -125,5 +128,27 @@ describe('RecordsManager — the one door, scoped to whoever is asking', () => {
     await records.restore({ manager: 'backups', takenAt: 'now', files: ['/dest/fake.db'] }, { key: 'travel-key' });
     expect(provider.staged).toEqual([{ backupFile: '/dest/fake.db', backupKey: 'travel-key' }]);
     expect(await records.integrityOk()).toBe(true);
+  });
+
+  it('favourites go through the same door: owner-scoped, Practitioner only, idempotent, gone with the account', async () => {
+    expect(favorites.initialized).toBe(true);
+    const fav = { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-a' };
+    expect(await records.addFavorite(alice, fav)).toEqual(fav);
+    await records.addFavorite(alice, fav);
+    await records.addFavorite(bob, { ...fav, resource_id: 'dr-b' });
+    expect(await records.favorites(alice, 'Practitioner')).toEqual([fav]);
+    expect(await records.favorites(bob, 'Practitioner')).toEqual([{ ...fav, resource_id: 'dr-b' }]);
+    await expect(records.favorites(alice, 'Patient')).rejects.toMatchObject({ status: 400, message: 'only Practitioner resources are supported' });
+    await expect(records.addFavorite(alice, { ...fav, resource_type: 'Patient' })).rejects.toMatchObject({ status: 400 });
+    await expect(records.addFavorite(alice, { ...fav, resource_id: '' })).rejects.toMatchObject({ status: 400, message: 'invalid request payload' });
+    await expect(records.favorites(ApiContext.anonymous(engine), 'Practitioner')).rejects.toMatchObject({ status: 401 });
+    expect(await records.removeFavorite(bob, fav)).toBe(false);
+    expect(await records.removeFavorite(alice, fav)).toBe(true);
+    await records.addFavorite(alice, fav);
+    await records.removeAll(alice);
+    expect(await records.favorites(alice, 'Practitioner')).toEqual([]);
+    expect(await records.favorites(bob, 'Practitioner')).toHaveLength(1);
+    const bare = new RecordsManager(new Engine(), new FakeRecordsProvider());
+    await expect(bare.favorites(alice, 'Practitioner')).rejects.toMatchObject({ status: 501 });
   });
 });
