@@ -21,9 +21,13 @@ import {createServer, IncomingMessage, ServerResponse} from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
 import {dirname, extname, join, resolve, sep} from 'node:path';
 import type {Resource, ResourceType} from '@medplum/fhirtypes';
-import {SqliteFhirRepository} from './SqliteFhirRepository.js';
+import type {SqliteFhirRepository} from './SqliteFhirRepository.js';
 import type {AuthStore} from './auth/index.js';
 import {sseFrame, type EventBus} from './events/index.js';
+import {Engine} from './framework/Engine.js';
+import {ApiContext, ApiError} from './framework/ApiContext.js';
+import {RecordsManager} from './app/managers/RecordsManager.js';
+import {SqliteRecordsProvider} from './app/providers/SqliteRecordsProvider.js';
 
 /**
  * The Go cookie name, on purpose: a browser that moves between the two stacks during the cut-over
@@ -57,24 +61,23 @@ export interface ServerAuth {
    * (yourphr#541): the user id stops being server configuration and becomes something each request
    * proves with a session — the isolation #537 demonstrated, enforced on the wire.
    */
-  repoForUser: (username: string) => SqliteFhirRepository;
 }
 
 export interface ServerModules {
   /** GET /api/secure/summary/ips — the IPS document for the caller (yourphr#577). */
-  ips?: (repo: SqliteFhirRepository) => Promise<unknown>;
+  ips?: (ctx: ApiContext) => Promise<unknown>;
   /** GET /api/secure/resource/provenance/:type/:id (yourphr#579). */
-  provenanceFor?: (repo: SqliteFhirRepository, resourceType: string, id: string) => unknown;
+  provenanceFor?: (ctx: ApiContext, resourceType: string, id: string) => Promise<unknown>;
   /** GET /api/secure/medications/reconciled (yourphr#580). */
-  medications?: (repo: SqliteFhirRepository) => Promise<unknown>;
+  medications?: (ctx: ApiContext) => Promise<unknown>;
   /** The dashboard and record pages (yourphr#595): classified lists, recent activity, the typed query. */
   records?: {
-    recent: (repo: SqliteFhirRepository, limit: number) => unknown[];
-    conditions: (repo: SqliteFhirRepository) => unknown[];
-    allergies: (repo: SqliteFhirRepository) => unknown[];
-    immunizations: (repo: SqliteFhirRepository) => unknown[];
-    /** Throws on a malformed query — the caller gets 400 with the reason. */
-    query: (repo: SqliteFhirRepository, body: Record<string, unknown>) => unknown[];
+    recent: (ctx: ApiContext, limit: number) => Promise<unknown[]>;
+    conditions: (ctx: ApiContext) => Promise<unknown[]>;
+    allergies: (ctx: ApiContext) => Promise<unknown[]>;
+    immunizations: (ctx: ApiContext) => Promise<unknown[]>;
+    /** Throws ApiError on a malformed query. */
+    query: (ctx: ApiContext, body: Record<string, unknown>) => Promise<unknown[]>;
   };
   /** The provider catalog (yourphr#603): admin CRUD, the sandbox list, authorize + connect. */
   catalog?: {
@@ -102,7 +105,7 @@ export interface ServerModules {
     revokeConsent: (username: string) => unknown;
     changePassword: (username: string, current: string, next: string) => { ok: true; token?: string } | { ok: false; status: number; error: string };
     signOutEverywhere: (username: string) => void;
-    deleteAccount: (username: string) => void;
+    deleteAccount: (ctx: ApiContext) => Promise<void>;
   };
   /** GET/POST/DELETE /api/secure/user/favorites (yourphr#595): the caller's starred practitioners. */
   favorites?: {
@@ -126,13 +129,13 @@ export interface ServerModules {
   sources?: {
     list: (username: string) => unknown[];
     get: (username: string, id: string) => unknown | undefined;
-    summary: (username: string, id: string, repo: SqliteFhirRepository) => unknown | undefined;
+    summary: (ctx: ApiContext, id: string) => Promise<unknown | undefined>;
     /** Resolves to Go's {source, data} or undefined; rejects when the sync itself failed. */
     sync: (username: string, id: string) => Promise<{ source: unknown; data: unknown } | undefined>;
     disconnect: (username: string, id: string) => boolean;
-    removeData: (username: string, id: string, repo: SqliteFhirRepository) => number | undefined;
-    remove: (username: string, id: string, repo: SqliteFhirRepository) => number | undefined;
-    exportBundle: (username: string, id: string, repo: SqliteFhirRepository) => { filename: string; bundle: unknown } | undefined;
+    removeData: (ctx: ApiContext, id: string) => Promise<number | undefined>;
+    remove: (ctx: ApiContext, id: string) => Promise<number | undefined>;
+    exportBundle: (ctx: ApiContext, id: string) => Promise<{ filename: string; bundle: unknown } | undefined>;
     connectable: () => unknown[];
     events: EventBus;
   };
@@ -145,7 +148,7 @@ export interface ServerModules {
     configSet: (key: string, value: unknown) => void;
     configReset: (key: string) => boolean;
     catalogList: () => unknown;
-    backupNow: () => unknown;
+    backupNow: () => Promise<unknown>;
     createUser: (username: string, password: string, role?: string) => void;
     /** The Users page (yourphr#604). */
     listUsers: () => unknown[];
@@ -153,13 +156,13 @@ export interface ServerModules {
     instanceSettings: () => { name: string; contact_email: string; contact_url: string };
     setInstanceSettings: (s: { name: string; contact_email: string; contact_url: string }) => void;
     metrics: () => unknown;
-    databaseInfo: () => unknown;
+    databaseInfo: () => Promise<unknown>;
     /** Returns the file path of a fresh backup for streaming. */
-    backupFile: () => { file: string; name: string; sizeBytes: number };
+    backupFile: () => Promise<{ file: string; name: string; sizeBytes: number }>;
     setSchedule: (body: Record<string, unknown>) => unknown;
     testDestination: (destination: string) => unknown;
     browse: (path: string) => unknown;
-    stageRestore: (backupName: string) => unknown;
+    stageRestore: (backupName: string) => Promise<unknown>;
     logs: () => { level: string; valid_levels: string[]; lines: string[] };
     setLogLevel: (level: string) => string;
     relayConfig: () => unknown;
@@ -168,7 +171,10 @@ export interface ServerModules {
 
 export interface ServerOptions {
   /** The pinned single-user repository — used only when `auth` is absent (the read-only harnesses). */
-  repo: SqliteFhirRepository;
+  /** The composition root (yourphr#608). When absent, a bare engine is built over `repo` for the contract harnesses. */
+  engine?: Engine;
+  /** Legacy: the contract harnesses hand one repository in and test reads, not auth. */
+  repo?: SqliteFhirRepository;
   /** Which source every record is attributed to. See the note on sourceId below. */
   sourceId?: string;
   /**
@@ -340,12 +346,24 @@ function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | u
 }
 
 export function createYourPhrServer(options: ServerOptions) {
-  const sourceId = options.sourceId ?? 'spike';
   const auth = options.auth;
+  // The engine: the assembled one, or — for the contract harnesses that hand a repository in — a
+  // bare one with a Records manager over that handle. Either way every record goes through the door.
+  const engineReady: Promise<Engine> = options.engine
+    ? Promise.resolve(options.engine)
+    : (async () => {
+        if (!options.repo) throw new Error('createYourPhrServer needs an engine or a repository');
+        const e = new Engine();
+        e.register('records', new RecordsManager(e, SqliteRecordsProvider.overRepository(options.repo)));
+        await e.initialize();
+        return e;
+      })();
+  const legacyUser = options.repo?.userId ?? '';
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
+      const engine = await engineReady;
 
       // GET /healthz — liveness/readiness for the orchestrator (yourphr#587). No session, no data:
       // it says the process is up and serving, nothing about who is asking.
@@ -405,8 +423,8 @@ export function createYourPhrServer(options: ServerOptions) {
       // The session gate: with auth wired, every /api/secure/* request proves who it is, and is
       // served by THAT user's repository. 401 for no token, a tampered token, an expired one, or a
       // token whose generation the account has moved past (a password change ends it mid-flight).
-      let repo = options.repo;
-      let sessionUser = '';
+      let sessionUser = legacyUser;
+      let ctx = ApiContext.from({username: legacyUser, role: 'user'}, engine);
       if (auth && url.pathname.startsWith('/api/secure/')) {
         // Bearer first (API clients, the harnesses), else the HttpOnly cookie (the browser).
         const header = req.headers['authorization'] ?? '';
@@ -421,8 +439,9 @@ export function createYourPhrServer(options: ServerOptions) {
           res.setHeader('X-Renewed-Token', session.renewed);
           res.setHeader('Set-Cookie', sessionCookie(session.renewed, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
         }
-        repo = auth.repoForUser(session.username);
         sessionUser = session.username;
+        // Who is asking, for every manager call this request makes (yourphr#608).
+        ctx = ApiContext.from({username: session.username, role: auth.store.roleOf(session.username) ?? 'user'}, engine);
       }
 
       // The access log (yourphr#596): a listed GET by a signed-in user is an access of their record.
@@ -478,7 +497,7 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/account/me' && req.method === 'DELETE') {
-          account.deleteAccount(sessionUser);
+          await account.deleteAccount(ctx);
           res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
           send(res, 200, {success: true});
           return;
@@ -666,12 +685,12 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
           if (!action && req.method === 'DELETE') {
-            const rows = src.remove(sessionUser, id, repo);
+            const rows = await src.remove(ctx, id);
             rows === undefined ? notFound() : send(res, 200, {success: true, data: rows});
             return;
           }
           if (action === 'summary' && req.method === 'GET') {
-            const summary = src.summary(sessionUser, id, repo);
+            const summary = await src.summary(ctx, id);
             summary === undefined ? notFound() : send(res, 200, {success: true, data: summary});
             return;
           }
@@ -691,12 +710,12 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
           if (action === 'remove-data' && req.method === 'POST') {
-            const rows = src.removeData(sessionUser, id, repo);
+            const rows = await src.removeData(ctx, id);
             rows === undefined ? notFound() : send(res, 200, {success: true, data: rows});
             return;
           }
           if (action === 'export' && req.method === 'GET') {
-            const exported = src.exportBundle(sessionUser, id, repo);
+            const exported = await src.exportBundle(ctx, id);
             if (exported === undefined) {
               notFound();
               return;
@@ -713,12 +732,12 @@ export function createYourPhrServer(options: ServerOptions) {
         }
       }
       if (modules?.ips && url.pathname === '/api/secure/summary/ips' && req.method === 'GET') {
-        send(res, 200, {success: true, data: await modules.ips(repo)});
+        send(res, 200, {success: true, data: await modules.ips(ctx)});
         return;
       }
       const provMatch = url.pathname.match(/^\/api\/secure\/resource\/provenance\/([^/]+)\/([^/]+)$/);
       if (modules?.provenanceFor && provMatch && req.method === 'GET') {
-        const p = modules.provenanceFor(repo, provMatch[1]!, provMatch[2]!);
+        const p = await modules.provenanceFor(ctx, provMatch[1]!, provMatch[2]!);
         if (!p) {
           send(res, 404, {success: false, error: 'not found'});
           return;
@@ -727,7 +746,7 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
       if (modules?.medications && url.pathname === '/api/secure/medications/reconciled' && req.method === 'GET') {
-        send(res, 200, {success: true, data: await modules.medications(repo)});
+        send(res, 200, {success: true, data: await modules.medications(ctx)});
         return;
       }
 
@@ -736,19 +755,19 @@ export function createYourPhrServer(options: ServerOptions) {
         const records = modules.records;
         if (url.pathname === '/api/secure/resources/recent' && req.method === 'GET') {
           const limit = Number(url.searchParams.get('limit') ?? 5);
-          send(res, 200, {success: true, data: records.recent(repo, Number.isInteger(limit) && limit > 0 ? limit : 5)});
+          send(res, 200, {success: true, data: await records.recent(ctx, Number.isInteger(limit) && limit > 0 ? limit : 5)});
           return;
         }
         if (url.pathname === '/api/secure/conditions/reconciled' && req.method === 'GET') {
-          send(res, 200, {success: true, data: records.conditions(repo)});
+          send(res, 200, {success: true, data: await records.conditions(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/allergies/classified' && req.method === 'GET') {
-          send(res, 200, {success: true, data: records.allergies(repo)});
+          send(res, 200, {success: true, data: await records.allergies(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/immunizations/classified' && req.method === 'GET') {
-          send(res, 200, {success: true, data: records.immunizations(repo)});
+          send(res, 200, {success: true, data: await records.immunizations(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/query' && req.method === 'POST') {
@@ -758,9 +777,9 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
           try {
-            send(res, 200, {success: true, data: records.query(repo, body)});
+            send(res, 200, {success: true, data: await records.query(ctx, body)});
           } catch (err) {
-            send(res, 400, {success: false, error: (err as Error).message});
+            send(res, err instanceof ApiError ? err.status : 400, {success: false, error: (err as Error).message});
           }
           return;
         }
@@ -879,12 +898,12 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/admin/database' && req.method === 'GET') {
-          send(res, 200, {success: true, data: admin.databaseInfo()});
+          send(res, 200, {success: true, data: await admin.databaseInfo()});
           return;
         }
         if (url.pathname === '/api/secure/admin/database/backup' && req.method === 'POST') {
           try {
-            const b = admin.backupFile();
+            const b = await admin.backupFile();
             send(res, 200, {success: true, data: {filename: b.name, path: b.file, destination: dirname(b.file), size_bytes: b.sizeBytes}});
           } catch (err) {
             send(res, 400, {success: false, error: (err as Error).message});
@@ -894,7 +913,7 @@ export function createYourPhrServer(options: ServerOptions) {
         if (url.pathname === '/api/secure/admin/database/backup/download' && req.method === 'POST') {
           let b: { file: string; name: string; sizeBytes: number };
           try {
-            b = admin.backupFile();
+            b = await admin.backupFile();
           } catch (err) {
             send(res, 400, {success: false, error: (err as Error).message});
             return;
@@ -941,7 +960,7 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
           try {
-            send(res, 200, {success: true, data: admin.stageRestore(name)});
+            send(res, 200, {success: true, data: await admin.stageRestore(name)});
           } catch (err) {
             const message = (err as Error).message;
             send(res, message.startsWith('no such backup') ? 404 : 400, {success: false, error: message});
@@ -967,7 +986,7 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/admin/backup' && req.method === 'POST') {
-          send(res, 200, {success: true, data: modules.admin.backupNow()});
+          send(res, 200, {success: true, data: await modules.admin.backupNow()});
           return;
         }
         if (url.pathname === '/api/secure/admin/users' && req.method === 'POST') {
@@ -985,64 +1004,40 @@ export function createYourPhrServer(options: ServerOptions) {
         }
       }
 
-      // GET /api/secure/resource/fhir?sourceResourceType=Condition
+      // The record routes go through the one door (yourphr#609). A record with no source
+      // attribution is shown under the legacy `sourceId` the contract harnesses pin.
+      const fallbackSource = options.sourceId ?? 'spike';
+      const attributed = (row: Record<string, unknown>): Record<string, unknown> => (row['source_id'] === '' ? {...row, source_id: fallbackSource} : row);
+
+      // GET /api/secure/resource/fhir?sourceResourceType=Condition[&sourceID=…]
       if (url.pathname === '/api/secure/resource/fhir' && req.method === 'GET') {
         const resourceType = url.searchParams.get('sourceResourceType');
         if (!resourceType) {
           send(res, 400, {success: false, error: 'sourceResourceType is required'});
           return;
         }
-        const bundle = await repo.search({
-          resourceType: resourceType as ResourceType,
-          count: Number(url.searchParams.get('limit') ?? 100000),
-          total: 'accurate',
+        const rows = await engine.managers.records.list(ctx, resourceType, {
+          limit: Number(url.searchParams.get('limit') ?? 100000),
+          sourceId: url.searchParams.get('sourceID') ?? undefined,
         });
-        // Which provider each record came from is stored per row (yourphr#594); ?sourceID narrows
-        // the list to one provider, which is how /explore/:source reads a single source's records.
-        const sourceOf = new Map(
-          (repo.db.prepare('SELECT id, source_id FROM resources WHERE resource_type = ? AND user_id = ?').all(resourceType, repo.userId ?? '') as {id: string; source_id: string}[])
-            .map((r) => [r.id, r.source_id === '' ? sourceId : r.source_id])
-        );
-        const wanted = url.searchParams.get('sourceID');
-        send(res, 200, {
-          success: true,
-          data: (bundle.entry ?? [])
-            .map((entry) => entry.resource as Resource)
-            .filter((r) => !wanted || sourceOf.get(r.id ?? '') === wanted)
-            .map((r) => toResourceFhir(r, sourceOf.get(r.id ?? '') ?? sourceId)),
-        });
+        send(res, 200, {success: true, data: rows.map(attributed)});
         return;
       }
 
       // GET /api/secure/resource/fhir/:sourceId/:resourceId — the detail page
       const detail = url.pathname.match(/^\/api\/secure\/resource\/fhir\/([^/]+)\/([^/]+)$/);
       if (detail && req.method === 'GET') {
-        const resourceId = detail[2]!;
-        // YourPHR addresses a record by (source, id) without naming the type, so the type has to be
-        // found. A FHIR-native store addresses by (type, id) — another seam the adapter absorbs.
-        const row = repo.db
-          .prepare('SELECT resource_type, source_id, content FROM resources WHERE id = ? AND user_id = ? AND deleted = 0')
-          .get(resourceId, repo.userId ?? '') as {resource_type: string; source_id: string; content: string} | undefined;
-        if (!row) {
-          send(res, 404, {success: false, error: 'not found'});
-          return;
-        }
-        send(res, 200, {success: true, data: toResourceFhir(JSON.parse(row.content), row.source_id === '' ? sourceId : row.source_id)});
+        send(res, 200, {success: true, data: attributed(await engine.managers.records.detail(ctx, detail[2]!))});
         return;
       }
 
       // GET /api/secure/summary — what the dashboard counts from
       if (url.pathname === '/api/secure/summary' && req.method === 'GET') {
-        const rows = repo.db
-          .prepare(
-            'SELECT resource_type, COUNT(*) AS count FROM resources WHERE deleted = 0 AND user_id = ? GROUP BY resource_type'
-          )
-          .all(repo.userId ?? '') as {resource_type: string; count: number}[];
         send(res, 200, {
           success: true,
           data: {
-            resource_type_counts: rows,
-            sources: options.modules?.sources ? options.modules.sources.list(sessionUser) : [{id: sourceId, display: 'spike'}],
+            resource_type_counts: await engine.managers.records.countsByType(ctx),
+            sources: options.modules?.sources ? options.modules.sources.list(sessionUser) : [{id: fallbackSource, display: 'spike'}],
             patients: [],
           },
         });
@@ -1056,7 +1051,12 @@ export function createYourPhrServer(options: ServerOptions) {
 
       send(res, 404, {success: false, error: 'not found'});
     } catch (err) {
-      // Errors reach the caller rather than vanishing — the lesson of the product repo's #527.
+      // The one error boundary: a guard's refusal in the envelope, everything else a 500 that
+      // reaches the caller rather than vanishing — the lesson of the product repo's #527.
+      if (err instanceof ApiError) {
+        send(res, err.status, {success: false, error: err.message, ...err.extra});
+        return;
+      }
       send(res, 500, {success: false, error: (err as Error).message});
     }
   });

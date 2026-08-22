@@ -207,7 +207,7 @@ async function main(): Promise<void> {
     await repoFor('alice').updateResource({ resourceType: 'Condition', id: 'alice-cond', code: { text: 'alice only' } } as never);
     await repoFor('bob').updateResource({ resourceType: 'Condition', id: 'bob-cond', code: { text: 'bob only' } } as never);
 
-    const server = createYourPhrServer({ repo: repoFor('alice'), auth: { store, repoForUser: repoFor } });
+    const server = createYourPhrServer({ repo: repoFor('alice'), auth: { store } });
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     const port = (server.address() as { port: number }).port;
     const base = `http://127.0.0.1:${port}`;

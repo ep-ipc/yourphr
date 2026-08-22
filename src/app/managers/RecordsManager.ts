@@ -1,0 +1,262 @@
+/**
+ * Records — the one door (yourphr#608, #609). Every read, write, count, export and removal of a
+ * FHIR record for any account goes through here, and the 70+ FHIR resource types are ONE
+ * resource: Condition, Observation and Claim are rows in the record store, not doors of their own
+ * (the architecture doc's "trap, now concrete").
+ *
+ * The manager takes the request context on every call and acts for `ctx.username`; the provider
+ * behind it (PHI storage, one-active) does the work and returns. The reconciled and classified
+ * views (conditions, allergies, immunizations, medications, the IPS, provenance, recent activity,
+ * the typed query) are methods here because they are what the record pages read, and a view
+ * computed by a free function over a store handle is a second door in all but name.
+ */
+import type { Bundle, Resource } from '@medplum/fhirtypes';
+import type { SearchRequest, WithId } from '@medplum/core';
+import { BaseManager, type BackupData } from '../../framework/BaseManager.js';
+import type { Engine } from '../../framework/Engine.js';
+import { ApiError, type ApiContext } from '../../framework/ApiContext.js';
+import type { BaseRecordsProvider, RecordsWriter, StoredRecord } from '../providers/BaseRecordsProvider.js';
+import { reconcileConditions, type ClassifiedCondition, type InputResource } from '../../conditions/index.js';
+import { classifyAllergies, type ClassifiedAllergy } from '../../allergies/index.js';
+import { classifyImmunizations, type ClassifiedImmunization } from '../../immunizations/index.js';
+import { reconcile as reconcileMedications, type MedInput, type ReconciledMedication } from '../../medication/index.js';
+import { buildIps, type IpsDocument } from '../../ips/index.js';
+import type { RecordProvenance } from '../../provenance/index.js';
+import { dateFor, toResourceFhir } from '../../server.js';
+
+declare module '../../framework/Engine.js' {
+  interface ManagerRegistry {
+    records: RecordsManager;
+  }
+}
+
+export interface QueryAggregation { field: string; fn?: string }
+export interface QueryRequest {
+  use?: string;
+  select?: string[];
+  from: string;
+  where?: Record<string, string | string[]>;
+  limit?: number;
+  offset?: number;
+  aggregations?: { count_by?: QueryAggregation; group_by?: QueryAggregation; order_by?: QueryAggregation };
+}
+export interface AggregationRow { label: string; value: string | number }
+
+export interface RecentItem {
+  source_id: string;
+  source_resource_type: string;
+  source_resource_id: string;
+  title: string;
+  date?: string;
+}
+
+const PARAM_NAME = /^[a-z][a-z0-9-]*$/i;
+
+export class RecordsManager extends BaseManager {
+  readonly name = 'records' as const;
+  /** Reads no configuration today; declared empty rather than pretending (the engine validates what is declared). */
+  override readonly dependsOn = [] as const;
+  /** Maps a source id to its display name; '' when unknown — never invent. Set by the app until Sources is a manager. */
+  sourceDisplay: (sourceId: string) => string = () => '';
+
+  constructor(engine: Engine, private readonly provider: BaseRecordsProvider) {
+    super(engine);
+  }
+
+  override async initialize(config: Record<string, unknown> = {}): Promise<void> {
+    await this.provider.initialize();
+    await super.initialize(config);
+  }
+
+  override async shutdown(): Promise<void> {
+    await this.provider.close();
+    await super.shutdown();
+  }
+
+  private who(ctx: ApiContext): string {
+    ctx.requireAuthenticated();
+    return ctx.username;
+  }
+
+  // --- the record pages ---
+
+  /** GET /resource/fhir?sourceResourceType=…[&sourceID=…] — YourPHR's resource_fhir rows. */
+  async list(ctx: ApiContext, resourceType: string, options: { limit?: number; sourceId?: string } = {}): Promise<Record<string, unknown>[]> {
+    const userId = this.who(ctx);
+    const bundle = await this.provider.search(userId, { resourceType: resourceType as never, count: options.limit ?? 100000, total: 'accurate' });
+    const sourceOf = await this.provider.sourceOf(userId, resourceType);
+    return (bundle.entry ?? [])
+      .map((e) => e.resource as Resource)
+      .filter((r) => !options.sourceId || sourceOf.get(r.id ?? '') === options.sourceId)
+      .map((r) => toResourceFhir(r, sourceOf.get(r.id ?? '') ?? ''));
+  }
+
+  /** GET /resource/fhir/:source/:id — addressed by id without its type, as YourPHR does. */
+  async detail(ctx: ApiContext, id: string): Promise<Record<string, unknown>> {
+    const stored = await this.provider.readById(this.who(ctx), id);
+    if (!stored) throw new ApiError(404, 'not found');
+    return toResourceFhir(stored.resource, stored.sourceId);
+  }
+
+  async search<T extends Resource>(ctx: ApiContext, request: SearchRequest<T>): Promise<Bundle<WithId<T>>> {
+    return this.provider.search(this.who(ctx), request);
+  }
+
+  /** GET /summary's counts. */
+  async countsByType(ctx: ApiContext, sourceId?: string): Promise<{ resource_type: string; count: number }[]> {
+    return (await this.provider.countByType(this.who(ctx), sourceId)).map((c) => ({ resource_type: c.resourceType, count: c.count }));
+  }
+
+  async typesHeld(ctx: ApiContext): Promise<string[]> {
+    return this.provider.typesHeld(this.who(ctx));
+  }
+
+  /** The dashboard's recent activity: newest records across every type, Go's list-item shape. */
+  async recent(ctx: ApiContext, limit: number): Promise<RecentItem[]> {
+    const items = (await this.provider.list(this.who(ctx))).map((r) => {
+      const shaped = toResourceFhir(r.resource, r.sourceId);
+      const date = String(shaped['sort_date'] ?? '').slice(0, 10);
+      return { source_id: r.sourceId, source_resource_type: r.resourceType, source_resource_id: r.id, title: String(shaped['sort_title'] ?? ''), ...(date ? { date } : {}) };
+    });
+    items.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    return items.slice(0, limit);
+  }
+
+  private async inputs(ctx: ApiContext, resourceType: string): Promise<InputResource[]> {
+    return (await this.provider.list(this.who(ctx), { resourceType }))
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((r) => ({ sourceResourceType: resourceType, sourceResourceId: r.id, sourceId: r.sourceId, raw: r.resource }));
+  }
+
+  async conditions(ctx: ApiContext): Promise<ClassifiedCondition[]> { return reconcileConditions(await this.inputs(ctx, 'Condition')); }
+  async allergies(ctx: ApiContext): Promise<ClassifiedAllergy[]> { return classifyAllergies(await this.inputs(ctx, 'AllergyIntolerance')); }
+  async immunizations(ctx: ApiContext): Promise<ClassifiedImmunization[]> { return classifyImmunizations(await this.inputs(ctx, 'Immunization')); }
+
+  async medications(ctx: ApiContext): Promise<ReconciledMedication[]> {
+    const inputs: MedInput[] = [];
+    for (const type of ['MedicationRequest', 'MedicationStatement', 'MedicationDispense']) {
+      for (const r of await this.provider.list(this.who(ctx), { resourceType: type })) inputs.push({ resource: r.resource, sourceId: r.sourceId });
+    }
+    return reconcileMedications(inputs);
+  }
+
+  async ips(ctx: ApiContext, now = new Date()): Promise<IpsDocument> {
+    const userId = this.who(ctx);
+    return buildIps({ search: (request) => this.provider.search(userId, request) }, now);
+  }
+
+  async provenance(ctx: ApiContext, resourceType: string, id: string): Promise<RecordProvenance | undefined> {
+    const userId = this.who(ctx);
+    const stored = await this.provider.read(userId, resourceType, id);
+    if (!stored) return undefined;
+    const history = await this.provider.history(userId, resourceType, id);
+    const display = stored.sourceId === '' ? 'This instance (manual entry or upload)' : this.sourceDisplay(stored.sourceId) || stored.sourceId;
+    return {
+      resourceType, id, sourceId: stored.sourceId, sourceDisplay: display,
+      firstReceivedAt: history.firstReceivedAt ?? stored.lastUpdated, lastConfirmedAt: stored.lastUpdated, timesSeen: Math.max(history.versions, 1),
+    };
+  }
+
+  /**
+   * The typed query (POST /query): where (comma = OR, parameters AND; tokens as code, system|code,
+   * system|; date prefixes), limit/offset, group_by with count or max/min(sort_date), count_by.
+   */
+  async query(ctx: ApiContext, query: QueryRequest): Promise<Record<string, unknown>[] | AggregationRow[]> {
+    const userId = this.who(ctx);
+    if (!/^[A-Z][A-Za-z]+$/.test(query.from ?? '')) throw new ApiError(400, 'from must name a resource type');
+    const where = Object.entries(query.where ?? {}).map(([param, raw]) => {
+      if (!PARAM_NAME.test(param)) throw new ApiError(400, `invalid search parameter: ${param}`);
+      return { param, alternatives: (Array.isArray(raw) ? raw : [raw]).flatMap((s) => String(s).split(',')) };
+    });
+    const rows = await this.provider.indexedSearch(userId, query.from, where);
+    const sortDate = (r: StoredRecord): string => String(dateFor(r.resource) ?? '');
+
+    const agg = query.aggregations;
+    let groupBy = agg?.group_by;
+    let orderBy = agg?.order_by;
+    if (agg?.count_by) {
+      groupBy = agg.count_by.field === '*' ? { field: 'source_resource_type' } : agg.count_by;
+      orderBy = { field: '*', fn: 'count' };
+    }
+    if (!groupBy) {
+      rows.sort((a, b) => sortDate(b).localeCompare(sortDate(a)));
+      const offset = query.offset ?? 0;
+      return rows.slice(offset, offset + (query.limit ?? 100)).map((r) => toResourceFhir(r.resource, r.sourceId));
+    }
+    if (!PARAM_NAME.test(groupBy.field) && groupBy.field !== 'source_resource_type') throw new ApiError(400, `invalid aggregation field: ${groupBy.field}`);
+    const byDate = orderBy !== undefined && orderBy.field !== '*';
+    if (byDate && orderBy!.field !== 'sort_date') throw new ApiError(400, `unsupported order_by field: ${orderBy!.field} (sort_date only)`);
+    const groups = new Map<string, { count: number; max: string; min: string }>();
+    for (const r of rows) {
+      const labels = groupBy.field === 'source_resource_type' ? [query.from] : await this.provider.indexedValues(userId, query.from, r.id, groupBy.field);
+      const date = sortDate(r);
+      for (const label of labels) {
+        const g = groups.get(label) ?? { count: 0, max: '', min: '' };
+        g.count++;
+        if (date !== '' && (g.max === '' || date > g.max)) g.max = date;
+        if (date !== '' && (g.min === '' || date < g.min)) g.min = date;
+        groups.set(label, g);
+      }
+    }
+    const out: AggregationRow[] = [...groups.entries()].map(([label, g]) => ({ label, value: byDate ? ((orderBy!.fn ?? 'max') === 'min' ? g.min : g.max) : g.count }));
+    out.sort((a, b) => (typeof a.value === 'number' && typeof b.value === 'number' ? b.value - a.value : String(b.value).localeCompare(String(a.value))));
+    return out;
+  }
+
+  // --- per source (the Sources page; Sources stays a store until its own child) ---
+
+  async sourceCounts(ctx: ApiContext, sourceId: string): Promise<{ source_id: string; resource_type: string; count: number }[]> {
+    return (await this.provider.countByType(this.who(ctx), sourceId)).map((c) => ({ source_id: sourceId, resource_type: c.resourceType, count: c.count }));
+  }
+
+  async patientOf(ctx: ApiContext, sourceId: string): Promise<Record<string, unknown> | null> {
+    const patients = (await this.provider.list(this.who(ctx), { resourceType: 'Patient', sourceId })).sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated));
+    return patients[0] ? toResourceFhir(patients[0].resource, sourceId) : null;
+  }
+
+  async exportSource(ctx: ApiContext, sourceId: string): Promise<{ resourceType: 'Bundle'; type: 'collection'; total: number; entry: { resource: unknown }[] }> {
+    const entry = (await this.provider.list(this.who(ctx), { sourceId })).map((r) => ({ resource: r.resource as unknown }));
+    return { resourceType: 'Bundle', type: 'collection', total: entry.length, entry };
+  }
+
+  /** Removes every record a source wrote for the caller: rows, index, history. Returns the row count. */
+  async removeSource(ctx: ApiContext, sourceId: string): Promise<number> {
+    return this.provider.removeBySource(this.who(ctx), sourceId);
+  }
+
+  /** Everything the caller holds, then the handle — the account is going. */
+  async removeAll(ctx: ApiContext): Promise<number> {
+    const userId = this.who(ctx);
+    const n = await this.provider.removeAll(userId);
+    await this.provider.release(userId);
+    return n;
+  }
+
+  // --- writes: the worker and the migration tool ---
+
+  /** A writer bound to the caller's account and one source — what a sync pass or an import writes through. */
+  writer(ctx: ApiContext, sourceId: string): RecordsWriter {
+    return this.provider.writer(this.who(ctx), sourceId);
+  }
+
+  async exists(ctx: ApiContext, resourceType: string, id: string): Promise<boolean> {
+    return (await this.provider.read(this.who(ctx), resourceType, id)) !== undefined;
+  }
+
+  // --- the base contract ---
+
+  async integrityOk(): Promise<boolean> {
+    return this.provider.integrityOk();
+  }
+
+  async backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }> {
+    const result = await this.provider.backup(options);
+    return { manager: this.name, takenAt: (options.now ?? new Date()).toISOString(), files: [result.file], ...result };
+  }
+
+  async restore(): Promise<void> {
+    // A records restore is staged by the backup coordinator and applied at the next start (see
+    // src/admin) — a live file is never overwritten. Until Backups is a manager, that path stays.
+    throw new ApiError(501, 'records restore is applied at start from a staged file, not live');
+  }
+}

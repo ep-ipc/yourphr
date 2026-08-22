@@ -11,8 +11,8 @@ import { dirname, join, resolve } from 'node:path';
 import type Database from 'better-sqlite3-multiple-ciphers';
 import type { ConfigStore } from '../config/index.js';
 import type { SourceStore } from '../worker/index.js';
-import { backupDatabase, isBackupFileName, listBackups, stageRestore, type BackupResult } from '../backup/index.js';
-import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
+import { isBackupFileName, listBackups, stageRestore, type BackupResult } from '../backup/index.js';
+import type { RecordsManager } from '../app/managers/RecordsManager.js';
 
 export interface BackupSchedule {
   enabled: boolean;
@@ -46,8 +46,8 @@ export interface AdminDeps {
   config: ConfigStore;
   appDb: InstanceType<typeof Database>;
   sources: SourceStore;
-  /** The records repository (any user's handle — the file is shared). */
-  recordsRepo: () => SqliteFhirRepository;
+  /** The door to the records (yourphr#609): backup and integrity go through it. */
+  records: RecordsManager;
   now?: () => Date;
 }
 
@@ -107,12 +107,12 @@ export class AdminOps {
   }
 
   /** A backup now: the records AND the app database in one encrypted file; the outcome recorded either way. */
-  backupNow(destination = this.backupDestination()): BackupResult {
+  async backupNow(destination = this.backupDestination()): Promise<BackupResult> {
     const at = this.now().toISOString();
     try {
-      const result = backupDatabase(this.deps.recordsRepo(), {
+      const result = await this.deps.records.backup({
         destination,
-        backupKey: this.deps.config.getString('backup.encryption.key'),
+        key: this.deps.config.getString('backup.encryption.key'),
         maxBackups: this.deps.config.getInt('backup.max-backups'),
         alsoExport: [this.deps.appDb],
         now: this.now(),
@@ -160,7 +160,7 @@ export class AdminOps {
   }
 
   /** Go's DatabaseInfoResponse over this stack's two files. */
-  databaseInfo(): Record<string, unknown> {
+  async databaseInfo(): Promise<Record<string, unknown>> {
     const dataDir = this.deps.dataDir;
     const files = [join(dataDir, this.deps.config.getString('database.location')), join(dataDir, 'records.db')];
     const sizeBytes = files.reduce((n, f) => n + (existsSync(f) ? statSync(f).size : 0), 0);
@@ -176,7 +176,7 @@ export class AdminOps {
       size_bytes: sizeBytes,
       users,
       sources: sourcesCount,
-      integrity_ok: quick(this.deps.appDb) && quick(this.deps.recordsRepo().db),
+      integrity_ok: quick(this.deps.appDb) && (await this.deps.records.integrityOk()),
       backup_destination: destination,
       backups: listBackups(destination).map((b) => ({ name: b.name, size_bytes: b.sizeBytes, modified: b.modified })),
       schedule: this.schedule(),
@@ -217,11 +217,11 @@ export class AdminOps {
    * live keys into <data>/*.staged, and the next start swaps them in (openStores applies them). The
    * live databases are not touched here; a backup of them is taken first so the swap is reversible.
    */
-  stageRestore(backupName: string): { staged: boolean; message: string } {
+  async stageRestore(backupName: string): Promise<{ staged: boolean; message: string }> {
     if (!isBackupFileName(backupName)) throw new Error('no such backup in the destination folder');
     const file = join(this.backupDestination(), backupName);
     if (!existsSync(file)) throw new Error('no such backup in the destination folder');
-    this.backupNow();
+    await this.backupNow();
     const key = this.deps.config.getString('backup.encryption.key');
     const dbKey = this.deps.config.getString('database.encryption.key');
     stageRestore(file, key, join(this.deps.dataDir, STAGED_RECORDS), dbKey, (t) => RECORDS_TABLES.has(t));

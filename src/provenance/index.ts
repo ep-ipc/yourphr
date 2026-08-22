@@ -16,7 +16,6 @@
  * No guessing: a record with no recorded source says so ("this instance", covering manual entry
  * and uploads) rather than inventing an origin.
  */
-import type Database from 'better-sqlite3-multiple-ciphers';
 
 export interface RecordProvenance {
   resourceType: string;
@@ -33,38 +32,10 @@ export interface RecordProvenance {
   timesSeen: number;
 }
 
-export interface ProvenanceDeps {
-  db: InstanceType<typeof Database>;
-  userId: string;
-  /** Maps a source_id to its display name; return '' when unknown — never invent. */
-  sourceDisplay?: (sourceId: string) => string;
-}
-
-export function provenanceFor(deps: ProvenanceDeps, resourceType: string, id: string): RecordProvenance | undefined {
-  const row = deps.db
-    .prepare('SELECT source_id, last_updated FROM resources WHERE resource_type = ? AND id = ? AND user_id = ? AND deleted = 0')
-    .get(resourceType, id, deps.userId) as { source_id: string; last_updated: string } | undefined;
-  if (!row) {
-    return undefined;
-  }
-  const history = deps.db
-    .prepare('SELECT MIN(last_updated) AS first, COUNT(*) AS n FROM resource_history WHERE resource_type = ? AND id = ?')
-    .get(resourceType, id) as { first: string | null; n: number };
-
-  const display = row.source_id === ''
-    ? 'This instance (manual entry or upload)'
-    : (deps.sourceDisplay?.(row.source_id) ?? '') || row.source_id; // fall back to the raw id, never a guess
-
-  return {
-    resourceType,
-    id,
-    sourceId: row.source_id,
-    sourceDisplay: display,
-    firstReceivedAt: history.first ?? row.last_updated,
-    lastConfirmedAt: row.last_updated,
-    timesSeen: Math.max(history.n, 1),
-  };
-}
+/*
+ * provenanceFor() used to live here as a free function over a store handle. The Records manager
+ * computes provenance now (yourphr#609) — a view computed past the door was a second door.
+ */
 
 /** The one-line legible rendering — what a record card's provenance row shows. */
 export function legibleProvenance(p: RecordProvenance): string {

@@ -14,7 +14,10 @@ import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 import { reconcileConditions, type InputResource } from '../src/conditions/index.js';
 import { classifyAllergies } from '../src/allergies/index.js';
 import { classifyImmunizations } from '../src/immunizations/index.js';
-import { recentResources, runQuery, type AggregationRow } from '../src/query/index.js';
+import { Engine } from '../src/framework/Engine.js';
+import { ApiContext, ApiError } from '../src/framework/ApiContext.js';
+import { RecordsManager, type AggregationRow } from '../src/app/managers/RecordsManager.js';
+import { SqliteRecordsProvider } from '../src/app/providers/SqliteRecordsProvider.js';
 import { FavoriteStore } from '../src/favorites/index.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
@@ -107,26 +110,32 @@ async function main(): Promise<void> {
     category: [{ coding: [{ system: 'http://terminology.hl7.org/CodeSystem/v2-0074', code: 'RAD' }] }] } as Resource);
   await repo.createResource({ resourceType: 'Condition', id: 'c1', code: { text: 'Sprain' }, recordedDate: '2024-07-01' } as Resource);
   await other.createResource(obs('o9', '718-7', 'Hemoglobin', '2025-01-01'));
+  // The door (yourphr#609): the typed query and the recent list are Records-manager methods over the provider.
+  const engine = new Engine();
+  engine.register('records', new RecordsManager(engine, new SqliteRecordsProvider(file, undefined)));
+  await engine.initialize();
+  const records = engine.managers.records;
+  const ctx = ApiContext.from({ username: 'alice', role: 'user' }, engine);
 
   // The labs page's first question: every LOINC-coded observation, grouped by code, newest first.
-  const grouped = runQuery(repo, { select: [], from: 'Observation', where: { code: `${LOINC}|,urn:oid:2.16.840.1.113883.6.1|` },
+  const grouped = await records.query(ctx, { select: [], from: 'Observation', where: { code: `${LOINC}|,urn:oid:2.16.840.1.113883.6.1|` },
     aggregations: { order_by: { field: 'sort_date', fn: 'max' }, group_by: { field: 'code' } } }) as AggregationRow[];
   check('group_by code with max(sort_date): one label per system|code, value = latest date, newest first; system-only tokens match any code in the system; other users excluded',
     grouped.map((g) => `${g.label}=${g.value}`).join(';') === `${LOINC}|718-7=2024-05-10;${LOINC}|2345-7=2024-03-10`);
   // Its second: the observations behind those codes, by the labels it was given.
-  const byCodes = runQuery(repo, { select: [], from: 'Observation', where: { code: grouped.map((g) => g.label).join(',') } }) as Record<string, unknown>[];
+  const byCodes = await records.query(ctx, { select: [], from: 'Observation', where: { code: grouped.map((g) => g.label).join(',') } }) as Record<string, unknown>[];
   check('where code=a,b ORs the alternatives and returns resource_fhir rows, sort_date DESC',
     byCodes.map((r) => r['source_resource_id']).join(',') === 'o2,o3,o1' && byCodes.every((r) => r['source_id'] === 'source-1' && (r['resource_raw'] as Resource).resourceType === 'Observation'));
   // Its third: the last lab reports.
-  const labs = runQuery(repo, { select: ['*'], from: 'DiagnosticReport', where: { category: 'http://terminology.hl7.org/CodeSystem/v2-0074|LAB' }, limit: 10 }) as Record<string, unknown>[];
+  const labs = await records.query(ctx, { select: ['*'], from: 'DiagnosticReport', where: { category: 'http://terminology.hl7.org/CodeSystem/v2-0074|LAB' }, limit: 10 }) as Record<string, unknown>[];
   check('a system|code token matches exactly that coding; limit honoured', labs.length === 1 && labs[0]!['source_resource_id'] === 'd1');
-  const counted = runQuery(repo, { from: 'Observation', aggregations: { count_by: { field: 'code' } } }) as AggregationRow[];
+  const counted = await records.query(ctx, { from: 'Observation', aggregations: { count_by: { field: 'code' } } }) as AggregationRow[];
   check('count_by is group_by + count, most frequent first', counted[0]?.label === `${LOINC}|718-7` && counted[0].value === 2 && counted.length === 3);
-  let refused = '';
-  try { runQuery(repo, { from: 'Observation; DROP TABLE resources' }); } catch (err) { refused = (err as Error).message; }
-  check('a malformed resource type is refused, not interpolated', refused.includes('resource type'));
+  let refused: unknown;
+  try { await records.query(ctx, { from: 'Observation; DROP TABLE resources' }); } catch (err) { refused = err; }
+  check('a malformed resource type is refused with a 400, not interpolated', refused instanceof ApiError && refused.status === 400 && refused.message.includes('resource type'));
 
-  const recent = recentResources(repo, 3);
+  const recent = await records.recent(ctx, 3);
   check('recent: newest across every type, Go\'s list-item shape, limited',
     recent.map((r) => `${r.source_resource_type}/${r.source_resource_id}@${r.date}`).join(',') === 'Observation/o4@2024-09-10,Condition/c1@2024-07-01,DiagnosticReport/d2@2024-06-11'
       && recent[0]?.title === 'Blood pressure' && recent[0].source_id === 'source-1');
@@ -144,6 +153,7 @@ async function main(): Promise<void> {
       && FavoriteStore.supports('Practitioner') && !FavoriteStore.supports('Patient'));
 
   app.close();
+  await engine.shutdown();
   repo.db.close();
   rmSync(dir, { recursive: true, force: true });
 

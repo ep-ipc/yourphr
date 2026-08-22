@@ -116,7 +116,7 @@ async function main(): Promise<void> {
 
   // --- the migration ---
   const goDb = openGoDatabase(goPath);
-  const stores = openStores(dataDir, {});
+  const stores = await openStores(dataDir, {});
   const report = await migrateFromGo(goDb, stores, { goDataDir: goRoot, allowInternalUrls: true });
 
   check('users: both live accounts imported, the soft-deleted one left behind',
@@ -146,13 +146,13 @@ async function main(): Promise<void> {
     JSON.stringify({ imported: report.records.imported, perType: report.records.perType, read: report.records.read }));
   check('records: the table without record columns is skipped BY NAME', report.records.read.tablesSkipped.join(',') === 'fhir_legacy_shape');
   check('records: a raw id that disagrees with the row is counted and the row id wins', report.records.idRewritten === 1 &&
-    stores.repoForUser('jim').db.prepare("SELECT 1 FROM resources WHERE resource_type = 'Condition' AND id = 'c-6' AND user_id = 'jim'").get() !== undefined);
-  const jimDb = stores.repoForUser('jim').db;
-  const sourceOf = (id: string): string => (jimDb.prepare("SELECT source_id FROM resources WHERE resource_type = 'Condition' AND id = ? AND user_id = 'jim'").get(id) as { source_id: string }).source_id;
-  check('records: attribution survives — mapped source becomes source-<spike id>', sourceOf('c-1') === `source-${report.sources.idMap['src-1']}`);
-  check('records: a disconnected source keeps a legacy-<go id> attribution, counted, never blank', sourceOf('c-3') === 'legacy-src-2' && report.records.unmappedSource === 1);
-  const patConditions = await stores.repoForUser('pat').search({ resourceType: 'Condition', count: 10, total: 'accurate' });
-  const patSeesJim = await stores.repoForUser('pat').search({ resourceType: 'Patient', count: 10, total: 'accurate' });
+    (await stores.recordsProvider.read('jim', 'Condition', 'c-6')) !== undefined);
+  // The witness reads the provider, below the manager — as the verification gate itself does.
+  const sourceOf = async (id: string): Promise<string> => (await stores.recordsProvider.read('jim', 'Condition', id))?.sourceId ?? '<missing>';
+  check('records: attribution survives — mapped source becomes source-<spike id>', (await sourceOf('c-1')) === `source-${report.sources.idMap['src-1']}`);
+  check('records: a disconnected source keeps a legacy-<go id> attribution, counted, never blank', (await sourceOf('c-3')) === 'legacy-src-2' && report.records.unmappedSource === 1);
+  const patConditions = await stores.recordsProvider.search('pat', { resourceType: 'Condition', count: 10, total: 'accurate' });
+  const patSeesJim = await stores.recordsProvider.search('pat', { resourceType: 'Patient', count: 10, total: 'accurate' });
   check('records: per-user isolation holds across the migration', (patConditions.total ?? 0) === 1 && (patSeesJim.total ?? 0) === 0);
 
   check('config: the translatable keys are carried with their units converted',
@@ -172,8 +172,12 @@ async function main(): Promise<void> {
     again.catalog.imported.length === 0 && again.sources.imported.length === 0 && stores.sources.list().length === 2);
 
   // --- TOOTH 1: a record removed on the receiving side turns the gate red ---
-  jimDb.prepare("DELETE FROM resources WHERE resource_type = 'Condition' AND id = 'c-2' AND user_id = 'jim'").run();
-  jimDb.prepare("DELETE FROM search_index WHERE resource_type = 'Condition' AND resource_id = 'c-2' AND user_id = 'jim'").run();
+  // Tampering happens OUTSIDE the door on purpose: a raw handle on the file, as an attacker or a
+  // stray script would have — the gate must notice what the manager never saw.
+  const raw = new Database(join(dataDir, 'records.db'));
+  raw.prepare("DELETE FROM resources WHERE resource_type = 'Condition' AND id = 'c-2' AND user_id = 'jim'").run();
+  raw.prepare("DELETE FROM search_index WHERE resource_type = 'Condition' AND resource_id = 'c-2' AND user_id = 'jim'").run();
+  raw.close();
   const tampered = await verifyAgainstGo(goDb, stores, [{ id: 'u-1', username: 'jim' }, { id: 'u-2', username: 'pat' }]);
   check('TOOTH: a record missing here is a named disagreement',
     tampered.disagreements.length === 1 && tampered.disagreements[0]!.resourceType === 'Condition' && tampered.disagreements[0]!.missing.join(',') === 'c-2', JSON.stringify(tampered.disagreements));
@@ -191,7 +195,7 @@ async function main(): Promise<void> {
   const badPath = makeGoInstance(badRoot, { badRow: true });
   const badDb = openGoDatabase(badPath);
   mkdirSync(join(dir, 'spike-bad'));
-  const badStores = openStores(join(dir, 'spike-bad'), {});
+  const badStores = await openStores(join(dir, 'spike-bad'), {});
   const bad = await migrateFromGo(badDb, badStores, { goDataDir: badRoot, allowInternalUrls: true });
   check('TOOTH: resource_raw contradicting its row is REJECTED with the reason, not repaired',
     bad.records.rejectedTotal === 1 && bad.records.rejected[0]!.reason.includes('resourceType Condition') && bad.records.rejected[0]!.ref.endsWith('Observation/o-bad'));
@@ -203,7 +207,7 @@ async function main(): Promise<void> {
   // --- one account only ---
   const oneDb = openGoDatabase(goPath);
   mkdirSync(join(dir, 'spike-one'));
-  const oneStores = openStores(join(dir, 'spike-one'), {});
+  const oneStores = await openStores(join(dir, 'spike-one'), {});
   const one = await migrateFromGo(oneDb, oneStores, { onlyUser: 'pat', goDataDir: goRoot, allowInternalUrls: true });
   check('--user migrates and verifies one account only', one.ok && one.users.imported.join(',') === 'pat' && one.records.imported === 1 && one.sources.imported.length === 1 && one.verify.usersCompared.join(',') === 'pat');
   let unknown = '';

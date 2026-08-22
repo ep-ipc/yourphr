@@ -17,6 +17,8 @@ import { readGoSources, importLegacySources, resourceTypesFromScopes, WILDCARD_R
 import { SourceStore, runSyncPass } from '../src/worker/index.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 
+import { repositoryWriter } from '../src/sync/index.js';
+
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
   results.push({ name, ok, detail });
@@ -119,7 +121,7 @@ async function main(): Promise<void> {
     return r;
   };
   const lines: string[] = [];
-  const pass = await runSyncPass({ store, repoForUser, maxPages: 5, allowInternal: true, log: (l) => lines.push(l) }, 1_000_000);
+  const pass = await runSyncPass({ store, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 5, allowInternal: true, log: (l) => lines.push(l) }, 1_000_000);
   check('THE MIGRATED SOURCE REFRESHES AND SYNCS WITHOUT A RECONNECT',
     pass.refreshed === 1 && pass.synced >= 1, JSON.stringify(pass));
   check('the token endpoint was discovered through the guarded client and persisted',
@@ -129,7 +131,7 @@ async function main(): Promise<void> {
   check('the no-refresh source logged the reconnect signal instead of failing silently',
     lines.some((l) => l.includes('no refresh token is available; reconnect the source')));
 
-  const secondPass = await runSyncPass({ store, repoForUser, maxPages: 5, allowInternal: true }, 1_000_050);
+  const secondPass = await runSyncPass({ store, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 5, allowInternal: true }, 1_000_050);
   check('the second pass uses the PERSISTED endpoint — no re-discovery', fake.state.discoveries === 1 && secondPass.synced >= 1);
 
   fake.server.close();

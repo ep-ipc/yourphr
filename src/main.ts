@@ -51,7 +51,7 @@ if (bootstrap.getString('database.encryption.key') === '') {
 
 const version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
-const app = assembleApp(dataDir, {
+const app = await assembleApp(dataDir, {
   env,
   webDir: webDir === '' ? undefined : webDir,
   workerIntervalMs: intervalSeconds > 0 ? intervalSeconds * 1000 : undefined,

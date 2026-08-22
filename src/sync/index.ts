@@ -15,9 +15,12 @@
 import type { Bundle, BundleEntry, Resource } from '@medplum/fhirtypes';
 import { OutboundHttp } from '../http/index.js';
 import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
+import type { RecordsWriter } from '../app/providers/BaseRecordsProvider.js';
 
 export interface SyncOptions {
-  repo: SqliteFhirRepository;
+  /** The door (yourphr#609). When absent, `repo` + `sourceId` build a repository-bound writer. */
+  writer?: RecordsWriter;
+  repo?: SqliteFhirRepository;
   /**
    * Empty means send no Authorization header at all. Some sandbox and public FHIR endpoints serve
    * open data and reject a malformed bearer token with 401 — sending "Bearer " plus a placeholder
@@ -91,14 +94,12 @@ export function nextPageUrl(bundle: Bundle, currentUrl: string): string | undefi
  * primary key, not of anything clever here.
  */
 export async function syncFrom(startUrl: string, options: SyncOptions): Promise<SyncReport> {
-  const { repo, accessToken } = options;
+  const { accessToken } = options;
   const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
   const http = new OutboundHttp({ allowInternal: options.allowInternal });
-
-  // Scoped to this run and restored afterwards: the repository is shared, and leaving a source
-  // attributed after the sync would silently change what every later write means.
-  const previousSource = repo.sourceId;
-  repo.sourceId = options.sourceId;
+  // The door the records go through (yourphr#609): a writer bound to the account and the source.
+  // A repository-bound writer is built here for the harnesses that hand a repository in directly.
+  const writer = options.writer ?? repositoryWriter(options.repo!, options.sourceId ?? '');
 
   const report: SyncReport = {
     pages: 0,
@@ -158,9 +159,9 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
         }
         seenThisRun.add(key);
 
-        const existing = await readIfPresent(repo, resource);
+        let outcome: 'created' | 'updated';
         try {
-          await repo.updateResource(resource);
+          outcome = await writer.upsert(resource);
         } catch (err) {
           const message = (err as Error).message;
           if (message.includes('cross-source id collision')) {
@@ -171,7 +172,7 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
           }
           throw err;
         }
-        if (existing) {
+        if (outcome === 'updated') {
           report.updated++;
         } else {
           report.created++;
@@ -182,19 +183,38 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
       url = nextPageUrl(bundle, url);
     }
   } finally {
-    // Restored even when the sync throws: leaving a source attributed would silently change
-    // what every later write to this repository means.
-    repo.sourceId = previousSource;
+    // nothing to restore: the writer carries its own source attribution
   }
 
   return report;
 }
 
-async function readIfPresent(repo: SqliteFhirRepository, resource: Resource): Promise<boolean> {
-  try {
-    await repo.readResource(resource.resourceType, resource.id as string);
-    return true;
-  } catch {
-    return false;
-  }
+/** A writer over a repository handle, attributing every write to one source and restoring afterwards. */
+export function repositoryWriter(repo: SqliteFhirRepository, sourceId: string): RecordsWriter {
+  return {
+    upsert: async (resource) => {
+      let existed = true;
+      try {
+        await repo.readResource(resource.resourceType, resource.id as string);
+      } catch {
+        existed = false;
+      }
+      const previous = repo.sourceId;
+      repo.sourceId = sourceId;
+      try {
+        await repo.updateResource(resource);
+      } finally {
+        repo.sourceId = previous;
+      }
+      return existed ? 'updated' : 'created';
+    },
+    exists: async (resourceType, id) => {
+      try {
+        await repo.readResource(resourceType, id);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
 }

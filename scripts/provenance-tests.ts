@@ -13,7 +13,13 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { SourceStore, runSyncPass } from '../src/worker/index.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
-import { provenanceFor, legibleProvenance } from '../src/provenance/index.js';
+import { legibleProvenance } from '../src/provenance/index.js';
+import { Engine } from '../src/framework/Engine.js';
+import { ApiContext } from '../src/framework/ApiContext.js';
+import { RecordsManager } from '../src/app/managers/RecordsManager.js';
+import { SqliteRecordsProvider } from '../src/app/providers/SqliteRecordsProvider.js';
+
+import { repositoryWriter } from '../src/sync/index.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -61,7 +67,7 @@ async function main(): Promise<void> {
     userId: 'alice', display: 'Fake Regional Health', fhirBaseUrl: base, tokenUrl: `${base}/token`, clientId: 'cid',
     patient: 'pa', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999,
   });
-  const deps = { store, repoForUser, maxPages: 5, allowInternal: true };
+  const deps = { store, repoForUser, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 5, allowInternal: true };
   await runSyncPass(deps, 1_000_000);
 
   const repo = repoForUser('alice');
@@ -69,15 +75,22 @@ async function main(): Promise<void> {
     const numeric = Number(sourceId.replace('source-', ''));
     return store.list().find((s) => s.id === numeric)?.display ?? '';
   };
-  const pdeps = { db: repo.db, userId: 'alice', sourceDisplay: displayFor };
+  // Provenance is the Records manager's answer (yourphr#609) — asked through the door, for whoever is asking.
+  const engine = new Engine();
+  engine.register('records', new RecordsManager(engine, new SqliteRecordsProvider(recordsFile, undefined)));
+  await engine.initialize();
+  const records = engine.managers.records;
+  records.sourceDisplay = displayFor;
+  const alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);
+  const bob = ApiContext.from({ username: 'bob', role: 'user' }, engine);
 
-  const first = provenanceFor(pdeps, 'Condition', 'condition-1');
+  const first = await records.provenance(alice, 'Condition', 'condition-1');
   check('a synced record knows its source, by NAME', first?.sourceDisplay === 'Fake Regional Health', first?.sourceDisplay);
   check('and records when it first arrived', !!first?.firstReceivedAt && first.timesSeen === 1);
 
   await runSyncPass(deps, 1_000_100);
   await runSyncPass(deps, 1_000_200);
-  const confirmed = provenanceFor(pdeps, 'Condition', 'condition-1')!;
+  const confirmed = (await records.provenance(alice, 'Condition', 'condition-1'))!;
   check('a resync reads as re-confirmation: source and first-received STABLE, timesSeen grows',
     confirmed.sourceId === first?.sourceId && confirmed.firstReceivedAt === first?.firstReceivedAt && confirmed.timesSeen === 3,
     `seen ${confirmed.timesSeen}`);
@@ -85,12 +98,14 @@ async function main(): Promise<void> {
 
   // Manual entry: no source, honestly attributed to this instance.
   await repo.updateResource({ resourceType: 'Condition', id: 'hand-entered', code: { text: 'typed in by the patient' } } as never);
-  const manual = provenanceFor(pdeps, 'Condition', 'hand-entered')!;
+  const manual = (await records.provenance(alice, 'Condition', 'hand-entered'))!;
   check('a manually entered record is attributed to THIS INSTANCE — never a guessed provider',
     manual.sourceId === '' && manual.sourceDisplay === 'This instance (manual entry or upload)');
 
   // Unknown source id: raw id shown, not invented.
-  const rawFallback = provenanceFor({ ...pdeps, sourceDisplay: () => '' }, 'Condition', 'condition-1')!;
+  records.sourceDisplay = () => '';
+  const rawFallback = (await records.provenance(alice, 'Condition', 'condition-1'))!;
+  records.sourceDisplay = displayFor;
   check('an unresolvable source shows its raw id, never an invented name', rawFallback.sourceDisplay === `source-${source.id}`);
 
   const line = legibleProvenance(confirmed);
@@ -101,12 +116,13 @@ async function main(): Promise<void> {
     !singleLine.includes('seen') && singleLine.startsWith('From This instance'));
 
   check('a record that does not exist yields no provenance, not a fabricated one',
-    provenanceFor(pdeps, 'Condition', 'ghost') === undefined);
+    await records.provenance(alice, 'Condition', 'ghost') === undefined);
 
   // Isolation: bob cannot read alice's provenance.
-  check('provenance is per-user isolated', provenanceFor({ ...pdeps, userId: 'bob' }, 'Condition', 'condition-1') === undefined);
+  check('provenance is per-user isolated', await records.provenance(bob, 'Condition', 'condition-1') === undefined);
 
   server.close();
+  await engine.shutdown();
   for (const r of repos.values()) r.db.close();
   db.close();
   rmSync(dir, { recursive: true, force: true });

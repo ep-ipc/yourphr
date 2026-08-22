@@ -25,15 +25,16 @@ import { ConfigStore, envNameFor, type ConfigValue } from './config/index.js';
 import { addColumnWithDefault, runMigrations, type Migration } from './migrations/index.js';
 import { AuthStore, GENERIC_SIGNIN_ERROR } from './auth/index.js';
 import { ProviderCatalog, catalogEntryShape, connectableShape, connectionPolicy, type CatalogEntry, type CatalogWrite } from './catalog/index.js';
+import { Engine } from './framework/Engine.js';
+import { ConfigurationManager } from './framework/ConfigurationManager.js';
+import { ApiContext } from './framework/ApiContext.js';
+import { RecordsManager } from './app/managers/RecordsManager.js';
+import { SqliteRecordsProvider } from './app/providers/SqliteRecordsProvider.js';
 import { SmartClient, generateVerifier } from './smart/index.js';
 import { resourceTypesFromScopes } from './migrate/index.js';
 import { randomUUID } from 'node:crypto';
 import { SourceStore, runSyncPass, syncSource, type ConnectedSource, type JobSummary } from './worker/index.js';
 import { EventBus } from './events/index.js';
-import { reconcileConditions, type InputResource } from './conditions/index.js';
-import { classifyAllergies } from './allergies/index.js';
-import { classifyImmunizations } from './immunizations/index.js';
-import { recentResources, runQuery, type QueryRequest } from './query/index.js';
 import { FavoriteStore } from './favorites/index.js';
 import { AccountStore, accessCategoryFor, providerRequiresLegalConsent } from './account/index.js';
 import { loadLegalDocument, parseLegalKind } from './legal/index.js';
@@ -41,9 +42,6 @@ import { AdminOps, applyStagedRestore } from './admin/index.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
 import { basename } from 'node:path';
 import { backupDatabase } from './backup/index.js';
-import { buildIps } from './ips/index.js';
-import { provenanceFor } from './provenance/index.js';
-import { reconcile, type MedInput } from './medication/index.js';
 import { createYourPhrServer, toResourceFhir } from './server.js';
 import { SqliteFhirRepository } from './SqliteFhirRepository.js';
 import { randomBytes } from 'node:crypto';
@@ -137,12 +135,16 @@ export interface Stores {
   sources: SourceStore;
   favorites: FavoriteStore;
   account: AccountStore;
-  repoForUser: (userId: string) => SqliteFhirRepository;
-  repos: Map<string, SqliteFhirRepository>;
-  close: () => void;
+  /** The composition root (yourphr#608): managers, in validated boot order. */
+  engine: Engine;
+  /** The one door to records (yourphr#609). */
+  records: RecordsManager;
+  /** The PHI-storage provider — for the migration tool's verification gate, which reads below the manager on purpose. */
+  recordsProvider: SqliteRecordsProvider;
+  close: () => Promise<void>;
 }
 
-export function openStores(dataDir: string, env: Record<string, string | undefined> = process.env): Stores {
+export async function openStores(dataDir: string, env: Record<string, string | undefined> = process.env): Promise<Stores> {
   // 1. Config — everything below reads it.
   const config = new ConfigStore(dataDir, undefined, env);
   const unknown = config.unknownKeys();
@@ -174,21 +176,19 @@ export function openStores(dataDir: string, env: Record<string, string | undefin
   const sources = new SourceStore(db);
   const favorites = new FavoriteStore(db);
   const account = new AccountStore(db);
-  const recordsPath = join(dataDir, 'records.db');
-  const repos = new Map<string, SqliteFhirRepository>();
-  const repoForUser = (userId: string): SqliteFhirRepository => {
-    let repo = repos.get(userId);
-    if (!repo) {
-      repo = new SqliteFhirRepository({ file: recordsPath, userId, key: dbKey === '' ? undefined : dbKey });
-      repos.set(userId, repo);
-    }
-    return repo;
-  };
+  // 6. The engine: managers in validated dependency order (yourphr#608). Configuration first,
+  // then Records over the PHI-storage provider. The other stores join as their own children land.
+  const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
+  const engine = new Engine();
+  engine.register('configuration', new ConfigurationManager(engine, config));
+  engine.register('records', new RecordsManager(engine, recordsProvider));
+  await engine.initialize();
+  appLog.info(`engine: ${engine.registered.join(' -> ')}`);
 
   return {
-    config, db, dbKey, auth, catalog, sources, favorites, account, repoForUser, repos,
-    close: () => {
-      for (const repo of repos.values()) repo.db.close();
+    config, db, dbKey, auth, catalog, sources, favorites, account, engine, records: engine.managers.records, recordsProvider,
+    close: async () => {
+      await engine.shutdown();
       db.close();
     },
   };
@@ -257,6 +257,7 @@ export function sourceShape(source: ConnectedSource, latestJob: JobSummary | und
 
 export interface App {
   server: ReturnType<typeof createYourPhrServer>;
+  engine: Engine;
   config: ConfigStore;
   auth: AuthStore;
   catalog: ProviderCatalog;
@@ -264,13 +265,15 @@ export interface App {
   account: AccountStore;
   bootstrapPasswordFile?: string;
   syncNow: (now?: number) => Promise<unknown>;
-  backupNow: () => unknown;
-  close: () => void;
+  backupNow: () => Promise<unknown>;
+  close: () => Promise<void>;
 }
 
-export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): App {
-  const stores = openStores(dataDir, options.env ?? process.env);
-  const { config, auth, catalog, sources, favorites, account, repoForUser } = stores;
+export async function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): Promise<App> {
+  const stores = await openStores(dataDir, options.env ?? process.env);
+  const { config, auth, catalog, sources, favorites, account, engine, records } = stores;
+  /** The worker and the migration tool act for an account as a named system principal. */
+  const systemCtx = (name: string, username: string): ApiContext => ApiContext.system(name, username, engine);
 
   // Bootstrap the first admin on an empty install — after auth exists, before anything serves.
   const bootstrap = auth.bootstrapAdmin(dataDir);
@@ -280,13 +283,18 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     catalog.seed(options.seeds);
   }
 
-  const workerDeps = { store: sources, repoForUser, maxPages: config.getInt('sync.max-pages'), allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1' };
+  const workerDeps = {
+    store: sources,
+    writerFor: (userId: string, sourceId: string) => records.writer(systemCtx('worker', userId), sourceId),
+    maxPages: config.getInt('sync.max-pages'),
+    allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
+  };
   const timer = options.workerIntervalMs
     ? setInterval(() => { void runSyncPass(workerDeps); }, options.workerIntervalMs)
     : undefined;
   timer?.unref?.();
 
-  const adminOps = new AdminOps({ dataDir, config, appDb: stores.db, sources, recordsRepo: () => repoForUser('__any__') });
+  const adminOps = new AdminOps({ dataDir, config, appDb: stores.db, sources, records });
   const backupNow = () => adminOps.backupNow();
   // The scheduler (yourphr#602): once a minute, is a backup due? Outcome recorded by backupNow.
   let lastScheduledMinute: string | undefined;
@@ -294,35 +302,12 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     const now = new Date();
     if (!adminOps.scheduleDue(now, lastScheduledMinute)) return;
     lastScheduledMinute = now.toISOString().slice(0, 16);
-    try {
-      const r = adminOps.backupNow();
-      appLog.info(`scheduled backup written: ${r.file} (${r.sizeBytes} bytes)`);
-    } catch (err) {
-      appLog.error(`scheduled backup failed: ${(err as Error).message}`);
-    }
+    adminOps.backupNow().then(
+      (r) => appLog.info(`scheduled backup written: ${r.file} (${r.sizeBytes} bytes)`),
+      (err: Error) => appLog.error(`scheduled backup failed: ${err.message}`)
+    );
   }, 60_000);
   scheduleTimer?.unref?.();
-
-  const medications = async (repo: SqliteFhirRepository) => {
-    const inputs: MedInput[] = [];
-    for (const type of ['MedicationRequest', 'MedicationStatement', 'MedicationDispense'] as const) {
-      const bundle = await repo.search({ resourceType: type, count: 1000, total: 'accurate' });
-      for (const entry of bundle.entry ?? []) {
-        const row = repo.db
-          .prepare('SELECT source_id FROM resources WHERE resource_type = ? AND id = ? AND user_id = ?')
-          .get(type, (entry.resource as { id?: string }).id, repo.userId ?? '') as { source_id: string } | undefined;
-        inputs.push({ resource: entry.resource as never, sourceId: row?.source_id ?? '' });
-      }
-    }
-    return reconcile(inputs);
-  };
-
-  /** Every live record of one type for the repository's user, as the classifiers take them. */
-  const inputsOf = (repo: SqliteFhirRepository, resourceType: string): InputResource[] =>
-    (repo.db
-      .prepare('SELECT id, source_id, content FROM resources WHERE resource_type = ? AND user_id = ? AND deleted = 0 ORDER BY id')
-      .all(resourceType, repo.userId ?? '') as { id: string; source_id: string; content: string }[])
-      .map((r) => ({ sourceResourceType: resourceType, sourceResourceId: r.id, sourceId: r.source_id, raw: JSON.parse(r.content) as unknown }));
 
   // The instance keys Go publishes that this stack has a value for. A key this stack does not have
   // (theme, demo, signup, the wider password policy) is ABSENT, and the Angular app's mapper already
@@ -422,29 +407,15 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     return s && s.userId === username ? s : undefined;
   };
 
-  /** Removes every record a source wrote for this user: rows, their index, their history. Returns the row count. */
-  const removeSourceRecords = (repo: SqliteFhirRepository, username: string, publicId: string): number => {
-    const remove = repo.db.transaction((): number => {
-      const rows = repo.db.prepare('SELECT resource_type, id FROM resources WHERE user_id = ? AND source_id = ?').all(username, publicId) as { resource_type: string; id: string }[];
-      const delIndex = repo.db.prepare('DELETE FROM search_index WHERE resource_type = ? AND resource_id = ? AND user_id = ?');
-      const delHistory = repo.db.prepare('DELETE FROM resource_history WHERE resource_type = ? AND id = ?');
-      for (const r of rows) {
-        delIndex.run(r.resource_type, r.id, username);
-        delHistory.run(r.resource_type, r.id);
-      }
-      return repo.db.prepare('DELETE FROM resources WHERE user_id = ? AND source_id = ?').run(username, publicId).changes;
-    });
-    return remove();
-  };
-
-  const sourceDisplay = (sourceId: string): string => {
+  // Until Sources is a manager, the Records manager asks the app for a source's display name.
+  records.sourceDisplay = (sourceId: string): string => {
     const numeric = Number(sourceId.replace('source-', ''));
     return sources.list().find((s) => s.id === numeric)?.display ?? '';
   };
 
   const server = createYourPhrServer({
-    repo: repoForUser('__unused__'), // never serves: auth is wired, every request resolves its own repo
-    auth: { store: auth, repoForUser, cookieMaxAgeSeconds: config.getInt('auth.session.absolute-seconds'), secureCookies: config.getBool('web.secure-cookies') },
+    engine,
+    auth: { store: auth, cookieMaxAgeSeconds: config.getInt('auth.session.absolute-seconds'), secureCookies: config.getBool('web.secure-cookies') },
     webDir: options.webDir,
     version: options.version,
     modules: {
@@ -472,20 +443,13 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
           const s = owned(username, id);
           return s ? sourceShape(s, sources.latestJob(s.id)) : undefined;
         },
-        summary: (username, id, repo) => {
-          const s = owned(username, id);
+        summary: async (ctx, id) => {
+          const s = owned(ctx.username, id);
           if (!s) return undefined;
-          const counts = (repo.db
-            .prepare('SELECT resource_type, COUNT(*) AS count FROM resources WHERE user_id = ? AND source_id = ? AND deleted = 0 GROUP BY resource_type ORDER BY resource_type')
-            .all(username, id) as { resource_type: string; count: number }[])
-            .map((r) => ({ source_id: id, resource_type: r.resource_type, count: r.count }));
-          const patientRow = repo.db
-            .prepare("SELECT content FROM resources WHERE user_id = ? AND source_id = ? AND resource_type = 'Patient' AND deleted = 0 ORDER BY last_updated DESC LIMIT 1")
-            .get(username, id) as { content: string } | undefined;
           return {
             source: sourceShape(s, sources.latestJob(s.id)),
-            resource_type_counts: counts,
-            patient: patientRow ? toResourceFhir(JSON.parse(patientRow.content), id) : null,
+            resource_type_counts: await records.sourceCounts(ctx, id),
+            patient: await records.patientOf(ctx, id),
           };
         },
         sync: async (username, id) => {
@@ -504,34 +468,30 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
           sources.clearTokens(s.id);
           return true;
         },
-        removeData: (username, id, repo) => (owned(username, id) ? removeSourceRecords(repo, username, id) : undefined),
-        remove: (username, id, repo) => {
-          const s = owned(username, id);
+        removeData: async (ctx, id) => (owned(ctx.username, id) ? records.removeSource(ctx, id) : undefined),
+        remove: async (ctx, id) => {
+          const s = owned(ctx.username, id);
           if (!s) return undefined;
-          const rows = removeSourceRecords(repo, username, id);
+          const rows = await records.removeSource(ctx, id);
           sources.remove(s.id);
           return rows;
         },
-        exportBundle: (username, id, repo) => {
-          const s = owned(username, id);
+        exportBundle: async (ctx, id) => {
+          const s = owned(ctx.username, id);
           if (!s) return undefined;
-          const rows = repo.db
-            .prepare('SELECT content FROM resources WHERE user_id = ? AND source_id = ? AND deleted = 0 ORDER BY resource_type, id')
-            .all(username, id) as { content: string }[];
-          const entry = rows.map((r) => ({ resource: JSON.parse(r.content) as unknown }));
+          const bundle = await records.exportSource(ctx, id);
           const slug = s.display.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'source';
           const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-          return { filename: `yourphr-${slug}-${stamp}.json`, bundle: { resourceType: 'Bundle', type: 'collection', total: entry.length, entry } };
+          return { filename: `yourphr-${slug}-${stamp}.json`, bundle };
         },
         // The catalog's connectable entries in Go's ConnectableProvider shape, policy resolved by
         // Go's rules (yourphr#603).
         connectable: () => catalog.connectable().map(connectableShape),
         events,
       },
-      ips: (repo) => buildIps(repo, new Date()).then((d) => d.bundle),
-      provenanceFor: (repo, resourceType, id) =>
-        provenanceFor({ db: repo.db, userId: repo.userId ?? '', sourceDisplay }, resourceType, id),
-      medications,
+      ips: (ctx) => records.ips(ctx).then((d) => d.bundle),
+      provenanceFor: (ctx, resourceType, id) => records.provenance(ctx, resourceType, id),
+      medications: (ctx) => records.medications(ctx),
       catalog: {
         isAdmin: (username) => auth.isAdmin(username),
         list: () => catalog.list().map(catalogEntryShape),
@@ -634,11 +594,11 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
         },
       },
       records: {
-        recent: (repo, limit) => recentResources(repo, limit),
-        conditions: (repo) => reconcileConditions(inputsOf(repo, 'Condition')),
-        allergies: (repo) => classifyAllergies(inputsOf(repo, 'AllergyIntolerance')),
-        immunizations: (repo) => classifyImmunizations(inputsOf(repo, 'Immunization')),
-        query: (repo, body) => runQuery(repo, body as unknown as QueryRequest),
+        recent: (ctx, limit) => records.recent(ctx, limit),
+        conditions: (ctx) => records.conditions(ctx),
+        allergies: (ctx) => records.allergies(ctx),
+        immunizations: (ctx) => records.immunizations(ctx),
+        query: (ctx, body) => records.query(ctx, body as unknown as Parameters<RecordsManager['query']>[1]),
       },
       account: {
         legalDocument: (kind) => {
@@ -678,23 +638,16 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
           return { ok: true, token: auth.issueSession(username) };
         },
         signOutEverywhere: (username) => auth.revokeAllSessions(username),
-        deleteAccount: (username) => {
-          // Everything the account owns, then the account: its sources and their records, records
-          // it wrote itself, favourites, consent, the access log, the sessions. The repository for
-          // this user is closed and dropped so a reconnect starts clean.
-          const repo = repoForUser(username);
-          for (const s of sources.list().filter((s) => s.userId === username)) {
-            removeSourceRecords(repo, username, `source-${s.id}`);
-            sources.remove(s.id);
-          }
-          removeSourceRecords(repo, username, '');
-          repo.db.prepare('DELETE FROM resources WHERE user_id = ?').run(username);
-          repo.db.prepare('DELETE FROM search_index WHERE user_id = ?').run(username);
+        deleteAccount: async (ctx) => {
+          // Everything the account owns, then the account: its sources, every record (the Records
+          // manager removes rows, index and history and drops the handle), favourites, consent,
+          // the access log, the sessions.
+          const username = ctx.username;
+          for (const s of sources.list().filter((s) => s.userId === username)) sources.remove(s.id);
+          await records.removeAll(ctx);
           for (const fav of favorites.list(username, 'Practitioner')) favorites.remove(username, fav);
           account.deleteUser(username);
           auth.deleteUser(username);
-          repo.db.close();
-          stores.repos.delete(username);
         },
       },
       favorites: {
@@ -772,8 +725,8 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
         },
         metrics: () => adminMetrics(),
         databaseInfo: () => adminOps.databaseInfo(),
-        backupFile: () => {
-          const r = adminOps.backupNow();
+        backupFile: async () => {
+          const r = await adminOps.backupNow();
           return { file: r.file, name: basename(r.file), sizeBytes: r.sizeBytes };
         },
         setSchedule: (body) => adminOps.setSchedule(body as never),
@@ -794,6 +747,7 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
 
   return {
     server,
+    engine,
     config,
     auth,
     catalog,
@@ -802,11 +756,11 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
     bootstrapPasswordFile: bootstrap.passwordFile,
     syncNow: (now?: number) => runSyncPass(workerDeps, now),
     backupNow,
-    close: () => {
+    close: async () => {
       if (timer) clearInterval(timer);
       if (scheduleTimer) clearInterval(scheduleTimer);
       server.close();
-      stores.close();
+      await stores.close();
     },
   };
 }

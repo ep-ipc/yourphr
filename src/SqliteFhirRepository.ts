@@ -90,12 +90,17 @@ export class SqliteFhirRepository extends FhirRepository {
   readonly userId?: string;
   /** Which provider subsequent writes are attributed to. See the source_id column comment. */
   sourceId?: string;
+  /** Where this handle points — so the records provider can open sibling handles on the same store. */
+  readonly file: string;
+  readonly key?: string;
 
   constructor(options: SqliteFhirRepositoryOptions) {
     super();
     loadDefinitions();
     this.userId = options.userId;
     this.sourceId = options.sourceId;
+    this.file = options.file;
+    this.key = options.key;
 
     this.db = new Database(options.file);
     if (options.key) {

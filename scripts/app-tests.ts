@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   });
 
   // Boot: env carries bootstrap + secrets ONLY (the #472 split, enforced by the config module).
-  const app = assembleApp(dir, {
+  const app = await assembleApp(dir, {
     env: {
       SPIKE_DATABASE_ENCRYPTION_KEY: 'at-rest-key',
       SPIKE_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key',
@@ -519,14 +519,14 @@ async function main(): Promise<void> {
   check('every admin card is behind the role gate', nonAdminDb.status === 200 && strangerDb.status === 403);
 
   fake.close();
-  app.close();
+  await app.close();
   rmSync(dir, { recursive: true, force: true });
 
   // --- a staged restore is applied on the next start (yourphr#602) ---
   {
     const rDir = mkdtempSync(join(tmpdir(), 'spike-app-restore-'));
     const env = { SPIKE_DATABASE_ENCRYPTION_KEY: 'k1', SPIKE_BACKUP_ENCRYPTION_KEY: 'bk', SPIKE_TEST_ALLOW_INTERNAL: '1' };
-    const a = assembleApp(rDir, { env });
+    const a = await assembleApp(rDir, { env });
     a.auth.createUser('keeper', 'keepers-long-enough-password');
     const rBase = await new Promise<string>((resolve) => { a.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(a.server.address() as { port: number }).port}`)); });
     const bootPw = readFileSync(a.bootstrapPasswordFile!, 'utf8').trim();
@@ -534,11 +534,11 @@ async function main(): Promise<void> {
     const b = (await (await fetch(`${rBase}/api/secure/admin/database/backup`, { method: 'POST', headers: { authorization: `Bearer ${tok}` } })).json()) as { data: { filename: string } };
     a.auth.createUser('latecomer', 'latecomers-long-enough-password');
     const staged = (await (await fetch(`${rBase}/api/secure/admin/database/restore`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tok}` }, body: JSON.stringify({ backup_name: b.data.filename, confirm: true }) })).json()) as { data: { staged: boolean } };
-    a.close();
-    const after = assembleApp(rDir, { env });
+    await a.close();
+    const after = await assembleApp(rDir, { env });
     check('a confirmed restore is STAGED, applied on the next start, and the previous databases are kept as *.pre-restore',
       staged.data.staged === true && after.auth.roleOf('keeper') === 'user' && after.auth.roleOf('latecomer') === undefined && existsSync(join(rDir, 'spike.db.pre-restore')) && existsSync(join(rDir, 'records.db.pre-restore')));
-    after.close();
+    await after.close();
     rmSync(rDir, { recursive: true, force: true });
   }
 
@@ -553,14 +553,14 @@ async function main(): Promise<void> {
     old.exec(`CREATE TABLE connected_sources (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, display TEXT NOT NULL, fhir_base_url TEXT NOT NULL, token_url TEXT NOT NULL, client_id TEXT NOT NULL, patient TEXT NOT NULL, resource_types TEXT NOT NULL, access_token TEXT NOT NULL, refresh_token TEXT NOT NULL DEFAULT '', expires_at INTEGER NOT NULL DEFAULT 0, last_sync_at INTEGER NOT NULL DEFAULT 0)`);
     old.prepare("INSERT INTO connected_sources (user_id, display, fhir_base_url, token_url, client_id, patient, resource_types, access_token) VALUES ('pat', 'Old Source', 'https://x.example.org', '', 'c', 'p', 'Condition', 't')").run();
     old.close();
-    const upgraded = assembleApp(oldDir, { env: { SPIKE_TEST_ALLOW_INTERNAL: '1' } });
+    const upgraded = await assembleApp(oldDir, { env: { SPIKE_TEST_ALLOW_INTERNAL: '1' } });
     check('a pre-role database boots, and bootstrap does not run (the table was populated)', !upgraded.bootstrapPasswordFile);
     check('the account named admin — the admin until now — is recorded as one', upgraded.auth.roleOf('admin') === 'admin');
     check('every other pre-existing account is a user', upgraded.auth.roleOf('pat') === 'user');
     const oldSource = upgraded.sources.list()[0];
     check('a pre-column source reads with platform_type and environment UNKNOWN (yourphr#594), and is served without them',
       oldSource?.platformType === '' && oldSource.environment === '' && !('platform_type' in sourceShape(oldSource, undefined)) && !('environment' in sourceShape(oldSource, undefined)));
-    upgraded.close();
+    await upgraded.close();
     rmSync(oldDir, { recursive: true, force: true });
   }
 

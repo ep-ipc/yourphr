@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   writeFileSync(join(webDir, 'assets', 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   writeFileSync(join(dir, 'outside-secret.txt'), 'never served');
 
-  const app = assembleApp(dir, { env: {}, webDir });
+  const app = await assembleApp(dir, { env: {}, webDir });
   const base = await new Promise<string>((resolve) => {
     app.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(app.server.address() as { port: number }).port}`));
   });
@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   const signin = await fetch(`${base}/api/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   check('the sign-in route still answers as API', signin.status === 401);
 
-  app.close();
+  await app.close();
   rmSync(dir, { recursive: true, force: true });
 
   const failed = results.filter((r) => !r.ok);

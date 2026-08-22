@@ -20,6 +20,7 @@
  */
 import type { Bundle, BundleEntry, Composition, CompositionSection, Resource } from '@medplum/fhirtypes';
 import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
+import type { SearchRequest, WithId } from '@medplum/core';
 
 export type SectionGroup = 'required' | 'recommended' | 'optional';
 
@@ -98,7 +99,12 @@ export interface IpsDocument {
  * Builds the IPS document for the repository's user. `now` injected for determinism — two calls
  * with the same records and the same now are byte-identical.
  */
-export async function buildIps(repo: SqliteFhirRepository, now: Date): Promise<IpsDocument> {
+/** What the composer needs from the store: a search. A repository satisfies it; so does the Records manager. */
+export interface IpsSource {
+  search<T extends Resource>(request: SearchRequest<T>): Promise<Bundle<WithId<T>>>;
+}
+
+export async function buildIps(repo: IpsSource, now: Date): Promise<IpsDocument> {
   const patientBundle = await repo.search({ resourceType: 'Patient', count: 1 });
   const patient = patientBundle.entry?.[0]?.resource as Resource | undefined;
 

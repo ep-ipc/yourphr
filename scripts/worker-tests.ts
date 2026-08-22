@@ -13,6 +13,8 @@ import { ProviderCatalog } from '../src/catalog/index.js';
 import { SourceStore, runSyncPass } from '../src/worker/index.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 
+import { repositoryWriter } from '../src/sync/index.js';
+
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
   results.push({ name, ok, detail });
@@ -136,7 +138,7 @@ async function main(): Promise<void> {
   });
 
   const lines: string[] = [];
-  const deps = { store, repoForUser, maxPages: 10, allowInternal: true, log: (l: string) => lines.push(l) };
+  const deps = { store, repoForUser, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 10, allowInternal: true, log: (l: string) => lines.push(l) };
 
   const pass1 = await runSyncPass(deps, NOW);
   check('an expired token is refreshed BEFORE the sync, and the sync succeeds on the new token',

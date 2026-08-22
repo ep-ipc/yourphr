@@ -30,8 +30,11 @@ import { readGoUsers, importLegacyUsers, type ImportReport as UserImportReport }
 import { readGoSources, importLegacySources, readGoAccountData, importLegacyAccountData, type SourceImportReport, type AccountImportReport } from './index.js';
 import type { CatalogWrite, ProviderCatalog } from '../catalog/index.js';
 import type { ConfigStore, ConfigValue } from '../config/index.js';
-import type { SqliteFhirRepository } from '../SqliteFhirRepository.js';
 import type { Stores } from '../app.js';
+import type { Engine } from '../framework/Engine.js';
+import { ApiContext } from '../framework/ApiContext.js';
+import type { RecordsManager } from '../app/managers/RecordsManager.js';
+import type { BaseRecordsProvider } from '../app/providers/BaseRecordsProvider.js';
 
 type GoDb = InstanceType<typeof Database>;
 
@@ -263,7 +266,8 @@ const REJECTIONS_KEPT = 20;
 
 export async function importLegacyRecords(
   records: Iterable<LegacyRecord>,
-  repoForUser: (username: string) => SqliteFhirRepository,
+  engine: Engine,
+  recordsManager: RecordsManager,
   sourceIdMap: Record<string, number>,
   read: RecordReadStats
 ): Promise<RecordImportReport> {
@@ -291,26 +295,23 @@ export async function importLegacyRecords(
       resource = { ...resource, id: r.resourceId };
     }
 
-    const repo = repoForUser(r.username);
-    const exists = repo.db
-      .prepare('SELECT 1 FROM resources WHERE resource_type = ? AND id = ? AND user_id = ?')
-      .get(r.resourceType, r.resourceId, r.username);
-    if (exists) {
+    // Through the door (yourphr#609): the migration is a named system principal acting for the
+    // account, so every imported row met the index, the audit and the collision check.
+    const ctx = ApiContext.system('migration', r.username, engine);
+    if (await recordsManager.exists(ctx, r.resourceType, r.resourceId)) {
       report.skippedExisting++;
       continue;
     }
 
     const mapped = sourceIdMap[r.goSourceId];
     if (mapped === undefined) report.unmappedSource++;
-    repo.sourceId = mapped === undefined ? `legacy-${r.goSourceId}` : `source-${mapped}`;
+    const sourceId = mapped === undefined ? `legacy-${r.goSourceId}` : `source-${mapped}`;
     try {
-      await repo.createResource(resource);
+      await recordsManager.writer(ctx, sourceId).upsert(resource);
       report.imported++;
       report.perType[r.resourceType] = (report.perType[r.resourceType] ?? 0) + 1;
     } catch (err) {
       reject(ref, (err as Error).message);
-    } finally {
-      repo.sourceId = undefined;
     }
   }
   return report;
@@ -455,14 +456,14 @@ function multisetMissing(a: string[], b: string[]): string[] {
   return missing;
 }
 
-async function compareUser(repo: SqliteFhirRepository, username: string, expected: Map<string, string[]>, report: VerifyReport, note?: string): Promise<void> {
+async function compareUser(provider: BaseRecordsProvider, username: string, expected: Map<string, string[]>, report: VerifyReport, note?: string): Promise<void> {
   for (const [resourceType, ids] of expected) {
     report.typesCompared++;
     let actual: string[];
     try {
       // Ask for more than the corpus holds so nothing is truncated — a page-limited comparison is
       // what produced three false disagreements the first time the shadow harness met real data.
-      const bundle = await repo.search({ resourceType: resourceType as ResourceType, count: ids.length + 1000 });
+      const bundle = await provider.search(username, { resourceType: resourceType as ResourceType, count: ids.length + 1000 });
       actual = (bundle.entry ?? []).map((e) => e.resource?.id ?? '').sort();
     } catch (err) {
       report.disagreements.push({ username, resourceType, go: ids.length, ts: 0, missing: ids.slice(0, 5), extra: [], note: `${note ?? ''}search threw: ${(err as Error).message}`.trim() });
@@ -483,14 +484,12 @@ async function compareUser(repo: SqliteFhirRepository, username: string, expecte
     });
   }
   // Types this side holds that the other does not — extra data is a disagreement too.
-  const tsTypes = repo.db
-    .prepare('SELECT resource_type AS t, COUNT(*) AS n FROM resources WHERE user_id = ? AND deleted = 0 GROUP BY resource_type')
-    .all(username) as { t: string; n: number }[];
-  for (const { t, n } of tsTypes) {
+  // The witness reads the provider directly — below the manager it checks, on purpose.
+  for (const { resourceType: t, count: n } of await provider.countByType(username)) {
     if (expected.has(t)) continue;
     report.typesCompared++;
-    const extra = repo.db.prepare('SELECT id FROM resources WHERE user_id = ? AND resource_type = ? AND deleted = 0 ORDER BY id LIMIT 5').all(username, t) as { id: string }[];
-    report.disagreements.push({ username, resourceType: t, go: 0, ts: n, missing: [], extra: extra.map((r) => r.id), note: `${note ?? ''}type absent on the Go side`.trim() });
+    const extra = (await provider.list(username, { resourceType: t })).slice(0, 5).map((r) => r.id);
+    report.disagreements.push({ username, resourceType: t, go: 0, ts: n, missing: [], extra, note: `${note ?? ''}type absent on the Go side`.trim() });
   }
 }
 
@@ -514,11 +513,11 @@ export async function verifyAgainstGo(goDb: GoDb, stores: Stores, users: GoUser[
     },
   };
   for (const user of users) {
-    await compareUser(stores.repoForUser(user.username), user.username, readGoIdSets(goDb, user.id), report);
+    await compareUser(stores.recordsProvider, user.username, readGoIdSets(goDb, user.id), report);
   }
   if (goAnswers) {
     const expected = new Map(Object.entries(goAnswers.answers).map(([t, ids]) => [t, [...ids].sort()]));
-    await compareUser(stores.repoForUser(goAnswers.username), goAnswers.username, expected, report, 'go-answers: ');
+    await compareUser(stores.recordsProvider, goAnswers.username, expected, report, 'go-answers: ');
   }
   return report;
 }
@@ -575,7 +574,7 @@ export async function migrateFromGo(goDb: GoDb, stores: Stores, options: Migrati
   log('records');
   const read = newReadStats();
   const usernameById = new Map(liveUsers.map((u) => [u.id, u.username]));
-  const records = await importLegacyRecords(readGoRecords(goDb, usernameById, read, options.onlyUser), stores.repoForUser, sources.idMap, read);
+  const records = await importLegacyRecords(readGoRecords(goDb, usernameById, read, options.onlyUser), stores.engine, stores.records, sources.idMap, read);
 
   log('config');
   const config = importLegacyConfig(stores.config, options.goDataDir ? readGoCustomConfig(options.goDataDir) : undefined);

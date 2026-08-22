@@ -17,7 +17,7 @@
 import type Database from 'better-sqlite3-multiple-ciphers';
 import { SmartClient, type Endpoints } from '../smart/index.js';
 import { syncFrom } from '../sync/index.js';
-import { SqliteFhirRepository } from '../SqliteFhirRepository.js';
+import type { RecordsWriter } from '../app/providers/BaseRecordsProvider.js';
 
 export interface ConnectedSource {
   id: number;
@@ -205,8 +205,8 @@ export class SourceStore {
 
 export interface WorkerDeps {
   store: SourceStore;
-  /** The repository serving a source's OWNER — same seam the HTTP layer uses (yourphr#541). */
-  repoForUser: (userId: string) => SqliteFhirRepository;
+  /** The door for a source's records (yourphr#609): a writer bound to the owner and the source. */
+  writerFor: (userId: string, sourceId: string) => RecordsWriter;
   maxPages: number;
   /** Tests only — lets loopback fakes be reached. */
   allowInternal?: boolean;
@@ -300,16 +300,15 @@ export async function syncSource(
 
     // --- sync, one source's failure never reaching the next ---
     const startedAt = now;
-    const repo = deps.repoForUser(source.userId);
+    const writer = deps.writerFor(source.userId, `source-${source.id}`);
     let received = 0;
     let created = 0;
     let updated = 0;
     try {
       for (const resourceType of source.resourceTypes) {
         const result = await syncFrom(`${source.fhirBaseUrl}/${resourceType}?patient=${source.patient}&_count=100`, {
-          repo,
+          writer,
           accessToken,
-          sourceId: `source-${source.id}`,
           maxPages: deps.maxPages,
           allowInternal: deps.allowInternal,
         });

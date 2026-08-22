@@ -55,7 +55,7 @@ async function main(): Promise<void> {
 
   const goDb = openGoDatabase(goResolved, arg('--go-key') ?? process.env['YOURPHR_DB_KEY']);
   mkdirSync(resolve(dataDir), { recursive: true });
-  const stores = openStores(resolve(dataDir), process.env);
+  const stores = await openStores(resolve(dataDir), process.env);
 
   try {
     const report = await migrateFromGo(goDb, stores, {

@@ -34,6 +34,10 @@ jobs:
       # call fetch() directly walks around it. See docs/planning/architecture-principles-typescript.md.
       - name: Network access confined to src/http
         run: npm run check:boundary
+      - name: Store boundary — the driver lives in providers, nothing reaches past a manager (yourphr#609)
+        run: npm run check:store
+      - name: Framework skeleton (typed registry, boot order, guards)
+        run: npm run framework
 
       - name: SSRF guard
         run: npm run ssrf
