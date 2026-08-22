@@ -408,6 +408,27 @@ export class AuthStore {
     return issueToken(this.config.sessionKey, claims);
   }
 
+  /** Every account, for the admin's Users page (yourphr#604): names, roles, when created — never a hash. */
+  listUsers(): { username: string; role: Role; created_at: string }[] {
+    return (this.db.prepare('SELECT username, role, created_at FROM auth_users ORDER BY created_at, username').all() as { username: string; role: string; created_at: string }[])
+      .map((r) => ({ username: r.username, role: normaliseRole(r.role), created_at: r.created_at }));
+  }
+
+  /**
+   * An admin sets a member's password (yourphr#604; the product's #511 — the family case: somebody
+   * forgot theirs). A generated, policy-compliant password, and a generation bump so whoever holds
+   * the old sessions is signed out everywhere (the #508 revocation). Returns the password once —
+   * the caller shows it, nobody stores it. False when the account does not exist.
+   */
+  adminResetPassword(username: string): string | undefined {
+    if (!this.userRow(username)) return undefined;
+    const password = randomBytes(18).toString('base64url'); // 24 chars, always above the policy minimum
+    const result = this.db
+      .prepare('UPDATE auth_users SET password_hash = ?, token_generation = token_generation + 1 WHERE username = ?')
+      .run(hashPassword(password), username);
+    return result.changes === 1 ? password : undefined;
+  }
+
   /** Removes the account. The caller removes what the account owned first. */
   deleteUser(username: string): boolean {
     return this.db.prepare('DELETE FROM auth_users WHERE username = ?').run(username).changes > 0;

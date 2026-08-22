@@ -146,7 +146,10 @@ export interface ServerModules {
     configReset: (key: string) => boolean;
     catalogList: () => unknown;
     backupNow: () => unknown;
-    createUser: (username: string, password: string) => void;
+    createUser: (username: string, password: string, role?: string) => void;
+    /** The Users page (yourphr#604). */
+    listUsers: () => unknown[];
+    resetUserPassword: (username: string) => { username: string; password: string } | undefined;
     instanceSettings: () => { name: string; contact_email: string; contact_url: string };
     setInstanceSettings: (s: { name: string; contact_email: string; contact_url: string }) => void;
     metrics: () => unknown;
@@ -516,6 +519,46 @@ export function createYourPhrServer(options: ServerOptions) {
         };
         send(res, 200, {success: true, data: modules.jobsForUser(sessionUser, query)});
         return;
+      }
+
+      // --- the Users page (yourphr#604): the admin's list, create, and password reset ---
+      if (modules?.admin && (url.pathname === '/api/secure/users' || /^\/api\/secure\/users\/[^/]+\/password$/.test(url.pathname))) {
+        // Go answers a non-admin here with 401 "Unauthorized"; the page treats both as "not for you".
+        if (!modules.admin.isAdmin(sessionUser)) {
+          send(res, 401, {success: false, error: 'Unauthorized'});
+          return;
+        }
+        if (url.pathname === '/api/secure/users' && req.method === 'GET') {
+          send(res, 200, {success: true, data: modules.admin.listUsers()});
+          return;
+        }
+        if (url.pathname === '/api/secure/users' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          const username = typeof body?.['username'] === 'string' ? (body['username'] as string).trim() : '';
+          const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
+          const role = body?.['role'] === 'admin' ? 'admin' : 'user';
+          if (!body || username === '' || password === '') {
+            send(res, 400, {success: false, error: 'username and password are required'});
+            return;
+          }
+          try {
+            modules.admin.createUser(username, password, role);
+          } catch (err) {
+            const message = (err as Error).message;
+            send(res, 400, {success: false, error: /UNIQUE constraint/i.test(message) ? 'User already exists' : message});
+            return;
+          }
+          // Go echoes the user it made. This stack stores no full_name or email — they are absent,
+          // not invented; id is the username, as /account/me already says.
+          send(res, 200, {success: true, data: {id: username, username, role}});
+          return;
+        }
+        const resetMatch = url.pathname.match(/^\/api\/secure\/users\/([^/]+)\/password$/);
+        if (resetMatch && req.method === 'POST') {
+          const reset = modules.admin.resetUserPassword(decodeURIComponent(resetMatch[1]!));
+          reset === undefined ? send(res, 404, {success: false, error: 'no such user'}) : send(res, 200, {success: true, data: reset});
+          return;
+        }
       }
 
       // --- the provider catalog (yourphr#603): admin curates, members connect ---

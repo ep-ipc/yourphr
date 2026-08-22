@@ -402,6 +402,31 @@ async function main(): Promise<void> {
   check('deleting the account removes its sources, records, and the account itself; the password no longer signs in',
     zedHad === 3 && zedDeleted.status === 200 && zedAgain.status === 401 && app.auth.roleOf('zed') === undefined && zedRows === 0);
 
+  // --- the Users page (yourphr#604) ---
+  type ListedUser = { id: string; username: string; role: string; created_at: string };
+  const users = (await (await fetch(`${base}/api/secure/users`, authed(adminToken))).json()) as { data: ListedUser[] };
+  const aliceListsUsers = await fetch(`${base}/api/secure/users`, { headers: { authorization: `Bearer ${((await (await signIn('alice', 'another-long-enough-password')).json()) as { data: string }).data}` } });
+  check('/secure/users lists every account with its role and creation time, never a hash; a member gets Go\'s 401',
+    users.data.some((u) => u.username === 'admin' && u.role === 'admin') && users.data.some((u) => u.username === 'alice' && u.role === 'user')
+      && users.data.every((u) => u.id === u.username && !!u.created_at && !('password_hash' in u) && !('password' in u)) && aliceListsUsers.status === 401);
+  const createBody = (over: Record<string, unknown>) => ({ method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ full_name: 'Dave Example', username: 'dave', email: 'dave@example.org', password: 'daves-long-enough-password', role: 'user', ...over }) });
+  const madeDave = await fetch(`${base}/api/secure/users`, createBody({}));
+  const madeDaveBody = (await madeDave.json()) as { data: { username: string; role: string } };
+  const duplicate = await fetch(`${base}/api/secure/users`, createBody({}));
+  const weak = await fetch(`${base}/api/secure/users`, createBody({ username: 'eve', password: 'short' }));
+  const madeAdmin = await fetch(`${base}/api/secure/users`, createBody({ username: 'ops2', role: 'admin' }));
+  check('create takes the page\'s body (full_name/email not stored — absent, not invented); duplicates and weak passwords are 400; role is honoured',
+    madeDave.status === 200 && madeDaveBody.data.username === 'dave' && madeDaveBody.data.role === 'user' && duplicate.status === 400 && ((await duplicate.json()) as { error: string }).error === 'User already exists'
+      && weak.status === 400 && madeAdmin.status === 200 && app.auth.roleOf('ops2') === 'admin' && app.auth.roleOf('dave') === 'user');
+  const daveToken = ((await (await signIn('dave', 'daves-long-enough-password')).json()) as { data: string }).data;
+  const resetDave = (await (await fetch(`${base}/api/secure/users/dave/password`, { method: 'POST', ...authed(adminToken) })).json()) as { data: { username: string; password: string } };
+  const daveOldSession = await fetch(`${base}/api/secure/account/me`, authed(daveToken));
+  const daveOldPassword = await signIn('dave', 'daves-long-enough-password');
+  const daveNewPassword = await signIn('dave', resetDave.data.password);
+  const resetNobody = await fetch(`${base}/api/secure/users/nobody/password`, { method: 'POST', ...authed(adminToken) });
+  check('an admin reset hands back a generated password once and signs the member out everywhere; the old password is dead; unknown user is 404',
+    resetDave.data.username === 'dave' && resetDave.data.password.length >= 12 && daveOldSession.status === 401 && daveOldPassword.status === 401 && daveNewPassword.status === 200 && resetNobody.status === 404);
+
   // --- the admin dashboard, database, logs and configuration pages (yourphr#602) ---
   const adminJson = async (path: string, init: RequestInit = {}) => {
     const r = await fetch(`${base}${path}`, { ...init, headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}`, ...(init.headers ?? {}) } });

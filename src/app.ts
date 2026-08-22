@@ -756,7 +756,14 @@ export function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; 
         },
         catalogList: () => catalog.list(),
         backupNow,
-        createUser: (username, password) => auth.createUser(username, password),
+        createUser: (username, password, role) => auth.createUser(username, password, role === 'admin' ? 'admin' : 'user'),
+        listUsers: () => auth.listUsers().map((u) => ({ id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0 })),
+        resetUserPassword: (username) => {
+          const password = auth.adminResetPassword(username);
+          if (password === undefined) return undefined;
+          appLog.info(`admin reset the password for ${username}; every session of that account ended`);
+          return { username, password };
+        },
         instanceSettings: () => ({ name: config.getString('operator.name'), contact_email: config.getString('operator.contact_email'), contact_url: config.getString('operator.contact_url') }),
         setInstanceSettings: (s) => {
           config.set('operator.name', s.name);
