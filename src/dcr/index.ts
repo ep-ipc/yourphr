@@ -20,7 +20,6 @@
  */
 import { OutboundHttp } from '../http/index.js';
 import { validateDiscoveredEndpoint } from '../smart/index.js';
-import type Database from 'better-sqlite3-multiple-ciphers';
 
 export interface DcrRequest {
   registrationEndpoint: string;
@@ -92,41 +91,4 @@ export async function registerDynamicClient(request: DcrRequest): Promise<Dynami
     registrationAccessToken: typeof payload['registration_access_token'] === 'string' ? payload['registration_access_token'] : '',
     registrationClientUri: typeof payload['registration_client_uri'] === 'string' ? payload['registration_client_uri'] : '',
   };
-}
-
-/** Persisted per-source dynamic credentials — the per-installation client DCR exists to mint. */
-export class DynamicClientStore {
-  constructor(private readonly db: InstanceType<typeof Database>) {
-    db.exec(`CREATE TABLE IF NOT EXISTS dynamic_clients (
-      source_id INTEGER PRIMARY KEY,
-      client_id TEXT NOT NULL,
-      client_secret TEXT NOT NULL DEFAULT '',
-      registration_access_token TEXT NOT NULL DEFAULT '',
-      registration_client_uri TEXT NOT NULL DEFAULT '',
-      registered_at TEXT NOT NULL
-    )`);
-  }
-
-  save(sourceId: number, client: DynamicClient): void {
-    this.db
-      .prepare(
-        `INSERT INTO dynamic_clients (source_id, client_id, client_secret, registration_access_token, registration_client_uri, registered_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(source_id) DO UPDATE SET client_id=excluded.client_id, client_secret=excluded.client_secret,
-           registration_access_token=excluded.registration_access_token, registration_client_uri=excluded.registration_client_uri,
-           registered_at=excluded.registered_at`
-      )
-      .run(sourceId, client.clientId, client.clientSecret, client.registrationAccessToken, client.registrationClientUri, new Date().toISOString());
-  }
-
-  forSource(sourceId: number): DynamicClient | undefined {
-    const row = this.db.prepare('SELECT * FROM dynamic_clients WHERE source_id = ?').get(sourceId) as Record<string, string> | undefined;
-    if (!row) return undefined;
-    return {
-      clientId: row['client_id'] ?? '',
-      clientSecret: row['client_secret'] ?? '',
-      registrationAccessToken: row['registration_access_token'] ?? '',
-      registrationClientUri: row['registration_client_uri'] ?? '',
-    };
-  }
 }

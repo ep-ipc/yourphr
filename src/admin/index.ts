@@ -10,7 +10,7 @@ import { existsSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync
 import { dirname, join, resolve } from 'node:path';
 import type Database from 'better-sqlite3-multiple-ciphers';
 import type { ConfigStore } from '../config/index.js';
-import type { SourceStore } from '../worker/index.js';
+import type { SourcesManager } from '../app/managers/SourcesManager.js';
 import { isBackupFileName, listBackups, stageRestore, type BackupResult } from '../backup/index.js';
 import type { RecordsManager } from '../app/managers/RecordsManager.js';
 
@@ -45,7 +45,8 @@ export interface AdminDeps {
   dataDir: string;
   config: ConfigStore;
   appDb: InstanceType<typeof Database>;
-  sources: SourceStore;
+  /** The door to connected sources (yourphr#612): the database page counts through it. */
+  sources: SourcesManager;
   /** The door to the records (yourphr#609): backup and integrity go through it. */
   records: RecordsManager;
   now?: () => Date;
@@ -165,7 +166,7 @@ export class AdminOps {
     const files = [join(dataDir, this.deps.config.getString('database.location')), join(dataDir, 'records.db')];
     const sizeBytes = files.reduce((n, f) => n + (existsSync(f) ? statSync(f).size : 0), 0);
     const users = (this.deps.appDb.prepare('SELECT COUNT(*) AS n FROM auth_users').get() as { n: number }).n;
-    const sourcesCount = (this.deps.appDb.prepare('SELECT COUNT(*) AS n FROM connected_sources').get() as { n: number }).n;
+    const sourcesCount = await this.deps.sources.count();
     const quick = (db: InstanceType<typeof Database>): boolean => {
       try { return String((db.pragma('quick_check') as { quick_check: string }[])[0]?.quick_check ?? '').toLowerCase() === 'ok'; } catch { return false; }
     };

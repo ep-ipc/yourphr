@@ -11,7 +11,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { registerDynamicClient, DynamicClientStore } from '../src/dcr/index.js';
+import { registerDynamicClient } from '../src/dcr/index.js';
+import { SqliteSourcesProvider } from '../src/app/providers/SqliteSourcesProvider.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -93,13 +94,13 @@ async function main(): Promise<void> {
     state.lastBody?.['token_endpoint_auth_method'] === 'none');
 
   const db = new Database(join(dir, 'dcr.db'));
-  const store = new DynamicClientStore(db);
-  store.save(7, client);
+  const store = new SqliteSourcesProvider(db); // the dynamic client rides with its source (yourphr#612)
+  await store.saveDynamicClient(7, client);
   check('the dynamic client persists per source and reads back',
-    store.forSource(7)?.clientId === 'dyn-client-123' && store.forSource(8) === undefined);
+    (await store.dynamicClientFor(7))?.clientId === 'dyn-client-123' && (await store.dynamicClientFor(8)) === undefined);
   const rotated = { ...client, clientId: 'dyn-client-456' };
-  store.save(7, rotated);
-  check('re-registration replaces the stored client (one per source)', store.forSource(7)?.clientId === 'dyn-client-456');
+  await store.saveDynamicClient(7, rotated);
+  check('re-registration replaces the stored client (one per source)', (await store.dynamicClientFor(7))?.clientId === 'dyn-client-456');
 
   // --- refusals with teeth ---
   state.mode = 'no-client-id';

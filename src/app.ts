@@ -36,7 +36,12 @@ import { SqliteRecordsProvider } from './app/providers/SqliteRecordsProvider.js'
 import { SmartClient, generateVerifier } from './smart/index.js';
 import { resourceTypesFromScopes } from './migrate/index.js';
 import { randomUUID } from 'node:crypto';
-import { SourceStore, runSyncPass, syncSource, type ConnectedSource, type JobSummary } from './worker/index.js';
+import { SourcesManager, sourceShape } from './app/managers/SourcesManager.js';
+import { JobsManager, backgroundJobShape } from './framework/managers/JobsManager.js';
+import { SqliteSourcesProvider } from './app/providers/SqliteSourcesProvider.js';
+import { SqliteJobsProvider } from './framework/providers/SqliteJobsProvider.js';
+import { NullSourceClientProvider, type BaseSourceClientProvider } from './app/providers/BaseSourceClientProvider.js';
+export { sourceShape, backgroundJobShape };
 import { EventBus } from './events/index.js';
 import { FavoriteStore } from './favorites/index.js';
 import { AccountStore, accessCategoryFor, providerRequiresLegalConsent } from './account/index.js';
@@ -136,7 +141,12 @@ export interface Stores {
   users: UsersManager;
   sessions: SessionsManager;
   catalog: ProviderCatalog;
-  sources: SourceStore;
+  /** The one door to connected sources and their sync (yourphr#612). */
+  sources: SourcesManager;
+  /** The one door to the job history (yourphr#612). */
+  jobs: JobsManager;
+  /** The per-member event stream the Sources page follows. */
+  events: EventBus;
   favorites: FavoriteStore;
   account: AccountStore;
   /** The composition root (yourphr#608): managers, in validated boot order. */
@@ -146,6 +156,16 @@ export interface Stores {
   /** The PHI-storage provider — for the migration tool's verification gate, which reads below the manager on purpose. */
   recordsProvider: SqliteRecordsProvider;
   close: () => Promise<void>;
+}
+
+/** The source-client provider configuration names: 'smart' loads the SMART client; 'null' loads nothing; anything else refuses to boot. */
+async function sourceClientFor(name: string, env: Record<string, string | undefined>): Promise<BaseSourceClientProvider> {
+  if (name === 'null') return new NullSourceClientProvider();
+  if (name === 'smart') {
+    const { SmartSourceClientProvider } = await import('./app/providers/SmartSourceClientProvider.js');
+    return new SmartSourceClientProvider({ allowInternal: env['SPIKE_TEST_ALLOW_INTERNAL'] === '1' });
+  }
+  throw new Error(`sources.client.provider: unknown provider '${name}' (smart or null)`);
 }
 
 export async function openStores(dataDir: string, env: Record<string, string | undefined> = process.env): Promise<Stores> {
@@ -170,7 +190,6 @@ export async function openStores(dataDir: string, env: Record<string, string | u
 
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
   const catalog = new ProviderCatalog(db);
-  const sources = new SourceStore(db);
   const favorites = new FavoriteStore(db);
   const account = new AccountStore(db);
   // 3. Accounts and sessions as managers over providers (yourphr#611): user storage in the app
@@ -190,76 +209,27 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('users', users);
   engine.register('sessions', sessions);
   engine.register('records', new RecordsManager(engine, recordsProvider));
+  // 7. Jobs and Sources (yourphr#612): the source client is an OPTIONAL capability — bound by
+  // configuration, loaded only when configured, inert (and said so) when not.
+  const events = new EventBus();
+  engine.register('jobs', new JobsManager(engine, new SqliteJobsProvider(db)));
+  engine.register('sources', new SourcesManager(engine, new SqliteSourcesProvider(db), await sourceClientFor(config.getString('sources.client.provider'), env), {
+    maxPages: config.getInt('sync.max-pages'),
+    events,
+    log: (line) => appLog.info(line),
+  }));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
+  const { records, sources, jobs } = engine.managers;
+  // The Records manager names a source for the records that carry its id — asked of the Sources door.
+  records.sourceDisplay = (sourceId) => sources.displayOf(sourceId);
 
   return {
-    config, db, dbKey, users, sessions, catalog, sources, favorites, account, engine, records: engine.managers.records, recordsProvider,
+    config, db, dbKey, users, sessions, catalog, sources, jobs, events, favorites, account, engine, records, recordsProvider,
     close: async () => {
       await engine.shutdown();
       db.close();
     },
-  };
-}
-
-/**
- * A recorded sync job in the shape of Go's BackgroundJob + BackgroundJobSyncData (yourphr#593), which
- * is what the Angular shell and /background-jobs read. Only what the row holds: the job id is the
- * row id, the user is the caller (the join proved ownership), and a recorded job is DONE or FAILED —
- * never READY/LOCKED, because this stack records outcomes, not a queue. brand_id is empty (no brand
- * here), the summary carries the counts the worker kept.
- */
-export function backgroundJobShape(job: JobSummary, username: string): Record<string, unknown> {
-  const iso = (seconds: number): string => new Date(seconds * 1000).toISOString();
-  const done = job.outcome === 'success';
-  return {
-    id: String(job.id ?? ''),
-    created_at: iso(job.startedAt),
-    updated_at: iso(job.finishedAt),
-    user_id: username,
-    job_type: 'SYNC',
-    job_status: done ? 'STATUS_DONE' : 'STATUS_FAILED',
-    locked_time: iso(job.startedAt),
-    done_time: iso(job.finishedAt),
-    retries: 0,
-    data: {
-      source_id: `source-${job.sourceId}`,
-      brand_id: '',
-      ...(job.error ? { error_data: { error: job.error } } : {}),
-      summary: {
-        outcome: done ? 'success' : 'failed',
-        duration_ms: Math.max(0, job.finishedAt - job.startedAt) * 1000,
-        total_resources: job.received,
-        ...(job.error ? { error_message: job.error } : {}),
-      },
-    },
-  };
-}
-
-/**
- * A connected source in the shape of Go's SourceCredential (yourphr#594) — what the Sources page,
- * Explore and the dashboard read. The public id is `source-<n>`, the same string every record of
- * that source carries in its source_id column, so /explore/:source and ?sourceID line up. Secrets
- * are Go's "[REDACTED]" when present and '' when the source is disconnected; fields this stack does
- * not hold (brand, portal, created_at; platform_type and environment when the row has none) are
- * absent, not invented — the Angular code already defaults every one of them.
- */
-export function sourceShape(source: ConnectedSource, latestJob: JobSummary | undefined): Record<string, unknown> {
-  const redact = (secret: string): string => (secret === '' ? '' : '[REDACTED]');
-  return {
-    id: `source-${source.id}`,
-    ...(source.lastSyncAt > 0 ? { updated_at: new Date(source.lastSyncAt * 1000).toISOString() } : {}),
-    user_id: source.userId,
-    display: source.display,
-    ...(source.platformType !== '' ? { platform_type: source.platformType } : {}),
-    ...(source.environment !== '' ? { environment: source.environment } : {}),
-    patient: source.patient,
-    client_id: source.clientId,
-    api_endpoint_base_url: source.fhirBaseUrl,
-    access_token: redact(source.accessToken),
-    refresh_token: redact(source.refreshToken),
-    expires_at: source.expiresAt,
-    ...(latestJob ? { latest_background_job: backgroundJobShape(latestJob, source.userId) } : {}),
   };
 }
 
@@ -270,7 +240,8 @@ export interface App {
   users: UsersManager;
   sessions: SessionsManager;
   catalog: ProviderCatalog;
-  sources: SourceStore;
+  sources: SourcesManager;
+  jobs: JobsManager;
   account: AccountStore;
   bootstrapPasswordFile?: string;
   syncNow: (now?: number) => Promise<unknown>;
@@ -280,7 +251,7 @@ export interface App {
 
 export async function assembleApp(dataDir: string, options: { seeds?: CatalogWrite[]; env?: Record<string, string | undefined>; workerIntervalMs?: number; webDir?: string; version?: string } = {}): Promise<App> {
   const stores = await openStores(dataDir, options.env ?? process.env);
-  const { config, users, sessions, catalog, sources, favorites, account, engine, records } = stores;
+  const { config, users, sessions, catalog, sources, favorites, account, engine, records, events } = stores;
   /** The worker and the migration tool act for an account as a named system principal. */
   const systemCtx = (name: string, username: string): ApiContext => ApiContext.system(name, username, engine);
 
@@ -292,14 +263,9 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     catalog.seed(options.seeds);
   }
 
-  const workerDeps = {
-    store: sources,
-    writerFor: (userId: string, sourceId: string) => records.writer(systemCtx('worker', userId), sourceId),
-    maxPages: config.getInt('sync.max-pages'),
-    allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
-  };
+  // The worker: the Sources manager's pass, on the configured interval.
   const timer = options.workerIntervalMs
-    ? setInterval(() => { void runSyncPass(workerDeps); }, options.workerIntervalMs)
+    ? setInterval(() => { void sources.pass(); }, options.workerIntervalMs)
     : undefined;
   timer?.unref?.();
 
@@ -326,8 +292,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     'operator.contact_url': config.getString('operator.contact_url'),
     'password.min_length': config.getInt('auth.password.min-length'),
   });
-
-  const events = new EventBus();
 
   /** The keys /api/instance/public publishes — Go's `public` list, as far as this stack has values. */
   const PUBLIC_KEYS = new Set(['operator.name', 'operator.contact_url', 'auth.password.min-length']);
@@ -367,39 +331,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
       allowInternal: (options.env ?? process.env)['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
     });
 
-  /** Go's AdminMetricsResponse over sync_jobs: no scrape endpoint here, counters from the job history. */
-  const adminMetrics = (): Record<string, unknown> => {
-    const bySource = new Map(sources.list().map((s) => [s.id, s]));
-    const jobs = stores.db.prepare('SELECT * FROM sync_jobs ORDER BY id DESC').all() as { id: number; source_id: number; outcome: string; received: number; error: string; started_at: number; finished_at: number }[];
-    const jobsTotal: Record<string, number> = {};
-    const resourcesTotal: Record<string, number> = {};
-    let durationCount = 0;
-    let durationSum = 0;
-    for (const j of jobs) {
-      const s = bySource.get(j.source_id);
-      const key = `${j.outcome === 'success' ? 'success' : 'failed'}|${s?.platformType || 'unknown'}|${s?.environment || 'unknown'}`;
-      jobsTotal[key] = (jobsTotal[key] ?? 0) + 1;
-      resourcesTotal[key] = (resourcesTotal[key] ?? 0) + j.received;
-      durationCount++;
-      durationSum += Math.max(0, j.finished_at - j.started_at);
-    }
-    const iso = (seconds: number): string => new Date(seconds * 1000).toISOString();
-    return {
-      scrape_enabled: false,
-      scrape_path: '/metrics',
-      scrape_note: 'This stack exposes no Prometheus scrape endpoint; the counters below come from the sync job history.',
-      process: { jobs_total: jobsTotal, resources_total: resourcesTotal, duration_count: durationCount, duration_sum_seconds: durationSum },
-      recent_jobs: jobs.slice(0, 10).map((j) => ({
-        id: String(j.id),
-        job_status: j.outcome === 'success' ? 'STATUS_DONE' : 'STATUS_FAILED',
-        created_at: iso(j.started_at),
-        done_time: iso(j.finished_at),
-        source_id: `source-${j.source_id}`,
-        summary: { outcome: j.outcome === 'success' ? 'success' : 'failed', duration_ms: Math.max(0, j.finished_at - j.started_at) * 1000, total_resources: j.received, ...(j.error ? { error_message: j.error } : {}) },
-      })),
-    };
-  };
-
   /** Go's LegalConsentStatus, from the stored timestamp ('' = not accepted). */
   const consentStatus = (acceptedAt: string): Record<string, unknown> => ({
     accepted: acceptedAt !== '',
@@ -407,20 +338,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     privacy_policy_url: '/privacy',
     terms_of_service_url: '/terms',
   });
-
-  /** The caller's source, by its public id — undefined for another user's or a malformed id. */
-  const owned = (username: string, publicId: string): ConnectedSource | undefined => {
-    const m = publicId.match(/^source-(\d+)$/);
-    if (!m) return undefined;
-    const s = sources.byId(Number(m[1]));
-    return s && s.userId === username ? s : undefined;
-  };
-
-  // Until Sources is a manager, the Records manager asks the app for a source's display name.
-  records.sourceDisplay = (sourceId: string): string => {
-    const numeric = Number(sourceId.replace('source-', ''));
-    return sources.list().find((s) => s.id === numeric)?.display ?? '';
-  };
 
   const server = createYourPhrServer({
     engine,
@@ -436,68 +353,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
         'operator.contact_email': config.getString('operator.contact_email'), // signed-in only (yourphr#459)
         'demo.admin.session': false, // this stack has no demo admin; the UI reads strictly true
       }),
-      jobsForUser: (username, query) => {
-        // Go's filters, honestly mapped: SYNC is the only job type here; STATUS_DONE/STATUS_FAILED are
-        // the only statuses a recorded job can have, so READY/LOCKED match nothing rather than something.
-        if (query.jobType && query.jobType !== 'SYNC') return [];
-        let outcome: 'success' | 'failure' | undefined;
-        if (query.status === 'STATUS_DONE') outcome = 'success';
-        else if (query.status === 'STATUS_FAILED') outcome = 'failure';
-        else if (query.status) return [];
-        return sources.jobsForUser(username, { limit: query.limit, offset: query.page * query.limit, outcome }).map((job) => backgroundJobShape(job, username));
-      },
-      sources: {
-        list: (username) => sources.list().filter((s) => s.userId === username).map((s) => sourceShape(s, sources.latestJob(s.id))),
-        get: (username, id) => {
-          const s = owned(username, id);
-          return s ? sourceShape(s, sources.latestJob(s.id)) : undefined;
-        },
-        summary: async (ctx, id) => {
-          const s = owned(ctx.username, id);
-          if (!s) return undefined;
-          return {
-            source: sourceShape(s, sources.latestJob(s.id)),
-            resource_type_counts: await records.sourceCounts(ctx, id),
-            patient: await records.patientOf(ctx, id),
-          };
-        },
-        sync: async (username, id) => {
-          const s = owned(username, id);
-          if (!s) return undefined;
-          events.publish(username, { event_type: 'source_sync', source_id: id });
-          const job = await syncSource(workerDeps, s);
-          events.publish(username, { event_type: 'source_complete', source_id: id });
-          if (job.outcome !== 'success') throw new Error(job.error || 'sync failed');
-          // Go answers with its upsert summary; the page prints data as "N row(s) effected".
-          return { source: sourceShape(sources.byId(s.id) ?? s, job), data: job.created + job.updated };
-        },
-        disconnect: (username, id) => {
-          const s = owned(username, id);
-          if (!s) return false;
-          sources.clearTokens(s.id);
-          return true;
-        },
-        removeData: async (ctx, id) => (owned(ctx.username, id) ? records.removeSource(ctx, id) : undefined),
-        remove: async (ctx, id) => {
-          const s = owned(ctx.username, id);
-          if (!s) return undefined;
-          const rows = await records.removeSource(ctx, id);
-          sources.remove(s.id);
-          return rows;
-        },
-        exportBundle: async (ctx, id) => {
-          const s = owned(ctx.username, id);
-          if (!s) return undefined;
-          const bundle = await records.exportSource(ctx, id);
-          const slug = s.display.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'source';
-          const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-          return { filename: `yourphr-${slug}-${stamp}.json`, bundle };
-        },
-        // The catalog's connectable entries in Go's ConnectableProvider shape, policy resolved by
-        // Go's rules (yourphr#603).
-        connectable: () => catalog.connectable().map(connectableShape),
-        events,
-      },
       ips: (ctx) => records.ips(ctx).then((d) => d.bundle),
       provenanceFor: (ctx, resourceType, id) => records.provenance(ctx, resourceType, id),
       medications: (ctx) => records.medications(ctx),
@@ -532,6 +387,8 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
         },
         // Sandboxes are for the admin to try a provider before a member meets it (the Sandbox page).
         sandbox: () => catalog.list().filter((e) => e.enabled && e.environment === 'sandbox').map(connectableShape),
+        // The catalog's connectable entries in Go's ConnectableProvider shape, policy resolved by Go's rules (yourphr#603).
+        connectable: () => catalog.connectable().map(connectableShape),
         authorize: async (_username, id, body) => {
           const e = enabledCatalogEntry(id);
           const redirectUri = typeof body['redirect_uri'] === 'string' ? (body['redirect_uri'] as string).trim() : '';
@@ -583,22 +440,14 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           if (patient === '') throw withStatus(502, 'token had no patient id — this stack does not yet resolve one from the FHIR API');
           const patientFacing = connectableShape(e)['display'] as string;
           const display = patientFacing === e.display && str('display') !== '' ? str('display') : patientFacing;
-          const source = sources.add({
+          const source = await sources.add(ctx, {
             userId: username, display, fhirBaseUrl: e.fhirBaseUrl, tokenUrl: endpoints.token, clientId: e.clientId, patient,
             resourceTypes: resourceTypesFromScopes(e.scopes), accessToken: token.accessToken, refreshToken: token.refreshToken ?? '',
             expiresAt: token.expiresAt ? Math.floor(token.expiresAt.getTime() / 1000) : 0,
             platformType: e.platformType || 'ehr', environment: e.environment,
           });
           // The initial import runs in the background, as Go's does; the page follows it on the event stream.
-          void (async () => {
-            events.publish(username, { event_type: 'source_sync', source_id: `source-${source.id}` });
-            try {
-              await syncSource(workerDeps, source);
-            } catch (err) {
-              appLog.error(`initial sync failed for source ${source.id}: ${(err as Error).message}`);
-            }
-            events.publish(username, { event_type: 'source_complete', source_id: `source-${source.id}` });
-          })();
+          sources.syncInBackground(ctx, source);
           return { source: sourceShape(source, undefined), data: { status: 'import_started' } };
         },
       },
@@ -625,15 +474,10 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           users.setConsent(ctx, now);
           return consentStatus(now);
         },
-        revokeConsent: (ctx) => {
+        revokeConsent: async (ctx) => {
           users.setConsent(ctx, '');
           // Go's rule: revoking the consent disconnects the sources that required it.
-          let disconnected = 0;
-          for (const s of sources.list()) {
-            if (s.userId !== ctx.username || !providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType)) continue;
-            sources.clearTokens(s.id);
-            disconnected++;
-          }
+          const disconnected = await sources.disconnectWhere(ctx, (s) => providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType));
           return { ...consentStatus(''), medicare_sources_disconnected: disconnected };
         },
         changePassword: async (ctx, current, next) => {
@@ -646,7 +490,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           // manager removes rows, index and history and drops the handle), favourites, the access
           // log, then the account itself (consent goes with it).
           const username = ctx.username;
-          for (const s of sources.list().filter((s) => s.userId === username)) sources.remove(s.id);
+          await sources.removeAll(ctx);
           await records.removeAll(ctx);
           for (const fav of favorites.list(username, 'Practitioner')) favorites.remove(username, fav);
           account.deleteUser(username);
@@ -724,7 +568,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
           config.set('operator.contact_email', s.contact_email);
           config.set('operator.contact_url', s.contact_url);
         },
-        metrics: () => adminMetrics(),
+        metrics: (ctx) => sources.adminMetrics(ctx),
         databaseInfo: () => adminOps.databaseInfo(),
         backupFile: async () => {
           const r = await adminOps.backupNow();
@@ -754,9 +598,10 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     sessions,
     catalog,
     sources,
+    jobs: stores.jobs,
     account,
     bootstrapPasswordFile: bootstrap.passwordFile,
-    syncNow: (now?: number) => runSyncPass(workerDeps, now),
+    syncNow: (now?: number) => sources.pass(now),
     backupNow,
     close: async () => {
       if (timer) clearInterval(timer);

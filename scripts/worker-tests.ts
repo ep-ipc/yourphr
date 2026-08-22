@@ -10,10 +10,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { ProviderCatalog } from '../src/catalog/index.js';
-import { SourceStore, runSyncPass } from '../src/worker/index.js';
+import { bootSources } from './lib/boot-sources.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 
-import { repositoryWriter } from '../src/sync/index.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -122,7 +121,9 @@ async function main(): Promise<void> {
   const fake = startFakeProvider();
   const base = await listen(fake.server);
 
-  const store = new SourceStore(db);
+  const lines: string[] = [];
+  const harness = await bootSources(db, join(dir, 'records.db'), { maxPages: 10, log: (l) => lines.push(l) });
+  const { sources, jobs, ctxFor } = harness;
   const repos = new Map<string, SqliteFhirRepository>();
   const repoForUser = (u: string) => {
     let r = repos.get(u);
@@ -131,22 +132,19 @@ async function main(): Promise<void> {
   };
 
   const NOW = 1_000_000;
-  const alice = store.add({
+  const alice = await sources.add(ctxFor('alice'), {
     userId: 'alice', display: 'Fake Provider', fhirBaseUrl: base, tokenUrl: `${base}/token`, clientId: 'cid-1',
     patient: 'pa', resourceTypes: ['Condition', 'Observation'],
     accessToken: 'long-expired-token', refreshToken: 'refresh-1', expiresAt: NOW - 100,
   });
 
-  const lines: string[] = [];
-  const deps = { store, repoForUser, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 10, allowInternal: true, log: (l: string) => lines.push(l) };
-
-  const pass1 = await runSyncPass(deps, NOW);
+  const pass1 = await sources.pass(NOW);
   check('an expired token is refreshed BEFORE the sync, and the sync succeeds on the new token',
     pass1.refreshAttempted === 1 && pass1.refreshed === 1 && pass1.synced === 1 && pass1.failed === 0);
   check('the accounting line reads exactly like the production signal',
     lines.some((l) => l === 'token-refresh: attempted 1, refreshed 1'));
 
-  const persisted = store.list().find((s) => s.id === alice.id)!;
+  const persisted = (await sources.owned(ctxFor('alice'), alice.id))!;
   check('rotated tokens are persisted (access, refresh, expiry)',
     persisted.accessToken === fake.state.validToken && persisted.refreshToken.startsWith('rotated-refresh-') && persisted.expiresAt > NOW);
 
@@ -154,43 +152,44 @@ async function main(): Promise<void> {
   check('records landed under the source\'s OWNER', (aliceRecords.total ?? 0) === 3, `${aliceRecords.total} Conditions`);
 
   // --- a fresh token is NOT refreshed ---
-  const pass2 = await runSyncPass(deps, NOW + 10);
+  const pass2 = await sources.pass(NOW + 10);
   check('a fresh token is left alone (refresh only near expiry)', pass2.refreshAttempted === 0 && pass2.synced === 1);
   const again = await repoForUser('alice').search({ resourceType: 'Condition', count: 100, total: 'accurate' });
   check('a worker resync creates nothing new', again.total === 3);
 
   // --- one failing source never costs the healthy one ---
-  const failing = store.add({
+  const failing = await sources.add(ctxFor('bob'), {
     userId: 'bob', display: 'Broken Provider', fhirBaseUrl: base, tokenUrl: `${base}/token`, clientId: 'cid-1',
     patient: 'pb', resourceTypes: ['Condition'],
     accessToken: fake.state.validToken, refreshToken: '', expiresAt: NOW + 100_000,
   });
   fake.state.failFhir = true;
-  const bobOnlyPass = await runSyncPass({ ...deps, store }, NOW + 20);
+  const bobOnlyPass = await sources.pass(NOW + 20);
   check('a failing provider fails BOTH syncs this pass (fake 500s for everyone) but the pass completes',
     bobOnlyPass.failed === 2 && bobOnlyPass.synced === 0);
   fake.state.failFhir = false;
 
-  const pass3 = await runSyncPass(deps, NOW + 30);
+  const pass3 = await sources.pass(NOW + 30);
   check('after the provider recovers, both sources sync — neither was wedged by the failure',
     pass3.synced === 2 && pass3.failed === 0);
 
-  const bobJobs = store.jobs(failing.id);
+  const bobJobs = await jobs.history(failing.id);
   check('job summaries record failure THEN success, with the error text',
     bobJobs.some((j) => j.outcome === 'failure' && j.error.includes('500')) && bobJobs.some((j) => j.outcome === 'success'));
 
   // --- a source with no refresh token logs the reconnect signal instead of dying silently ---
-  store.add({
+  await sources.add(ctxFor('carol'), {
     userId: 'carol', display: 'No Refresh', fhirBaseUrl: base, tokenUrl: `${base}/token`, clientId: 'cid-1',
     patient: 'pc', resourceTypes: ['Condition'],
     accessToken: 'expired-and-unrefreshable', refreshToken: '', expiresAt: NOW - 100,
   });
-  await runSyncPass(deps, NOW + 40);
+  await sources.pass(NOW + 40);
   check('a source with no refresh token logs the reconnect-the-source warning',
     lines.some((l) => l.includes('no refresh token is available; reconnect the source')));
 
   fake.server.close();
   for (const r of repos.values()) r.db.close();
+  await harness.close();
   db.close();
   rmSync(dir, { recursive: true, force: true });
 

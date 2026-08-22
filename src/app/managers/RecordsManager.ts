@@ -57,7 +57,7 @@ export class RecordsManager extends BaseManager {
   /** Reads no configuration today; declared empty rather than pretending (the engine validates what is declared). */
   override readonly dependsOn = [] as const;
   /** Maps a source id to its display name; '' when unknown — never invent. Set by the app until Sources is a manager. */
-  sourceDisplay: (sourceId: string) => string = () => '';
+  sourceDisplay: (sourceId: string) => Promise<string> | string = () => '';
 
   constructor(engine: Engine, private readonly provider: BaseRecordsProvider) {
     super(engine);
@@ -150,7 +150,7 @@ export class RecordsManager extends BaseManager {
     const stored = await this.provider.read(userId, resourceType, id);
     if (!stored) return undefined;
     const history = await this.provider.history(userId, resourceType, id);
-    const display = stored.sourceId === '' ? 'This instance (manual entry or upload)' : this.sourceDisplay(stored.sourceId) || stored.sourceId;
+    const display = stored.sourceId === '' ? 'This instance (manual entry or upload)' : (await this.sourceDisplay(stored.sourceId)) || stored.sourceId;
     return {
       resourceType, id, sourceId: stored.sourceId, sourceDisplay: display,
       firstReceivedAt: history.firstReceivedAt ?? stored.lastUpdated, lastConfirmedAt: stored.lastUpdated, timesSeen: Math.max(history.versions, 1),

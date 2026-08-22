@@ -16,7 +16,8 @@
  *     grant means the worker asks for exactly what the source authorized, nothing more.
  */
 import type Database from 'better-sqlite3-multiple-ciphers';
-import type { SourceStore } from '../worker/index.js';
+import type { SourcesManager, SourceImportReport } from '../app/managers/SourcesManager.js';
+import type { ApiContext } from '../framework/ApiContext.js';
 import type { AccountStore, AccessEvent } from '../account/index.js';
 import type { LegacyUser } from '../framework/managers/UsersManager.js';
 
@@ -106,58 +107,29 @@ export function readGoSources(goDb: InstanceType<typeof Database>): LegacySource
   }));
 }
 
-export interface SourceImportReport {
-  imported: string[];
-  skippedExisting: string[];
-  /** Sources with no refresh token — they migrate, but the first expiry needs a reconnect. */
-  needsReconnect: string[];
-  /**
-   * Go source id -> spike source id, for imported AND already-present sources alike, so the record
-   * import (yourphr#586) can attribute every fhir_* row to the source it came from.
-   */
-  idMap: Record<string, number>;
-}
+export type { SourceImportReport };
 
 /**
- * One-way import into the spike's SourceStore: an existing (user, base, patient) source is
- * skipped and reported, never overwritten. tokenUrl lands '' — the worker discovers it on first
- * need. Tokens land verbatim; expiry carries so a still-valid access token keeps working and an
- * expired one refreshes on the first pass.
+ * One-way import through the Sources door (yourphr#612), as the migration principal: the Go rows
+ * become NewSource values keyed by their Go id; the manager skips what is already held, lands
+ * tokens verbatim, and reports what needs a reconnect.
  */
-export function importLegacySources(store: SourceStore, sources: LegacySource[]): SourceImportReport {
-  const report: SourceImportReport = { imported: [], skippedExisting: [], needsReconnect: [], idMap: {} };
-  const existing = new Map(store.list().map((s) => [`${s.userId}|${s.fhirBaseUrl}|${s.patient}`, s.id]));
-  for (const source of sources) {
-    const key = `${source.username}|${source.fhirBaseUrl}|${source.patient}`;
-    const label = `${source.username}:${source.display}`;
-    const held = existing.get(key);
-    if (held !== undefined) {
-      report.skippedExisting.push(label);
-      report.idMap[source.id] = held;
-      continue;
-    }
-    const added = store.add({
-      userId: source.username,
-      display: source.display,
-      fhirBaseUrl: source.fhirBaseUrl,
-      tokenUrl: '', // discovered by the worker on first need — the import stays offline
-      clientId: source.clientId,
-      patient: source.patient,
-      resourceTypes: resourceTypesFromScopes(source.scopes),
-      accessToken: source.accessToken,
-      refreshToken: source.refreshToken,
-      expiresAt: source.expiresAt,
-      platformType: source.platformType,
-      environment: source.environment,
-    });
-    existing.set(key, added.id);
-    report.idMap[source.id] = added.id;
-    report.imported.push(label);
-    if (source.refreshToken === '') {
-      report.needsReconnect.push(label);
-    }
-  }
-  return report;
+export function importLegacySources(sources: SourcesManager, ctx: ApiContext, legacy: LegacySource[]): Promise<SourceImportReport> {
+  return sources.importLegacy(ctx, legacy.map((source) => ({
+    legacyId: source.id,
+    userId: source.username,
+    display: source.display,
+    fhirBaseUrl: source.fhirBaseUrl,
+    tokenUrl: '', // discovered on first need — the import stays offline
+    clientId: source.clientId,
+    patient: source.patient,
+    resourceTypes: resourceTypesFromScopes(source.scopes),
+    accessToken: source.accessToken,
+    refreshToken: source.refreshToken,
+    expiresAt: source.expiresAt,
+    platformType: source.platformType,
+    environment: source.environment,
+  })));
 }
 
 // ---------------------------------------------------------------------------

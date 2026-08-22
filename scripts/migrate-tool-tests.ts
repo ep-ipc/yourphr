@@ -169,7 +169,7 @@ async function main(): Promise<void> {
   const again = await migrateFromGo(goDb, stores, { goDataDir: goRoot, allowInternalUrls: true });
   check('re-run is one-way: nothing imported twice, nothing duplicated, still verified',
     again.ok && again.users.imported.length === 0 && again.users.skippedExisting.length === 2 && again.records.imported === 0 && again.records.skippedExisting === 7 &&
-    again.catalog.imported.length === 0 && again.sources.imported.length === 0 && stores.sources.list().length === 2);
+    again.catalog.imported.length === 0 && again.sources.imported.length === 0 && (await stores.sources.count()) === 2);
 
   // --- TOOTH 1: a record removed on the receiving side turns the gate red ---
   // Tampering happens OUTSIDE the door on purpose: a raw handle on the file, as an attacker or a

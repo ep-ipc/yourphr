@@ -87,6 +87,7 @@ export interface ServerModules {
     update: (id: string, body: Record<string, unknown>) => unknown | undefined;
     remove: (id: string) => boolean;
     sandbox: () => unknown[];
+    connectable: () => unknown[];
     /** Resolves Go's authorize answer; rejects with a status-bearing error. */
     authorize: (username: string, id: string, body: Record<string, unknown>) => Promise<unknown>;
     connect: (ctx: ApiContext, id: string, body: Record<string, unknown>) => Promise<{ source: unknown; data: unknown }>;
@@ -100,7 +101,7 @@ export interface ServerModules {
     recordAccess: (username: string, pathname: string) => void;
     legalConsent: (ctx: ApiContext) => unknown;
     grantConsent: (ctx: ApiContext) => unknown;
-    revokeConsent: (ctx: ApiContext) => unknown;
+    revokeConsent: (ctx: ApiContext) => Promise<unknown> | unknown;
     /** Throws ApiError (401 wrong current, 400 policy); resolves the fresh session token. */
     changePassword: (ctx: ApiContext, current: string, next: string) => Promise<string | undefined>;
     signOutEverywhere: (ctx: ApiContext) => Promise<void>;
@@ -118,26 +119,6 @@ export interface ServerModules {
   publicInstance?: () => Record<string, unknown>;
   /** What a signed-in member may know (GET /api/secure/instance, yourphr#593): public plus the operator contact. */
   instanceForUser?: (username: string) => Record<string, unknown>;
-  /** GET /api/secure/jobs (yourphr#593): the caller's sync jobs in Go's BackgroundJob shape. */
-  jobsForUser?: (username: string, query: { limit: number; page: number; status?: string; jobType?: string }) => unknown[];
-  /**
-   * The Sources page (yourphr#594): the caller's connected sources in Go's SourceCredential shape,
-   * the per-source actions, the connectable catalog and the event stream. Every per-source call
-   * answers undefined for a source the caller does not own — 404, never 403, so ids are not probed.
-   */
-  sources?: {
-    list: (username: string) => unknown[];
-    get: (username: string, id: string) => unknown | undefined;
-    summary: (ctx: ApiContext, id: string) => Promise<unknown | undefined>;
-    /** Resolves to Go's {source, data} or undefined; rejects when the sync itself failed. */
-    sync: (username: string, id: string) => Promise<{ source: unknown; data: unknown } | undefined>;
-    disconnect: (username: string, id: string) => boolean;
-    removeData: (ctx: ApiContext, id: string) => Promise<number | undefined>;
-    remove: (ctx: ApiContext, id: string) => Promise<number | undefined>;
-    exportBundle: (ctx: ApiContext, id: string) => Promise<{ filename: string; bundle: unknown } | undefined>;
-    connectable: () => unknown[];
-    events: EventBus;
-  };
   admin?: {
     /** GET /admin/config in Go's AdminConfigResponse shape (yourphr#602). */
     configSnapshot: () => unknown;
@@ -153,7 +134,7 @@ export interface ServerModules {
     resetUserPassword: (ctx: ApiContext, username: string) => Promise<{ username: string; password: string }>;
     instanceSettings: () => { name: string; contact_email: string; contact_url: string };
     setInstanceSettings: (s: { name: string; contact_email: string; contact_url: string }) => void;
-    metrics: () => unknown;
+    metrics: (ctx: ApiContext) => Promise<unknown> | unknown;
     databaseInfo: () => Promise<unknown>;
     /** Returns the file path of a fresh backup for streaming. */
     backupFile: () => Promise<{ file: string; name: string; sizeBytes: number }>;
@@ -463,7 +444,7 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent/revoke' && req.method === 'POST') {
-          send(res, 200, {success: true, data: account.revokeConsent(ctx)});
+          send(res, 200, {success: true, data: await account.revokeConsent(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/password' && req.method === 'POST') {
@@ -517,7 +498,7 @@ export function createYourPhrServer(options: ServerOptions) {
         send(res, 200, {success: true, data: modules.instanceForUser(sessionUser)});
         return;
       }
-      if (modules?.jobsForUser && url.pathname === '/api/secure/jobs' && req.method === 'GET') {
+      if (engine.has('jobs') && url.pathname === '/api/secure/jobs' && req.method === 'GET') {
         const limitParam = Number(url.searchParams.get('limit') ?? 0);
         const pageParam = Number(url.searchParams.get('page') ?? 0);
         if (!Number.isInteger(limitParam) || limitParam < 0 || !Number.isInteger(pageParam) || pageParam < 0) {
@@ -530,7 +511,7 @@ export function createYourPhrServer(options: ServerOptions) {
           status: url.searchParams.get('status') ?? undefined,
           jobType: url.searchParams.get('jobType') ?? undefined,
         };
-        send(res, 200, {success: true, data: modules.jobsForUser(sessionUser, query)});
+        send(res, 200, {success: true, data: await engine.managers.jobs.forUser(ctx, query)});
         return;
       }
 
@@ -639,17 +620,17 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // --- the Sources page (yourphr#594) ---
-      if (modules?.sources) {
-        const src = modules.sources;
+      if (modules?.catalog && url.pathname === '/api/secure/provider-catalog/connectable' && req.method === 'GET') {
+        send(res, 200, {success: true, data: modules.catalog.connectable()});
+        return;
+      }
+      if (engine.has('sources')) {
+        const src = engine.managers.sources;
         if (url.pathname === '/api/secure/source' && req.method === 'GET') {
-          send(res, 200, {success: true, data: src.list(sessionUser)});
+          send(res, 200, {success: true, data: await src.listShaped(ctx)});
           return;
         }
-        if (url.pathname === '/api/secure/provider-catalog/connectable' && req.method === 'GET') {
-          send(res, 200, {success: true, data: src.connectable()});
-          return;
-        }
-        if (url.pathname === '/api/secure/events/stream' && req.method === 'GET') {
+        if (src.events && url.pathname === '/api/secure/events/stream' && req.method === 'GET') {
           // Server-sent events, Go's framing (event:message, JSON data). A keep-alive every 15s so
           // an idle connection survives a proxy; the subscription ends when the client goes away.
           res.writeHead(200, {'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no'});
@@ -667,7 +648,7 @@ export function createYourPhrServer(options: ServerOptions) {
           const action = sourceMatch[2];
           const notFound = (): void => send(res, 404, {success: false, error: 'source not found'});
           if (!action && req.method === 'GET') {
-            const source = src.get(sessionUser, id);
+            const source = await src.getShaped(ctx, id);
             source === undefined ? notFound() : send(res, 200, {success: true, data: source});
             return;
           }
@@ -684,7 +665,7 @@ export function createYourPhrServer(options: ServerOptions) {
           if (action === 'sync' && req.method === 'POST') {
             let result: { source: unknown; data: unknown } | undefined;
             try {
-              result = await src.sync(sessionUser, id);
+              result = await src.syncNow(ctx, id);
             } catch (err) {
               send(res, 500, {success: false, error: `record sync failed: ${(err as Error).message}`});
               return;
@@ -693,7 +674,7 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
           if (action === 'disconnect' && req.method === 'POST') {
-            src.disconnect(sessionUser, id) ? send(res, 200, {success: true, data: {disconnected: true}}) : notFound();
+            (await src.disconnect(ctx, id)) ? send(res, 200, {success: true, data: {disconnected: true}}) : notFound();
             return;
           }
           if (action === 'remove-data' && req.method === 'POST') {
@@ -881,7 +862,7 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/admin/metrics' && req.method === 'GET') {
-          send(res, 200, {success: true, data: admin.metrics()});
+          send(res, 200, {success: true, data: await admin.metrics(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/admin/database' && req.method === 'GET') {
@@ -1019,7 +1000,7 @@ export function createYourPhrServer(options: ServerOptions) {
           success: true,
           data: {
             resource_type_counts: await engine.managers.records.countsByType(ctx),
-            sources: options.modules?.sources ? options.modules.sources.list(sessionUser) : [{id: fallbackSource, display: 'spike'}],
+            sources: engine.has('sources') ? await engine.managers.sources.listShaped(ctx) : [{id: fallbackSource, display: 'spike'}],
             patients: [],
           },
         });

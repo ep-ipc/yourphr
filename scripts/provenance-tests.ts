@@ -11,15 +11,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { SourceStore, runSyncPass } from '../src/worker/index.js';
+import { bootSources } from './lib/boot-sources.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 import { legibleProvenance } from '../src/provenance/index.js';
-import { Engine } from '../src/framework/Engine.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
-import { RecordsManager } from '../src/app/managers/RecordsManager.js';
-import { SqliteRecordsProvider } from '../src/app/providers/SqliteRecordsProvider.js';
 
-import { repositoryWriter } from '../src/sync/index.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -49,8 +45,9 @@ function startFakeProvider(token: string) {
 async function main(): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'spike-prov-'));
   const db = new Database(join(dir, 'app.db'));
-  const store = new SourceStore(db);
   const recordsFile = join(dir, 'records.db');
+  const harness = await bootSources(db, recordsFile, { maxPages: 5 });
+  const { engine, sources, records, ctxFor } = harness;
   const repos = new Map<string, SqliteFhirRepository>();
   const repoForUser = (u: string) => {
     let r = repos.get(u);
@@ -63,24 +60,14 @@ async function main(): Promise<void> {
     server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(server.address() as { port: number }).port}`));
   });
 
-  const source = store.add({
+  const source = await sources.add(ctxFor('alice'), {
     userId: 'alice', display: 'Fake Regional Health', fhirBaseUrl: base, tokenUrl: `${base}/token`, clientId: 'cid',
     patient: 'pa', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999,
   });
-  const deps = { store, repoForUser, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 5, allowInternal: true };
-  await runSyncPass(deps, 1_000_000);
+  await sources.pass(1_000_000);
 
   const repo = repoForUser('alice');
-  const displayFor = (sourceId: string) => {
-    const numeric = Number(sourceId.replace('source-', ''));
-    return store.list().find((s) => s.id === numeric)?.display ?? '';
-  };
   // Provenance is the Records manager's answer (yourphr#609) — asked through the door, for whoever is asking.
-  const engine = new Engine();
-  engine.register('records', new RecordsManager(engine, new SqliteRecordsProvider(recordsFile, undefined)));
-  await engine.initialize();
-  const records = engine.managers.records;
-  records.sourceDisplay = displayFor;
   const alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);
   const bob = ApiContext.from({ username: 'bob', role: 'user' }, engine);
 
@@ -88,8 +75,8 @@ async function main(): Promise<void> {
   check('a synced record knows its source, by NAME', first?.sourceDisplay === 'Fake Regional Health', first?.sourceDisplay);
   check('and records when it first arrived', !!first?.firstReceivedAt && first.timesSeen === 1);
 
-  await runSyncPass(deps, 1_000_100);
-  await runSyncPass(deps, 1_000_200);
+  await sources.pass(1_000_100);
+  await sources.pass(1_000_200);
   const confirmed = (await records.provenance(alice, 'Condition', 'condition-1'))!;
   check('a resync reads as re-confirmation: source and first-received STABLE, timesSeen grows',
     confirmed.sourceId === first?.sourceId && confirmed.firstReceivedAt === first?.firstReceivedAt && confirmed.timesSeen === 3,
@@ -105,7 +92,7 @@ async function main(): Promise<void> {
   // Unknown source id: raw id shown, not invented.
   records.sourceDisplay = () => '';
   const rawFallback = (await records.provenance(alice, 'Condition', 'condition-1'))!;
-  records.sourceDisplay = displayFor;
+  records.sourceDisplay = (id) => sources.displayOf(id);
   check('an unresolvable source shows its raw id, never an invented name', rawFallback.sourceDisplay === `source-${source.id}`);
 
   const line = legibleProvenance(confirmed);

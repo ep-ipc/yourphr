@@ -509,7 +509,7 @@ export async function verifyAgainstGo(goDb: GoDb, stores: Stores, users: GoUser[
       goUsers: readGoUserIds(goDb).length,
       tsUsers: (stores.db.prepare('SELECT COUNT(*) AS n FROM auth_users').get() as { n: number }).n,
       goSources: readGoSources(goDb).length,
-      tsSources: stores.sources.list().length,
+      tsSources: await stores.sources.count(),
     },
   };
   for (const user of users) {
@@ -569,7 +569,7 @@ export async function migrateFromGo(goDb: GoDb, stores: Stores, options: Migrati
   const catalog = importLegacyCatalog(stores.catalog, readGoCatalog(goDb), { allowInternal: options.allowInternalUrls });
 
   log('sources');
-  const sources = importLegacySources(stores.sources, readGoSources(goDb).filter((s) => selected.has(s.username)));
+  const sources = await importLegacySources(stores.sources, ApiContext.system('migration', 'migration', stores.engine), readGoSources(goDb).filter((s) => selected.has(s.username)));
 
   log('records');
   const read = newReadStats();

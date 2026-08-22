@@ -14,10 +14,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { readGoSources, importLegacySources, resourceTypesFromScopes, WILDCARD_RESOURCE_TYPES } from '../src/migrate/index.js';
-import { SourceStore, runSyncPass } from '../src/worker/index.js';
+import { bootSources } from './lib/boot-sources.js';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
 
-import { repositoryWriter } from '../src/sync/index.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -94,21 +93,25 @@ async function main(): Promise<void> {
     legacy.find((s) => s.id === 'src-4')?.platformType === 'manual' && legacy.find((s) => s.id === 'src-1')?.environment === 'sandbox');
 
   const appDb = new Database(join(dir, 'app.db'));
-  const store = new SourceStore(appDb);
-  const report = importLegacySources(store, legacy);
+  const lines: string[] = [];
+  const harness = await bootSources(appDb, join(dir, 'records.db'), { maxPages: 5, log: (l) => lines.push(l) });
+  const { sources, ctxFor } = harness;
+  const migration = ctxFor('migration');
+  const jimSources = () => sources.list(ctxFor('jim'));
+  const report = await importLegacySources(sources, migration, legacy);
   check('import lands both live sources', report.imported.length === 2);
   check('and carries platform_type + environment onto the spike rows',
-    store.list().find((s) => s.display === 'No Refresh')?.platformType === 'manual' && store.list().find((s) => s.display === 'Epic (Sandbox)')?.environment === 'sandbox');
+    (await jimSources()).find((s) => s.display === 'No Refresh')?.platformType === 'manual' && (await jimSources()).find((s) => s.display === 'Epic (Sandbox)')?.environment === 'sandbox');
   check('the Go id -> spike id map covers every live source (yourphr#586 needs it to attribute records)',
-    Object.keys(report.idMap).sort().join(',') === 'src-1,src-4' && store.list().every((s) => Object.values(report.idMap).includes(s.id)));
+    Object.keys(report.idMap).sort().join(',') === 'src-1,src-4' && (await jimSources()).every((s) => Object.values(report.idMap).includes(s.id)));
   check('a source with no refresh token is REPORTED as needs-reconnect, not silently doomed',
     report.needsReconnect.join(',') === 'jim:No Refresh');
 
-  const again = importLegacySources(store, legacy);
+  const again = await importLegacySources(sources, migration, legacy);
   check('re-import is one-way: everything skipped, nothing duplicated',
-    again.imported.length === 0 && again.skippedExisting.length === 2 && store.list().length === 2);
+    again.imported.length === 0 && again.skippedExisting.length === 2 && (await jimSources()).length === 2);
 
-  const epic = store.list().find((s) => s.display === 'Epic (Sandbox)')!;
+  const epic = (await jimSources()).find((s) => s.display === 'Epic (Sandbox)')!;
   check('tokens, expiry and grant-derived types land verbatim',
     epic.accessToken === 'migrated-but-expired-token' && epic.refreshToken === 'go-refresh-token' &&
     epic.expiresAt === 100 && epic.resourceTypes.sort().join(',') === 'Condition,Observation' && epic.tokenUrl === '');
@@ -120,24 +123,24 @@ async function main(): Promise<void> {
     if (!r) { r = new SqliteFhirRepository({ file: join(dir, 'records.db'), userId: u }); repos.set(u, r); }
     return r;
   };
-  const lines: string[] = [];
-  const pass = await runSyncPass({ store, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 5, allowInternal: true, log: (l) => lines.push(l) }, 1_000_000);
+  const pass = await sources.pass(1_000_000);
   check('THE MIGRATED SOURCE REFRESHES AND SYNCS WITHOUT A RECONNECT',
     pass.refreshed === 1 && pass.synced >= 1, JSON.stringify(pass));
   check('the token endpoint was discovered through the guarded client and persisted',
-    fake.state.discoveries === 1 && store.list().find((s) => s.id === epic.id)!.tokenUrl.endsWith('/token'));
+    fake.state.discoveries === 1 && (await sources.owned(ctxFor('jim'), epic.id))!.tokenUrl.endsWith('/token'));
   const conditions = await repoForUser('jim').search({ resourceType: 'Condition', count: 10, total: 'accurate' });
   check('migrated-source records land under the Go username', (conditions.total ?? 0) === 1);
   check('the no-refresh source logged the reconnect signal instead of failing silently',
     lines.some((l) => l.includes('no refresh token is available; reconnect the source')));
 
-  const secondPass = await runSyncPass({ store, writerFor: (u: string, sid: string) => repositoryWriter(repoForUser(u), sid), maxPages: 5, allowInternal: true }, 1_000_050);
+  const secondPass = await sources.pass(1_000_050);
   check('the second pass uses the PERSISTED endpoint — no re-discovery', fake.state.discoveries === 1 && secondPass.synced >= 1);
 
   fake.server.close();
   goDb.close();
-  appDb.close();
   for (const r of repos.values()) r.db.close();
+  await harness.close();
+  appDb.close();
   rmSync(dir, { recursive: true, force: true });
 
   const failed = results.filter((r) => !r.ok);

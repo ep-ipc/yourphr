@@ -84,7 +84,8 @@ async function main(): Promise<void> {
   const aliceToken = ((await (await signIn('alice', 'a-long-enough-password')).json()) as { data: string }).data;
 
   // Connect a source for alice and run the worker once — the sync half of the assembly.
-  app.sources.add({
+  const asUser = (u: string) => ApiContext.system('test', u, app.engine);
+  await app.sources.add(asUser('alice'), {
     userId: 'alice', display: 'Fake Regional Health', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid',
     patient: 'pa', resourceTypes: ['Condition', 'MedicationStatement'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999,
   });
@@ -258,7 +259,7 @@ async function main(): Promise<void> {
       && bundle.resourceType === 'Bundle' && bundle.type === 'collection' && bundle.total === 4 && bundle.entry.length === 4);
 
   const disconnected = await fetch(`${base}/api/secure/source/source-1/disconnect`, { method: 'POST', ...authed(aliceToken) });
-  const afterDisconnect = app.sources.byId(1)!;
+  const afterDisconnect = (await app.sources.owned(asUser('alice'), 1))!;
   await app.syncNow(1_000_100);
   const jobsAfterDisconnect = (await (await fetch(`${base}/api/secure/jobs`, authed(aliceToken))).json()) as { data: Job[] };
   check('disconnect clears the tokens, keeps the records, and the worker skips the source',
@@ -332,11 +333,11 @@ async function main(): Promise<void> {
   check('legal consent: not accepted until granted; granting records an RFC3339 time in Go\'s shape',
     consentBefore.data.accepted === false && consentBefore.data.privacy_policy_url === '/privacy' && granted.data.accepted === true
       && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(granted.data.accepted_at ?? '') && consentAfter.data.accepted_at === granted.data.accepted_at);
-  const medicare = app.sources.add({ userId: 'alice', display: 'Medicare Blue Button', fhirBaseUrl: 'https://sandbox.bluebutton.cms.gov/v2/fhir', tokenUrl: '', clientId: 'c',
+  const medicare = await app.sources.add(asUser('alice'), { userId: 'alice', display: 'Medicare Blue Button', fhirBaseUrl: 'https://sandbox.bluebutton.cms.gov/v2/fhir', tokenUrl: '', clientId: 'c',
     patient: 'm', resourceTypes: ['Coverage'], accessToken: 'tok', refreshToken: 'ref', expiresAt: 99_999_999 });
   const revoked = (await (await fetch(`${base}/api/secure/account/legal-consent/revoke`, { method: 'POST', ...authed(aliceToken) })).json()) as { data: Consent };
   check('revoking the consent disconnects the Medicare sources (Go\'s rule) and reports how many',
-    revoked.data.accepted === false && revoked.data.medicare_sources_disconnected === 1 && app.sources.byId(medicare.id)?.accessToken === '' && app.sources.byId(medicare.id)?.refreshToken === '');
+    revoked.data.accepted === false && revoked.data.medicare_sources_disconnected === 1 && (await app.sources.owned(asUser('alice'), medicare.id))?.accessToken === '' && (await app.sources.owned(asUser('alice'), medicare.id))?.refreshToken === '');
 
   const pw = (current: string, next: string) => fetch(`${base}/api/secure/account/password`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${aliceToken}` }, body: JSON.stringify({ current_password: current, new_password: next }) });
   const wrongCurrent = await pw('not-her-password', 'another-long-enough-password');
@@ -357,12 +358,12 @@ async function main(): Promise<void> {
 
   await app.users.createUser(sys, 'zed', 'zeds-long-enough-password');
   const zedToken = ((await (await signIn('zed', 'zeds-long-enough-password')).json()) as { data: string }).data;
-  app.sources.add({ userId: 'zed', display: 'Zed Clinic', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pz', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999 });
+  await app.sources.add(asUser('zed'), { userId: 'zed', display: 'Zed Clinic', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pz', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999 });
   await app.syncNow(1_000_200);
   const zedHad = ((await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition`, authed(zedToken))).json()) as { data: unknown[] }).data.length;
   const zedDeleted = await fetch(`${base}/api/secure/account/me`, { method: 'DELETE', ...authed(zedToken) });
   const zedAgain = await signIn('zed', 'zeds-long-enough-password');
-  const zedRows = app.sources.list().filter((s) => s.userId === 'zed').length;
+  const zedRows = (await app.sources.list(asUser('zed'))).length;
   check('deleting the account removes its sources, records, and the account itself; the password no longer signs in',
     zedHad === 3 && zedDeleted.status === 200 && zedAgain.status === 401 && (await app.users.roleOf('zed')) === undefined && zedRows === 0);
 
@@ -407,7 +408,7 @@ async function main(): Promise<void> {
     instanceBefore.body.data['name'] === 'Nerds by the Hour' && badEmail.status === 400 && setInstance.status === 200 && instanceAfter.body.data['name'] === 'Ops Team'
       && ((await (await fetch(`${base}/api/secure/instance`, authed(adminToken))).json()) as { data: Record<string, unknown> }).data['operator.contact_url'] === 'https://example.org/help');
 
-  app.sources.add({ userId: 'alice', display: 'Fake Regional Health Again', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pa', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999, platformType: 'ehr', environment: 'sandbox' });
+  await app.sources.add(asUser('alice'), { userId: 'alice', display: 'Fake Regional Health Again', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pa', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999, platformType: 'ehr', environment: 'sandbox' });
   await app.syncNow(1_000_400);
   const metrics = await adminJson('/api/secure/admin/metrics');
   check('the Metrics card: no scrape endpoint (said so), counters and recent jobs from the sync history',
@@ -521,7 +522,7 @@ async function main(): Promise<void> {
     check('a pre-role database boots, and bootstrap does not run (the table was populated)', !upgraded.bootstrapPasswordFile);
     check('the account named admin — the admin until now — is recorded as one', (await upgraded.users.roleOf('admin')) === 'admin');
     check('every other pre-existing account is a user', (await upgraded.users.roleOf('pat')) === 'user');
-    const oldSource = upgraded.sources.list()[0];
+    const oldSource = (await upgraded.sources.list(ApiContext.system('test', 'pat', upgraded.engine)))[0];
     check('a pre-column source reads with platform_type and environment UNKNOWN (yourphr#594), and is served without them',
       oldSource?.platformType === '' && oldSource.environment === '' && !('platform_type' in sourceShape(oldSource, undefined)) && !('environment' in sourceShape(oldSource, undefined)));
     await upgraded.close();
