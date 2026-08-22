@@ -112,6 +112,12 @@ jobs:
         run: |
           make test-backend-coverage
           CGO_ENABLED=0 go build -buildvcs=false ./backend/cmd/fasten/
+      # The Go vulnerability scan, where the frontend's yarn audit already is (#607). Advisory
+      # pages match registry coordinates; this matches the symbols the binary actually reaches,
+      # so it is the check that can say "affected" rather than "mentioned". Fails the job on a
+      # reachable vulnerability — the #546 stance applied to the dependency tree.
+      - name: Vulnerability scan (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       - name: Upload coverage
         uses: actions/upload-artifact@v7
         with:
