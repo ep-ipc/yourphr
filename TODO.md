@@ -98,6 +98,7 @@
 
 ## 🔵 In review
 
+- [#617](https://github.com/jwilleke/yourphr/issues/617) — [SPIKE] #608 child: the app database's shared connection and schema ledger, engine-owned — DatabaseManager over SqliteDatabaseProvider; src/migrations moves below the door
 - [#616](https://github.com/jwilleke/yourphr/issues/616) — [SPIKE] #608 child: Favourites fold into Records — FavoriteStore retired behind RecordsManager over a favourites provider
 - [#615](https://github.com/jwilleke/yourphr/issues/615) — [SPIKE] #608 child: Backup manager — schedule, health, staged restore and the artifact store behind BackupManager over an optional backup-storage provider; AdminOps retired
 - [#614](https://github.com/jwilleke/yourphr/issues/614) — [SPIKE] #608 child: Audit manager — the access log as a REQUIRED capability over SqliteAuditProvider; consent folds into the users provider; AccountStore retired
