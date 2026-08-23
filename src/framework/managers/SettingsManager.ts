@@ -112,7 +112,7 @@ export class SettingsManager extends BaseManager {
 
   /** GET /admin/config in Go's AdminConfigResponse shape (yourphr#602). */
   configSnapshot(ctx: ApiContext): { entries: ConfigEntry[]; custom_config_path: string; warnings: string[] } {
-    ctx.requireAdmin();
+    ctx.require('admin-read');
     const config = this.configuration;
     return {
       entries: config.snapshot().map((row) => {
@@ -138,7 +138,7 @@ export class SettingsManager extends BaseManager {
 
   /** The raw value — a logged, deliberate act, recorded by who asked. Undefined for an unknown key. */
   configReveal(ctx: ApiContext, key: string): { key: string; value: ConfigValue; default: ConfigValue } | undefined {
-    ctx.requireAdmin();
+    ctx.require('admin-system');
     const spec = this.configuration.specOf(key);
     if (!spec) return undefined;
     this.log(`${ctx.actor} revealed configuration value for ${key}`);
@@ -147,7 +147,7 @@ export class SettingsManager extends BaseManager {
 
   /** ApiError 400 unknown key / invalid value, 409 env-pinned. */
   configSet(ctx: ApiContext, key: string, value: unknown): void {
-    ctx.requireAdmin();
+    ctx.require('admin-system');
     const config = this.configuration;
     const spec = config.specOf(key);
     if (!spec) throw new ApiError(400, `unknown configuration key ${JSON.stringify(key)} — only keys this stack describes can be set`);
@@ -170,7 +170,7 @@ export class SettingsManager extends BaseManager {
 
   /** Removes an override; false when there was none. ApiError 400 for an unknown key. */
   configReset(ctx: ApiContext, key: string): boolean {
-    ctx.requireAdmin();
+    ctx.require('admin-system');
     if (!this.configuration.specOf(key)) throw new ApiError(400, `unknown configuration key ${JSON.stringify(key)}`);
     let cleared: boolean;
     try {
@@ -183,7 +183,7 @@ export class SettingsManager extends BaseManager {
   }
 
   instanceSettings(ctx: ApiContext): InstanceSettings {
-    ctx.requireAdmin();
+    ctx.require('admin-read');
     const config = this.configuration;
     return {
       name: config.getString('operator.name'),
@@ -194,7 +194,7 @@ export class SettingsManager extends BaseManager {
 
   /** ApiError 400 when an address is the wrong shape; the values are stored trimmed. */
   setInstanceSettings(ctx: ApiContext, s: InstanceSettings): InstanceSettings {
-    ctx.requireAdmin();
+    ctx.require('admin-system');
     const settings: InstanceSettings = { name: s.name.trim(), contact_email: s.contact_email.trim(), contact_url: s.contact_url.trim() };
     if (settings.contact_email !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(settings.contact_email)) {
       throw new ApiError(400, 'contact_email is not an email address');

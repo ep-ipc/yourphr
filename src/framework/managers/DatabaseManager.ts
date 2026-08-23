@@ -36,7 +36,7 @@ export class DatabaseManager<Handle = unknown> extends BaseManager {
 
   /** The admin's Database card: where the app database lives and its size. */
   storage(ctx: ApiContext): { location: string; sizeBytes: number } {
-    ctx.requireAdmin();
+    ctx.require('admin-read');
     return this.provider.storage();
   }
 

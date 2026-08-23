@@ -103,7 +103,7 @@ export class JobsManager extends BaseManager {
 
   /** Every run, newest first — an operator's view (yourphr#593 metrics). */
   async all(ctx: ApiContext): Promise<JobRecord[]> {
-    ctx.requireAdmin();
+    ctx.require('admin-read');
     return (await this.provider.all()).reverse();
   }
 

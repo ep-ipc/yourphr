@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Engine } from '../Engine.js';
 import { ApiContext, ApiError } from '../ApiContext.js';
+import { ALL_PERMISSIONS } from '../policy.js';
 
 const engine = new Engine();
 
@@ -22,11 +23,28 @@ describe('ApiContext — who is asking, immutable, with guards that throw ApiErr
     const admin = ApiContext.from({ username: 'ops', role: 'admin' }, engine);
     expect(() => nobody.requireAuthenticated()).toThrow(ApiError);
     try { nobody.requireAuthenticated(); } catch (e) { expect((e as ApiError).status).toBe(401); }
-    try { member.requireAdmin(); } catch (e) { expect((e as ApiError).status).toBe(403); expect((e as ApiError).message).toBe('admin role required'); }
-    expect(() => admin.requireAdmin()).not.toThrow();
-    expect(member.isAdmin()).toBe(false);
-    expect(admin.isAdmin()).toBe(true);
-    expect(nobody.isAdmin()).toBe(false);
+    try { member.require('admin-read'); } catch (e) { expect((e as ApiError).status).toBe(403); expect((e as ApiError).message).toBe('admin role required'); }
+    expect(() => admin.require('admin-read')).not.toThrow();
+    expect(member.can('admin-read')).toBe(false);
+    expect(admin.can('admin-read')).toBe(true);
+    expect(nobody.can('admin-read')).toBe(false);
+  });
+
+  it('the role carries its permissions, anonymous is a role with none, and an unknown role grants nothing (yourphr#620)', () => {
+    const nobody = ApiContext.anonymous(engine);
+    const member = ApiContext.from({ username: 'alice', role: 'user' }, engine);
+    const admin = ApiContext.from({ username: 'ops', role: 'admin' }, engine);
+    expect(nobody.role).toBe('anonymous');
+    expect(nobody.permissions).toEqual([]);
+    expect(member.permissions).toEqual([]); // a member's own records are ownership, not a permission
+    expect([...admin.permissions].sort()).toEqual(ALL_PERMISSIONS);
+    // 401 before 403: nobody is asking is a different answer from you may not.
+    try { nobody.require('admin-read'); } catch (e) { expect((e as ApiError).status).toBe(401); }
+    // A typo in a role name must not widen anyone's powers.
+    const typo = ApiContext.from({ username: 'x', role: 'Admin' as never }, engine);
+    expect(typo.permissions).toEqual([]);
+    // The permission list is frozen with the rest of the authorization facts.
+    expect(() => (admin.permissions as string[]).push('admin-system')).toThrow();
   });
 
   it('a system principal acts for an account and is the named actor', () => {

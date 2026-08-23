@@ -105,7 +105,7 @@ export class UsersManager extends BaseManager {
 
   /** An admin (or a system principal: bootstrap, tests) creates an account. */
   async createUser(ctx: ApiContext, username: string, password: string, role: Role = 'user'): Promise<void> {
-    if (ctx.system === '') ctx.requireAdmin();
+    if (ctx.system === '') ctx.require('user-create');
     this.checkUsername(username);
     this.checkPolicy(password);
     if (await this.provider.get(username)) throw new ApiError(400, 'User already exists');
@@ -114,7 +114,7 @@ export class UsersManager extends BaseManager {
 
   /** Every account, for the admin's Users page: names, roles, when created — never a hash. */
   async listUsers(ctx: ApiContext): Promise<{ username: string; role: Role; created_at: string }[]> {
-    ctx.requireAdmin();
+    ctx.require('user-read');
     return (await this.provider.list()).map((u) => ({ username: u.username, role: u.role, created_at: u.createdAt }));
   }
 
@@ -134,7 +134,7 @@ export class UsersManager extends BaseManager {
    * is signed out everywhere. Returned once — the caller shows it, nobody stores it.
    */
   async adminResetPassword(ctx: ApiContext, username: string): Promise<string> {
-    ctx.requireAdmin();
+    ctx.require('user-edit');
     if (!(await this.provider.get(username))) throw new ApiError(404, 'no such user');
     const password = randomBytes(18).toString('base64url'); // 24 chars, always above the policy minimum
     if (!(await this.provider.setPasswordHash(username, this.passwords.hash(password), true))) throw new ApiError(500, 'could not set the password');
@@ -144,7 +144,7 @@ export class UsersManager extends BaseManager {
 
   /** How many accounts the instance holds — the admin's database page. */
   async count(ctx: ApiContext): Promise<number> {
-    if (ctx.system === '') ctx.requireAdmin();
+    if (ctx.system === '') ctx.require('user-read');
     return this.provider.count();
   }
 

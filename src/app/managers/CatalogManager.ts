@@ -107,7 +107,7 @@ export class CatalogManager extends BaseManager {
 
   /** The admin's, or a named system principal's (the migration tool, a harness seed). */
   private manage(ctx: ApiContext): void {
-    if (ctx.system === '') ctx.requireAdmin(MANAGE);
+    if (ctx.system === '') ctx.require('admin-system', MANAGE);
   }
 
   private async entryById(publicId: string): Promise<CatalogEntry | undefined> {
@@ -198,7 +198,7 @@ export class CatalogManager extends BaseManager {
 
   /** Sandboxes are for the admin to try a provider before a member meets it (the Sandbox page). */
   async sandbox(ctx: ApiContext): Promise<Record<string, unknown>[]> {
-    ctx.requireAdmin();
+    ctx.require('admin-read');
     return (await this.provider.list()).filter((e) => e.enabled && e.environment === 'sandbox').map(connectableShape);
   }
 

@@ -102,7 +102,7 @@ export class BackupManager extends BaseManager {
 
   /** The admin's, or the scheduler acting as a system principal. */
   private manage(ctx: ApiContext): void {
-    if (ctx.system === '') ctx.requireAdmin();
+    if (ctx.system === '') ctx.require('admin-system');
   }
 
   // --- where and when ----------------------------------------------------------------------

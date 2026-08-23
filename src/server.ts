@@ -450,7 +450,9 @@ export function createYourPhrServer(options: ServerOptions) {
       // --- the Users page (yourphr#604): the admin's list, create, and password reset ---
       if (url.pathname === '/api/secure/users' || /^\/api\/secure\/users\/[^/]+\/password$/.test(url.pathname)) {
         // Go answers a non-admin here with 401 "Unauthorized"; the page treats both as "not for you".
-        if (!ctx.isAdmin()) {
+        // The permission is the one the Users manager requires behind this wall (yourphr#620), so
+        // the outer gate and the real one cannot drift apart.
+        if (!ctx.can('user-read')) {
           send(res, 401, {success: false, error: 'Unauthorized'});
           return;
         }
@@ -509,7 +511,7 @@ export function createYourPhrServer(options: ServerOptions) {
         }
         if (url.pathname !== '/api/secure/provider-catalog/connectable') {
           // Everything else is the admin's: the catalog is instance configuration.
-          if (!ctx.isAdmin()) { send(res, 403, {success: false, error: 'admin role required to manage the provider catalog'}); return; }
+          if (!ctx.can('admin-system')) { send(res, 403, {success: false, error: 'admin role required to manage the provider catalog'}); return; }
           if (url.pathname === '/api/secure/provider-catalog' && req.method === 'GET') {
             send(res, 200, {success: true, data: await cat.list(ctx)});
             return;
@@ -712,9 +714,11 @@ export function createYourPhrServer(options: ServerOptions) {
         }
       }
       if (url.pathname.startsWith('/api/secure/admin/')) {
-        // Operator-only. The gate is a role check, not a route secret: a non-admin gets 403 with
-        // no detail about what lives here.
-        if (!ctx.isAdmin()) {
+        // Operator-only. The gate names the least this subtree needs (yourphr#620) — reading an
+        // admin screen — and each manager behind it requires its own; a caller who may read but not
+        // change is refused at the door that changes, not here. It is a permission check, not a
+        // route secret: a caller without it gets 403 with no detail about what lives here.
+        if (!ctx.can('admin-read')) {
           send(res, 403, {success: false, error: 'admin role required'});
           return;
         }

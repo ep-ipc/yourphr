@@ -342,7 +342,7 @@ export class SourcesManager extends BaseManager {
 
   /** Go's AdminMetricsResponse over the job history: no scrape endpoint here, counters from what ran. */
   async adminMetrics(ctx: ApiContext): Promise<Record<string, unknown>> {
-    ctx.requireAdmin();
+    ctx.require('admin-read');
     const bySource = new Map((await this.provider.list()).map((s) => [s.id, s]));
     const jobs = await this.engine.managers.jobs.all(ctx);
     const jobsTotal: Record<string, number> = {};

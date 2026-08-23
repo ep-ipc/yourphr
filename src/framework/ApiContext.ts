@@ -11,6 +11,7 @@
  * the Go stack's, because the Angular app reads them.
  */
 import type { Engine } from './Engine.js';
+import { permissionsFor, type Permission } from './policy.js';
 
 export class ApiError extends Error {
   constructor(
@@ -26,6 +27,13 @@ export class ApiError extends Error {
 
 export type Role = 'admin' | 'user';
 
+/**
+ * The role a CONTEXT carries. `anonymous` is a role with an empty permission list rather than an
+ * `if` at the edge (yourphr#620), so the unauthenticated path goes through the same evaluator as
+ * every other. It is never a stored role — the users table holds `Role`.
+ */
+export type ContextRole = Role | 'anonymous';
+
 export interface Principal {
   username: string;
   role: Role;
@@ -37,7 +45,9 @@ export class ApiContext {
   readonly engine: Engine;
   readonly isAuthenticated: boolean;
   readonly username: string;
-  readonly role: Role;
+  readonly role: ContextRole;
+  /** What this caller may do, resolved once from the role at construction (yourphr#620). */
+  readonly permissions: readonly Permission[];
   readonly tokenGeneration: number | undefined;
   /** A named non-human caller (the migration tool, the worker); '' for a person. */
   readonly system: string;
@@ -46,7 +56,8 @@ export class ApiContext {
     this.engine = engine;
     this.isAuthenticated = principal !== null;
     this.username = principal?.username ?? '';
-    this.role = principal?.role ?? 'user';
+    this.role = principal?.role ?? 'anonymous';
+    this.permissions = Object.freeze([...permissionsFor(this.role)]);
     this.tokenGeneration = principal?.tokenGeneration;
     this.system = system;
     Object.freeze(this);
@@ -72,16 +83,22 @@ export class ApiContext {
     return this.system !== '' ? this.system : this.username;
   }
 
-  isAdmin(): boolean {
-    return this.isAuthenticated && this.role === 'admin';
-  }
-
   requireAuthenticated(): void {
     if (!this.isAuthenticated) throw new ApiError(401, 'unauthorized');
   }
 
-  requireAdmin(message = 'admin role required'): void {
+  /** Does this caller hold the permission? The whole question, asked one way (yourphr#620). */
+  can(permission: Permission): boolean {
+    return this.isAuthenticated && this.permissions.includes(permission);
+  }
+
+  /**
+   * The gate: 401 when nobody is asking, 403 when somebody is but may not. The message stays the
+   * Go stack's default because the Angular app reads it; a caller passes its own where Go's screen
+   * says something more specific.
+   */
+  require(permission: Permission, message = 'admin role required'): void {
     this.requireAuthenticated();
-    if (!this.isAdmin()) throw new ApiError(403, message);
+    if (!this.can(permission)) throw new ApiError(403, message);
   }
 }
