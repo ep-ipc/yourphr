@@ -3,7 +3,7 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-23
 
-- Last worked on: #627 key-naming convention (yourphr.* prefix, no underscores) landed at 7848921, CI green, in-review; the configuration chain #621/#622/#623/#627 is now all in-review
+- Last worked on: #626 storage roots landed at 0da4717, CI green, in-review; the configuration chain is #621/#622/#623/#627/#626, all in-review
 - Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike)
 - Running / in-flight: none
 - Parked / half-done: none
@@ -11,6 +11,7 @@
   - Jim's close decisions on the in-review queue (`gh issue list --label in-review`)
   - NOT YET FILED, needs a decision: a role beyond admin/user can be DEFINED in config but not HELD — `auth_users.role` is 'admin' | 'user' and normaliseRole() coerces. demo-admin (#494) and caregiver work as policy today but no account can be assigned one
   - #626 (next) instance data spans a fast and a slow root, every path composed in the config file — SQLite must not land on a NAS mount, backups should; today they are `join(dataDir, …)` calls so an operator cannot separate them
+  - #628 (P1) refuse to boot when a SQLite database resolves onto a network filesystem — WAL needs shared memory and is unsupported there; #626 shipped with NO guard rather than a misleading one
   - #624 (rescoped, now P1) split the `bootstrap` flag — it does three jobs: raw-env (locates the config file), secret (now a `$VAR` reference), restart-required (four keys un-settable for no reason)
   - #625 did-you-mean in the unknown-key report (port ngdpbase's findClosestAddonName)
   - #606 glossary: evidence posted; decisive number is the glossary row count in a NAS backup (PHI, needs Jim)
@@ -114,6 +115,7 @@
 
 ## 🔵 In review
 
+- [#626](https://github.com/jwilleke/yourphr/issues/626) — [SPIKE] Configuration: instance data spans a fast and a slow root, with every path composed from one of them
 - [#627](https://github.com/jwilleke/yourphr/issues/627) — [SPIKE] Configuration: one key-naming convention — yourphr prefix, lowercase, hyphens, no underscores
 - [#623](https://github.com/jwilleke/yourphr/issues/623) — [SPIKE] Configuration: permissions and roles become shipped config keys, read from the merged configuration at startup
 - [#622](https://github.com/jwilleke/yourphr/issues/622) — [SPIKE] Configuration: environment references ($VAR, ${VAR}) replace the bootstrap flag — the config file names the variable
