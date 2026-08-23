@@ -2,6 +2,16 @@
 
 > __Status: adopted direction, 2026-08-16.__ Operator decision: follow the concepts in [`jwilleke/ngdpbase`](https://github.com/jwilleke/ngdpbase) `src/` as far as they fit. This records *which* concepts, how they map onto a PHR, and — the part that matters — which ones do not transfer.
 
+## DEFAULT TO ngdpbase
+
+__Read `/Volumes/hd2A/workspaces/github/ngdpbase` — the code, not its docs — and default to what it does.__ It is checked out locally. When this stack needs a mechanism ngdpbase already has, take ngdpbase's shape as it is built, even where something else looks tidier.
+
+__Improvements are FILED, not built in flight.__ A better idea found mid-implementation becomes an issue against the adopted shape. It does not become a structure invented on the spot, because the next problem then gets solved on top of the invention, and three layers later nothing matches the framework any more.
+
+__A divergence is only legitimate if this document names it__ — see [Five mechanisms to tighten while copying](#five-mechanisms-to-tighten-while-copying), each of which states the ngdpbase weakness it fixes. Anything else is an invention. The test before writing code: __does this document name this divergence, or am I about to create one?__
+
+Nothing in the code, the configuration, the tests or the deployment says "spike". That word was scaffolding for the transition, never the product. This stack becomes YourPHR; the Go stack goes silent.
+
 Companion to [`strategy-typescript-transition.md`](strategy-typescript-transition.md) (what is being built and when) and [`authorization-framework.md`](authorization-framework.md), which already derives from ngdpbase's `WikiContext` and `PolicyEvaluator`.
 
 ## Why adopt rather than invent

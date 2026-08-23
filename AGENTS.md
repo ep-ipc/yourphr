@@ -60,6 +60,15 @@ Only committed files are linted: anything `.gitignore`d is generated or vendored
 linted instead.
 <!-- KIT:END -->
 
+## TypeScript stack: DEFAULT TO ngdpbase
+
+__Before any work on the TypeScript stack, read [`docs/planning/architecture-principles-typescript.md`](docs/planning/architecture-principles-typescript.md).__ It is the guiding document, and its first section is the rule that matters most:
+
+- __Default to `/Volumes/hd2A/workspaces/github/ngdpbase`__ — the code, not its docs. It is checked out locally. When this stack needs a mechanism ngdpbase already has, take ngdpbase's shape as it is built, even where something else looks tidier.
+- __Improvements are FILED, not built in flight.__ A better idea found mid-implementation becomes an issue against the adopted shape, never a structure invented on the spot.
+- __A divergence is legitimate only if that document names it.__ The test before writing code: *does the document name this divergence, or am I about to create one?*
+- __Nothing says "spike".__ That word was scaffolding for the transition, never the product. This stack becomes YourPHR; the Go stack goes silent.
+
 ## Project Context
 
 Repo-specific brief for agents. The kit-managed protocol is __above__ `KIT:END`; everything below is owned by this repo and is the single source of truth for product context (formerly `CLAUDE.md`). Claude Code loads [`CLAUDE.md`](CLAUDE.md), which is a short pointer here.
