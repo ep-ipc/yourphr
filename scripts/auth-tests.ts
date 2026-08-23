@@ -43,7 +43,7 @@ async function boot(options: { session?: { slidingSeconds: number; absoluteSecon
   const dir = mkdtempSync(join(tmpdir(), 'spike-auth-'));
   const db = new Database(join(dir, 'app.db'));
   const engine = new Engine();
-  const configEnv = options.minPassword === undefined ? {} : { SPIKE_AUTH_PASSWORD_MIN_LENGTH: String(options.minPassword) };
+  const configEnv = options.minPassword === undefined ? {} : { YOURPHR_AUTH_PASSWORD_MIN_LENGTH: String(options.minPassword) };
   const config = new ConfigurationManager(engine, new FileConfigProvider(dir), { env: configEnv });
   const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider());
   const sessions = new SessionsManager(engine, [new PasswordAuthProvider()], { sessionKey: options.sessionKey ?? randomBytes(32), session: options.session, throttle: options.throttle, trustedProxies: options.trustedProxies, factors: options.factors });

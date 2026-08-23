@@ -39,7 +39,7 @@ let admin: ApiContext;
 let alice: ApiContext;
 let clock: Date;
 
-async function boot(provider: BaseBackupProvider = store, env: Record<string, string> = { SPIKE_BACKUP_ENCRYPTION_KEY: 'travel-key' }): Promise<void> {
+async function boot(provider: BaseBackupProvider = store, env: Record<string, string> = { YOURPHR_BACKUP_ENCRYPTION_KEY: 'travel-key' }): Promise<void> {
   engine = new Engine();
   exporter = new FakeExporter(store);
   backups = new BackupManager(engine, provider, { dataDir: dir, exporter, alsoExport: ['app-db'], now: () => clock });
@@ -66,7 +66,7 @@ describe('BackupManager — the coordinator', () => {
   });
 
   it('a backup now goes through the exporter under the backup key, prunes by retention, and records a success', async () => {
-    engine.managers.configuration.set('backup.max-backups', 2);
+    engine.managers.configuration.set('yourphr.backup.max-backups', 2);
     await expect(backups.backupNow(alice)).rejects.toMatchObject({ status: 403 });
     const first = await backups.backupNow(admin);
     expect(first).toMatchObject({ name: expect.stringMatching(/backup\.db$/), sizeBytes: 42, pruned: [] });

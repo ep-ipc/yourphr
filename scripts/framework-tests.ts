@@ -11,6 +11,7 @@ import { ApiContext, ApiError } from '../src/framework/ApiContext.js';
 import { ConfigurationManager } from '../src/framework/ConfigurationManager.js';
 import { PolicyManager, PERMISSIONS_KEY, ROLES_KEY } from '../src/framework/managers/PolicyManager.js';
 import { FileConfigProvider } from '../src/framework/providers/FileConfigProvider.js';
+import { ConfigCatalog, envNameFor, legacyEnvNameFor } from '../src/config/index.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -130,6 +131,34 @@ async function main(): Promise<void> {
   check('a context resolves its permissions through the policy manager, live per request',
     ApiContext.from({ username: 'ops', role: 'admin' }, policyEngine).can('admin-system')
       && !ApiContext.from({ username: 'alice', role: 'user' }, policyEngine).can('admin-read'));
+
+  // --- the configuration key convention (yourphr#627) ---
+  // One separator, everywhere, so a key survives a URL, an HTTP header, a shell variable and a log
+  // line unchanged. Underscore is RFC 3986 unreserved, so this is not a standards argument — it is
+  // that nginx drops headers containing underscores by DEFAULT and silently, and that `_` vanishes
+  // under link underlining. ngdpbase holds the same rule across 472 keys with zero underscores.
+  const catalogKeys = Object.keys(ConfigCatalog);
+  const badShape = catalogKeys.filter((k) => !/^yourphr(\.[a-z0-9]+(-[a-z0-9]+)*)+$/.test(k));
+  check('every configuration key is yourphr-prefixed, lowercase, dot-separated, hyphens inside a segment, no underscores',
+    badShape.length === 0, badShape.join(', '));
+
+  // envNameFor collapses BOTH dots and hyphens to '_', so it is not injective on its own: `a.b-c`
+  // and `a-b.c` produce the same variable. Banning underscores does not fix that — only this does.
+  const byEnvName = new Map<string, string[]>();
+  for (const key of catalogKeys) {
+    const name = envNameFor(key);
+    byEnvName.set(name, [...(byEnvName.get(name) ?? []), key]);
+  }
+  const collisions = [...byEnvName.entries()].filter(([, keys]) => keys.length > 1);
+  check('no two configuration keys map to the same environment variable name',
+    collisions.length === 0, collisions.map(([n, k]) => `${n} <- ${k.join(' + ')}`).join('; '));
+
+  check('the environment name derives from the key itself, carrying its own prefix',
+    envNameFor('yourphr.auth.password.min-length') === 'YOURPHR_AUTH_PASSWORD_MIN_LENGTH');
+  // The deployed manifests still set SPIKE_* — including SOPS-encrypted secrets whose variable
+  // names live inside the encrypted payload — so the old name must keep working until the cut-over.
+  check('the pre-#627 SPIKE_ name is still accepted, so a running deployment does not crash-loop on rename',
+    legacyEnvNameFor('yourphr.database.encryption.key') === 'SPIKE_DATABASE_ENCRYPTION_KEY');
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

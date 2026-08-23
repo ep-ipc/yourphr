@@ -5,7 +5,7 @@
  *
  * Sign-in: throttled per ACCOUNT and per IP before any verification (yourphr#509), the per-IP key
  * trusting X-Forwarded-For only from a declared proxy (yourphr#529); then every configured FACTOR
- * must pass — `auth.factors` is an ALL-OF list, never "try each until one succeeds" (the doc's
+ * must pass — `yourphr.auth.factors` is an ALL-OF list, never "try each until one succeeds" (the doc's
  * MFA-bypass warning, tested); one generic refusal for every failure (yourphr#104). The provider's
  * AuthResult carries the token generation into the session claims, so a password change or a
  * sign-out-everywhere ends the session mid-flight. Sliding TTL with an absolute cap (yourphr#445).
@@ -89,7 +89,7 @@ export interface SessionsOptions {
   session?: SessionPolicy;
   throttle?: ThrottlePolicy;
   trustedProxies?: string[];
-  /** The all-of factor list (`auth.factors`); each names a registered provider. Default ['password']. */
+  /** The all-of factor list (`yourphr.auth.factors`); each names a registered provider. Default ['password']. */
   factors?: string[];
 }
 
@@ -123,7 +123,7 @@ export class SessionsManager extends BaseManager {
 
   /**
    * Sign in. Credentials are keyed by factor name (`{ password: '…', totp: '…' }`); EVERY factor in
-   * `auth.factors` must pass. Unknown accounts still cost a real verification and get the same message.
+   * `yourphr.auth.factors` must pass. Unknown accounts still cost a real verification and get the same message.
    */
   async signIn(
     username: string,

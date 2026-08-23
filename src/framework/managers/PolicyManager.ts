@@ -33,8 +33,8 @@ declare module '../Engine.js' {
   }
 }
 
-export const PERMISSIONS_KEY = 'auth.permissions.definitions';
-export const ROLES_KEY = 'auth.roles.definitions';
+export const PERMISSIONS_KEY = 'yourphr.auth.permissions.definitions';
+export const ROLES_KEY = 'yourphr.auth.roles.definitions';
 
 /** What a permission governs, in the operator's words. */
 export interface PermissionDefinition {

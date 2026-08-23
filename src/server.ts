@@ -780,7 +780,7 @@ export function createYourPhrServer(options: ServerOptions) {
           const phi = engine.managers.records.storage(ctx);
           send(res, 200, {success: true, data: {
             location: [app.location, phi.location].join(' + '),
-            encryption_enabled: engine.has('settings') && engine.managers.configuration.getString('database.encryption.key') !== '',
+            encryption_enabled: engine.has('settings') && engine.managers.configuration.getString('yourphr.database.encryption.key') !== '',
             size_bytes: app.sizeBytes + phi.sizeBytes,
             users: await engine.managers.users.count(ctx),
             sources: engine.has('sources') ? await engine.managers.sources.count() : 0,

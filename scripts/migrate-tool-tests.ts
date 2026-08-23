@@ -90,6 +90,7 @@ function makeGoInstance(root: string, options: { badRow?: boolean } = {}): strin
     .run('p1', 'u-1', 'src-1', 'Patient', 'p-1', JSON.stringify({ resourceType: 'Patient', id: 'p-1', name: [{ family: 'Testcase' }] }), null);
   db.close();
 
+  // A GO instance's overrides — Go's key names, which yourphr#627 did not touch and must not.
   writeFileSync(join(root, 'config', 'app-custom-config.json'), JSON.stringify({
     _comment: 'synthetic',
     'jwt.session_ttl_minutes': 30,
@@ -160,8 +161,8 @@ async function main(): Promise<void> {
   check('records: per-user isolation holds across the migration', (patConditions.total ?? 0) === 1 && (patSeesJim.total ?? 0) === 0);
 
   check('config: the translatable keys are carried with their units converted',
-    report.config.carried.length === 3 && stores.config.getInt('auth.session.sliding-seconds') === 1800 && stores.config.getInt('backup.max-backups') === 3);
-  check('config: the operator contact is carried, nested shape flattened (yourphr#593)', stores.config.getString('operator.name') === 'Nerds by the Hour');
+    report.config.carried.length === 3 && stores.config.getInt('yourphr.auth.session.sliding-seconds') === 1800 && stores.config.getInt('yourphr.backup.max-backups') === 3);
+  check('config: the operator contact is carried, nested shape flattened (yourphr#593)', stores.config.getString('yourphr.operator.name') === 'Nerds by the Hour');
   check('config: everything else is LISTED as not carried, comments dropped',
     report.config.notCarried.join(',') === 'theme.name');
 

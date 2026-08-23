@@ -45,11 +45,14 @@ RUN mkdir -p /opt/yourphr/data && chown -R node:node /opt/yourphr
 USER node
 
 # Bootstrap only (yourphr#472): where the data lives, where the UI is, which port. Settings live in
-# the config store under the data directory. Secrets (SPIKE_DATABASE_ENCRYPTION_KEY,
-# SPIKE_BACKUP_ENCRYPTION_KEY) come from the orchestrator, never from an image.
-ENV SPIKE_STORAGE_DATA_DIR=/opt/yourphr/data \
-    SPIKE_WEB_STATIC_DIR=/opt/yourphr/web \
-    SPIKE_WEB_LISTEN_PORT=8080
+# the config store under the data directory. Secrets (YOURPHR_DATABASE_ENCRYPTION_KEY,
+# YOURPHR_BACKUP_ENCRYPTION_KEY) come from the orchestrator, never from an image.
+# Names derive from the configuration keys, which carry the yourphr. prefix (yourphr#627). The
+# pre-#627 SPIKE_* names are still accepted with a warning, so a deployment whose manifests have
+# not been updated keeps booting; that fallback goes at the cut-over (yourphr#588).
+ENV YOURPHR_STORAGE_DATA_DIR=/opt/yourphr/data \
+    YOURPHR_WEB_STATIC_DIR=/opt/yourphr/web \
+    YOURPHR_WEB_LISTEN_PORT=8080
 EXPOSE 8080
 VOLUME ["/opt/yourphr/data"]
 CMD ["node", "dist/main.js"]

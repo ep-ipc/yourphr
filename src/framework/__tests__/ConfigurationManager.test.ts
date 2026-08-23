@@ -24,59 +24,59 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
   it('merges the two layers and answers with the typed getters', async () => {
     const { engine, cfg } = boot();
     await engine.initialize();
-    expect(cfg.getInt('sync.max-pages')).toBe(500);
-    expect(cfg.getBool('backup.schedule.enabled')).toBe(false);
-    expect(cfg.getStringList('auth.trusted-proxies')).toEqual([]);
-    cfg.set('sync.max-pages', 42);
-    expect(cfg.getInt('sync.max-pages')).toBe(42);
+    expect(cfg.getInt('yourphr.sync.max-pages')).toBe(500);
+    expect(cfg.getBool('yourphr.backup.schedule.enabled')).toBe(false);
+    expect(cfg.getStringList('yourphr.auth.trusted-proxies')).toEqual([]);
+    cfg.set('yourphr.sync.max-pages', 42);
+    expect(cfg.getInt('yourphr.sync.max-pages')).toBe(42);
   });
 
   it('writes ONLY the deltas — never the merged view (the ngdpbase #895 lesson)', async () => {
     const { engine, cfg, provider } = boot();
     await engine.initialize();
-    cfg.set('operator.name', 'Ops');
+    cfg.set('yourphr.operator.name', 'Ops');
     // The whole point: one changed key on disk, not a frozen copy of the 29 shipped ones.
-    expect(provider.written()).toEqual({ 'operator.name': 'Ops' });
-    expect(cfg.customValues()).toEqual({ 'operator.name': 'Ops' });
-    expect(cfg.getInt('sync.max-pages')).toBe(500); // still following the product
+    expect(provider.written()).toEqual({ 'yourphr.operator.name': 'Ops' });
+    expect(cfg.customValues()).toEqual({ 'yourphr.operator.name': 'Ops' });
+    expect(cfg.getInt('yourphr.sync.max-pages')).toBe(500); // still following the product
   });
 
   it('a later release changing a shipped default reaches an instance that never overrode it', () => {
-    const provider = new FakeConfigProvider({ 'operator.name': 'Ops' }, { ...shipped(), 'auth.throttle.max-failures': 8 });
+    const provider = new FakeConfigProvider({ 'yourphr.operator.name': 'Ops' }, { ...shipped(), 'yourphr.auth.throttle.max-failures': 8 });
     const cfg = new ConfigurationManager(new Engine(), provider, { env: {} });
-    expect(cfg.getInt('auth.throttle.max-failures')).toBe(8); // the new default applies
-    expect(cfg.getString('operator.name')).toBe('Ops');       // the override still wins
+    expect(cfg.getInt('yourphr.auth.throttle.max-failures')).toBe(8); // the new default applies
+    expect(cfg.getString('yourphr.operator.name')).toBe('Ops');       // the override still wins
   });
 
   it('precedence is environment > instance override > shipped default', () => {
-    const { cfg } = boot({ SPIKE_AUTH_PASSWORD_MIN_LENGTH: '20' }, { 'auth.password.min-length': 16 });
-    expect(cfg.getInt('auth.password.min-length')).toBe(20);
-    expect(cfg.isSetByEnvironment('auth.password.min-length')).toBe(true);
-    expect(cfg.shippedValue('auth.password.min-length')).toBe(12); // what the product says, regardless
+    const { cfg } = boot({ YOURPHR_AUTH_PASSWORD_MIN_LENGTH: '20' }, { 'yourphr.auth.password.min-length': 16 });
+    expect(cfg.getInt('yourphr.auth.password.min-length')).toBe(20);
+    expect(cfg.isSetByEnvironment('yourphr.auth.password.min-length')).toBe(true);
+    expect(cfg.shippedValue('yourphr.auth.password.min-length')).toBe(12); // what the product says, regardless
   });
 
   it('refuses the writes that would store a value that never applies', () => {
-    const { cfg } = boot({ SPIKE_SYNC_MAX_PAGES: '9' });
+    const { cfg } = boot({ YOURPHR_SYNC_MAX_PAGES: '9' });
     expect(() => cfg.set('nope.key', 1)).toThrow(/unknown configuration key/);
-    expect(() => cfg.set('database.encryption.key', 'x')).toThrow(/bootstrap/);   // env only
-    expect(() => cfg.set('sync.max-pages', 5)).toThrow(/set in the environment/); // env wins at read time
+    expect(() => cfg.set('yourphr.database.encryption.key', 'x')).toThrow(/bootstrap/);   // env only
+    expect(() => cfg.set('yourphr.sync.max-pages', 5)).toThrow(/set in the environment/); // env wins at read time
   });
 
   it('clear() drops an override; resetToDefaults() drops them all', async () => {
     const { engine, cfg, provider } = boot();
     await engine.initialize();
-    cfg.set('operator.name', 'Ops');
-    cfg.set('backup.max-backups', 3);
-    expect(cfg.clear('operator.name')).toBe(true);
-    expect(cfg.clear('operator.name')).toBe(false);
-    expect(cfg.getString('operator.name')).toBe('');
+    cfg.set('yourphr.operator.name', 'Ops');
+    cfg.set('yourphr.backup.max-backups', 3);
+    expect(cfg.clear('yourphr.operator.name')).toBe(true);
+    expect(cfg.clear('yourphr.operator.name')).toBe(false);
+    expect(cfg.getString('yourphr.operator.name')).toBe('');
     cfg.resetToDefaults();
     expect(provider.written()).toEqual({});
-    expect(cfg.getInt('backup.max-backups')).toBe(7);
+    expect(cfg.getInt('yourphr.backup.max-backups')).toBe(7);
   });
 
   it('unknown override keys are reported, never silently carried or dropped (yourphr#473)', () => {
-    const { cfg } = boot({}, { 'operator.name': 'Ops', 'typo.key': 'x' });
+    const { cfg } = boot({}, { 'yourphr.operator.name': 'Ops', 'typo.key': 'x' });
     expect(cfg.unknownKeys()).toEqual(['typo.key']);
   });
 
@@ -84,91 +84,91 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
     const provider = new FakeConfigProvider({}, undefined, '/data/config/app-custom-config.json: bad JSON');
     const cfg = new ConfigurationManager(new Engine(), provider, { env: {} });
     expect(cfg.unknownKeys()[0]).toContain('unreadable');
-    expect(() => cfg.set('operator.name', 'Ops')).toThrow(/refusing to overwrite/);
+    expect(() => cfg.set('yourphr.operator.name', 'Ops')).toThrow(/refusing to overwrite/);
     expect(provider.saves).toBe(0);
   });
 
   it('snapshot() names the layer each value came from and masks secrets', () => {
-    const { cfg } = boot({ SPIKE_BACKUP_ENCRYPTION_KEY: 'from-env' }, { 'operator.name': 'Ops' });
+    const { cfg } = boot({ YOURPHR_BACKUP_ENCRYPTION_KEY: 'from-env' }, { 'yourphr.operator.name': 'Ops' });
     const rows = Object.fromEntries(cfg.snapshot().map((r) => [r.key, r]));
-    expect(rows['backup.encryption.key']).toMatchObject({ value: '••••', source: 'environment' });
-    expect(rows['operator.name']).toMatchObject({ value: 'Ops', source: 'custom' });
-    expect(rows['sync.max-pages']).toMatchObject({ value: 500, source: 'default' });
-    expect(rows['sync.max-pages']?.description).toContain('paging'); // meaning came from the catalogue
+    expect(rows['yourphr.backup.encryption.key']).toMatchObject({ value: '••••', source: 'environment' });
+    expect(rows['yourphr.operator.name']).toMatchObject({ value: 'Ops', source: 'custom' });
+    expect(rows['yourphr.sync.max-pages']).toMatchObject({ value: 500, source: 'default' });
+    expect(rows['yourphr.sync.max-pages']?.description).toContain('paging'); // meaning came from the catalogue
   });
 
   it('refuses to boot when the shipped values and the catalogue disagree', () => {
-    const { 'sync.max-pages': _dropped, ...missingOne } = shipped();
+    const { 'yourphr.sync.max-pages': _dropped, ...missingOne } = shipped();
     expect(() => new ConfigurationManager(new Engine(), new FakeConfigProvider({}, missingOne), { env: {} }))
-      .toThrow(/no shipped value for sync\.max-pages/);
+      .toThrow(/no shipped value for yourphr\.sync\.max-pages/);
     expect(() => new ConfigurationManager(new Engine(), new FakeConfigProvider({}, { ...shipped(), 'undescribed.key': 1 }), { env: {} }))
       .toThrow(/no description for undescribed\.key/);
   });
 
   it('backup() carries the overrides only — never the environment — and restore() puts them back', async () => {
-    const { engine, cfg } = boot({ SPIKE_BACKUP_ENCRYPTION_KEY: 'from-env' });
+    const { engine, cfg } = boot({ YOURPHR_BACKUP_ENCRYPTION_KEY: 'from-env' });
     await engine.initialize();
-    cfg.set('operator.name', 'Ops');
+    cfg.set('yourphr.operator.name', 'Ops');
     const data = await cfg.backup();
-    expect(data.payload).toEqual({ 'operator.name': 'Ops' });
+    expect(data.payload).toEqual({ 'yourphr.operator.name': 'Ops' });
     const second = boot();
     await second.engine.initialize();
     await second.cfg.restore(data);
-    expect(second.cfg.getString('operator.name')).toBe('Ops');
+    expect(second.cfg.getString('yourphr.operator.name')).toBe('Ops');
   });
 });
 
 describe('environment references — the config file names the variable (yourphr#622)', () => {
   it('a bare $VAR is the whole value and resolves from the environment', () => {
-    const { cfg } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'operator.name': '$SMTP_PASSWORD' });
-    expect(cfg.getString('operator.name')).toBe('hunter2');
-    expect(cfg.isEnvReference('operator.name')).toBe(true);
+    const { cfg } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'yourphr.operator.name': '$SMTP_PASSWORD' });
+    expect(cfg.getString('yourphr.operator.name')).toBe('hunter2');
+    expect(cfg.isEnvReference('yourphr.operator.name')).toBe(true);
   });
 
   it('an unset bare $VAR REFUSES, naming the variable and the key that wanted it', () => {
-    const { cfg } = boot({}, { 'operator.name': '$SMTP_PASSWORD' });
-    expect(() => cfg.getString('operator.name')).toThrow(/SMTP_PASSWORD/);
-    expect(() => cfg.getString('operator.name')).toThrow(/operator\.name/);
+    const { cfg } = boot({}, { 'yourphr.operator.name': '$SMTP_PASSWORD' });
+    expect(() => cfg.getString('yourphr.operator.name')).toThrow(/SMTP_PASSWORD/);
+    expect(() => cfg.getString('yourphr.operator.name')).toThrow(/operator\.name/);
   });
 
   it('an embedded ${VAR} resolves, and is left INTACT on a miss so it fails at point of use', () => {
-    const { cfg } = boot({ BACKUP_ROOT: '/mnt/nas' }, { 'backup.destination': '${BACKUP_ROOT}/backups' });
-    expect(cfg.getString('backup.destination')).toBe('/mnt/nas/backups');
-    const { cfg: missing } = boot({}, { 'backup.destination': '${BACKUP_ROOT}/backups' });
-    expect(missing.getString('backup.destination')).toBe('${BACKUP_ROOT}/backups'); // silent, not fatal
+    const { cfg } = boot({ BACKUP_ROOT: '/mnt/nas' }, { 'yourphr.backup.destination': '${BACKUP_ROOT}/backups' });
+    expect(cfg.getString('yourphr.backup.destination')).toBe('/mnt/nas/backups');
+    const { cfg: missing } = boot({}, { 'yourphr.backup.destination': '${BACKUP_ROOT}/backups' });
+    expect(missing.getString('yourphr.backup.destination')).toBe('${BACKUP_ROOT}/backups'); // silent, not fatal
   });
 
   it('$$literal escapes a value that genuinely starts with $', () => {
-    const { cfg } = boot({}, { 'operator.name': '$$NotAVariable' });
-    expect(cfg.getString('operator.name')).toBe('$NotAVariable');
-    expect(cfg.isEnvReference('operator.name')).toBe(false);
+    const { cfg } = boot({}, { 'yourphr.operator.name': '$$NotAVariable' });
+    expect(cfg.getString('yourphr.operator.name')).toBe('$NotAVariable');
+    expect(cfg.isEnvReference('yourphr.operator.name')).toBe(false);
   });
 
   it('resolves at LOOKUP time, so a changed environment is seen on the next read', () => {
     const env: Record<string, string> = { TOKEN: 'first' };
-    const { cfg } = boot(env, { 'operator.name': '$TOKEN' });
-    expect(cfg.getString('operator.name')).toBe('first');
+    const { cfg } = boot(env, { 'yourphr.operator.name': '$TOKEN' });
+    expect(cfg.getString('yourphr.operator.name')).toBe('first');
     env['TOKEN'] = 'second';
-    expect(cfg.getString('operator.name')).toBe('second');
+    expect(cfg.getString('yourphr.operator.name')).toBe('second');
   });
 
   it('masking is structural: a referenced value is masked without anyone flagging it secret', () => {
-    const { cfg } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'operator.name': '$SMTP_PASSWORD' });
-    expect(cfg.maskedValue('operator.name')).toBe('••••');   // not marked `secret` in the catalogue
-    expect(cfg.getString('operator.name')).toBe('hunter2');  // still readable to code that asks
-    expect(cfg.snapshot().find((r) => r.key === 'operator.name')?.value).toBe('••••');
+    const { cfg } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'yourphr.operator.name': '$SMTP_PASSWORD' });
+    expect(cfg.maskedValue('yourphr.operator.name')).toBe('••••');   // not marked `secret` in the catalogue
+    expect(cfg.getString('yourphr.operator.name')).toBe('hunter2');  // still readable to code that asks
+    expect(cfg.snapshot().find((r) => r.key === 'yourphr.operator.name')?.value).toBe('••••');
   });
 
   it('refuses to write a literal over a reference — that would copy a secret onto disk', () => {
-    const { cfg, provider } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'operator.name': '$SMTP_PASSWORD' });
-    expect(() => cfg.set('operator.name', 'Ops')).toThrow(/copy a secret out of the deployment/);
+    const { cfg, provider } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'yourphr.operator.name': '$SMTP_PASSWORD' });
+    expect(() => cfg.set('yourphr.operator.name', 'Ops')).toThrow(/copy a secret out of the deployment/);
     expect(provider.saves).toBe(0);
-    cfg.set('operator.name', '$OTHER_VAR'); // pointing it at a different variable is fine
-    expect(provider.written()).toEqual({ 'operator.name': '$OTHER_VAR' });
+    cfg.set('yourphr.operator.name', '$OTHER_VAR'); // pointing it at a different variable is fine
+    expect(provider.written()).toEqual({ 'yourphr.operator.name': '$OTHER_VAR' });
   });
 
   it('a missing required secret refuses at BOOT, not at the first request that reads it', async () => {
-    const { engine } = boot({}, { 'operator.contact_email': '$UNSET_SECRET' });
+    const { engine } = boot({}, { 'yourphr.operator.contact-email': '$UNSET_SECRET' });
     await expect(engine.initialize()).rejects.toThrow(/UNSET_SECRET/);
   });
 });
@@ -177,10 +177,10 @@ describe('FileConfigProvider — the two files (yourphr#621)', () => {
   it('reads the shipped defaults and the instance overrides, ignoring _ comment keys', () => {
     const dir = tmp();
     mkdirSync(join(dir, 'config'), { recursive: true });
-    writeFileSync(join(dir, 'config', 'app-custom-config.json'), JSON.stringify({ _comment: 'notes', 'operator.name': 'Ops' }));
+    writeFileSync(join(dir, 'config', 'app-custom-config.json'), JSON.stringify({ _comment: 'notes', 'yourphr.operator.name': 'Ops' }));
     const loaded = new FileConfigProvider(dir).load();
-    expect(loaded.custom).toEqual({ 'operator.name': 'Ops' }); // the comment is not a setting
-    expect(loaded.defaults['sync.max-pages']).toBe(500);
+    expect(loaded.custom).toEqual({ 'yourphr.operator.name': 'Ops' }); // the comment is not a setting
+    expect(loaded.defaults['yourphr.sync.max-pages']).toBe(500);
     expect(loaded.defaults['_comment']).toBeUndefined();
   });
 
@@ -202,9 +202,9 @@ describe('FileConfigProvider — the two files (yourphr#621)', () => {
   it('saves the deltas with a header warning against pasting the defaults in', () => {
     const dir = tmp();
     const provider = new FileConfigProvider(dir);
-    provider.saveCustom({ 'operator.name': 'Ops' });
+    provider.saveCustom({ 'yourphr.operator.name': 'Ops' });
     const written = JSON.parse(readFileSync(provider.customLocation(), 'utf8')) as Record<string, unknown>;
-    expect(written['operator.name']).toBe('Ops');
+    expect(written['yourphr.operator.name']).toBe('Ops');
     expect(String(written['_comment'])).toContain('ONLY what this instance changed');
     expect(Object.keys(written)).toHaveLength(2); // the header and the one delta; nothing else
   });

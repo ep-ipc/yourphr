@@ -15,7 +15,7 @@
  * --allow-internal  accept catalog URLs the SSRF guard would refuse (loopback sandboxes). Never
  *                   against production.
  *
- * The spike's own settings (SPIKE_DATABASE_ENCRYPTION_KEY, ...) come from the environment exactly
+ * The spike's own settings (YOURPHR_DATABASE_ENCRYPTION_KEY, ...) come from the environment exactly
  * as they do for the server, because the stores are opened through the same function.
  *
  * Exit 0 only when the verification agrees for every account and every resource type. Exit 1

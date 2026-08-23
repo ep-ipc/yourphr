@@ -2,7 +2,7 @@
  * The authorization vocabulary that stays in code (yourphr#620, narrowed by yourphr#623).
  *
  * The permission REGISTRY and the ROLE definitions are no longer here — they are two keys in the
- * shipped configuration (`auth.permissions.definitions`, `auth.roles.definitions`), read from the
+ * shipped configuration (`yourphr.auth.permissions.definitions`, `yourphr.auth.roles.definitions`), read from the
  * merged configuration at startup by `PolicyManager`. What remains is the shape of the idea, and
  * the two rules that are not the operator's to change:
  *

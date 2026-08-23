@@ -31,8 +31,8 @@ async function main(): Promise<void> {
   // Boot: env carries bootstrap + secrets ONLY (the #472 split, enforced by the config module).
   const app = await assembleApp(dir, {
     env: {
-      SPIKE_DATABASE_ENCRYPTION_KEY: 'at-rest-key',
-      SPIKE_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key',
+      YOURPHR_DATABASE_ENCRYPTION_KEY: 'at-rest-key',
+      YOURPHR_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key',
       SPIKE_TEST_ALLOW_INTERNAL: '1',
     },
     seeds: [
@@ -107,8 +107,8 @@ async function main(): Promise<void> {
   const badPage = await fetch(`${base}/api/secure/jobs?page=-1`, authed(aliceToken));
   check('Go\'s status filter and paging are honoured (nothing failed; a bad page is refused)', failedOnly.data.length === 0 && badPage.status === 400);
 
-  app.config.set('operator.name', 'Nerds by the Hour');
-  app.config.set('operator.contact_email', 'ops@example.org');
+  app.config.set('yourphr.operator.name', 'Nerds by the Hour');
+  app.config.set('yourphr.operator.contact-email', 'ops@example.org');
   const instance = (await (await fetch(`${base}/api/secure/instance`, authed(aliceToken))).json()) as { data: Record<string, unknown> };
   const publicInstance = (await (await fetch(`${base}/api/instance/public`)).json()) as { data: Record<string, unknown> };
   check('/secure/instance names the operator with the contact email; /instance/public withholds the email (yourphr#459)',
@@ -294,7 +294,7 @@ async function main(): Promise<void> {
   const opsAdmin = await fetch(`${base}/api/secure/admin/config`, authed(opsToken));
   check('an admin not named admin reaches the admin surface — the gate reads the role column', opsMe.data.role === 'admin' && opsAdmin.status === 200);
   const snapshot = (await (await fetch(`${base}/api/secure/admin/config`, authed(adminToken))).json()) as { data: { entries: { key: string; value: unknown; masked: boolean; from_env: boolean }[] } };
-  const secretRow = snapshot.data.entries.find((r) => r.key === 'database.encryption.key');
+  const secretRow = snapshot.data.entries.find((r) => r.key === 'yourphr.database.encryption.key');
   check('the config snapshot masks secrets and says where a value comes from', secretRow?.value === '••••' && secretRow?.masked === true && secretRow?.from_env === true);
   const catalogList = (await (await fetch(`${base}/api/secure/admin/catalog`, authed(adminToken))).json()) as { data: { display: string }[] };
   check('the seeded catalog is visible to the admin', catalogList.data.some((e) => e.display === 'Seeded Sandbox'));
@@ -460,7 +460,7 @@ async function main(): Promise<void> {
   const badTime = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '25:00', days: 'daily', destination: '', max_backups: 3 }) });
   const scheduled = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '02:30', days: 'weekly', destination: '', max_backups: 3 }) });
   check('the schedule is validated (HH:MM, daily|weekly) and stored in the settings store',
-    badTime.status === 400 && scheduled.status === 200 && scheduled.body.data['days'] === 'weekly' && app.config.getString('backup.schedule.time') === '02:30' && app.config.getBool('backup.schedule.enabled'));
+    badTime.status === 400 && scheduled.status === 200 && scheduled.body.data['days'] === 'weekly' && app.config.getString('yourphr.backup.schedule.time') === '02:30' && app.config.getBool('yourphr.backup.schedule.enabled'));
   const testOk = await adminJson('/api/secure/admin/database/backup/test', { method: 'POST', body: JSON.stringify({ destination: dir }) });
   const testBad = await adminJson('/api/secure/admin/database/backup/test', { method: 'POST', body: JSON.stringify({ destination: join(dir, 'does-not-exist') }) });
   const browse = await adminJson(`/api/secure/admin/database/browse?path=${encodeURIComponent(dir)}`);
@@ -481,24 +481,24 @@ async function main(): Promise<void> {
 
   const cfg = await adminJson('/api/secure/admin/config');
   const entries = cfg.body.data['entries'] as { key: string; value: unknown; masked: boolean; source: string; public: boolean; from_env: boolean; env_var: string; default: unknown }[];
-  const secret = entries.find((e) => e.key === 'backup.encryption.key')!;
-  const pub = entries.find((e) => e.key === 'auth.password.min-length')!;
+  const secret = entries.find((e) => e.key === 'yourphr.backup.encryption.key')!;
+  const pub = entries.find((e) => e.key === 'yourphr.auth.password.min-length')!;
   check('the Configuration page gets Go\'s shape: entries with masked/source/public/from_env/env_var/default, the custom config path',
-    Array.isArray(entries) && typeof cfg.body.data['custom_config_path'] === 'string' && secret.masked && secret.from_env && secret.env_var === 'SPIKE_BACKUP_ENCRYPTION_KEY' && pub.public === true && pub.source === 'default');
-  const revealed = await adminJson('/api/secure/admin/config/reveal/backup.encryption.key');
+    Array.isArray(entries) && typeof cfg.body.data['custom_config_path'] === 'string' && secret.masked && secret.from_env && secret.env_var === 'YOURPHR_BACKUP_ENCRYPTION_KEY' && pub.public === true && pub.source === 'default');
+  const revealed = await adminJson('/api/secure/admin/config/reveal/yourphr.backup.encryption.key'); // key in a URL path segment, unencoded (yourphr#627)
   const revealUnknown = await adminJson('/api/secure/admin/config/reveal/nope.key');
   check('reveal returns the real value of a masked key (and is logged); an unknown key is 404',
-    revealed.body.data['value'] === 'travelling-copy-key' && revealUnknown.status === 404 && ((await adminJson('/api/secure/admin/logs')).body.data['lines'] as string[]).some((l) => l.includes('revealed configuration value for backup.encryption.key')));
-  const setOk = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'sync.max-pages', value: '250' }) });
-  const setEnv = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'database.encryption.key', value: 'x' }) });
+    revealed.body.data['value'] === 'travelling-copy-key' && revealUnknown.status === 404 && ((await adminJson('/api/secure/admin/logs')).body.data['lines'] as string[]).some((l) => l.includes('revealed configuration value for yourphr.backup.encryption.key')));
+  const setOk = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.sync.max-pages', value: '250' }) });
+  const setEnv = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.database.encryption.key', value: 'x' }) });
   const setUnknown = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'nope.key', value: 1 }) });
-  const setBootstrap = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'web.listen.port', value: 9 }) });
-  const setBadType = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'sync.max-pages', value: 'lots' }) });
+  const setBootstrap = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.web.listen.port', value: 9 }) });
+  const setBadType = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.sync.max-pages', value: 'lots' }) });
   check('set: coerced to the shipped type and stored; env-pinned is 409; unknown, bootstrap and wrong-typed are 400',
-    setOk.status === 200 && app.config.getInt('sync.max-pages') === 250 && setEnv.status === 409 && setUnknown.status === 400 && setBootstrap.status === 400 && setBadType.status === 400);
-  const reset = await adminJson('/api/secure/admin/config/sync.max-pages', { method: 'DELETE' });
-  const resetAgain = await adminJson('/api/secure/admin/config/sync.max-pages', { method: 'DELETE' });
-  check('reset clears the override (reported), and the default is back', reset.body.data['cleared'] === true && resetAgain.body.data['cleared'] === false && app.config.getInt('sync.max-pages') === 500);
+    setOk.status === 200 && app.config.getInt('yourphr.sync.max-pages') === 250 && setEnv.status === 409 && setUnknown.status === 400 && setBootstrap.status === 400 && setBadType.status === 400);
+  const reset = await adminJson('/api/secure/admin/config/yourphr.sync.max-pages', { method: 'DELETE' });
+  const resetAgain = await adminJson('/api/secure/admin/config/yourphr.sync.max-pages', { method: 'DELETE' });
+  check('reset clears the override (reported), and the default is back', reset.body.data['cleared'] === true && resetAgain.body.data['cleared'] === false && app.config.getInt('yourphr.sync.max-pages') === 500);
   const nonAdminDb = await fetch(`${base}/api/secure/admin/database`, authed(opsToken));
   const strangerDb = await fetch(`${base}/api/secure/admin/database`, { headers: { authorization: `Bearer ${((await (await signIn('alice', 'another-long-enough-password')).json()) as { data: string }).data}` } });
   check('every admin card is behind the role gate', nonAdminDb.status === 200 && strangerDb.status === 403);
@@ -510,7 +510,7 @@ async function main(): Promise<void> {
   // --- a staged restore is applied on the next start (yourphr#602) ---
   {
     const rDir = mkdtempSync(join(tmpdir(), 'spike-app-restore-'));
-    const env = { SPIKE_DATABASE_ENCRYPTION_KEY: 'k1', SPIKE_BACKUP_ENCRYPTION_KEY: 'bk', SPIKE_TEST_ALLOW_INTERNAL: '1' };
+    const env = { YOURPHR_DATABASE_ENCRYPTION_KEY: 'k1', YOURPHR_BACKUP_ENCRYPTION_KEY: 'bk', SPIKE_TEST_ALLOW_INTERNAL: '1' };
     const a = await assembleApp(rDir, { env });
     await a.users.createUser(ApiContext.system('harness', 'admin', a.engine), 'keeper', 'keepers-long-enough-password');
     const rBase = await new Promise<string>((resolve) => { a.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(a.server.address() as { port: number }).port}`)); });

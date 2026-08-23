@@ -4,8 +4,8 @@
  * when, and the account's token generation, so the session that follows can be revoked
  * (yourphr#528). A provider reports; the Sessions manager turns the report into a session.
  *
- * Cardinality lives in the configuration and the manager, not here: `auth.factors` is an ALL-OF
- * list (every named factor must pass — password AND totp), `auth.providers` is the registry of
+ * Cardinality lives in the configuration and the manager, not here: `yourphr.auth.factors` is an ALL-OF
+ * list (every named factor must pass — password AND totp), `yourphr.auth.providers` is the registry of
  * what is available. A provider never falls through to another: a failed factor is a failed sign-in.
  */
 import type { UserRecord } from './BaseUsersProvider.js';

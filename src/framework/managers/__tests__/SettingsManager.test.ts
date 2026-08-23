@@ -31,15 +31,16 @@ describe('SettingsManager — what the instance says about itself, with the call
     const { engine, settings, nobody } = await boot();
     expect(engine.registered).toEqual(['configuration', 'policy', 'settings']);
     const pub = settings.publicInstance(nobody);
+    // Wire format, read by the Angular app — deliberately NOT the yourphr.* config key names (yourphr#627).
     expect(Object.keys(pub).sort()).toEqual(['operator.contact_url', 'operator.name', 'password.min_length']);
-    expect(pub).not.toHaveProperty('operator.contact_email');
+    expect(pub).not.toHaveProperty('operator.contact_email'); // wire name: withheld from anonymous (yourphr#459)
   });
 
   it('the signed-in view adds the operator contact; anonymous is refused', async () => {
     const { settings, member, nobody, admin } = await boot();
     settings.setInstanceSettings(admin, { name: 'Ops', contact_email: 'ops@example.org', contact_url: 'https://example.org/help' });
     const mine = settings.instanceForUser(member);
-    expect(mine['operator.contact_email']).toBe('ops@example.org');
+    expect(mine['operator.contact_email']).toBe('ops@example.org'); // wire name, not the config key
     expect(mine['demo.admin.session']).toBe(false);
     expect(() => settings.instanceForUser(nobody)).toThrow(ApiError);
   });
@@ -48,9 +49,9 @@ describe('SettingsManager — what the instance says about itself, with the call
     const { settings, member } = await boot();
     for (const call of [
       () => settings.configSnapshot(member),
-      () => settings.configReveal(member, 'operator.name'),
-      () => settings.configSet(member, 'operator.name', 'x'),
-      () => settings.configReset(member, 'operator.name'),
+      () => settings.configReveal(member, 'yourphr.operator.name'),
+      () => settings.configSet(member, 'yourphr.operator.name', 'x'),
+      () => settings.configReset(member, 'yourphr.operator.name'),
       () => settings.instanceSettings(member),
       () => settings.setInstanceSettings(member, { name: '', contact_email: '', contact_url: '' }),
     ]) {
@@ -61,44 +62,44 @@ describe('SettingsManager — what the instance says about itself, with the call
   });
 
   it('snapshot: Go\'s row shape — secrets masked, env-pinned marked, public keys named', async () => {
-    const { settings, admin } = await boot({ SPIKE_BACKUP_ENCRYPTION_KEY: 'from-env' });
+    const { settings, admin } = await boot({ YOURPHR_BACKUP_ENCRYPTION_KEY: 'from-env' });
     const snap = settings.configSnapshot(admin);
     const byKey = Object.fromEntries(snap.entries.map((e) => [e.key, e]));
-    expect(byKey['backup.encryption.key']).toMatchObject({ masked: true, value: '••••', from_env: true, env_var: 'SPIKE_BACKUP_ENCRYPTION_KEY', bootstrap: true });
-    expect(byKey['operator.name']).toMatchObject({ public: true, source: 'default', from_env: false });
-    expect(byKey['operator.contact_email']?.public).toBe(false);
+    expect(byKey['yourphr.backup.encryption.key']).toMatchObject({ masked: true, value: '••••', from_env: true, env_var: 'YOURPHR_BACKUP_ENCRYPTION_KEY', bootstrap: true });
+    expect(byKey['yourphr.operator.name']).toMatchObject({ public: true, source: 'default', from_env: false });
+    expect(byKey['yourphr.operator.contact-email']?.public).toBe(false);
     // Where the overrides live comes from the PROVIDER, not from the manager guessing a filename
     // (yourphr#621) — with the in-memory provider there is no file, and the screen says so.
     expect(snap.custom_config_path).toBe('<in-memory>');
   });
 
   it('reveal is logged by the actor, never a bare "admin"', async () => {
-    const { settings, admin, log } = await boot({ SPIKE_BACKUP_ENCRYPTION_KEY: 'from-env' });
-    expect(settings.configReveal(admin, 'backup.encryption.key')).toEqual({ key: 'backup.encryption.key', value: 'from-env', default: '' });
+    const { settings, admin, log } = await boot({ YOURPHR_BACKUP_ENCRYPTION_KEY: 'from-env' });
+    expect(settings.configReveal(admin, 'yourphr.backup.encryption.key')).toEqual({ key: 'yourphr.backup.encryption.key', value: 'from-env', default: '' });
     expect(settings.configReveal(admin, 'nope.key')).toBeUndefined();
-    expect(log).toEqual(['ops revealed configuration value for backup.encryption.key']);
+    expect(log).toEqual(['ops revealed configuration value for yourphr.backup.encryption.key']);
   });
 
   it('set: unknown key 400, env-pinned 409, wrong shape 400, otherwise coerced to the shipped type and logged', async () => {
-    const { settings, admin, engine, log } = await boot({ SPIKE_SYNC_MAX_PAGES: '9' });
+    const { settings, admin, engine, log } = await boot({ YOURPHR_SYNC_MAX_PAGES: '9' });
     const status = (fn: () => void): number => { try { fn(); return 200; } catch (err) { return (err as ApiError).status; } };
     expect(status(() => settings.configSet(admin, 'nope.key', 1))).toBe(400);
-    expect(status(() => settings.configSet(admin, 'sync.max-pages', 5))).toBe(409);
-    expect(status(() => settings.configSet(admin, 'backup.max-backups', 'many'))).toBe(400);
-    expect(status(() => settings.configSet(admin, 'backup.encryption.key', 'x'))).toBe(400); // bootstrap: env only
-    settings.configSet(admin, 'backup.max-backups', '3');
-    expect(engine.managers.configuration.getInt('backup.max-backups')).toBe(3);
-    settings.configSet(admin, 'backup.schedule.enabled', 'true');
-    expect(engine.managers.configuration.getBool('backup.schedule.enabled')).toBe(true);
-    expect(log).toEqual(['ops set configuration backup.max-backups', 'ops set configuration backup.schedule.enabled']);
+    expect(status(() => settings.configSet(admin, 'yourphr.sync.max-pages', 5))).toBe(409);
+    expect(status(() => settings.configSet(admin, 'yourphr.backup.max-backups', 'many'))).toBe(400);
+    expect(status(() => settings.configSet(admin, 'yourphr.backup.encryption.key', 'x'))).toBe(400); // bootstrap: env only
+    settings.configSet(admin, 'yourphr.backup.max-backups', '3');
+    expect(engine.managers.configuration.getInt('yourphr.backup.max-backups')).toBe(3);
+    settings.configSet(admin, 'yourphr.backup.schedule.enabled', 'true');
+    expect(engine.managers.configuration.getBool('yourphr.backup.schedule.enabled')).toBe(true);
+    expect(log).toEqual(['ops set configuration yourphr.backup.max-backups', 'ops set configuration yourphr.backup.schedule.enabled']);
   });
 
   it('reset: clears an override (true), says when there was none (false), refuses an unknown key', async () => {
     const { settings, admin, engine } = await boot();
-    settings.configSet(admin, 'backup.max-backups', 3);
-    expect(settings.configReset(admin, 'backup.max-backups')).toBe(true);
-    expect(engine.managers.configuration.getInt('backup.max-backups')).toBe(7);
-    expect(settings.configReset(admin, 'backup.max-backups')).toBe(false);
+    settings.configSet(admin, 'yourphr.backup.max-backups', 3);
+    expect(settings.configReset(admin, 'yourphr.backup.max-backups')).toBe(true);
+    expect(engine.managers.configuration.getInt('yourphr.backup.max-backups')).toBe(7);
+    expect(settings.configReset(admin, 'yourphr.backup.max-backups')).toBe(false);
     expect(() => settings.configReset(admin, 'nope.key')).toThrow(ApiError);
   });
 

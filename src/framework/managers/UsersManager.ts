@@ -54,7 +54,7 @@ export class UsersManager extends BaseManager {
 
   override async initialize(config: Record<string, unknown> = {}): Promise<void> {
     await this.provider.initialize();
-    this.minPasswordLength = this.engine.managers.configuration.getInt('auth.password.min-length');
+    this.minPasswordLength = this.engine.managers.configuration.getInt('yourphr.auth.password.min-length');
     await super.initialize(config);
   }
 

@@ -313,14 +313,16 @@ export interface ConfigTranslation {
  * The only Go settings with a counterpart here. Everything else in the Go overlay is reported as
  * not carried — listed by name, so the operator can see what they will be setting again.
  */
+// `go:` names are the GO stack's keys and are NOT ours to rename — they are read out of a database
+// this build did not write. Only the `ts:` side moved to the yourphr.* convention (yourphr#627).
 export const CONFIG_TRANSLATIONS: ConfigTranslation[] = [
-  { go: 'backup.max-backups', ts: 'backup.max-backups', convert: (v) => Number(v), note: 'same meaning' },
-  { go: 'backup.destination', ts: 'backup.destination', convert: (v) => String(v), note: 'same meaning' },
-  { go: 'jwt.session_ttl_minutes', ts: 'auth.session.sliding-seconds', convert: (v) => Number(v) * 60, note: 'minutes -> seconds' },
-  { go: 'jwt.session_absolute_hours', ts: 'auth.session.absolute-seconds', convert: (v) => Number(v) * 3600, note: 'hours -> seconds' },
-  { go: 'operator.name', ts: 'operator.name', convert: (v) => String(v), note: 'same meaning (yourphr#593)' },
-  { go: 'operator.contact_email', ts: 'operator.contact_email', convert: (v) => String(v), note: 'same meaning (yourphr#593)' },
-  { go: 'operator.contact_url', ts: 'operator.contact_url', convert: (v) => String(v), note: 'same meaning (yourphr#593)' },
+  { go: 'backup.max-backups', ts: 'yourphr.backup.max-backups', convert: (v) => Number(v), note: 'same meaning' },
+  { go: 'backup.destination', ts: 'yourphr.backup.destination', convert: (v) => String(v), note: 'same meaning' },
+  { go: 'jwt.session_ttl_minutes', ts: 'yourphr.auth.session.sliding-seconds', convert: (v) => Number(v) * 60, note: 'minutes -> seconds' },
+  { go: 'jwt.session_absolute_hours', ts: 'yourphr.auth.session.absolute-seconds', convert: (v) => Number(v) * 3600, note: 'hours -> seconds' },
+  { go: 'operator.name', ts: 'yourphr.operator.name', convert: (v) => String(v), note: 'same meaning (yourphr#593)' },
+  { go: 'operator.contact_email', ts: 'yourphr.operator.contact-email', convert: (v) => String(v), note: 'same meaning (yourphr#593)' },
+  { go: 'operator.contact_url', ts: 'yourphr.operator.contact-url', convert: (v) => String(v), note: 'same meaning (yourphr#593)' },
 ];
 
 /** Reads <go data dir>/config/app-custom-config.json, flat dotted (post-#456) or nested (older). */

@@ -26,9 +26,9 @@ function refuse(message: string): never {
 
 const env = process.env;
 
-const dataDir = env[envNameFor('storage.data_dir')] ?? '';
+const dataDir = env[envNameFor('yourphr.storage.data-dir')] ?? '';
 if (dataDir === '') {
-  refuse(`${envNameFor('storage.data_dir')} is not set — the data directory is bootstrap configuration and has no default`);
+  refuse(`${envNameFor('yourphr.storage.data-dir')} is not set — the data directory is bootstrap configuration and has no default`);
 }
 try {
   mkdirSync(dataDir, { recursive: true });
@@ -37,20 +37,20 @@ try {
   refuse(`${dataDir} is not a writable directory (${(err as Error).message})`);
 }
 
-const webDir = env[envNameFor('web.static-dir')] ?? '';
+const webDir = env[envNameFor('yourphr.web.static-dir')] ?? '';
 if (webDir !== '' && !existsSync(join(webDir, 'index.html'))) {
-  refuse(`${envNameFor('web.static-dir')}=${webDir} holds no index.html — the built Angular app is expected there`);
+  refuse(`${envNameFor('yourphr.web.static-dir')}=${webDir} holds no index.html — the built Angular app is expected there`);
 }
 
 // Bootstrap values are read once here; assembleApp() builds its own manager over the same files
 // for everything else. Two reads of one file, one truth. Configuration is the bootstrap layer
 // (yourphr#621), so its provider is chosen here rather than by configuration.
 const bootstrap = new ConfigurationManager(new Engine(), new FileConfigProvider(dataDir), { env });
-const port = bootstrap.getInt('web.listen.port');
-const host = bootstrap.getString('web.listen.host');
-const intervalSeconds = bootstrap.getInt('sync.interval-seconds');
-if (bootstrap.getString('database.encryption.key') === '') {
-  appLog.warn(`${envNameFor('database.encryption.key')} is not set — the database and the tokens in it are stored in the clear`);
+const port = bootstrap.getInt('yourphr.web.listen.port');
+const host = bootstrap.getString('yourphr.web.listen.host');
+const intervalSeconds = bootstrap.getInt('yourphr.sync.interval-seconds');
+if (bootstrap.getString('yourphr.database.encryption.key') === '') {
+  appLog.warn(`${envNameFor('yourphr.database.encryption.key')} is not set — the database and the tokens in it are stored in the clear`);
 }
 
 const version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;

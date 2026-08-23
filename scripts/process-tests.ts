@@ -58,9 +58,9 @@ async function main(): Promise<void> {
   const webDir = join(dir, 'web');
   mkdirSync(webDir);
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>YourPHR</title><app-root></app-root>');
-  const DATA = envNameFor('storage.data_dir');
-  const WEB = envNameFor('web.static-dir');
-  const PORT = envNameFor('web.listen.port');
+  const DATA = envNameFor('yourphr.storage.data-dir');
+  const WEB = envNameFor('yourphr.web.static-dir');
+  const PORT = envNameFor('yourphr.web.listen.port');
 
   // --- refusals: a misconfigured process must not boot inert (yourphr#546's principle) ---
   const noData = runOnce({ [DATA]: '', [PORT]: '0' });
@@ -71,7 +71,7 @@ async function main(): Promise<void> {
   // --- the process ---
   const port = 18000 + Math.floor(Math.random() * 1000);
   const child = spawn(process.execPath, ENTRY, {
-    env: { ...process.env, [DATA]: dataDir, [WEB]: webDir, [PORT]: String(port), [envNameFor('web.listen.host')]: '127.0.0.1', [envNameFor('sync.interval-seconds')]: '0' },
+    env: { ...process.env, [DATA]: dataDir, [WEB]: webDir, [PORT]: String(port), [envNameFor('yourphr.web.listen.host')]: '127.0.0.1', [envNameFor('yourphr.sync.interval-seconds')]: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
     check('boots and says where it listens, where the data is, and that the worker is off', output.includes(`127.0.0.1:${port}`) && output.includes(dataDir) && output.includes('worker off'));
     check('first start names the bootstrap password file, never the password',
       output.includes('.admin_bootstrap_password') && !output.includes(readFileSync(join(dataDir, '.admin_bootstrap_password'), 'utf8').trim()));
-    check('warns loudly when the database key is unset', output.includes(envNameFor('database.encryption.key')) && output.includes('in the clear'));
+    check('warns loudly when the database key is unset', output.includes(envNameFor('yourphr.database.encryption.key')) && output.includes('in the clear'));
 
     const health = await get(port, '/healthz');
     check('GET /healthz is 200 without a session', health.status === 200 && health.body === '{"ok":true}', `${health.status} ${health.body}`);

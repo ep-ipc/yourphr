@@ -54,7 +54,7 @@ export interface SettingsOptions {
 }
 
 /** The keys /api/instance/public publishes — Go's `public` list, as far as this stack has values. */
-const PUBLIC_KEYS = new Set(['operator.name', 'operator.contact_url', 'auth.password.min-length']);
+const PUBLIC_KEYS = new Set(['yourphr.operator.name', 'yourphr.operator.contact-url', 'yourphr.auth.password.min-length']);
 
 export class SettingsManager extends BaseManager {
   readonly name = 'settings';
@@ -93,10 +93,14 @@ export class SettingsManager extends BaseManager {
    */
   publicInstance(_ctx: ApiContext): Record<string, unknown> {
     const config = this.configuration;
+    // The FIELD NAMES are wire format — the Angular app reads these literal strings, and Go
+    // publishes the same ones — so they are deliberately NOT the configuration key names
+    // (yourphr#627). The config keys moved to the yourphr.* convention; these did not, because
+    // renaming them would be a frontend break dressed up as a settings cleanup.
     return {
-      'operator.name': config.getString('operator.name'),
-      'operator.contact_url': config.getString('operator.contact_url'),
-      'password.min_length': config.getInt('auth.password.min-length'),
+      'operator.name': config.getString('yourphr.operator.name'),
+      'operator.contact_url': config.getString('yourphr.operator.contact-url'),
+      'password.min_length': config.getInt('yourphr.auth.password.min-length'),
     };
   }
 
@@ -105,7 +109,7 @@ export class SettingsManager extends BaseManager {
     ctx.requireAuthenticated();
     return {
       ...this.publicInstance(ctx),
-      'operator.contact_email': this.configuration.getString('operator.contact_email'),
+      'operator.contact_email': this.configuration.getString('yourphr.operator.contact-email'), // wire format, not the config key
       'demo.admin.session': false, // this stack has no demo admin; the UI reads strictly true
     };
   }
@@ -187,9 +191,9 @@ export class SettingsManager extends BaseManager {
     ctx.require('admin-read');
     const config = this.configuration;
     return {
-      name: config.getString('operator.name'),
-      contact_email: config.getString('operator.contact_email'),
-      contact_url: config.getString('operator.contact_url'),
+      name: config.getString('yourphr.operator.name'),
+      contact_email: config.getString('yourphr.operator.contact-email'),
+      contact_url: config.getString('yourphr.operator.contact-url'),
     };
   }
 
@@ -204,9 +208,9 @@ export class SettingsManager extends BaseManager {
       throw new ApiError(400, 'contact_url must start with http:// or https://');
     }
     const config = this.configuration;
-    config.set('operator.name', settings.name);
-    config.set('operator.contact_email', settings.contact_email);
-    config.set('operator.contact_url', settings.contact_url);
+    config.set('yourphr.operator.name', settings.name);
+    config.set('yourphr.operator.contact-email', settings.contact_email);
+    config.set('yourphr.operator.contact-url', settings.contact_url);
     this.log(`${ctx.actor} set the instance settings`);
     return settings;
   }

@@ -9,7 +9,7 @@
  * provider that could get it wrong, and "which layer wins" must not vary by where the bytes live.
  *
  * THE BOOTSTRAP EXCEPTION, stated rather than assumed: every other capability in this stack is
- * selected BY configuration (`audit.provider`, `backup.storage.provider`). This one cannot be —
+ * selected BY configuration (`yourphr.audit.provider`, `yourphr.backup.storage.provider`). This one cannot be —
  * it is what reads configuration. Its provider is chosen by the composition root, from the same
  * place the data directory and the database key already come from. Ratified 2026-08-23.
  *
@@ -19,7 +19,7 @@
 import { BaseManager, type BackupData } from './BaseManager.js';
 import type { Engine } from './Engine.js';
 import type { BaseConfigProvider } from './providers/BaseConfigProvider.js';
-import { ConfigCatalog, envNameFor, isConfigObject, type ConfigKeySpec, type ConfigObject, type ConfigValue } from '../config/index.js';
+import { ConfigCatalog, envNameFor, legacyEnvNameFor, isConfigObject, type ConfigKeySpec, type ConfigObject, type ConfigValue } from '../config/index.js';
 
 declare module './Engine.js' {
   interface ManagerRegistry {
@@ -112,7 +112,7 @@ export class ConfigurationManager extends BaseManager {
   private configured(key: string): ConfigValue {
     const spec = this.catalog[key];
     if (!spec) throw new Error(`unknown configuration key: ${key}`);
-    const fromEnv = this.env[envNameFor(key)];
+    const fromEnv = this.env[envNameFor(key)] ?? this.legacyEnvValue(key);
     if (fromEnv !== undefined) return coerceFromEnv(fromEnv, this.defaults[key], key);
     // A bootstrap key ignores the overrides by design: it must hold before an admin could set it.
     if (!spec.bootstrap && key in this.custom) return this.merged[key] as ConfigValue;
@@ -216,7 +216,23 @@ export class ConfigurationManager extends BaseManager {
   customValues(): Record<string, ConfigValue> { return { ...this.custom }; }
 
   specOf(key: string): ConfigKeySpec | undefined { return this.catalog[key]; }
-  isSetByEnvironment(key: string): boolean { return this.env[envNameFor(key)] !== undefined; }
+  isSetByEnvironment(key: string): boolean {
+    return this.env[envNameFor(key)] !== undefined || this.legacyEnvValue(key) !== undefined;
+  }
+
+  /** A pre-yourphr#627 `SPIKE_*` variable, warned about once so an operator knows to move it. */
+  private legacyEnvValue(key: string): string | undefined {
+    const legacy = legacyEnvNameFor(key);
+    if (legacy === undefined) return undefined;
+    const value = this.env[legacy];
+    if (value !== undefined && !this.warnedLegacy.has(legacy)) {
+      this.warnedLegacy.add(legacy);
+      this.log(`configuration: ${legacy} is the old name for ${envNameFor(key)} and still works — update the deployment before the cut-over (yourphr#588)`);
+    }
+    return value;
+  }
+
+  private readonly warnedLegacy = new Set<string>();
   customConfigPath(): string { return this.provider.customLocation(); }
 
   /** Override keys the catalogue does not know — reported, never silently dropped (yourphr#473). */

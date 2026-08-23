@@ -203,12 +203,12 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   }
 
   // 2. The app database + migrations before anything opens for business.
-  const dbKey = config.getString('database.encryption.key');
+  const dbKey = config.getString('yourphr.database.encryption.key');
   const engineRef = (): Engine => engine;
-  applyStagedRestore(dataDir, [[STAGED_RECORDS, 'records.db'], [STAGED_APP, config.getString('database.location')]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
+  applyStagedRestore(dataDir, [[STAGED_RECORDS, 'records.db'], [STAGED_APP, config.getString('yourphr.database.location')]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
   // The app database's one connection is the engine's (yourphr#617): opened and migrated by its
   // provider before any sibling provider is built over it; closed last at shutdown.
-  const database = new DatabaseManager(engine, new SqliteDatabaseProvider(join(dataDir, config.getString('database.location')), dbKey, APP_MIGRATIONS));
+  const database = new DatabaseManager(engine, new SqliteDatabaseProvider(join(dataDir, config.getString('yourphr.database.location')), dbKey, APP_MIGRATIONS));
   const db = database.handle;
 
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
@@ -217,10 +217,10 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider(), { log: (line) => appLog.info(line) });
   const sessions = new SessionsManager(engineRef(), [new PasswordAuthProvider()], {
     sessionKey: randomBytes(32),
-    session: { slidingSeconds: config.getInt('auth.session.sliding-seconds'), absoluteSeconds: config.getInt('auth.session.absolute-seconds') },
-    throttle: { maxFailures: config.getInt('auth.throttle.max-failures'), windowSeconds: config.getInt('auth.throttle.window-seconds') },
-    trustedProxies: config.getStringList('auth.trusted-proxies'),
-    factors: config.getStringList('auth.factors'),
+    session: { slidingSeconds: config.getInt('yourphr.auth.session.sliding-seconds'), absoluteSeconds: config.getInt('yourphr.auth.session.absolute-seconds') },
+    throttle: { maxFailures: config.getInt('yourphr.auth.throttle.max-failures'), windowSeconds: config.getInt('yourphr.auth.throttle.window-seconds') },
+    trustedProxies: config.getStringList('yourphr.auth.trusted-proxies'),
+    factors: config.getStringList('yourphr.auth.factors'),
   });
   // 6. The engine: managers in validated dependency order (yourphr#608). Configuration first,
   // then Records over the PHI-storage provider. The other stores join as their own children land.
@@ -229,21 +229,21 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('database', database);
   // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.
-  engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('audit.provider'), db)));
+  engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('yourphr.audit.provider'), db)));
   engine.register('users', users);
   engine.register('sessions', sessions);
   const recordsManager = new RecordsManager(engine, recordsProvider, new SqliteFavoritesProvider(db));
   engine.register('records', recordsManager);
   // Backups (yourphr#615): the coordinator over OPTIONAL storage; the records door is the exporter.
-  engine.register('backups', new BackupManager(engine, backupProviderFor(config.getString('backup.storage.provider')), { dataDir, exporter: recordsManager, alsoExport: [db] }));
+  engine.register('backups', new BackupManager(engine, backupProviderFor(config.getString('yourphr.backup.storage.provider')), { dataDir, exporter: recordsManager, alsoExport: [db] }));
   // 7. Jobs and Sources (yourphr#612): the source client is an OPTIONAL capability — bound by
   // configuration, loaded only when configured, inert (and said so) when not.
   const events = new EventBus();
   engine.register('jobs', new JobsManager(engine, new SqliteJobsProvider(db)));
-  const sourceClient = await sourceClientFor(config.getString('sources.client.provider'), env);
+  const sourceClient = await sourceClientFor(config.getString('yourphr.sources.client.provider'), env);
   const allowInternal = env['SPIKE_TEST_ALLOW_INTERNAL'] === '1';
   engine.register('sources', new SourcesManager(engine, new SqliteSourcesProvider(db), sourceClient, {
-    maxPages: config.getInt('sync.max-pages'),
+    maxPages: config.getInt('yourphr.sync.max-pages'),
     events,
     log: (line) => appLog.info(line),
   }));
@@ -317,7 +317,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
 
   const server = createYourPhrServer({
     engine,
-    auth: { cookieMaxAgeSeconds: config.getInt('auth.session.absolute-seconds'), secureCookies: config.getBool('web.secure-cookies') },
+    auth: { cookieMaxAgeSeconds: config.getInt('yourphr.auth.session.absolute-seconds'), secureCookies: config.getBool('yourphr.web.secure-cookies') },
     webDir: options.webDir,
     version: options.version,
   });

@@ -108,12 +108,12 @@ export class BackupManager extends BaseManager {
   // --- where and when ----------------------------------------------------------------------
 
   destination(): string {
-    return this.cfg.getString('backup.destination') || join(this.options.dataDir, 'backups');
+    return this.cfg.getString('yourphr.backup.destination') || join(this.options.dataDir, 'backups');
   }
 
   schedule(): BackupSchedule {
     const c = this.cfg;
-    return { enabled: c.getBool('backup.schedule.enabled'), time: c.getString('backup.schedule.time'), days: c.getString('backup.schedule.days'), destination: c.getString('backup.destination'), max_backups: c.getInt('backup.max-backups') };
+    return { enabled: c.getBool('yourphr.backup.schedule.enabled'), time: c.getString('yourphr.backup.schedule.time'), days: c.getString('yourphr.backup.schedule.days'), destination: c.getString('yourphr.backup.destination'), max_backups: c.getInt('yourphr.backup.max-backups') };
   }
 
   /** Go's validation, then the settings store — refusals name the rule. */
@@ -128,11 +128,11 @@ export class BackupManager extends BaseManager {
     const destination = String(req.destination ?? '').trim();
     if (destination !== '' && !destination.startsWith('/')) throw new ApiError(400, 'destination must be an absolute folder, or empty for the default');
     const c = this.cfg;
-    c.set('backup.schedule.enabled', req.enabled === true);
-    c.set('backup.schedule.time', time);
-    c.set('backup.schedule.days', days);
-    c.set('backup.destination', destination);
-    c.set('backup.max-backups', maxBackups);
+    c.set('yourphr.backup.schedule.enabled', req.enabled === true);
+    c.set('yourphr.backup.schedule.time', time);
+    c.set('yourphr.backup.schedule.days', days);
+    c.set('yourphr.backup.destination', destination);
+    c.set('yourphr.backup.max-backups', maxBackups);
     return this.schedule();
   }
 
@@ -149,8 +149,8 @@ export class BackupManager extends BaseManager {
   /** Why backups cannot be taken, or '' — this stack always encrypts, so the key is one gate; the store is the other. */
   unavailable(): string {
     if (this.provider.name === 'null') return 'Backups are unavailable: no backup storage is configured (backup.storage.provider = null).';
-    if (this.cfg.getString('backup.encryption.key') === '') {
-      return 'Backups are unavailable: no backup encryption key is set (SPIKE_BACKUP_ENCRYPTION_KEY). Backups are always encrypted, so there is nothing safe to write.';
+    if (this.cfg.getString('yourphr.backup.encryption.key') === '') {
+      return 'Backups are unavailable: no backup encryption key is set (YOURPHR_BACKUP_ENCRYPTION_KEY). Backups are always encrypted, so there is nothing safe to write.';
     }
     return '';
   }
@@ -165,8 +165,8 @@ export class BackupManager extends BaseManager {
       const reason = this.unavailable();
       if (reason !== '') throw new ApiError(400, reason);
       await this.provider.ensure(destination);
-      const result = await this.options.exporter.backup({ destination, key: this.cfg.getString('backup.encryption.key'), now: this.now(), alsoExport: this.options.alsoExport });
-      const pruned = await this.provider.prune(destination, this.cfg.getInt('backup.max-backups'));
+      const result = await this.options.exporter.backup({ destination, key: this.cfg.getString('yourphr.backup.encryption.key'), now: this.now(), alsoExport: this.options.alsoExport });
+      const pruned = await this.provider.prune(destination, this.cfg.getInt('yourphr.backup.max-backups'));
       this.state = { lastSuccessAt: at, lastSuccessPath: result.file, lastAttemptAt: at, consecutiveFailures: 0 };
       this.saveHealth();
       return { file: result.file, name: basename(result.file), sizeBytes: result.sizeBytes, pruned };
@@ -238,7 +238,7 @@ export class BackupManager extends BaseManager {
     const file = await this.provider.resolve(this.destination(), backupName);
     if (!file) throw new ApiError(404, 'no such backup in the destination folder');
     await this.backupNow(ctx);
-    await this.options.exporter.restore({ manager: 'backups', takenAt: this.now().toISOString(), files: [file] }, { key: this.cfg.getString('backup.encryption.key') });
+    await this.options.exporter.restore({ manager: 'backups', takenAt: this.now().toISOString(), files: [file] }, { key: this.cfg.getString('yourphr.backup.encryption.key') });
     return { staged: true, message: 'Restore staged (current databases backed up first). Restart the app to apply it.' };
   }
 

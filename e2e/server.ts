@@ -29,8 +29,8 @@ const fakeBase = await listenFake(fake);
 
 const app = await assembleApp(dir, {
   env: {
-    SPIKE_DATABASE_ENCRYPTION_KEY: 'e2e-at-rest-key',
-    SPIKE_BACKUP_ENCRYPTION_KEY: 'e2e-backup-key',
+    YOURPHR_DATABASE_ENCRYPTION_KEY: 'e2e-at-rest-key',
+    YOURPHR_BACKUP_ENCRYPTION_KEY: 'e2e-backup-key',
     SPIKE_TEST_ALLOW_INTERNAL: '1',
   },
   webDir,
@@ -52,7 +52,7 @@ await app.sources.add(ApiContext.system('e2e-seed', E2E_USER, app.engine), {
   platformType: 'ehr', environment: 'production', // a production source for the member's Explore page; the catalog seed stays a sandbox entry
 });
 await app.syncNow(1_000_000);
-app.config.set('backup.destination', join(dir, 'backups'));
+app.config.set('yourphr.backup.destination', join(dir, 'backups'));
 
 await new Promise<void>((resolve) => app.server.listen(E2E_PORT, '127.0.0.1', resolve));
 console.log(`[e2e] spike listening on http://127.0.0.1:${E2E_PORT}; data in ${dir}; web ${webDir}`);
