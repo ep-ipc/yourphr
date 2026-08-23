@@ -3,15 +3,15 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-23
 
-- Last worked on: #618 (child 9 of #608) — SettingsManager landed in the spike at 5e16dcc, CI green, in-review; #608 residue item 1 is now half done (records pass-throughs, the account composition and the admin users/metrics/database/logs/relay closures remain in ServerModules)
-- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at 5e16dcc
+- Last worked on: #608 residue item 1 finished — #618 (SettingsManager) and #619 (ServerModules retired) both landed in the spike and are in-review; spike CI green at 7d9a4a6
+- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at 7d9a4a6
 - Running / in-flight: none
 - Parked / half-done: none
 - Next steps:
-  - Jim's close decisions on the 24 in-review issues (run `gh issue list --label in-review`)
-  - #606 glossary: decide used-on-live vs retire — the last open #591 parity gate before the cut-over
+  - Jim's close decisions on the 25 in-review issues (run `gh issue list --label in-review`)
+  - #606 glossary: the evidence pass is posted (Go logs record no API requests; the decisive number is the glossary row count in a NAS backup — PHI, so it needs you). Recommendation on the issue is to port it regardless
   - #588: schedule the rehearsal (scratch migrate from the latest NAS backup, then the Ingress swap + swap-back at a quiet hour); follow-ups named in the runbook (tool in the image, Go read-only switch)
-  - #608 residue if wanted: the rest of ServerModules (account composition, admin users/metrics/database/logs/relay) as a tenth child; policy-as-data; torn snapshot
+  - #608 residue still open if wanted: policy-as-data (2), torn snapshot (3), the src/sync + src/ips allowlist entries (4) — each its own issue
   - PR #598 (external, ep-ipc): already thanked + declined with #600 carrying the standalone fix — nothing pending unless they reply
 - Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push; in a command chain that `cd`s into the spike, yourphr bookkeeping needs `git -C` + absolute paths
 <!-- RESUME:END -->
@@ -112,6 +112,7 @@
 
 ## 🔵 In review
 
+- [#619](https://github.com/jwilleke/yourphr/issues/619) — [SPIKE] #608 child: ServerModules retired — the account page, the admin users/metrics/database/logs cards and the records pass-throughs reach their managers directly; policy at the doors
 - [#618](https://github.com/jwilleke/yourphr/issues/618) — [SPIKE] #608 child: Settings manager — the admin configuration and instance cards, and the public instance keys, behind SettingsManager with the caller passed in
 - [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
 - [#605](https://github.com/jwilleke/yourphr/issues/605) — [SPIKE] Parity: medical-history graph — POST /secure/resource/graph/MedicalHistory
