@@ -3,18 +3,18 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-23
 
-- Last worked on: #608 residue — #618 (SettingsManager), #619 (ServerModules retired) and #620 (policy as data) all landed in the spike and are in-review; spike CI green at 5bb82b2
-- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at 5bb82b2
+- Last worked on: #621 — the config system ported to the framework model (ConfigurationManager over BaseConfigProvider, two files, ConfigStore retired); landed at c0f9049, CI green, in-review
+- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at c0f9049
 - Running / in-flight: none
 - Parked / half-done: none
 - Next steps:
-  - Jim's close decisions on the 26 in-review issues (run `gh issue list --label in-review`)
-  - #620 asks one question back: keep the registry to the 5 enforced permissions (what landed), or seed the doc's full vocabulary with an `enforced: false` marker
-  - #606 glossary: evidence pass posted (Go logs record no API requests; the decisive number is the glossary row count in a NAS backup — PHI, so it needs you). Recommendation on the issue is to port regardless
-  - #588: schedule the rehearsal (scratch migrate from the latest NAS backup, then the Ingress swap + swap-back at a quiet hour); follow-ups named in the runbook (tool in the image, Go read-only switch)
-  - #608 residue left: (3) torn snapshot across several exporters, (4) src/sync + src/ips on the store-boundary allowlist — each its own issue when wanted
-  - PR #598 (external, ep-ipc): already thanked + declined with #600 carrying the standalone fix — nothing pending unless they reply
-- Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push; in a command chain that `cd`s into the spike, yourphr bookkeeping needs `git -C` + absolute paths
+  - #622 (env-refs `$VAR`/`${VAR}` replacing the `bootstrap` flag) — unblocked by #621, agreed direction
+  - #623 (permissions + roles become shipped config keys, read from merged config at startup) — unblocked by #621; supersedes the compiled registry that #620 landed
+  - Jim's close decisions on the in-review queue (`gh issue list --label in-review`)
+  - #606 glossary: evidence posted; decisive number is the glossary row count in a NAS backup (PHI, needs Jim)
+  - #588: schedule the cut-over rehearsal
+  - #608 residue left: (3) torn snapshot across several exporters, (4) src/sync + src/ips on the store-boundary allowlist
+- Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push; in a command chain that `cd`s into the spike, yourphr bookkeeping needs `git -C` + absolute paths; .dockerignore is an ALLOWLIST — anything new the image needs must be added there or the build fails
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
@@ -113,6 +113,7 @@
 
 ## 🔵 In review
 
+- [#621](https://github.com/jwilleke/yourphr/issues/621) — [SPIKE] Configuration: ConfigurationManager over a config provider — ConfigStore retired, two files, the bootstrap layer
 - [#620](https://github.com/jwilleke/yourphr/issues/620) — [SPIKE] #608 residue: policy as data — a permission registry and roles as flat lists, replacing the scattered requireAdmin() checks
 - [#619](https://github.com/jwilleke/yourphr/issues/619) — [SPIKE] #608 child: ServerModules retired — the account page, the admin users/metrics/database/logs cards and the records pass-throughs reach their managers directly; policy at the doors
 - [#618](https://github.com/jwilleke/yourphr/issues/618) — [SPIKE] #608 child: Settings manager — the admin configuration and instance cards, and the public instance keys, behind SettingsManager with the caller passed in
