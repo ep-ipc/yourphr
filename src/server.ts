@@ -91,25 +91,15 @@ export interface ServerModules {
     signOutEverywhere: (ctx: ApiContext) => Promise<void>;
     deleteAccount: (ctx: ApiContext) => Promise<void>;
   };
-  /** GET/POST/DELETE /api/secure/user/favorites (yourphr#595): the caller's starred practitioners. */
-  /** Admin surface (yourphr#582): gate decides who counts as the operator. */
-  /** What an anonymous caller may know about this instance (GET /api/instance/public). */
-  publicInstance?: () => Record<string, unknown>;
-  /** What a signed-in member may know (GET /api/secure/instance, yourphr#593): public plus the operator contact. */
-  instanceForUser?: (username: string) => Record<string, unknown>;
+  /**
+   * Admin surface (yourphr#582): gate decides who counts as the operator. The configuration and
+   * instance cards and the instance keys are the settings manager's (yourphr#618), not closures.
+   */
   admin?: {
-    /** GET /admin/config in Go's AdminConfigResponse shape (yourphr#602). */
-    configSnapshot: () => unknown;
-    configReveal: (key: string) => unknown | undefined;
-    /** Throws with a status-bearing error: 400 unknown/invalid, 409 env-pinned. */
-    configSet: (key: string, value: unknown) => void;
-    configReset: (key: string) => boolean;
     createUser: (ctx: ApiContext, username: string, password: string, role?: string) => Promise<void>;
     /** The Users page (yourphr#604). */
     listUsers: (ctx: ApiContext) => Promise<unknown[]>;
     resetUserPassword: (ctx: ApiContext, username: string) => Promise<{ username: string; password: string }>;
-    instanceSettings: () => { name: string; contact_email: string; contact_url: string };
-    setInstanceSettings: (s: { name: string; contact_email: string; contact_url: string }) => void;
     metrics: (ctx: ApiContext) => Promise<unknown> | unknown;
     databaseInfo: (ctx: ApiContext) => Promise<unknown>;
     logs: () => { level: string; valid_levels: string[]; lines: string[] };
@@ -338,7 +328,7 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
       if (url.pathname === '/api/instance/public' && req.method === 'GET') {
-        send(res, 200, {success: true, data: options.modules?.publicInstance?.() ?? {}});
+        send(res, 200, {success: true, data: engine.has('settings') ? engine.managers.settings.publicInstance(ApiContext.anonymous(engine)) : {}});
         return;
       }
       // Logout clears the HttpOnly cookie — the one thing JavaScript cannot do itself.
@@ -467,8 +457,8 @@ export function createYourPhrServer(options: ServerOptions) {
       // --- the assembled modules (yourphr#582) ---
       const modules = options.modules;
       // The two calls every page makes (yourphr#593): who runs this instance, and the job indicator.
-      if (modules?.instanceForUser && url.pathname === '/api/secure/instance' && req.method === 'GET') {
-        send(res, 200, {success: true, data: modules.instanceForUser(sessionUser)});
+      if (engine.has('settings') && url.pathname === '/api/secure/instance' && req.method === 'GET') {
+        send(res, 200, {success: true, data: engine.managers.settings.instanceForUser(ctx)});
         return;
       }
       if (engine.has('jobs') && url.pathname === '/api/secure/jobs' && req.method === 'GET') {
@@ -757,74 +747,51 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         const admin = modules.admin;
-        const withStatus = (err: unknown): { status: number; error: string } => {
-          const e = err as Error & { status?: number };
-          return {status: e.status ?? 400, error: e.message};
-        };
-        if (url.pathname === '/api/secure/admin/config' && req.method === 'GET') {
-          send(res, 200, {success: true, data: admin.configSnapshot()});
-          return;
-        }
-        const reveal = url.pathname.match(/^\/api\/secure\/admin\/config\/reveal\/([^/]+)$/);
-        if (reveal && req.method === 'GET') {
-          const revealed = admin.configReveal(decodeURIComponent(reveal[1]!));
-          revealed === undefined ? send(res, 404, {success: false, error: 'unknown configuration key'}) : send(res, 200, {success: true, data: revealed});
-          return;
-        }
-        if (url.pathname === '/api/secure/admin/config' && req.method === 'PUT') {
-          const body = await readJsonBody(req);
-          const key = typeof body?.['key'] === 'string' ? (body['key'] as string).trim().toLowerCase() : '';
-          if (!body || key === '' || !('value' in body)) {
-            send(res, 400, {success: false, error: 'invalid request'});
+        // The configuration and instance cards (yourphr#602, #618): the settings manager holds the
+        // policy and throws ApiError — 400 unknown/invalid, 409 env-pinned — into the error boundary.
+        if (engine.has('settings')) {
+          const settings = engine.managers.settings;
+          if (url.pathname === '/api/secure/admin/config' && req.method === 'GET') {
+            send(res, 200, {success: true, data: settings.configSnapshot(ctx)});
             return;
           }
-          try {
-            admin.configSet(key, body['value']);
+          const reveal = url.pathname.match(/^\/api\/secure\/admin\/config\/reveal\/([^/]+)$/);
+          if (reveal && req.method === 'GET') {
+            const revealed = settings.configReveal(ctx, decodeURIComponent(reveal[1]!));
+            revealed === undefined ? send(res, 404, {success: false, error: 'unknown configuration key'}) : send(res, 200, {success: true, data: revealed});
+            return;
+          }
+          if (url.pathname === '/api/secure/admin/config' && req.method === 'PUT') {
+            const body = await readJsonBody(req);
+            const key = typeof body?.['key'] === 'string' ? (body['key'] as string).trim().toLowerCase() : '';
+            if (!body || key === '' || !('value' in body)) {
+              send(res, 400, {success: false, error: 'invalid request'});
+              return;
+            }
+            settings.configSet(ctx, key, body['value']);
             send(res, 200, {success: true, data: {key}});
-          } catch (err) {
-            const e = withStatus(err);
-            send(res, e.status, {success: false, error: e.error});
-          }
-          return;
-        }
-        const resetKey = url.pathname.match(/^\/api\/secure\/admin\/config\/([^/]+)$/);
-        if (resetKey && req.method === 'DELETE') {
-          try {
-            send(res, 200, {success: true, data: {key: decodeURIComponent(resetKey[1]!), cleared: admin.configReset(decodeURIComponent(resetKey[1]!).toLowerCase())}});
-          } catch (err) {
-            const e = withStatus(err);
-            send(res, e.status, {success: false, error: e.error});
-          }
-          return;
-        }
-        if (url.pathname === '/api/secure/admin/instance' && req.method === 'GET') {
-          send(res, 200, {success: true, data: admin.instanceSettings()});
-          return;
-        }
-        if (url.pathname === '/api/secure/admin/instance' && req.method === 'PUT') {
-          const body = await readJsonBody(req);
-          if (!body) {
-            send(res, 400, {success: false, error: 'invalid request'});
             return;
           }
-          const str = (k: string): string => (typeof body[k] === 'string' ? (body[k] as string).trim() : '');
-          const settings = {name: str('name'), contact_email: str('contact_email'), contact_url: str('contact_url')};
-          if (settings.contact_email !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(settings.contact_email)) {
-            send(res, 400, {success: false, error: 'contact_email is not an email address'});
+          const resetKey = url.pathname.match(/^\/api\/secure\/admin\/config\/([^/]+)$/);
+          if (resetKey && req.method === 'DELETE') {
+            const key = decodeURIComponent(resetKey[1]!);
+            send(res, 200, {success: true, data: {key, cleared: settings.configReset(ctx, key.toLowerCase())}});
             return;
           }
-          if (settings.contact_url !== '' && !/^https?:\/\//.test(settings.contact_url)) {
-            send(res, 400, {success: false, error: 'contact_url must start with http:// or https://'});
+          if (url.pathname === '/api/secure/admin/instance' && req.method === 'GET') {
+            send(res, 200, {success: true, data: settings.instanceSettings(ctx)});
             return;
           }
-          try {
-            admin.setInstanceSettings(settings);
-          } catch (err) {
-            send(res, 500, {success: false, error: `save failed: ${(err as Error).message}`});
+          if (url.pathname === '/api/secure/admin/instance' && req.method === 'PUT') {
+            const body = await readJsonBody(req);
+            if (!body) {
+              send(res, 400, {success: false, error: 'invalid request'});
+              return;
+            }
+            const str = (k: string): string => (typeof body[k] === 'string' ? (body[k] as string) : '');
+            send(res, 200, {success: true, data: settings.setInstanceSettings(ctx, {name: str('name'), contact_email: str('contact_email'), contact_url: str('contact_url')})});
             return;
           }
-          send(res, 200, {success: true, data: settings});
-          return;
         }
         if (url.pathname === '/api/secure/admin/metrics' && req.method === 'GET') {
           send(res, 200, {success: true, data: await admin.metrics(ctx)});

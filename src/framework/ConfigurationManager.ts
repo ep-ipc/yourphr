@@ -9,7 +9,10 @@
  */
 import { BaseManager, type BackupData } from './BaseManager.js';
 import type { Engine } from './Engine.js';
-import { ConfigStore, type ConfigValue } from '../config/index.js';
+import { ConfigStore, type ConfigKeySpec, type ConfigValue } from '../config/index.js';
+
+/** One row of the admin view: the effective value (secrets masked) and where it came from. */
+export type ConfigRow = ReturnType<ConfigStore['snapshot']>[number];
 
 declare module './Engine.js' {
   interface ManagerRegistry {
@@ -29,6 +32,17 @@ export class ConfigurationManager extends BaseManager {
   getBool(key: string): boolean { return this.store.getBool(key); }
   getStringList(key: string): string[] { return this.store.getStringList(key); }
   set(key: string, value: ConfigValue): void { this.store.set(key, value); }
+
+  // The rest of the door (yourphr#618): what the settings manager needs to show, reveal, set and
+  // reset keys through its sibling rather than around it. Each is the store's call by the same name.
+  specOf(key: string): ConfigKeySpec | undefined { return this.store.specOf(key); }
+  snapshot(): ConfigRow[] { return this.store.snapshot(); }
+  /** The raw value of a secret — a logged, deliberate act; the caller names who asked. */
+  reveal(key: string): ConfigValue { return this.store.reveal(key); }
+  /** Removes an override. False when there was none. */
+  clear(key: string): boolean { return this.store.clear(key); }
+  isSetByEnvironment(key: string): boolean { return this.store.isSetByEnvironment(key); }
+  customConfigPath(): string { return this.store.customConfigPath(); }
 
   async backup(): Promise<BackupData> {
     const overlay: Record<string, ConfigValue> = {};

@@ -21,7 +21,7 @@
  */
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { ConfigStore, envNameFor, type ConfigValue } from './config/index.js';
+import { ConfigStore } from './config/index.js';
 import { addColumnWithDefault, type Migration } from './framework/providers/sqlite-migrations.js';
 import { DatabaseManager } from './framework/managers/DatabaseManager.js';
 import { SqliteDatabaseProvider } from './framework/providers/SqliteDatabaseProvider.js';
@@ -33,6 +33,8 @@ import { CatalogManager, type CatalogWrite } from './app/managers/CatalogManager
 import { SqliteCatalogProvider } from './app/providers/SqliteCatalogProvider.js';
 import { Engine } from './framework/Engine.js';
 import { ConfigurationManager } from './framework/ConfigurationManager.js';
+import { SettingsManager, coerceToShippedType } from './framework/managers/SettingsManager.js';
+export { coerceToShippedType };
 import { ApiContext } from './framework/ApiContext.js';
 import { RecordsManager } from './app/managers/RecordsManager.js';
 import { SqliteRecordsProvider } from './app/providers/SqliteRecordsProvider.js';
@@ -223,6 +225,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
   engine.register('configuration', new ConfigurationManager(engine, config));
+  engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line) })); // yourphr#618
   engine.register('database', database);
   // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.
   engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('audit.provider'), db)));
@@ -311,20 +314,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
   }, 60_000);
   scheduleTimer?.unref?.();
 
-  // The instance keys Go publishes that this stack has a value for. A key this stack does not have
-  // (theme, demo, signup, the wider password policy) is ABSENT, and the Angular app's mapper already
-  // defaults an absent key — nothing is invented to fill Go's list.
-  const publicInstanceKeys = (): Record<string, unknown> => ({
-    'operator.name': config.getString('operator.name'),
-    'operator.contact_url': config.getString('operator.contact_url'),
-    'password.min_length': config.getInt('auth.password.min-length'),
-  });
-
-  /** The keys /api/instance/public publishes — Go's `public` list, as far as this stack has values. */
-  const PUBLIC_KEYS = new Set(['operator.name', 'operator.contact_url', 'auth.password.min-length']);
-
-  const withStatus = (status: number, message: string): Error & { status: number } => Object.assign(new Error(message), { status });
-
   /** Go's LegalConsentStatus, from the stored timestamp ('' = not accepted). */
   const consentStatus = (acceptedAt: string): Record<string, unknown> => ({
     accepted: acceptedAt !== '',
@@ -339,14 +328,6 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     webDir: options.webDir,
     version: options.version,
     modules: {
-      // Only what an anonymous caller may know; the password minimum is published so the UI can say
-      // it before the server refuses (yourphr#506's shape).
-      publicInstance: publicInstanceKeys,
-      instanceForUser: () => ({
-        ...publicInstanceKeys(),
-        'operator.contact_email': config.getString('operator.contact_email'), // signed-in only (yourphr#459)
-        'demo.admin.session': false, // this stack has no demo admin; the UI reads strictly true
-      }),
       ips: (ctx) => records.ips(ctx).then((d) => d.bundle),
       provenanceFor: (ctx, resourceType, id) => records.provenance(ctx, resourceType, id),
       medications: (ctx) => records.medications(ctx),
@@ -391,67 +372,12 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
         },
       },
       admin: {
-        configSnapshot: () => ({
-          entries: config.snapshot().map((row) => {
-            const spec = config.specOf(row.key)!;
-            const masked = row.value === '••••';
-            return {
-              key: row.key,
-              value: row.value,
-              masked,
-              source: row.source === 'custom' ? 'custom' : 'default',
-              public: PUBLIC_KEYS.has(row.key),
-              promoted: false,
-              default: spec.secret && String(spec.default) !== '' ? '••••' : spec.default,
-              from_env: row.source === 'environment',
-              env_var: envNameFor(row.key),
-              description: row.description,
-              bootstrap: spec.bootstrap === true,
-            };
-          }),
-          custom_config_path: config.customConfigPath(),
-          warnings: [],
-        }),
-        configReveal: (key) => {
-          const spec = config.specOf(key);
-          if (!spec) return undefined;
-          appLog.info(`admin revealed configuration value for ${key}`);
-          return { key, value: config.reveal(key), default: spec.default };
-        },
-        configSet: (key, value) => {
-          const spec = config.specOf(key);
-          if (!spec) throw withStatus(400, `unknown configuration key ${JSON.stringify(key)} — only keys this stack describes can be set`);
-          if (config.isSetByEnvironment(key)) throw withStatus(409, `${key} is set by the environment variable ${envNameFor(key)}, which takes precedence over this screen — change it in your deployment configuration instead`);
-          let coerced: ConfigValue;
-          try {
-            coerced = coerceToShippedType(value, spec.default);
-          } catch (err) {
-            throw withStatus(400, `${key}: ${(err as Error).message}`);
-          }
-          try {
-            config.set(key, coerced);
-          } catch (err) {
-            throw withStatus(400, (err as Error).message);
-          }
-          appLog.info(`admin set configuration ${key}`);
-        },
-        configReset: (key) => {
-          const spec = config.specOf(key);
-          if (!spec) throw withStatus(400, `unknown configuration key ${JSON.stringify(key)}`);
-          return config.clear(key);
-        },
         createUser: (ctx, username, password, role) => users.createUser(ctx, username, password, role === 'admin' ? 'admin' : 'user'),
         listUsers: async (ctx) => (await users.listUsers(ctx)).map((u) => ({ id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0 })),
         resetUserPassword: async (ctx, username) => {
           const password = await users.adminResetPassword(ctx, username);
           appLog.info(`admin reset the password for ${username}; every session of that account ended`);
           return { username, password };
-        },
-        instanceSettings: () => ({ name: config.getString('operator.name'), contact_email: config.getString('operator.contact_email'), contact_url: config.getString('operator.contact_url') }),
-        setInstanceSettings: (s) => {
-          config.set('operator.name', s.name);
-          config.set('operator.contact_email', s.contact_email);
-          config.set('operator.contact_url', s.contact_url);
         },
         metrics: (ctx) => sources.adminMetrics(ctx),
         // Go's DatabaseInfoResponse over this stack's two files — a view composed from the doors.
@@ -506,26 +432,4 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
       await stores.close();
     },
   };
-}
-
-/** Go's coerceToShippedType: the stored value keeps the type of the shipped default. */
-export function coerceToShippedType(value: unknown, shipped: ConfigValue): ConfigValue {
-  if (typeof shipped === 'boolean') {
-    if (typeof value === 'boolean') return value;
-    if (value === 'true' || value === 'false') return value === 'true';
-    throw new Error('expected true or false');
-  }
-  if (typeof shipped === 'number') {
-    const n = typeof value === 'number' ? value : Number(value);
-    if (typeof value === 'boolean' || value === '' || !Number.isFinite(n)) throw new Error('expected a number');
-    return n;
-  }
-  if (Array.isArray(shipped)) {
-    if (Array.isArray(value)) return value.map(String);
-    if (typeof value === 'string') return value.split(',').map((v) => v.trim()).filter(Boolean);
-    throw new Error('expected a list');
-  }
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  throw new Error('expected text');
 }
