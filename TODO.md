@@ -3,17 +3,17 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-23
 
-- Last worked on: #608 architecture umbrella — all 8 children landed in the spike (#609–#617, in-review); #605 medical-history graph and #599 full-text search landed (in-review); #588 cut-over runbook drafted (docs/deployment/cutover-runbook.md, open pending the rollback rehearsal)
-- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at a890341
+- Last worked on: #618 (child 9 of #608) — SettingsManager landed in the spike at 5e16dcc, CI green, in-review; #608 residue item 1 is now half done (records pass-throughs, the account composition and the admin users/metrics/database/logs/relay closures remain in ServerModules)
+- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at 5e16dcc
 - Running / in-flight: none
 - Parked / half-done: none
 - Next steps:
-  - Jim's close decisions on the 23 in-review issues (run `gh issue list --label in-review`)
+  - Jim's close decisions on the 24 in-review issues (run `gh issue list --label in-review`)
   - #606 glossary: decide used-on-live vs retire — the last open #591 parity gate before the cut-over
   - #588: schedule the rehearsal (scratch migrate from the latest NAS backup, then the Ingress swap + swap-back at a quiet hour); follow-ups named in the runbook (tool in the image, Go read-only switch)
-  - #608 residue if wanted: SettingsManager for the remaining ServerModules closures (account/admin/instance), policy-as-data, torn snapshot
-  - PR #598 (external, ep-ipc): thank + triage against #599's in-database search shape
-- Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push (memory saved); in a command chain that `cd`s into the spike, yourphr bookkeeping needs `git -C` + absolute paths (memory saved)
+  - #608 residue if wanted: the rest of ServerModules (account composition, admin users/metrics/database/logs/relay) as a tenth child; policy-as-data; torn snapshot
+  - PR #598 (external, ep-ipc): already thanked + declined with #600 carrying the standalone fix — nothing pending unless they reply
+- Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push; in a command chain that `cd`s into the spike, yourphr bookkeeping needs `git -C` + absolute paths
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
@@ -112,6 +112,7 @@
 
 ## 🔵 In review
 
+- [#618](https://github.com/jwilleke/yourphr/issues/618) — [SPIKE] #608 child: Settings manager — the admin configuration and instance cards, and the public instance keys, behind SettingsManager with the caller passed in
 - [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
 - [#605](https://github.com/jwilleke/yourphr/issues/605) — [SPIKE] Parity: medical-history graph — POST /secure/resource/graph/MedicalHistory
 - [#617](https://github.com/jwilleke/yourphr/issues/617) — [SPIKE] #608 child: the app database's shared connection and schema ledger, engine-owned — DatabaseManager over SqliteDatabaseProvider; src/migrations moves below the door
