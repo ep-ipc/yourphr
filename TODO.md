@@ -1,5 +1,21 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-08-23
+
+- Last worked on: #608 architecture umbrella — all 8 children landed in the spike (#609–#617, in-review); #605 medical-history graph and #599 full-text search landed (in-review); #588 cut-over runbook drafted (docs/deployment/cutover-runbook.md, open pending the rollback rehearsal)
+- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at a890341
+- Running / in-flight: none
+- Parked / half-done: none
+- Next steps:
+  - Jim's close decisions on the 23 in-review issues (run `gh issue list --label in-review`)
+  - #606 glossary: decide used-on-live vs retire — the last open #591 parity gate before the cut-over
+  - #588: schedule the rehearsal (scratch migrate from the latest NAS backup, then the Ingress swap + swap-back at a quiet hour); follow-ups named in the runbook (tool in the image, Go read-only switch)
+  - #608 residue if wanted: SettingsManager for the remaining ServerModules closures (account/admin/instance), policy-as-data, torn snapshot
+  - PR #598 (external, ep-ipc): thank + triage against #599's in-database search shape
+- Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push (memory saved); in a command chain that `cd`s into the spike, yourphr bookkeeping needs `git -C` + absolute paths (memory saved)
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 > __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
 
