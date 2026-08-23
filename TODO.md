@@ -30,7 +30,6 @@
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#506](https://github.com/jwilleke/yourphr/issues/506) — [FEATURE] Password policy in configuration, enforced server-side and published to the UI
 - [#608](https://github.com/jwilleke/yourphr/issues/608) — [SPIKE] Architecture: build on the ngdpbase model throughout — engine, managers as the only door, config-bound providers, request context (the agreed architecture doc, applied)
-- [#598](https://github.com/jwilleke/yourphr/pull/598) — feat(search): AI-assisted search & chat, ported and hardened for yourphr *(PR · blocked — required checks pending)* — no linked issue (external; architecture declined, search goal carried by its own P1 issue)
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
 - [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
@@ -153,5 +152,4 @@
 
 ## ❓ Needs triage
 
-- [#601](https://github.com/jwilleke/yourphr/issues/601) — Unraid App Template
 - [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
