@@ -3,18 +3,19 @@
 <!-- RESUME:START -->
 ## ▶ Resume here — 2026-08-23
 
-- Last worked on: #621 — the config system ported to the framework model (ConfigurationManager over BaseConfigProvider, two files, ConfigStore retired); landed at c0f9049, CI green, in-review
-- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike); spike CI green at c0f9049
+- Last worked on: the configuration chain — #621 (ConfigurationManager over a provider, two files), #622 (environment references), #623 (permissions + roles from merged config) all landed and in-review; spike CI green at 54f2208
+- Branch / state: main, clean, 0 unpushed, 0 stashes (both jwilleke/yourphr and jwilleke/yourphr-ts-spike)
 - Running / in-flight: none
 - Parked / half-done: none
 - Next steps:
-  - #622 (env-refs `$VAR`/`${VAR}` replacing the `bootstrap` flag) — unblocked by #621, agreed direction
-  - #623 (permissions + roles become shipped config keys, read from merged config at startup) — unblocked by #621; supersedes the compiled registry that #620 landed
   - Jim's close decisions on the in-review queue (`gh issue list --label in-review`)
+  - NOT YET FILED, needs a decision: a role beyond admin/user can be DEFINED in config but not HELD — `auth_users.role` is 'admin' | 'user' and normaliseRole() coerces. demo-admin (#494) and caregiver work as policy today but no account can be assigned one
+  - #624 restart-required marking — lands the other half of what `bootstrap: true` currently fuses, after which that flag can retire (see #622)
+  - #625 did-you-mean in the unknown-key report (port ngdpbase's findClosestAddonName)
   - #606 glossary: evidence posted; decisive number is the glossary row count in a NAS backup (PHI, needs Jim)
   - #588: schedule the cut-over rehearsal
   - #608 residue left: (3) torn snapshot across several exporters, (4) src/sync + src/ips on the store-boundary allowlist
-- Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push; in a command chain that `cd`s into the spike, yourphr bookkeeping needs `git -C` + absolute paths; .dockerignore is an ALLOWLIST — anything new the image needs must be added there or the build fails
+- Blockers / significant notes: spike CI has checks the local suite skips (check-http-boundary.sh) — check Actions after every push; `git -C` + absolute paths after `cd` into the spike; .dockerignore is an ALLOWLIST — anything new the image needs must be added there or the build fails
 <!-- RESUME:END -->
 
 > Generated from live GitHub state — ranked by priority label.
@@ -112,6 +113,8 @@
 
 ## 🔵 In review
 
+- [#623](https://github.com/jwilleke/yourphr/issues/623) — [SPIKE] Configuration: permissions and roles become shipped config keys, read from the merged configuration at startup
+- [#622](https://github.com/jwilleke/yourphr/issues/622) — [SPIKE] Configuration: environment references ($VAR, ${VAR}) replace the bootstrap flag — the config file names the variable
 - [#621](https://github.com/jwilleke/yourphr/issues/621) — [SPIKE] Configuration: ConfigurationManager over a config provider — ConfigStore retired, two files, the bootstrap layer
 - [#620](https://github.com/jwilleke/yourphr/issues/620) — [SPIKE] #608 residue: policy as data — a permission registry and roles as flat lists, replacing the scattered requireAdmin() checks
 - [#619](https://github.com/jwilleke/yourphr/issues/619) — [SPIKE] #608 child: ServerModules retired — the account page, the admin users/metrics/database/logs cards and the records pass-throughs reach their managers directly; policy at the doors
