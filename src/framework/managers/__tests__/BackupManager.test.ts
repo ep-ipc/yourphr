@@ -43,7 +43,7 @@ async function boot(provider: BaseBackupProvider = store, env: Record<string, st
   engine = new Engine();
   exporter = new FakeExporter(store);
   backups = new BackupManager(engine, provider, { dataDir: dir, exporter, alsoExport: ['app-db'], now: () => clock });
-  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env })).register('policy', new PolicyManager(engine)).register('backups', backups);
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider({}, undefined, undefined, dir), { env: env })).register('policy', new PolicyManager(engine)).register('backups', backups);
   await engine.initialize();
   admin = ApiContext.from({ username: 'root', role: 'admin' }, engine);
   alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);

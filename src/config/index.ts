@@ -71,6 +71,13 @@ export interface ConfigKeySpec {
    * screen change a listen port that silently does not apply.
    */
   bootstrap?: boolean;
+  /**
+   * This key defines a STORAGE ROOT (yourphr#626). Root keys are resolved first, in catalogue
+   * order, and their values are then available to `${VAR}` in every other value — which is how a
+   * path composes from a root without the framework knowing any application key by name. A root
+   * may reference an earlier root; nothing else may be referenced this way.
+   */
+  root?: boolean;
   description: string;
 }
 
@@ -80,8 +87,10 @@ export interface ConfigKeySpec {
  * arrive, with a description, because an undescribed setting is unfindable in an admin UI.
  */
 export const ConfigCatalog: Record<string, ConfigKeySpec> = {
-  'yourphr.storage.data-dir': { bootstrap: true, description: 'Directory holding everything this instance owns. Bootstrap: must exist before any setting screen can.' },
-  'yourphr.database.location': { bootstrap: true, description: 'SQLite database file path. Bootstrap.' },
+  'yourphr.storage.data-dir': { bootstrap: true, root: true, description: 'Directory holding everything this instance owns. Bootstrap: must exist before any setting screen can.' },
+  'yourphr.storage.slow-dir': { root: true, description: 'The slow root: bulk and archives, fine on a NAS mount. Defaults to the fast root, so a single-volume instance sets nothing (yourphr#626).' },
+  'yourphr.database.location': { description: 'Where the app database lives. Composed from a root; must resolve onto the FAST root — SQLite locking is unsafe over a network mount.' },
+  'yourphr.records.location': { description: 'Where the PHI record store lives. Composed from a root; must resolve onto the FAST root, for the same reason as the app database.' },
   'yourphr.database.encryption.key': { bootstrap: true, secret: true, description: 'At-rest cipher key. Bootstrap and secret: env only, never the overlay.' },
   'yourphr.web.listen.port': { bootstrap: true, description: 'TCP port the process listens on. Bootstrap.' },
   'yourphr.web.listen.host': { bootstrap: true, description: 'Address the process binds. Bootstrap.' },
@@ -105,7 +114,7 @@ export const ConfigCatalog: Record<string, ConfigKeySpec> = {
   'yourphr.sources.client.provider': { description: "How connected sources are reached: 'smart' (SMART on FHIR over the guarded HTTP client) or 'null' (an instance that never syncs — nothing fetched, every sync says why). Optional capability (yourphr#612)." },
   'yourphr.sync.max-pages': { description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
   'yourphr.backup.storage.provider': { description: "Where backup artifacts live: 'filesystem' (a local folder — the data directory, a NAS mount) or 'null' (no backup storage: the instance serves, every backup action refuses with a reason). Optional capability (yourphr#615)." },
-  'yourphr.backup.destination': { description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
+  'yourphr.backup.destination': { description: 'Folder scheduled and manual backups are written to. Composed from a root — the slow one by default, which is where a NAS mount belongs.' },
   'yourphr.backup.max-backups': { description: 'Retention: newest N backups are kept; 0 disables pruning.' },
   'yourphr.backup.schedule.enabled': { description: 'Run scheduled backups from this process (yourphr#602).' },
   'yourphr.backup.schedule.time': { description: 'When the scheduled backup runs, HH:MM, server-local time.' },

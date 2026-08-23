@@ -24,7 +24,7 @@ export class FileConfigProvider extends BaseConfigProvider {
   private readonly defaultsPath: string;
   private readonly customPath: string;
 
-  constructor(dataDir: string, defaultsPath = join(process.cwd(), 'config', 'app-default-config.json')) {
+  constructor(private readonly dataDir: string, defaultsPath = join(process.cwd(), 'config', 'app-default-config.json')) {
     super();
     this.defaultsPath = defaultsPath;
     this.customPath = join(dataDir, 'config', 'app-custom-config.json');
@@ -56,6 +56,11 @@ export class FileConfigProvider extends BaseConfigProvider {
 
   customLocation(): string {
     return this.customPath;
+  }
+
+  /** The fast root is the directory this provider was pointed at — the instance's data directory. */
+  override roots(): Record<string, string> {
+    return { YOURPHR_STORAGE_DATA_DIR: this.dataDir };
   }
 }
 

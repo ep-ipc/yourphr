@@ -108,6 +108,7 @@ export class BackupManager extends BaseManager {
   // --- where and when ----------------------------------------------------------------------
 
   destination(): string {
+    // Composed from a storage root in the configuration file, not joined here (yourphr#626).
     return this.cfg.getString('yourphr.backup.destination') || join(this.options.dataDir, 'backups');
   }
 

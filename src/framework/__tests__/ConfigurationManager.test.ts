@@ -118,6 +118,43 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
   });
 });
 
+describe('storage roots — instance data spans two, paths compose from them (yourphr#626)', () => {
+  const tmpRoot = (): string => tmp();
+
+  it('one volume: the slow root collapses onto the fast one and nothing else changes', () => {
+    const dir = tmpRoot();
+    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: {} });
+    expect(cfg.getString('yourphr.storage.data-dir')).toBe(dir);
+    expect(cfg.getString('yourphr.storage.slow-dir')).toBe(dir);   // defaults to the fast root
+    expect(cfg.getString('yourphr.database.location')).toBe(join(dir, 'spike.db'));
+    expect(cfg.getString('yourphr.records.location')).toBe(join(dir, 'records.db'));
+    expect(cfg.getString('yourphr.backup.destination')).toBe(join(dir, 'backups'));
+  });
+
+  it('two volumes: backups move to the slow root, the databases stay on the fast one', () => {
+    const dir = tmpRoot();
+    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: { YOURPHR_STORAGE_SLOW_DIR: '/mnt/nas' } });
+    expect(cfg.getString('yourphr.backup.destination')).toBe('/mnt/nas/backups');
+    expect(cfg.getString('yourphr.database.location')).toBe(join(dir, 'spike.db'));  // never follows the slow root
+    expect(cfg.getString('yourphr.records.location')).toBe(join(dir, 'records.db'));
+  });
+
+  it('an operator repoints one path in the config file without touching the roots', () => {
+    const dir = tmpRoot();
+    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: {} });
+    cfg.set('yourphr.backup.destination', '/mnt/elsewhere/nightly');
+    expect(cfg.getString('yourphr.backup.destination')).toBe('/mnt/elsewhere/nightly');
+    expect(cfg.getString('yourphr.database.location')).toBe(join(dir, 'spike.db')); // unaffected
+  });
+
+  it('a root resolves before the paths that reference it, and a real variable outranks the default', () => {
+    const dir = tmpRoot();
+    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: { YOURPHR_STORAGE_SLOW_DIR: '/slow' } });
+    expect(cfg.getString('yourphr.storage.slow-dir')).toBe('/slow');
+    expect(cfg.getString('yourphr.backup.destination')).toBe('/slow/backups');
+  });
+});
+
 describe('environment references — the config file names the variable (yourphr#622)', () => {
   it('a bare $VAR is the whole value and resolves from the environment', () => {
     const { cfg } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'yourphr.operator.name': '$SMTP_PASSWORD' });

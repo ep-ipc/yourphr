@@ -549,6 +549,27 @@ async function main(): Promise<void> {
     rmSync(oldDir, { recursive: true, force: true });
   }
 
+  // Storage roots (yourphr#626): one volume collapses both roots, two volumes put the archive on
+  // the slow one while the databases stay on the fast one. That the databases must not sit on a
+  // NETWORK filesystem is real but is not enforced here — see yourphr#628 for the check that stats
+  // the resolved path rather than trusting what a root was labelled.
+  {
+    const fastDir = mkdtempSync(join(tmpdir(), 'spike-fast-'));
+    const oneVolume = await assembleApp(fastDir, { env: { SPIKE_TEST_ALLOW_INTERNAL: '1' } });
+    check('one volume: both databases and the backup destination compose off the single root',
+      oneVolume.config.getString('yourphr.database.location') === join(fastDir, 'spike.db')
+        && oneVolume.config.getString('yourphr.records.location') === join(fastDir, 'records.db')
+        && oneVolume.config.getString('yourphr.backup.destination') === join(fastDir, 'backups'));
+    await oneVolume.close();
+
+    const twoVolume = await assembleApp(fastDir, { env: { YOURPHR_STORAGE_SLOW_DIR: '/mnt/nas', SPIKE_TEST_ALLOW_INTERNAL: '1' } });
+    check('two volumes: the archive follows the slow root, the databases stay on the fast one',
+      twoVolume.config.getString('yourphr.backup.destination') === '/mnt/nas/backups'
+        && twoVolume.config.getString('yourphr.database.location') === join(fastDir, 'spike.db'));
+    await twoVolume.close();
+    rmSync(fastDir, { recursive: true, force: true });
+  }
+
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
   if (failed.length) process.exit(1);

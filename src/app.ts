@@ -19,7 +19,7 @@
  * A tool with its own idea of where the data lives is how a migration lands in the wrong place and
  * reports success.
  */
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { FileConfigProvider } from './framework/providers/FileConfigProvider.js';
 import { addColumnWithDefault, type Migration } from './framework/providers/sqlite-migrations.js';
@@ -205,10 +205,18 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // 2. The app database + migrations before anything opens for business.
   const dbKey = config.getString('yourphr.database.encryption.key');
   const engineRef = (): Engine => engine;
-  applyStagedRestore(dataDir, [[STAGED_RECORDS, 'records.db'], [STAGED_APP, config.getString('yourphr.database.location')]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
+  // Where the two databases live is decided in the configuration files, composed from a storage
+  // root, not computed here (yourphr#626). Both belong on the FAST root: these run in WAL mode,
+  // which needs shared memory and is unsupported on a network filesystem. That is NOT enforced
+  // here — checking the declared root would catch a mistake nobody makes while staying silent on
+  // a data directory pointed straight at a NAS, which is the likely one. The real check stats the
+  // resolved path's filesystem and is yourphr#628.
+  const appDbPath = config.getString('yourphr.database.location');
+  const recordsDbPath = config.getString('yourphr.records.location');
+  applyStagedRestore(dataDir, [[STAGED_RECORDS, basename(recordsDbPath)], [STAGED_APP, basename(appDbPath)]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
   // The app database's one connection is the engine's (yourphr#617): opened and migrated by its
   // provider before any sibling provider is built over it; closed last at shutdown.
-  const database = new DatabaseManager(engine, new SqliteDatabaseProvider(join(dataDir, config.getString('yourphr.database.location')), dbKey, APP_MIGRATIONS));
+  const database = new DatabaseManager(engine, new SqliteDatabaseProvider(appDbPath, dbKey, APP_MIGRATIONS));
   const db = database.handle;
 
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
@@ -224,7 +232,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   });
   // 6. The engine: managers in validated dependency order (yourphr#608). Configuration first,
   // then Records over the PHI-storage provider. The other stores join as their own children land.
-  const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
+  const recordsProvider = new SqliteRecordsProvider(recordsDbPath, dbKey === '' ? undefined : dbKey);
   engine.register('policy', new PolicyManager(engine, (line) => appLog.info(line))); // yourphr#623: roles and permissions from the merged configuration
   engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('database', database);

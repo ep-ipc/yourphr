@@ -55,6 +55,7 @@ export class ConfigurationManager extends BaseManager {
   private custom: Record<string, ConfigValue> = {};
   private merged: Record<string, ConfigValue> = {};
   private customUnreadable: string | undefined;
+  private roots: Record<string, string> = {};
 
   constructor(engine: Engine, private readonly provider: BaseConfigProvider, options: ConfigurationOptions = {}) {
     super(engine);
@@ -74,6 +75,19 @@ export class ConfigurationManager extends BaseManager {
     this.custom = loaded.custom;
     this.customUnreadable = loaded.customUnreadable;
     this.merged = deepMerge(this.defaults, this.custom);
+    // A real environment variable always wins; the provider's roots are the floor, so a template
+    // resolves against the root actually in use even when nothing in the environment names it.
+    this.roots = { ...this.provider.roots() };
+    // Root keys resolve FIRST, in catalogue order, and join the resolution scope — so a path can
+    // compose from a root without this manager knowing any application key by name, and a root may
+    // build on an earlier one (yourphr#626).
+    for (const [key, spec] of Object.entries(this.catalog)) {
+      if (spec.root !== true || !(key in this.defaults)) continue;
+      const name = envNameFor(key);
+      if (this.env[name] !== undefined) continue; // a real environment variable still wins
+      const value = String(this.resolveEnvRef(this.merged[key] ?? this.defaults[key]!, key));
+      if (value !== '') this.roots[name] = value;
+    }
     const described = Object.keys(this.catalog);
     // Two lists that must agree, and nothing else checks them: a shipped value nobody described is
     // unfindable in the admin UI, and a described key with no value reads as undefined at runtime.
@@ -112,7 +126,7 @@ export class ConfigurationManager extends BaseManager {
   private configured(key: string): ConfigValue {
     const spec = this.catalog[key];
     if (!spec) throw new Error(`unknown configuration key: ${key}`);
-    const fromEnv = this.env[envNameFor(key)] ?? this.legacyEnvValue(key);
+    const fromEnv = this.envValue(envNameFor(key)) ?? this.legacyEnvValue(key);
     if (fromEnv !== undefined) return coerceFromEnv(fromEnv, this.defaults[key], key);
     // A bootstrap key ignores the overrides by design: it must hold before an admin could set it.
     if (!spec.bootstrap && key in this.custom) return this.merged[key] as ConfigValue;
@@ -140,7 +154,7 @@ export class ConfigurationManager extends BaseManager {
     const bare = /^\$([A-Z_][A-Z0-9_]*)$/.exec(value);
     if (bare) {
       const name = bare[1]!;
-      const found = this.env[name];
+      const found = this.envValue(name);
       if (found !== undefined) {
         this.envRefHits++;
         return found;
@@ -150,7 +164,7 @@ export class ConfigurationManager extends BaseManager {
     }
     if (value.includes('${')) {
       return value.replace(/\$\{([^}]+)\}/g, (match, name: string) => {
-        const found = this.env[name];
+        const found = this.envValue(name);
         if (found === undefined) {
           this.envRefBraceMisses++;
           return match; // left intact on purpose: it fails at point of use, where the path is visible
@@ -217,10 +231,15 @@ export class ConfigurationManager extends BaseManager {
 
   specOf(key: string): ConfigKeySpec | undefined { return this.catalog[key]; }
   isSetByEnvironment(key: string): boolean {
-    return this.env[envNameFor(key)] !== undefined || this.legacyEnvValue(key) !== undefined;
+    return this.envValue(envNameFor(key)) !== undefined || this.legacyEnvValue(key) !== undefined;
   }
 
   /** A pre-yourphr#627 `SPIKE_*` variable, warned about once so an operator knows to move it. */
+  /** The environment as this manager sees it: the real one, over the provider's roots. */
+  private envValue(name: string): string | undefined {
+    return this.env[name] ?? this.roots[name];
+  }
+
   private legacyEnvValue(key: string): string | undefined {
     const legacy = legacyEnvNameFor(key);
     if (legacy === undefined) return undefined;

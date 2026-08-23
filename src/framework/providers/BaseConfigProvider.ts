@@ -42,4 +42,12 @@ export abstract class BaseConfigProvider {
 
   /** Where the overrides live, so an operator can find the file (or the row, or the ConfigMap). */
   abstract customLocation(): string;
+
+  /**
+   * The storage roots this provider was built over, as environment names (yourphr#626). The manager
+   * seeds `${VAR}` resolution with these so a path template resolves against the root actually in
+   * use — including a test's temporary directory, which no environment variable names. A real
+   * environment variable of the same name still wins.
+   */
+  roots(): Record<string, string> { return {}; }
 }

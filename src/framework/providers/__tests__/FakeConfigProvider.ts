@@ -21,9 +21,16 @@ export class FakeConfigProvider extends BaseConfigProvider {
   constructor(
     private custom: Record<string, ConfigValue> = {},
     private readonly defaults: Record<string, ConfigValue> = SHIPPED,
-    private readonly unreadable?: string
+    private readonly unreadable?: string,
+    /** The fast storage root path templates resolve against (yourphr#626). */
+    private readonly dataDir = '/data'
   ) {
     super();
+  }
+
+  /** Same contract as the file provider: the root this instance was built over. */
+  override roots(): Record<string, string> {
+    return { YOURPHR_STORAGE_DATA_DIR: this.dataDir };
   }
 
   load(): LoadedConfig {

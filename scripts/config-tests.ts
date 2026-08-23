@@ -78,8 +78,10 @@ function main(): void {
     check('a typo\'d key fails loudly instead of vanishing', unknown);
 
     let bootstrap = '';
-    try { cfg.set('yourphr.database.location', 'elsewhere.db'); } catch (err) { bootstrap = (err as Error).message; }
-    check('a bootstrap key refuses the settings store and points at the environment', bootstrap.includes('YOURPHR_DATABASE_LOCATION'));
+    // database.location stopped being bootstrap in yourphr#626 — it is now a path composed from a
+    // storage root, and settable. The listen port is still bootstrap: it is read before the app assembles.
+    try { cfg.set('yourphr.web.listen.port', 9999); } catch (err) { bootstrap = (err as Error).message; }
+    check('a bootstrap key refuses the settings store and points at the environment', bootstrap.includes('YOURPHR_WEB_LISTEN_PORT'));
 
     mkdirSync(join(dir, 'config'), { recursive: true });
     writeFileSync(join(dir, 'config', 'app-custom-config.json'), '{not json');
