@@ -152,6 +152,41 @@ Two traps:
 - __Absent must not mean null.__ If `getManager('image')` returns null, every call site needs a check and the one that forgets crashes on real data. Keep the capability addressable and make the *implementation* inert; the saving already happened by not importing the real module. No caller branches — the same disease as 25 scattered admin checks.
 - __Absent must be visible.__ An install where a feature silently does nothing because a config key is missing is indistinguishable from a bug. Log the resolved provider set at boot. That is the mail lesson: inert is fine, inert *and invisible* is a support ticket.
 
+### Where configuration lives
+
+Everything above names configuration keys without saying where they come from. Two files, one merge, and the order is the whole of it:
+
+```text
+config/app-default-config.json        ships with the product — required, read-only, never written at runtime
+<data>/config/app-custom-config.json  the instance's overrides — optional, written by Admin -> Configuration
+SPIKE_* / YOURPHR_* environment       bootstrap and secrets ONLY (yourphr#472)
+```
+
+Later overrides earlier. This is ngdpbase's model verbatim (`ConfigurationManager.ts`, "Configuration merge order (later overrides earlier)"), with the environment layer added on top because a container has nowhere else to put a database key before an admin exists to type one.
+
+__The shipped file is the catalogue of what this release understands.__ Read-only is not a convenience: it is what lets a later release change a default and have that change actually reach installed instances. An instance that has never overridden a key follows the product; one that has, does not, and can say exactly which keys those are.
+
+__The overlay holds only what the operator changed — never the merged view.__ This is the rule most worth defending, and it is not theoretical. ngdpbase shipped the bug it prevents and had to add an escape hatch around its own merge: `ConfigurationManager.getDefaultProperty()` exists, per its own comment, to *"read a property from the SHIPPED defaults only, ignoring instance custom-config overrides ... whose seed must not be shadowed by legacy whole-catalog snapshots in instance config (the #895 propagation bug)"*. An instance had written back a whole catalogue rather than its deltas; every later shipped entry was then shadowed entry-by-entry, and the deep merge did not save it, because a merge cannot tell a deliberate override from an accidental snapshot. Writing deltas is what keeps that distinction real.
+
+__Values live in the JSON; meaning lives in code.__ These are different things and fusing them is what made this question look harder than it is. The file carries a key's *value*. The compiled catalogue carries what the key *means* — its description, whether it is a secret, whether it is bootstrap-only, whether changing it needs a restart. Meaning is a property of the release, not of the instance, so an operator cannot edit it and a release upgrade updates it for free. ngdpbase keeps documentation in sibling `_comment_*` string keys instead, which is honest but unreachable from code: nothing can render it in an admin screen, and nothing can check that a key was described at all.
+
+That split is also what makes structured values safe. A key whose value is an object — the permission registry, the role definitions — merges __per entry inside the object__, not whole-value, so an operator who overrides one role does not freeze the rest against every role shipped afterwards. The same discipline applies to the write path: __Admin -> Configuration must persist the entries the operator actually changed, never the merged object it was rendering.__ Getting this wrong is `#895` again, one level down, and it will look like the feature working right up until the next release.
+
+__What YourPHR keeps that ngdpbase does not have.__ These are not divergences to justify; they already exist in the spike's config store and are cheap to carry:
+
+- __Per-key descriptions__, so an undescribed setting is unfindable in the admin UI and a reviewer notices the omission.
+- __Unknown keys are reported, never silently carried or dropped__ ([#473](https://github.com/jwilleke/yourphr/issues/473)) — a typo'd key that vanishes teaches the operator the setting "does not work".
+- __Secret-flagged keys never leave the snapshot unmasked__, and __bootstrap keys are environment-only__ — they must hold before any admin exists to have set them.
+- __A key pinned by the environment is read-only to the admin screen__, answered 409 rather than accepted, because env wins at read time and storing the write would keep a value that never applies.
+- __Uniform environment naming.__ `auth.session.sliding-seconds` is `SPIKE_AUTH_SESSION_SLIDING_SECONDS`, derived. ngdpbase's `getProperty()` carries a hand-maintained table of six env overrides, so any key not on that list cannot be set from the environment at all and nothing says so.
+
+__What this buys, immediately.__ Once the two files exist, things that looked like architecture become ordinary keys. The permission registry and the role definitions are two entries in the shipped defaults, overridable per instance and editable in Admin -> Configuration — which is how ngdpbase already carries them (`ngdpbase.permissions.definitions`, `ngdpbase.roles.definitions`). No new mechanism is required to let an operator define a caregiver role; the mechanism is the config system, and this section is the part that was missing.
+
+Two constraints follow, and both have precedent rather than being invented here:
+
+- __A permission name an operator grants must be one the code enforces, checked at boot.__ Configuration decides *who may do what*; it does not get to invent an act. A role granting a permission nothing checks is a grant that silently means nothing, which is the same family as configuration claiming S3 while the manager writes to disk. Refusing the boot is the answer, per the required-capability rule above. ngdpbase validates on load for the same reason — `PolicyValidator.ts` is 904 lines of it.
+- __One list, not two.__ ngdpbase's own config carries the warning: its role definitions' inline `permissions[]` arrays are display-only, while `PolicyEvaluator.evaluateAccess()` reads `ngdpbase.access.policies`, and the two are held together by a comment instructing the next editor to keep them matched. The list the admin screen renders must be the list the evaluator reads.
+
 ### How a manager gets its provider
 
 Each manager selects its provider from configuration at `initialize()`. ngdpbase implements this by convention, and the convention is worth taking as-is:
