@@ -117,6 +117,7 @@ export class SettingsManager extends BaseManager {
     return {
       entries: config.snapshot().map((row) => {
         const spec = config.specOf(row.key)!;
+        const shipped = config.shippedValue(row.key)!;
         return {
           key: row.key,
           value: row.value,
@@ -124,7 +125,7 @@ export class SettingsManager extends BaseManager {
           source: row.source === 'custom' ? 'custom' : 'default',
           public: PUBLIC_KEYS.has(row.key),
           promoted: false,
-          default: spec.secret && String(spec.default) !== '' ? '••••' : spec.default,
+          default: spec.secret && String(shipped) !== '' ? '••••' : shipped,
           from_env: row.source === 'environment',
           env_var: envNameFor(row.key),
           description: row.description,
@@ -142,7 +143,7 @@ export class SettingsManager extends BaseManager {
     const spec = this.configuration.specOf(key);
     if (!spec) return undefined;
     this.log(`${ctx.actor} revealed configuration value for ${key}`);
-    return { key, value: this.configuration.reveal(key), default: spec.default };
+    return { key, value: this.configuration.reveal(key), default: this.configuration.shippedValue(key)! };
   }
 
   /** ApiError 400 unknown key / invalid value, 409 env-pinned. */
@@ -156,7 +157,7 @@ export class SettingsManager extends BaseManager {
     }
     let coerced: ConfigValue;
     try {
-      coerced = coerceToShippedType(value, spec.default);
+      coerced = coerceToShippedType(value, this.configuration.shippedValue(key)!);
     } catch (err) {
       throw new ApiError(400, `${key}: ${(err as Error).message}`);
     }

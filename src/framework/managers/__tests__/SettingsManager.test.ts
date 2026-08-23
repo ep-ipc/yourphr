@@ -6,7 +6,7 @@ import { Engine } from '../../Engine.js';
 import { ApiContext, ApiError } from '../../ApiContext.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
 import { SettingsManager, coerceToShippedType } from '../SettingsManager.js';
-import { ConfigStore } from '../../../config/index.js';
+import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -15,7 +15,7 @@ async function boot(env: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'spike-settings-')); dirs.push(dir);
   const engine = new Engine();
   const log: string[] = [];
-  engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir, undefined, env)));
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env }));
   const settings = new SettingsManager(engine, { log: (line) => log.push(line), dataDir: dir });
   engine.register('settings', settings);
   await engine.initialize();
@@ -66,7 +66,9 @@ describe('SettingsManager — what the instance says about itself, with the call
     expect(byKey['backup.encryption.key']).toMatchObject({ masked: true, value: '••••', from_env: true, env_var: 'SPIKE_BACKUP_ENCRYPTION_KEY', bootstrap: true });
     expect(byKey['operator.name']).toMatchObject({ public: true, source: 'default', from_env: false });
     expect(byKey['operator.contact_email']?.public).toBe(false);
-    expect(snap.custom_config_path.endsWith('app-custom-config.json')).toBe(true);
+    // Where the overrides live comes from the PROVIDER, not from the manager guessing a filename
+    // (yourphr#621) — with the in-memory provider there is no file, and the screen says so.
+    expect(snap.custom_config_path).toBe('<in-memory>');
   });
 
   it('reveal is logged by the actor, never a bare "admin"', async () => {

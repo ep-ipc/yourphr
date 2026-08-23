@@ -15,7 +15,7 @@ import bcryptjs from 'bcryptjs';
 import { Engine } from '../src/framework/Engine.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
 import { ConfigurationManager } from '../src/framework/ConfigurationManager.js';
-import { ConfigStore } from '../src/config/index.js';
+import { FileConfigProvider } from '../src/framework/providers/FileConfigProvider.js';
 import { UsersManager } from '../src/framework/managers/UsersManager.js';
 import { SessionsManager, GENERIC_SIGNIN_ERROR, decodeToken, issueToken, clientIp, Throttle } from '../src/framework/managers/SessionsManager.js';
 import { SqliteUsersProvider } from '../src/framework/providers/SqliteUsersProvider.js';
@@ -42,11 +42,12 @@ async function boot(options: { session?: { slidingSeconds: number; absoluteSecon
   const dir = mkdtempSync(join(tmpdir(), 'spike-auth-'));
   const db = new Database(join(dir, 'app.db'));
   const engine = new Engine();
-  const config = new ConfigStore(dir, undefined, options.minPassword === undefined ? {} : { SPIKE_AUTH_PASSWORD_MIN_LENGTH: String(options.minPassword) });
+  const configEnv = options.minPassword === undefined ? {} : { SPIKE_AUTH_PASSWORD_MIN_LENGTH: String(options.minPassword) };
+  const config = new ConfigurationManager(engine, new FileConfigProvider(dir), { env: configEnv });
   const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider());
   const sessions = new SessionsManager(engine, [new PasswordAuthProvider()], { sessionKey: options.sessionKey ?? randomBytes(32), session: options.session, throttle: options.throttle, trustedProxies: options.trustedProxies, factors: options.factors });
   const recordsFile = join(dir, 'records.db');
-  engine.register('configuration', new ConfigurationManager(engine, config)).register('users', users).register('sessions', sessions)
+  engine.register('configuration', config).register('users', users).register('sessions', sessions)
     .register('records', new RecordsManager(engine, new SqliteRecordsProvider(recordsFile, undefined)));
   await engine.initialize();
   const sys = ApiContext.system('harness', 'admin', engine);
@@ -180,7 +181,7 @@ async function main(): Promise<void> {
     const engine = new Engine();
     const users = new UsersManager(engine, new SqliteUsersProvider(db), new PasswordAuthProvider());
     const sessions = new SessionsManager(engine, [new PasswordAuthProvider(), new Totp()], { factors: ['password', 'totp'] });
-    engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir))).register('users', users).register('sessions', sessions);
+    engine.register('configuration', new ConfigurationManager(engine, new FileConfigProvider(dir))).register('users', users).register('sessions', sessions);
     await engine.initialize();
     await users.createUser(ApiContext.system('harness', 'admin', engine), 'alice', PASSWORD);
     const passwordOnly = await sessions.signIn('alice', { password: PASSWORD }, REQ);
@@ -190,7 +191,7 @@ async function main(): Promise<void> {
     let missing = '';
     try {
       const e2 = new Engine();
-      e2.register('configuration', new ConfigurationManager(e2, new ConfigStore(dir)));
+      e2.register('configuration', new ConfigurationManager(e2, new FileConfigProvider(dir)));
       e2.register('users', new UsersManager(e2, new SqliteUsersProvider(db), new PasswordAuthProvider()));
       e2.register('sessions', new SessionsManager(e2, [new PasswordAuthProvider()], { factors: ['password', 'totp'] }));
       await e2.initialize();

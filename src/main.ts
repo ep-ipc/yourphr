@@ -11,7 +11,10 @@
 import { accessSync, constants, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assembleApp } from './app.js';
-import { ConfigStore, envNameFor } from './config/index.js';
+import { envNameFor } from './config/index.js';
+import { Engine } from './framework/Engine.js';
+import { ConfigurationManager } from './framework/ConfigurationManager.js';
+import { FileConfigProvider } from './framework/providers/FileConfigProvider.js';
 import { appLog } from './log/index.js';
 
 const EX_CONFIG = 78;
@@ -39,9 +42,10 @@ if (webDir !== '' && !existsSync(join(webDir, 'index.html'))) {
   refuse(`${envNameFor('web.static-dir')}=${webDir} holds no index.html — the built Angular app is expected there`);
 }
 
-// Bootstrap values are read once here; assembleApp() reads the same store again for everything
-// else. Two reads of one file, one truth.
-const bootstrap = new ConfigStore(dataDir, undefined, env);
+// Bootstrap values are read once here; assembleApp() builds its own manager over the same files
+// for everything else. Two reads of one file, one truth. Configuration is the bootstrap layer
+// (yourphr#621), so its provider is chosen here rather than by configuration.
+const bootstrap = new ConfigurationManager(new Engine(), new FileConfigProvider(dataDir), { env });
 const port = bootstrap.getInt('web.listen.port');
 const host = bootstrap.getString('web.listen.host');
 const intervalSeconds = bootstrap.getInt('sync.interval-seconds');

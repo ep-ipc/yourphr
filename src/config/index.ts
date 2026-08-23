@@ -1,32 +1,59 @@
 /**
- * The configuration system — Phase 4 opens here (yourphr#542), because everything else in the long
- * tail reads configuration. The shape is the one the Go stack and ngdpbase both converged on
- * (yourphr#472, ngdpbase#1042-era config), each decision carried with its reason:
+ * The configuration TYPES and CATALOGUE (yourphr#542, reshaped by yourphr#621).
  *
- *   - ONE store, three layers, strict precedence: environment > custom overlay > defaults.
- *     Environment carries BOOTSTRAP AND SECRETS ONLY — things that must exist before any admin
- *     could open a settings screen. Everything else is a setting, edited at runtime, persisted to
- *     the overlay.
- *   - The overlay file holds only what the operator changed — never the merged view. Writing the
+ * What used to live here — a `ConfigStore` doing file I/O, merging and precedence all at once —
+ * is now split the way every other resource in this stack is split: `ConfigurationManager` is the
+ * door and owns the policy (merge order, precedence, the environment layer, this catalogue), and a
+ * `BaseConfigProvider` behind it owns the storage. What remains in this file is the vocabulary
+ * both sides share.
+ *
+ * The rules the catalogue exists to serve, each with its reason:
+ *
+ *   - Three layers, strict precedence: environment > instance overrides > shipped defaults.
+ *     Environment carries BOOTSTRAP AND SECRETS ONLY — things that must hold before any admin
+ *     could open a settings screen. Everything else is a setting, edited at runtime.
+ *   - The overrides hold only what the operator changed — never the merged view. Writing the
  *     merged view would freeze today's defaults into the instance forever, so a later release that
- *     changed a default would silently not apply.
+ *     changed a default would silently not apply. ngdpbase shipped that bug (its #895) and had to
+ *     add an escape hatch around its own merge.
  *   - A key pinned by the environment is READ-ONLY to set(): env wins at read time, so accepting
  *     the write would store a value that never applies. Refusing is the honest answer (the Go
  *     config screen returns 409 for the same reason).
  *   - Writes apply to the running process immediately — a saved setting that needs a restart is a
  *     setting that lies until one happens.
- *   - Unknown keys in the overlay are REPORTED, not silently carried or silently dropped
+ *   - Unknown keys in the overrides are REPORTED, not silently carried or silently dropped
  *     (yourphr#473): a typo'd key that vanishes teaches the operator the setting "does not work".
  *   - Secret-flagged keys never leave snapshot() unmasked (yourphr#286's json:"-" made the same
  *     promise in Go).
+ *
+ * VALUES live in config/app-default-config.json; MEANING lives in the catalogue below. Meaning is
+ * a property of the release, not of the instance, so an operator cannot edit it and an upgrade
+ * updates it for free. ngdpbase keeps documentation in sibling `_comment_*` string keys instead,
+ * which is honest but unreachable from code — nothing can render it or check that a key was
+ * described at all.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+/**
+ * A structured setting — a JSON object whose leaves are ordinary values. ngdpbase carries its
+ * permission registry and role definitions this way (`ngdpbase.permissions.definitions`), and
+ * deepMerge below merges one PER ENTRY rather than whole-value, so overriding one entry does not
+ * freeze the rest against everything shipped afterwards.
+ */
+export type ConfigObject = { [key: string]: ConfigValue };
 
-export type ConfigValue = string | number | boolean | string[];
+export type ConfigValue = string | number | boolean | ConfigValue[] | ConfigObject;
 
+/** A plain object, not an array and not null — ngdpbase's `isPlainObject`. */
+export function isConfigObject(value: unknown): value is ConfigObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * What a key MEANS. Deliberately not what it is worth: the value ships in
+ * config/app-default-config.json, while meaning is a property of the release and stays in code so
+ * an upgrade updates it and an operator cannot edit it (yourphr#621). ngdpbase has no equivalent —
+ * it keeps `_comment_*` string keys, which nothing can render in an admin screen or check.
+ */
 export interface ConfigKeySpec {
-  default: ConfigValue;
   /** Never shown by snapshot(); still readable by code that holds the store. */
   secret?: boolean;
   /**
@@ -42,36 +69,36 @@ export interface ConfigKeySpec {
  * unknown-key check measures against. Deliberately small; Phase 4 consumers add keys here as they
  * arrive, with a description, because an undescribed setting is unfindable in an admin UI.
  */
-export const DefaultConfigSpec: Record<string, ConfigKeySpec> = {
-  'storage.data_dir': { default: '', bootstrap: true, description: 'Directory holding everything this instance owns. Bootstrap: must exist before any setting screen can.' },
-  'database.location': { default: 'spike.db', bootstrap: true, description: 'SQLite database file path. Bootstrap.' },
-  'database.encryption.key': { default: '', bootstrap: true, secret: true, description: 'At-rest cipher key. Bootstrap and secret: env only, never the overlay.' },
-  'web.listen.port': { default: 8080, bootstrap: true, description: 'TCP port the process listens on. Bootstrap.' },
-  'web.listen.host': { default: '0.0.0.0', bootstrap: true, description: 'Address the process binds. Bootstrap.' },
-  'web.secure-cookies': { default: false, bootstrap: true, description: 'Mark the session cookie Secure. Off behind a TLS-terminating proxy that reaches this process over plain HTTP. Bootstrap.' },
-  'web.static-dir': { default: '', bootstrap: true, description: 'Directory holding the built Angular app (index.html at its root). Empty = API only. Bootstrap.' },
-  'sync.interval-seconds': { default: 900, description: 'How often the background worker refreshes tokens and syncs connected sources. 0 disables the worker.' },
-  'auth.session.sliding-seconds': { default: 3600, description: 'A session use inside this window is valid and renews the window.' },
-  'auth.session.absolute-seconds': { default: 43200, description: 'No session outlives issue time plus this, however active.' },
-  'auth.throttle.max-failures': { default: 5, description: 'Sign-in failures per account/IP window before refusal.' },
-  'auth.throttle.window-seconds': { default: 900, description: 'The throttle window.' },
-  'auth.password.min-length': { default: 12, description: 'Server-enforced password minimum (yourphr#506).' },
-  'auth.trusted-proxies': { default: [] as string[], description: 'Direct peers whose X-Forwarded-For is believed (yourphr#529). Empty = believe nobody.' },
-  'auth.providers': { default: ['password'] as string[], description: 'The authentication providers available (any-of alternatives). Only password exists today (yourphr#611).' },
-  'auth.factors': { default: ['password'] as string[], description: 'The factors EVERY sign-in must pass (all-of; password AND totp, never try-each). A factor with no provider refuses to boot.' },
-  'audit.provider': { default: 'sqlite', description: "Where the patient-visible access log is kept. REQUIRED (yourphr#614): there is no inert default — an unknown or unhealthy provider refuses to boot rather than run with auditing off." },
-  'sources.client.provider': { default: 'smart', description: "How connected sources are reached: 'smart' (SMART on FHIR over the guarded HTTP client) or 'null' (an instance that never syncs — nothing fetched, every sync says why). Optional capability (yourphr#612)." },
-  'sync.max-pages': { default: 500, description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
-  'backup.storage.provider': { default: 'filesystem', description: "Where backup artifacts live: 'filesystem' (a local folder — the data directory, a NAS mount) or 'null' (no backup storage: the instance serves, every backup action refuses with a reason). Optional capability (yourphr#615)." },
-  'backup.destination': { default: '', description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
-  'backup.max-backups': { default: 7, description: 'Retention: newest N backups are kept; 0 disables pruning.' },
-  'backup.schedule.enabled': { default: false, description: 'Run scheduled backups from this process (yourphr#602).' },
-  'backup.schedule.time': { default: '02:00', description: 'When the scheduled backup runs, HH:MM, server-local time.' },
-  'backup.schedule.days': { default: 'daily', description: "'daily' or 'weekly' (weekly = Sundays)." },
-  'operator.name': { default: '', description: 'Who runs this instance — shown on the contact, privacy and help pages (yourphr#593). Public.' },
-  'operator.contact_email': { default: '', description: 'How a signed-in member reaches the operator. Withheld from anonymous callers (yourphr#459).' },
-  'operator.contact_url': { default: '', description: 'A contact page or form for this instance. Public.' },
-  'backup.encryption.key': { default: '', bootstrap: true, secret: true, description: 'Backups are ALWAYS encrypted under this key — its own secret, not the database key, because the copy that travels and the copy that stays should not fall together. Bootstrap: env only.' },
+export const ConfigCatalog: Record<string, ConfigKeySpec> = {
+  'storage.data_dir': { bootstrap: true, description: 'Directory holding everything this instance owns. Bootstrap: must exist before any setting screen can.' },
+  'database.location': { bootstrap: true, description: 'SQLite database file path. Bootstrap.' },
+  'database.encryption.key': { bootstrap: true, secret: true, description: 'At-rest cipher key. Bootstrap and secret: env only, never the overlay.' },
+  'web.listen.port': { bootstrap: true, description: 'TCP port the process listens on. Bootstrap.' },
+  'web.listen.host': { bootstrap: true, description: 'Address the process binds. Bootstrap.' },
+  'web.secure-cookies': { bootstrap: true, description: 'Mark the session cookie Secure. Off behind a TLS-terminating proxy that reaches this process over plain HTTP. Bootstrap.' },
+  'web.static-dir': { bootstrap: true, description: 'Directory holding the built Angular app (index.html at its root). Empty = API only. Bootstrap.' },
+  'sync.interval-seconds': { description: 'How often the background worker refreshes tokens and syncs connected sources. 0 disables the worker.' },
+  'auth.session.sliding-seconds': { description: 'A session use inside this window is valid and renews the window.' },
+  'auth.session.absolute-seconds': { description: 'No session outlives issue time plus this, however active.' },
+  'auth.throttle.max-failures': { description: 'Sign-in failures per account/IP window before refusal.' },
+  'auth.throttle.window-seconds': { description: 'The throttle window.' },
+  'auth.password.min-length': { description: 'Server-enforced password minimum (yourphr#506).' },
+  'auth.trusted-proxies': { description: 'Direct peers whose X-Forwarded-For is believed (yourphr#529). Empty = believe nobody.' },
+  'auth.providers': { description: 'The authentication providers available (any-of alternatives). Only password exists today (yourphr#611).' },
+  'auth.factors': { description: 'The factors EVERY sign-in must pass (all-of; password AND totp, never try-each). A factor with no provider refuses to boot.' },
+  'audit.provider': { description: "Where the patient-visible access log is kept. REQUIRED (yourphr#614): there is no inert default — an unknown or unhealthy provider refuses to boot rather than run with auditing off." },
+  'sources.client.provider': { description: "How connected sources are reached: 'smart' (SMART on FHIR over the guarded HTTP client) or 'null' (an instance that never syncs — nothing fetched, every sync says why). Optional capability (yourphr#612)." },
+  'sync.max-pages': { description: 'Refused past this rather than paging forever on a provider that always returns a next link.' },
+  'backup.storage.provider': { description: "Where backup artifacts live: 'filesystem' (a local folder — the data directory, a NAS mount) or 'null' (no backup storage: the instance serves, every backup action refuses with a reason). Optional capability (yourphr#615)." },
+  'backup.destination': { description: 'Folder scheduled and manual backups are written to. Empty = <data dir>/backups.' },
+  'backup.max-backups': { description: 'Retention: newest N backups are kept; 0 disables pruning.' },
+  'backup.schedule.enabled': { description: 'Run scheduled backups from this process (yourphr#602).' },
+  'backup.schedule.time': { description: 'When the scheduled backup runs, HH:MM, server-local time.' },
+  'backup.schedule.days': { description: "'daily' or 'weekly' (weekly = Sundays)." },
+  'operator.name': { description: 'Who runs this instance — shown on the contact, privacy and help pages (yourphr#593). Public.' },
+  'operator.contact_email': { description: 'How a signed-in member reaches the operator. Withheld from anonymous callers (yourphr#459).' },
+  'operator.contact_url': { description: 'A contact page or form for this instance. Public.' },
+  'backup.encryption.key': { bootstrap: true, secret: true, description: 'Backups are ALWAYS encrypted under this key — its own secret, not the database key, because the copy that travels and the copy that stays should not fall together. Bootstrap: env only.' },
 };
 
 const ENV_PREFIX = 'SPIKE_';
@@ -79,128 +106,4 @@ const ENV_PREFIX = 'SPIKE_';
 /** SPIKE_AUTH_SESSION_SLIDING_SECONDS for auth.session.sliding-seconds — the Go convention. */
 export function envNameFor(key: string): string {
   return ENV_PREFIX + key.toUpperCase().replace(/[.-]/g, '_');
-}
-
-export class ConfigStore {
-  private overlay: Record<string, unknown> = {};
-  private readonly overlayPath: string;
-
-  constructor(
-    private readonly dataDir: string,
-    private readonly spec: Record<string, ConfigKeySpec> = DefaultConfigSpec,
-    private readonly env: Record<string, string | undefined> = process.env
-  ) {
-    this.overlayPath = join(dataDir, 'config', 'app-custom-config.json');
-    if (existsSync(this.overlayPath)) {
-      // A file we cannot parse is left alone and reported by unknownKeys() as unreadable rather
-      // than clobbered on the next save — it may hold settings the operator wants back.
-      try {
-        this.overlay = JSON.parse(readFileSync(this.overlayPath, 'utf8')) as Record<string, unknown>;
-      } catch {
-        this.overlayBroken = true;
-      }
-    }
-  }
-
-  private overlayBroken = false;
-
-  isSetByEnvironment(key: string): boolean {
-    return this.env[envNameFor(key)] !== undefined;
-  }
-
-  private raw(key: string): ConfigValue {
-    const spec = this.spec[key];
-    if (!spec) {
-      throw new Error(`unknown configuration key: ${key}`);
-    }
-    const fromEnv = this.env[envNameFor(key)];
-    if (fromEnv !== undefined) {
-      if (typeof spec.default === 'number') return Number(fromEnv);
-      if (typeof spec.default === 'boolean') return fromEnv === 'true' || fromEnv === '1';
-      if (Array.isArray(spec.default)) return fromEnv.split(',').map((s) => s.trim()).filter(Boolean);
-      return fromEnv;
-    }
-    if (key in this.overlay && !spec.bootstrap) {
-      return this.overlay[key] as ConfigValue;
-    }
-    return spec.default;
-  }
-
-  getString(key: string): string { return String(this.raw(key)); }
-  getInt(key: string): number { return Number(this.raw(key)); }
-  getBool(key: string): boolean { return this.raw(key) === true; }
-  getStringList(key: string): string[] {
-    const v = this.raw(key);
-    return Array.isArray(v) ? v : v === '' ? [] : [String(v)];
-  }
-
-  /**
-   * Persist a setting into the overlay and apply it live. Refuses: unknown keys (a typo must fail
-   * loudly, not vanish), env-pinned keys (env wins at read, so the write would lie), and bootstrap
-   * keys (they must hold before any admin exists — environment only).
-   */
-  set(key: string, value: ConfigValue): void {
-    const spec = this.spec[key];
-    if (!spec) {
-      throw new Error(`unknown configuration key: ${key}`);
-    }
-    if (spec.bootstrap) {
-      throw new Error(`${key} is bootstrap configuration — set it in the environment (${envNameFor(key)}), not the settings store`);
-    }
-    if (this.isSetByEnvironment(key)) {
-      throw new Error(`${key} is set in the environment (${envNameFor(key)}); remove the variable to manage it here`);
-    }
-    if (this.overlayBroken) {
-      throw new Error(`${this.overlayPath} exists but cannot be parsed — refusing to overwrite it`);
-    }
-    this.overlay[key] = value;
-    mkdirSync(dirname(this.overlayPath), { recursive: true });
-    writeFileSync(this.overlayPath, JSON.stringify(this.overlay, null, 2) + '\n', { mode: 0o600 });
-  }
-
-  /** Overlay keys the catalogue does not know — reported, never silently dropped (yourphr#473). */
-  /** Removes an override so the key reads its default (or the environment) again. False when there was none. */
-  clear(key: string): boolean {
-    if (!this.spec[key]) {
-      throw new Error(`unknown configuration key: ${key}`);
-    }
-    if (this.overlayBroken) {
-      throw new Error(`${this.overlayPath} exists but cannot be parsed — refusing to overwrite it`);
-    }
-    if (!(key in this.overlay)) return false;
-    delete this.overlay[key];
-    mkdirSync(dirname(this.overlayPath), { recursive: true });
-    writeFileSync(this.overlayPath, JSON.stringify(this.overlay, null, 2) + '\n', { mode: 0o600 });
-    return true;
-  }
-
-  /** Where the overrides live, so an operator can find the file. */
-  customConfigPath(): string {
-    return this.overlayPath;
-  }
-
-  specOf(key: string): ConfigKeySpec | undefined {
-    return this.spec[key];
-  }
-
-  /** The raw (unmasked) value — for the admin reveal, which is a logged, deliberate act. */
-  reveal(key: string): ConfigValue {
-    return this.raw(key);
-  }
-
-  unknownKeys(): string[] {
-    if (this.overlayBroken) {
-      return [`<unreadable: ${this.overlayPath}>`];
-    }
-    return Object.keys(this.overlay).filter((k) => !(k in this.spec));
-  }
-
-  /** The admin-UI view: every known key, its effective value (secrets masked), and its source. */
-  snapshot(): { key: string; value: ConfigValue | '••••'; source: 'environment' | 'custom' | 'default'; description: string }[] {
-    return Object.entries(this.spec).map(([key, spec]) => {
-      const source = this.isSetByEnvironment(key) ? 'environment' : key in this.overlay && !spec.bootstrap ? 'custom' : 'default';
-      const value = spec.secret && String(this.raw(key)) !== '' ? ('••••' as const) : this.raw(key);
-      return { key, value, source, description: spec.description };
-    });
-  }
 }

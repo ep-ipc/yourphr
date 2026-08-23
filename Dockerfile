@@ -37,6 +37,9 @@ WORKDIR /opt/yourphr
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /build/dist ./dist
 COPY package.json ./
+# The shipped defaults are part of the product (yourphr#621): the process refuses to boot without
+# them, and WORKDIR is where FileConfigProvider looks. Instance overrides live under ./data.
+COPY config ./config
 COPY --from=frontend /opt/fasten/web ./web
 RUN mkdir -p /opt/yourphr/data && chown -R node:node /opt/yourphr
 USER node

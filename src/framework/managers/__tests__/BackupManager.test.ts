@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Engine } from '../../Engine.js';
 import { ApiContext } from '../../ApiContext.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
-import { ConfigStore } from '../../../config/index.js';
+import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
 import { BackupManager, applyStagedRestore, type BackupExporter } from '../BackupManager.js';
 import { FakeBackupProvider } from '../../providers/__tests__/FakeBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from '../../providers/BaseBackupProvider.js';
@@ -42,7 +42,7 @@ async function boot(provider: BaseBackupProvider = store, env: Record<string, st
   engine = new Engine();
   exporter = new FakeExporter(store);
   backups = new BackupManager(engine, provider, { dataDir: dir, exporter, alsoExport: ['app-db'], now: () => clock });
-  engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir, undefined, env))).register('backups', backups);
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env })).register('backups', backups);
   await engine.initialize();
   admin = ApiContext.from({ username: 'root', role: 'admin' }, engine);
   alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);

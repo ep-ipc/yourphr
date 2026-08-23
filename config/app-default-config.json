@@ -1,0 +1,36 @@
+{
+  "_comment": "Shipped defaults for the YourPHR TypeScript stack (yourphr#621). READ-ONLY: this file is the product, not the instance. An operator overrides values in <data dir>/config/app-custom-config.json, which holds ONLY what they changed — never a copy of this file. Keys prefixed with _ are comments and are ignored on load.",
+  "storage.data_dir": "",
+  "database.location": "spike.db",
+  "database.encryption.key": "",
+  "web.listen.port": 8080,
+  "web.listen.host": "0.0.0.0",
+  "web.secure-cookies": false,
+  "web.static-dir": "",
+  "sync.interval-seconds": 900,
+  "auth.session.sliding-seconds": 3600,
+  "auth.session.absolute-seconds": 43200,
+  "auth.throttle.max-failures": 5,
+  "auth.throttle.window-seconds": 900,
+  "auth.password.min-length": 12,
+  "auth.trusted-proxies": [],
+  "auth.providers": [
+    "password"
+  ],
+  "auth.factors": [
+    "password"
+  ],
+  "audit.provider": "sqlite",
+  "sources.client.provider": "smart",
+  "sync.max-pages": 500,
+  "backup.storage.provider": "filesystem",
+  "backup.destination": "",
+  "backup.max-backups": 7,
+  "backup.schedule.enabled": false,
+  "backup.schedule.time": "02:00",
+  "backup.schedule.days": "daily",
+  "operator.name": "",
+  "operator.contact_email": "",
+  "operator.contact_url": "",
+  "backup.encryption.key": ""
+}

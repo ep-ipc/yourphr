@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { Engine } from '../../Engine.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
-import { ConfigStore } from '../../../config/index.js';
+import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
 import { DatabaseManager } from '../DatabaseManager.js';
 import { SqliteDatabaseProvider } from '../../providers/SqliteDatabaseProvider.js';
 import { addColumnWithDefault, type Migration } from '../../providers/sqlite-migrations.js';
@@ -21,7 +21,7 @@ async function boot(ledger: Migration[], key = 'at-rest-key'): Promise<{ engine:
   const engine = new Engine();
   const provider = new SqliteDatabaseProvider(join(dir, 'app.db'), key, ledger);
   const database = new DatabaseManager(engine, provider);
-  engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir))).register('database', database);
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider())).register('database', database);
   await engine.initialize();
   return { engine, database, provider };
 }

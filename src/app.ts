@@ -21,7 +21,7 @@
  */
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { ConfigStore } from './config/index.js';
+import { FileConfigProvider } from './framework/providers/FileConfigProvider.js';
 import { addColumnWithDefault, type Migration } from './framework/providers/sqlite-migrations.js';
 import { DatabaseManager } from './framework/managers/DatabaseManager.js';
 import { SqliteDatabaseProvider } from './framework/providers/SqliteDatabaseProvider.js';
@@ -137,7 +137,7 @@ const APP_MIGRATIONS: Migration[] = [
 
 /** Everything that owns data, opened the one way the server opens it. */
 export interface Stores {
-  config: ConfigStore;
+  config: ConfigurationManager;
   /** The app database's handle — the composition root's and the harnesses'; never a route's. */
   db: InstanceType<typeof Database>;
   /** '' when the database is unencrypted. */
@@ -189,8 +189,13 @@ async function sourceClientFor(name: string, env: Record<string, string | undefi
 }
 
 export async function openStores(dataDir: string, env: Record<string, string | undefined> = process.env): Promise<Stores> {
-  // 1. Config — everything below reads it.
-  const config = new ConfigStore(dataDir, undefined, env);
+  // 1. Config — everything below reads it, so the engine and its first manager come first.
+  // The configuration capability is the BOOTSTRAP LAYER (yourphr#621): the one capability NOT
+  // selected by configuration, because it is what reads configuration. The composition root picks
+  // its provider here, alongside the data directory and the database key.
+  const engine = new Engine();
+  const config = new ConfigurationManager(engine, new FileConfigProvider(dataDir), { env, log: (line) => appLog.info(line) });
+  engine.register('configuration', config);
   const unknown = config.unknownKeys();
   if (unknown.length > 0) {
     appLog.warn(`config: keys with no effect: ${unknown.join(', ')}`); // yourphr#473 — reported, not dropped
@@ -198,7 +203,6 @@ export async function openStores(dataDir: string, env: Record<string, string | u
 
   // 2. The app database + migrations before anything opens for business.
   const dbKey = config.getString('database.encryption.key');
-  const engine = new Engine();
   const engineRef = (): Engine => engine;
   applyStagedRestore(dataDir, [[STAGED_RECORDS, 'records.db'], [STAGED_APP, config.getString('database.location')]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
   // The app database's one connection is the engine's (yourphr#617): opened and migrated by its
@@ -220,7 +224,6 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // 6. The engine: managers in validated dependency order (yourphr#608). Configuration first,
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
-  engine.register('configuration', new ConfigurationManager(engine, config));
   engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('database', database);
   // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.
@@ -261,7 +264,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
 export interface App {
   server: ReturnType<typeof createYourPhrServer>;
   engine: Engine;
-  config: ConfigStore;
+  config: ConfigurationManager;
   users: UsersManager;
   sessions: SessionsManager;
   catalog: CatalogManager;

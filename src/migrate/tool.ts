@@ -29,7 +29,8 @@ import type { Resource, ResourceType } from '@medplum/fhirtypes';
 import { readGoUsers, readGoSources, importLegacySources, readGoAccountData, importLegacyAccountData, type SourceImportReport, type AccountImportReport } from './index.js';
 import type { ImportReport as UserImportReport } from '../framework/managers/UsersManager.js';
 import type { CatalogManager, CatalogWrite } from '../app/managers/CatalogManager.js';
-import type { ConfigStore, ConfigValue } from '../config/index.js';
+import type { ConfigValue } from '../config/index.js';
+import type { ConfigurationManager } from '../framework/ConfigurationManager.js';
 import type { Stores } from '../app.js';
 import type { Engine } from '../framework/Engine.js';
 import { ApiContext } from '../framework/ApiContext.js';
@@ -352,7 +353,7 @@ export interface ConfigImportReport {
   notCarried: string[];
 }
 
-export function importLegacyConfig(config: ConfigStore, goConfig: { path: string; values: Record<string, unknown> | undefined } | undefined): ConfigImportReport {
+export function importLegacyConfig(config: ConfigurationManager, goConfig: { path: string; values: Record<string, unknown> | undefined } | undefined): ConfigImportReport {
   const report: ConfigImportReport = { path: goConfig?.path, carried: [], refused: [], notCarried: [] };
   const values = goConfig?.values;
   if (!values) {

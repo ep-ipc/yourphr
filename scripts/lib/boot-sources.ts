@@ -6,7 +6,7 @@
 import type Database from 'better-sqlite3-multiple-ciphers';
 import { dirname } from 'node:path';
 import { ConfigurationManager } from '../../src/framework/ConfigurationManager.js';
-import { ConfigStore } from '../../src/config/index.js';
+import { FileConfigProvider } from '../../src/framework/providers/FileConfigProvider.js';
 import { Engine } from '../../src/framework/Engine.js';
 import { ApiContext } from '../../src/framework/ApiContext.js';
 import { RecordsManager } from '../../src/app/managers/RecordsManager.js';
@@ -36,7 +36,7 @@ export interface SourcesHarness {
 export async function bootSources(appDb: InstanceType<typeof Database>, recordsFile: string, options: { maxPages?: number; log?: (line: string) => void } = {}): Promise<SourcesHarness> {
   const engine = new Engine();
   const client = new SmartSourceClientProvider({ allowInternal: true });
-  engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dirname(recordsFile))));
+  engine.register('configuration', new ConfigurationManager(engine, new FileConfigProvider(dirname(recordsFile))));
   engine.register('records', new RecordsManager(engine, new SqliteRecordsProvider(recordsFile, undefined)));
   engine.register('jobs', new JobsManager(engine, new SqliteJobsProvider(appDb)));
   engine.register('sources', new SourcesManager(engine, new SqliteSourcesProvider(appDb), client, { maxPages: options.maxPages ?? 10, log: options.log }));
