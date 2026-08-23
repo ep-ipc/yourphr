@@ -10,7 +10,8 @@
 - Next steps:
   - Jim's close decisions on the in-review queue (`gh issue list --label in-review`)
   - NOT YET FILED, needs a decision: a role beyond admin/user can be DEFINED in config but not HELD — `auth_users.role` is 'admin' | 'user' and normaliseRole() coerces. demo-admin (#494) and caregiver work as policy today but no account can be assigned one
-  - #624 restart-required marking — lands the other half of what `bootstrap: true` currently fuses, after which that flag can retire (see #622)
+  - #626 two storage roots (fast/slow) with paths composed in the config file — SQLite must not land on a NAS mount, backups should; today they are `join(dataDir, …)` calls so an operator cannot separate them
+  - #624 (rescoped, now P1) split the `bootstrap` flag — it does three jobs: raw-env (locates the config file), secret (now a `$VAR` reference), restart-required (four keys un-settable for no reason)
   - #625 did-you-mean in the unknown-key report (port ngdpbase's findClosestAddonName)
   - #606 glossary: evidence posted; decisive number is the glossary row count in a NAS backup (PHI, needs Jim)
   - #588: schedule the cut-over rehearsal
