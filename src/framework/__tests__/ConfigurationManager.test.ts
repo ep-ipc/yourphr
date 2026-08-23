@@ -118,6 +118,61 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
   });
 });
 
+describe('environment references — the config file names the variable (yourphr#622)', () => {
+  it('a bare $VAR is the whole value and resolves from the environment', () => {
+    const { cfg } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'operator.name': '$SMTP_PASSWORD' });
+    expect(cfg.getString('operator.name')).toBe('hunter2');
+    expect(cfg.isEnvReference('operator.name')).toBe(true);
+  });
+
+  it('an unset bare $VAR REFUSES, naming the variable and the key that wanted it', () => {
+    const { cfg } = boot({}, { 'operator.name': '$SMTP_PASSWORD' });
+    expect(() => cfg.getString('operator.name')).toThrow(/SMTP_PASSWORD/);
+    expect(() => cfg.getString('operator.name')).toThrow(/operator\.name/);
+  });
+
+  it('an embedded ${VAR} resolves, and is left INTACT on a miss so it fails at point of use', () => {
+    const { cfg } = boot({ BACKUP_ROOT: '/mnt/nas' }, { 'backup.destination': '${BACKUP_ROOT}/backups' });
+    expect(cfg.getString('backup.destination')).toBe('/mnt/nas/backups');
+    const { cfg: missing } = boot({}, { 'backup.destination': '${BACKUP_ROOT}/backups' });
+    expect(missing.getString('backup.destination')).toBe('${BACKUP_ROOT}/backups'); // silent, not fatal
+  });
+
+  it('$$literal escapes a value that genuinely starts with $', () => {
+    const { cfg } = boot({}, { 'operator.name': '$$NotAVariable' });
+    expect(cfg.getString('operator.name')).toBe('$NotAVariable');
+    expect(cfg.isEnvReference('operator.name')).toBe(false);
+  });
+
+  it('resolves at LOOKUP time, so a changed environment is seen on the next read', () => {
+    const env: Record<string, string> = { TOKEN: 'first' };
+    const { cfg } = boot(env, { 'operator.name': '$TOKEN' });
+    expect(cfg.getString('operator.name')).toBe('first');
+    env['TOKEN'] = 'second';
+    expect(cfg.getString('operator.name')).toBe('second');
+  });
+
+  it('masking is structural: a referenced value is masked without anyone flagging it secret', () => {
+    const { cfg } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'operator.name': '$SMTP_PASSWORD' });
+    expect(cfg.maskedValue('operator.name')).toBe('••••');   // not marked `secret` in the catalogue
+    expect(cfg.getString('operator.name')).toBe('hunter2');  // still readable to code that asks
+    expect(cfg.snapshot().find((r) => r.key === 'operator.name')?.value).toBe('••••');
+  });
+
+  it('refuses to write a literal over a reference — that would copy a secret onto disk', () => {
+    const { cfg, provider } = boot({ SMTP_PASSWORD: 'hunter2' }, { 'operator.name': '$SMTP_PASSWORD' });
+    expect(() => cfg.set('operator.name', 'Ops')).toThrow(/copy a secret out of the deployment/);
+    expect(provider.saves).toBe(0);
+    cfg.set('operator.name', '$OTHER_VAR'); // pointing it at a different variable is fine
+    expect(provider.written()).toEqual({ 'operator.name': '$OTHER_VAR' });
+  });
+
+  it('a missing required secret refuses at BOOT, not at the first request that reads it', async () => {
+    const { engine } = boot({}, { 'operator.contact_email': '$UNSET_SECRET' });
+    await expect(engine.initialize()).rejects.toThrow(/UNSET_SECRET/);
+  });
+});
+
 describe('FileConfigProvider — the two files (yourphr#621)', () => {
   it('reads the shipped defaults and the instance overrides, ignoring _ comment keys', () => {
     const dir = tmp();

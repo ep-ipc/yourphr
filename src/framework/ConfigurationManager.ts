@@ -93,11 +93,23 @@ export class ConfigurationManager extends BaseManager {
     const overridden = Object.keys(this.custom).length;
     this.log(`configuration: ${Object.keys(this.defaults).length} keys from the '${this.provider.name}' provider${overridden ? `, ${overridden} overridden by this instance` : ''}`);
     if (this.customUnreadable) this.log(`configuration: overrides could not be read and are being ignored, not overwritten — ${this.customUnreadable}`);
+    // Resolve every key once at boot so a missing REQUIRED secret refuses here, naming itself,
+    // rather than at the first request that happens to read it (yourphr#622).
+    for (const key of Object.keys(this.catalog)) this.raw(key);
+    if (this.envRefHits || this.envRefBraceMisses) {
+      this.log(`configuration: ${this.envRefHits} environment reference(s) resolved` +
+        (this.envRefBraceMisses ? `, ${this.envRefBraceMisses} left unresolved (embedded form — they fail at point of use)` : ''));
+    }
   }
 
   // --- reading ---------------------------------------------------------------------------------
 
   private raw(key: string): ConfigValue {
+    return this.resolveEnvRef(this.configured(key), key);
+  }
+
+  /** The value the layers select, BEFORE environment references are resolved. */
+  private configured(key: string): ConfigValue {
     const spec = this.catalog[key];
     if (!spec) throw new Error(`unknown configuration key: ${key}`);
     const fromEnv = this.env[envNameFor(key)];
@@ -105,6 +117,73 @@ export class ConfigurationManager extends BaseManager {
     // A bootstrap key ignores the overrides by design: it must hold before an admin could set it.
     if (!spec.bootstrap && key in this.custom) return this.merged[key] as ConfigValue;
     return this.defaults[key] as ConfigValue;
+  }
+
+  /**
+   * Environment references (yourphr#622), ngdpbase's `resolveEnvRef` (#775) carried with its three
+   * forms and — the part that matters — its deliberately DIFFERENT strictness between them:
+   *
+   *   `$$literal`  escape, for a value that genuinely starts with `$`. Checked FIRST, or `$$VAR`
+   *                reads as a malformed bare reference.
+   *   `$VAR`       the WHOLE value is one variable. STRICT: an unset variable throws, naming both
+   *                the variable and the key that wanted it. This is the form for secrets — an
+   *                operator who wrote it meant it, and silently falling back to a shipped empty
+   *                string is how an instance ends up serving with its cipher key missing.
+   *   `${VAR}`     embedded, for path templates. SILENT on a miss: the placeholder is left intact
+   *                and fails at point of use, where the message names the actual path.
+   *
+   * Resolved at LOOKUP time, not load time, so a test that changes the environment mid-run sees it.
+   */
+  private resolveEnvRef(value: ConfigValue, key: string): ConfigValue {
+    if (typeof value !== 'string') return value;
+    if (value.startsWith('$$')) return value.slice(1);
+    const bare = /^\$([A-Z_][A-Z0-9_]*)$/.exec(value);
+    if (bare) {
+      const name = bare[1]!;
+      const found = this.env[name];
+      if (found !== undefined) {
+        this.envRefHits++;
+        return found;
+      }
+      this.envRefMisses++;
+      throw new Error(`configuration: ${key} is set to the environment variable ${name}, which is unset — add ${name}=... to the deployment (a .env file, a Kubernetes Secret) and restart`);
+    }
+    if (value.includes('${')) {
+      return value.replace(/\$\{([^}]+)\}/g, (match, name: string) => {
+        const found = this.env[name];
+        if (found === undefined) {
+          this.envRefBraceMisses++;
+          return match; // left intact on purpose: it fails at point of use, where the path is visible
+        }
+        this.envRefHits++;
+        return found;
+      });
+    }
+    return value;
+  }
+
+  /** Counters for the boot summary — an instance says how many references resolved. */
+  private envRefHits = 0;
+  private envRefMisses = 0;
+  private envRefBraceMisses = 0;
+
+  /** Is this key's configured value a whole-value environment reference — i.e. does it hold a secret? */
+  isEnvReference(key: string): boolean {
+    const value = this.configured(key);
+    return typeof value === 'string' && !value.startsWith('$$') && /^\$[A-Z_][A-Z0-9_]*$/.test(value);
+  }
+
+  /**
+   * The value with secrets masked, for anything that prints configuration — boot banners, the
+   * admin listing, a debug dump. Masking is STRUCTURAL: it follows from the value being an
+   * environment reference, so a newly referenced secret is masked without anyone remembering to
+   * flag it. The catalogue's `secret` marker still covers values secret without being referenced.
+   */
+  maskedValue(key: string): ConfigValue | '••••' {
+    if (this.isEnvReference(key)) return '••••';
+    const spec = this.catalog[key];
+    const value = this.raw(key);
+    return spec?.secret && String(value) !== '' ? '••••' : value;
   }
 
   getString(key: string): string { return String(this.raw(key)); }
@@ -150,8 +229,7 @@ export class ConfigurationManager extends BaseManager {
   snapshot(): ConfigRow[] {
     return Object.entries(this.catalog).map(([key, spec]) => {
       const source = this.isSetByEnvironment(key) ? 'environment' : key in this.custom && !spec.bootstrap ? 'custom' : 'default';
-      const raw = this.raw(key);
-      return { key, value: spec.secret && String(raw) !== '' ? ('••••' as const) : raw, source, description: spec.description };
+      return { key, value: this.maskedValue(key), source, description: spec.description };
     });
   }
 
@@ -163,6 +241,11 @@ export class ConfigurationManager extends BaseManager {
     if (spec.bootstrap) throw new Error(`${key} is bootstrap configuration — set it in the environment (${envNameFor(key)}), not the settings store`);
     if (this.isSetByEnvironment(key)) throw new Error(`${key} is set in the environment (${envNameFor(key)}); remove the variable to manage it here`);
     if (this.customUnreadable) throw new Error(`${this.provider.customLocation()} exists but cannot be parsed — refusing to overwrite it`);
+    // Writing a literal over an environment reference would move a secret out of the deployment
+    // and into a file on disk — silently, and from a screen that was only showing '••••'.
+    if (this.isEnvReference(key) && !(typeof value === 'string' && value.startsWith('$'))) {
+      throw new Error(`${key} is set to an environment variable; writing a literal here would copy a secret out of the deployment and into ${this.provider.customLocation()}`);
+    }
     this.custom[key] = value;
     this.merged = deepMerge(this.defaults, this.custom);
     this.provider.saveCustom(this.custom);

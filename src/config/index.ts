@@ -59,6 +59,16 @@ export interface ConfigKeySpec {
   /**
    * Bootstrap keys may ONLY come from defaults or environment — set() refuses them even when no
    * env var is present, because they must hold before any admin exists to have set them.
+   *
+   * NOTE (yourphr#622): this flag is currently doing two jobs, and they should be separated.
+   * Of the eight keys carrying it, most are not secrets at all (`web.listen.port`, `web.listen.host`,
+   * `web.static-dir`) — they are marked bootstrap because changing them from a settings screen
+   * would not take effect until a restart, which is what `restartRequired` should say
+   * (yourphr#624). The remaining two are secrets, which environment references now express
+   * directly: a value of `$SPIKE_DATABASE_ENCRYPTION_KEY` names its variable in the file an
+   * operator reads, and masks itself. Once yourphr#624 lands, this flag can retire in favour of
+   * the two concepts it fused. It is kept for now because removing it today would let an admin
+   * screen change a listen port that silently does not apply.
    */
   bootstrap?: boolean;
   description: string;
