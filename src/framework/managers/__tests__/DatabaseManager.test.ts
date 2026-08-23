@@ -27,6 +27,18 @@ async function boot(ledger: Migration[], key = 'at-rest-key'): Promise<{ engine:
 }
 
 describe('DatabaseManager — the engine owns the app database', () => {
+  it('storage() answers the admin Database card for its own file — and only for an admin (yourphr#619)', async () => {
+    const { engine, database } = await boot([M1]);
+    const { ApiContext } = await import('../../ApiContext.js');
+    const admin = ApiContext.from({ username: 'ops', role: 'admin' }, engine);
+    const member = ApiContext.from({ username: 'alice', role: 'user' }, engine);
+    const storage = database.storage(admin);
+    expect(storage.location).toBe(join(dir, 'app.db'));
+    expect(storage.sizeBytes).toBeGreaterThan(0);
+    expect(() => database.storage(member)).toThrow(/admin/);
+    await engine.shutdown();
+  });
+
   it('opens under the key and runs the ledger before anything is built over the handle; a reopen skips what was applied', async () => {
     const first = await boot([M1, M2]);
     expect(first.provider.migrations).toEqual({ applied: ['20260101000000', '20260102000000'], skipped: 0 });

@@ -360,6 +360,22 @@ async function main(): Promise<void> {
   check('sign out everywhere ends every session including this one, clears the cookie, and the new password signs back in',
     signedOut.status === 200 && /fasten_session=;.*Max-Age=0/.test(signedOut.headers.get('set-cookie') ?? '') && afterSignOut.status === 401 && backIn.status === 200);
 
+  // Deleting the account (yourphr#619): every door the closure used to call, in the same order —
+  // sources, records, the access log, then the account. Nothing checked this journey before.
+  await app.users.createUser(sys, 'gone', 'a-long-enough-password-here');
+  const goneToken = ((await (await signIn('gone', 'a-long-enough-password-here')).json()) as { data: string }).data;
+  await app.sources.add(asUser('gone'), { userId: 'gone', display: 'Gone Clinic', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pg', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999 });
+  await fetch(`${base}/api/secure/account/legal-consent/grant`, { method: 'POST', ...authed(goneToken) });
+  await fetch(`${base}/api/secure/account/access-log`, authed(goneToken)); // an access to log
+  const goneSourcesBefore = (await app.sources.list(asUser('gone'))).length;
+  const goneDeleted = await fetch(`${base}/api/secure/account/me`, { method: 'DELETE', ...authed(goneToken) });
+  const goneAfter = await fetch(`${base}/api/secure/account/me`, authed(goneToken));
+  const goneSignIn = await signIn('gone', 'a-long-enough-password-here');
+  check('deleting the account removes its sources, its records, its access log and the account itself; the session dies with it',
+    goneSourcesBefore === 1 && goneDeleted.status === 200 && (await app.sources.list(asUser('gone'))).length === 0
+      && (await app.users.record('gone')) === undefined && goneAfter.status === 401 && goneSignIn.status === 401,
+    `sources ${goneSourcesBefore}, delete ${goneDeleted.status}, me ${goneAfter.status}, signin ${goneSignIn.status}`);
+
   await app.users.createUser(sys, 'zed', 'zeds-long-enough-password');
   const zedToken = ((await (await signIn('zed', 'zeds-long-enough-password')).json()) as { data: string }).data;
   await app.sources.add(asUser('zed'), { userId: 'zed', display: 'Zed Clinic', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'cid', patient: 'pz', resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 99_999_999 });

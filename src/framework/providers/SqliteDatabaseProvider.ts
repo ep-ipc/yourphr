@@ -2,6 +2,7 @@
 import Database from 'better-sqlite3-multiple-ciphers';
 import { BaseDatabaseProvider } from './BaseDatabaseProvider.js';
 import { runMigrations, type Migration, type MigrationReport } from './sqlite-migrations.js';
+import { existsSync, statSync } from 'node:fs';
 
 export class SqliteDatabaseProvider extends BaseDatabaseProvider<InstanceType<typeof Database>> {
   readonly name = 'sqlite';
@@ -10,7 +11,7 @@ export class SqliteDatabaseProvider extends BaseDatabaseProvider<InstanceType<ty
   /** What the ledger did at open — applied ids, skipped count. */
   readonly migrations: MigrationReport;
 
-  constructor(file: string, key: string, ledger: Migration[]) {
+  constructor(private readonly file: string, key: string, ledger: Migration[]) {
     super();
     this.db = new Database(file);
     if (key !== '') {
@@ -28,6 +29,10 @@ export class SqliteDatabaseProvider extends BaseDatabaseProvider<InstanceType<ty
   get handle(): InstanceType<typeof Database> { return this.db; }
 
   async initialize(): Promise<void> { /* opened and migrated in the constructor, before any sibling provider */ }
+
+  storage(): { location: string; sizeBytes: number } {
+    return { location: this.file, sizeBytes: existsSync(this.file) ? statSync(this.file).size : 0 };
+  }
 
   async integrityOk(): Promise<boolean> {
     try {

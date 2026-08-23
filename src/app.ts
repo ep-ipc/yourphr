@@ -46,17 +46,13 @@ import { NullSourceClientProvider, type BaseSourceClientProvider } from './app/p
 export { sourceShape, backgroundJobShape };
 import { EventBus } from './events/index.js';
 import { SqliteFavoritesProvider } from './app/providers/SqliteFavoritesProvider.js';
-import { providerRequiresLegalConsent } from './account/index.js';
 import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
-import { loadLegalDocument, parseLegalKind } from './legal/index.js';
 import { BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
 import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
 import { BACKUP_SUFFIX, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
-import { basename } from 'node:path';
-import { existsSync, statSync } from 'node:fs';
 import { createYourPhrServer, toResourceFhir } from './server.js';
 import { SqliteFhirRepository } from './SqliteFhirRepository.js';
 import { randomBytes } from 'node:crypto';
@@ -213,7 +209,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // 4. Catalog and 5. sources + per-user repositories — the same seam the HTTP layer and worker share.
   // 3. Accounts and sessions as managers over providers (yourphr#611): user storage in the app
   // database, passwords by the scrypt provider, the factor list from configuration.
-  const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider());
+  const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider(), { log: (line) => appLog.info(line) });
   const sessions = new SessionsManager(engineRef(), [new PasswordAuthProvider()], {
     sessionKey: randomBytes(32),
     session: { slidingSeconds: config.getInt('auth.session.sliding-seconds'), absoluteSeconds: config.getInt('auth.session.absolute-seconds') },
@@ -225,7 +221,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
   engine.register('configuration', new ConfigurationManager(engine, config));
-  engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line) })); // yourphr#618
+  engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('database', database);
   // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.
   engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('audit.provider'), db)));
@@ -314,101 +310,11 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
   }, 60_000);
   scheduleTimer?.unref?.();
 
-  /** Go's LegalConsentStatus, from the stored timestamp ('' = not accepted). */
-  const consentStatus = (acceptedAt: string): Record<string, unknown> => ({
-    accepted: acceptedAt !== '',
-    ...(acceptedAt !== '' ? { accepted_at: acceptedAt } : {}),
-    privacy_policy_url: '/privacy',
-    terms_of_service_url: '/terms',
-  });
-
   const server = createYourPhrServer({
     engine,
     auth: { cookieMaxAgeSeconds: config.getInt('auth.session.absolute-seconds'), secureCookies: config.getBool('web.secure-cookies') },
     webDir: options.webDir,
     version: options.version,
-    modules: {
-      ips: (ctx) => records.ips(ctx).then((d) => d.bundle),
-      provenanceFor: (ctx, resourceType, id) => records.provenance(ctx, resourceType, id),
-      medications: (ctx) => records.medications(ctx),
-      records: {
-        recent: (ctx, limit) => records.recent(ctx, limit),
-        conditions: (ctx) => records.conditions(ctx),
-        allergies: (ctx) => records.allergies(ctx),
-        immunizations: (ctx) => records.immunizations(ctx),
-        query: (ctx, body) => records.query(ctx, body as unknown as Parameters<RecordsManager['query']>[1]),
-      },
-      account: {
-        legalDocument: (kind) => {
-          const parsed = parseLegalKind(kind);
-          return parsed ? loadLegalDocument(dataDir, parsed) : undefined;
-        },
-        legalConsent: async (ctx) => consentStatus(await users.consentAcceptedAt(ctx)),
-        grantConsent: async (ctx) => {
-          const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-          await users.setConsent(ctx, now);
-          return consentStatus(now);
-        },
-        revokeConsent: async (ctx) => {
-          await users.setConsent(ctx, '');
-          // Go's rule: revoking the consent disconnects the sources that required it.
-          const disconnected = await sources.disconnectWhere(ctx, (s) => providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType));
-          return { ...consentStatus(''), medicare_sources_disconnected: disconnected };
-        },
-        changePassword: async (ctx, current, next) => {
-          await users.changePassword(ctx, current, next); // 401 wrong current, 400 policy — as ApiError
-          return sessions.issueFor(ctx.username);
-        },
-        signOutEverywhere: (ctx) => sessions.revokeAll(ctx),
-        deleteAccount: async (ctx) => {
-          // Everything the account owns, then the account: its sources, every record (the Records
-          // manager removes rows, index and history and drops the handle), favourites, the access
-          // log, then the account itself (consent goes with it).
-          const username = ctx.username;
-          await sources.removeAll(ctx);
-          await records.removeAll(ctx);
-          await audit.removeForUser(ctx);
-          await users.deleteSelf(ctx);
-        },
-      },
-      admin: {
-        createUser: (ctx, username, password, role) => users.createUser(ctx, username, password, role === 'admin' ? 'admin' : 'user'),
-        listUsers: async (ctx) => (await users.listUsers(ctx)).map((u) => ({ id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0 })),
-        resetUserPassword: async (ctx, username) => {
-          const password = await users.adminResetPassword(ctx, username);
-          appLog.info(`admin reset the password for ${username}; every session of that account ended`);
-          return { username, password };
-        },
-        metrics: (ctx) => sources.adminMetrics(ctx),
-        // Go's DatabaseInfoResponse over this stack's two files — a view composed from the doors.
-        databaseInfo: async (ctx) => {
-          const files = [join(dataDir, config.getString('database.location')), join(dataDir, 'records.db')];
-          const sizeBytes = files.reduce((n, f) => n + (existsSync(f) ? statSync(f).size : 0), 0);
-          return {
-            location: files.join(' + '),
-            encryption_enabled: config.getString('database.encryption.key') !== '',
-            size_bytes: sizeBytes,
-            users: await users.count(ctx),
-            sources: await sources.count(),
-            integrity_ok: (await engine.managers.database.integrityOk()) && (await records.integrityOk()),
-            backup_destination: backups.destination(),
-            backups: (await backups.list(ctx)).map((b) => ({ name: b.name, size_bytes: b.sizeBytes, modified: b.modified })),
-            schedule: backups.schedule(),
-            backup_health: backups.health(),
-            allowed_backup_roots: [],
-            backups_unavailable: backups.unavailable(),
-          };
-        },
-        logs: () => ({ level: appLog.currentLevel(), valid_levels: VALID_LEVELS, lines: appLog.recent() }),
-        setLogLevel: (level) => {
-          const set = appLog.setLevel(level);
-          appLog.info(`admin changed server log level to ${JSON.stringify(set)}`);
-          return set;
-        },
-        // No SMART relay in this stack (the product's #408 is not ported): honestly not configured.
-        relayConfig: () => ({ callback_url: '', configured: false, ready: false, public_url: '', poll_url: '', secret: '' }),
-      },
-    },
   });
 
   return {

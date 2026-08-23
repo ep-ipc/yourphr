@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -16,13 +16,13 @@ async function boot(env: Record<string, string> = {}) {
   const engine = new Engine();
   const log: string[] = [];
   engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir, undefined, env)));
-  const settings = new SettingsManager(engine, { log: (line) => log.push(line) });
+  const settings = new SettingsManager(engine, { log: (line) => log.push(line), dataDir: dir });
   engine.register('settings', settings);
   await engine.initialize();
   const admin = ApiContext.from({ username: 'ops', role: 'admin' }, engine);
   const member = ApiContext.from({ username: 'alice', role: 'user' }, engine);
   const nobody = ApiContext.anonymous(engine);
-  return { engine, settings, log, admin, member, nobody };
+  return { engine, settings, log, admin, member, nobody, dir };
 }
 
 describe('SettingsManager — what the instance says about itself, with the caller passed in', () => {
@@ -107,6 +107,22 @@ describe('SettingsManager — what the instance says about itself, with the call
     const saved = settings.setInstanceSettings(admin, { name: ' Ops Team ', contact_email: 'ops@example.org', contact_url: 'https://example.org/help' });
     expect(saved.name).toBe('Ops Team');
     expect(settings.instanceSettings(admin)).toEqual(saved);
+  });
+
+  it('the legal text is public, shipped unless the operator overrides it, and an unusable override is an error rather than a silent fallback (yourphr#619)', async () => {
+    const { settings, nobody, dir } = await boot();
+    const shipped = settings.legalDocument(nobody, 'privacy');
+    expect(shipped).toMatchObject({ kind: 'privacy', source: 'shipped' });
+    expect(shipped?.html).toContain('<');
+    expect(settings.legalDocument(nobody, 'PRIVACY')).toMatchObject({ kind: 'privacy' }); // Go accepts either case
+    expect(settings.legalDocument(nobody, 'nonsense')).toBeUndefined();
+    mkdirSync(join(dir, 'config'), { recursive: true });
+    writeFileSync(join(dir, 'config', 'terms-of-service.md'), '# Our terms\n');
+    const overridden = settings.legalDocument(nobody, 'terms');
+    expect(overridden).toMatchObject({ kind: 'terms', source: 'operator' });
+    expect(overridden?.markdown).toBe('# Our terms\n');
+    writeFileSync(join(dir, 'config', 'terms-of-service.md'), '   \n');
+    expect(() => settings.legalDocument(nobody, 'terms')).toThrow(/empty/);
   });
 
   it('backup() carries nothing of its own — the configuration manager\'s overlay is what travels', async () => {

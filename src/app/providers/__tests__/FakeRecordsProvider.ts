@@ -126,6 +126,7 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
   }
   async release(userId: string): Promise<void> { this.released.push(userId); }
   async integrityOk(): Promise<boolean> { return true; }
+  storage(): { location: string; sizeBytes: number } { return { location: ':memory:', sizeBytes: 0 }; }
   async backup(options: { destination: string; key: string }): Promise<{ file: string; sizeBytes: number; pruned: string[] }> {
     this.backups.push({ destination: options.destination, key: options.key });
     return { file: `${options.destination}/fake.db`, sizeBytes: this.rows.size, pruned: [] };

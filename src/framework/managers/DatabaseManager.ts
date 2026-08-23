@@ -6,6 +6,7 @@
  */
 import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
+import type { ApiContext } from '../ApiContext.js';
 import type { BaseDatabaseProvider } from '../providers/BaseDatabaseProvider.js';
 
 declare module '../Engine.js' {
@@ -32,6 +33,12 @@ export class DatabaseManager<Handle = unknown> extends BaseManager {
   }
 
   integrityOk(): Promise<boolean> { return this.provider.integrityOk(); }
+
+  /** The admin's Database card: where the app database lives and its size. */
+  storage(ctx: ApiContext): { location: string; sizeBytes: number } {
+    ctx.requireAdmin();
+    return this.provider.storage();
+  }
 
   override async shutdown(): Promise<void> {
     await this.provider.close();

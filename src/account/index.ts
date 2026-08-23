@@ -28,3 +28,21 @@ export function accessCategoryFor(pathname: string): string | undefined {
   if (/^\/api\/secure\/source\/[^/]+\/export$/.test(pathname)) return 'Full export';
   return undefined;
 }
+
+/**
+ * Go's LegalConsentStatus, from the stored timestamp ('' = not accepted). The account page reads
+ * these exact field names, so the shape is Go's rather than this stack's preference (yourphr#619).
+ */
+export function consentStatus(acceptedAt: string): Record<string, unknown> {
+  return {
+    accepted: acceptedAt !== '',
+    ...(acceptedAt !== '' ? { accepted_at: acceptedAt } : {}),
+    privacy_policy_url: '/privacy',
+    terms_of_service_url: '/terms',
+  };
+}
+
+/** The timestamp Go stamps a consent with: ISO 8601, whole seconds. */
+export function consentNow(now = new Date()): string {
+  return now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}

@@ -17,6 +17,7 @@ import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
 import { ApiError, type ApiContext } from '../ApiContext.js';
 import { envNameFor, type ConfigValue } from '../../config/index.js';
+import { loadLegalDocument, parseLegalKind, type LegalDocument } from '../../legal/index.js';
 
 declare module '../Engine.js' {
   interface ManagerRegistry {
@@ -48,6 +49,8 @@ export interface InstanceSettings {
 export interface SettingsOptions {
   /** Where the admin's deliberate acts are recorded (reveal, set, reset). */
   log?: (line: string) => void;
+  /** The data directory — where an operator's legal-text override lives (yourphr#619). */
+  dataDir?: string;
 }
 
 /** The keys /api/instance/public publishes — Go's `public` list, as far as this stack has values. */
@@ -57,10 +60,24 @@ export class SettingsManager extends BaseManager {
   readonly name = 'settings';
   override readonly dependsOn = ['configuration'] as const;
   private readonly log: (line: string) => void;
+  private readonly dataDir: string | undefined;
 
   constructor(engine: Engine, options: SettingsOptions = {}) {
     super(engine);
     this.log = options.log ?? (() => undefined);
+    this.dataDir = options.dataDir;
+  }
+
+  /**
+   * The privacy policy or terms text (yourphr#596) — public, the shipped text unless the operator
+   * overrides it in the data directory. Undefined for a kind this stack does not have; throws when
+   * an override exists but is unusable (the operator must know, not get the shipped text silently).
+   */
+  legalDocument(_ctx: ApiContext, kind: string): LegalDocument | undefined {
+    const parsed = parseLegalKind(kind);
+    if (!parsed) return undefined;
+    if (this.dataDir === undefined) throw new ApiError(500, 'legal documents are not configured on this instance');
+    return loadLegalDocument(this.dataDir, parsed);
   }
 
   private get configuration() {

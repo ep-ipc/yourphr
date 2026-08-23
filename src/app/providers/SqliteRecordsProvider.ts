@@ -10,6 +10,7 @@ import type { Bundle, Resource } from '@medplum/fhirtypes';
 import type { SearchRequest, WithId } from '@medplum/core';
 import { SqliteFhirRepository } from '../../SqliteFhirRepository.js';
 import { dirname } from 'node:path';
+import { existsSync, statSync } from 'node:fs';
 import { backupDatabase, stageInstanceRestore } from './sqlite-backup.js';
 import { ftsQuery } from './record-text.js';
 import { BaseRecordsProvider, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
@@ -239,6 +240,10 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
       if (!this.borrowed.has(h)) h.db.close();
       this.handles.delete(userId);
     }
+  }
+
+  storage(): { location: string; sizeBytes: number } {
+    return { location: this.file, sizeBytes: existsSync(this.file) ? statSync(this.file).size : 0 };
   }
 
   async integrityOk(): Promise<boolean> {

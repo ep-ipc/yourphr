@@ -45,8 +45,11 @@ export class UsersManager extends BaseManager {
   private bootstrapFile?: string;
   private bootstrapUsername?: string;
 
-  constructor(engine: Engine, private readonly provider: BaseUsersProvider, private readonly passwords: BaseAuthProvider) {
+  private readonly log: (line: string) => void;
+
+  constructor(engine: Engine, private readonly provider: BaseUsersProvider, private readonly passwords: BaseAuthProvider, options: { log?: (line: string) => void } = {}) {
     super(engine);
+    this.log = options.log ?? (() => undefined);
   }
 
   override async initialize(config: Record<string, unknown> = {}): Promise<void> {
@@ -135,6 +138,7 @@ export class UsersManager extends BaseManager {
     if (!(await this.provider.get(username))) throw new ApiError(404, 'no such user');
     const password = randomBytes(18).toString('base64url'); // 24 chars, always above the policy minimum
     if (!(await this.provider.setPasswordHash(username, this.passwords.hash(password), true))) throw new ApiError(500, 'could not set the password');
+    this.log(`${ctx.actor} reset the password for ${username}; every session of that account ended`);
     return password;
   }
 

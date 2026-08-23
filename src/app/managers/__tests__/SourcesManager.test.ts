@@ -234,6 +234,17 @@ describe('SourcesManager — sync now, disconnect, remove, export', () => {
     expect((await sources.owned(bob, 3))?.accessToken).toBe('tok');
   });
 
+  it('disconnectConsentRequired disconnects the Medicare family and nothing else — Go\'s consent rule, at the sources door (yourphr#619)', async () => {
+    await sources.add(alice, newSource('alice', { display: 'Medicare Blue Button', fhirBaseUrl: 'https://sandbox.bluebutton.cms.gov/v2/fhir' }));
+    await sources.add(alice, newSource('alice', { display: 'County Clinic' }));
+    await sources.add(bob, newSource('bob', { display: 'Medicare Blue Button', fhirBaseUrl: 'https://sandbox.bluebutton.cms.gov/v2/fhir' }));
+    expect(await sources.disconnectConsentRequired(alice)).toBe(1);
+    expect((await sources.owned(alice, 1))?.accessToken).toBe('');
+    expect((await sources.owned(alice, 2))?.accessToken).toBe('tok');
+    expect((await sources.owned(bob, 3))?.accessToken).toBe('tok'); // another account's consent is not this caller's to revoke
+    expect(await sources.disconnectConsentRequired(alice)).toBe(0); // already disconnected: nothing left to touch
+  });
+
   it('remove takes the records through the Records door, then the job history, then the source', async () => {
     await sources.add(alice, newSource('alice'));
     await sources.pass(NOW);

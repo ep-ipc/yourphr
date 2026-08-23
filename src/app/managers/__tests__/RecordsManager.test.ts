@@ -130,6 +130,12 @@ describe('RecordsManager — the one door, scoped to whoever is asking', () => {
     expect(await records.integrityOk()).toBe(true);
   });
 
+  it('storage() answers the admin Database card for the PHI store, and refuses a member (yourphr#619)', () => {
+    const admin = ApiContext.from({ username: 'ops', role: 'admin' }, engine);
+    expect(records.storage(admin)).toEqual({ location: ':memory:', sizeBytes: 0 });
+    expect(() => records.storage(alice)).toThrow(/admin/);
+  });
+
   it('favourites go through the same door: owner-scoped, Practitioner only, idempotent, gone with the account', async () => {
     expect(favorites.initialized).toBe(true);
     const fav = { source_id: 'source-1', resource_type: 'Practitioner', resource_id: 'dr-a' };

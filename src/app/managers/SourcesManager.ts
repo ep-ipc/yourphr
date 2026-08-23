@@ -20,6 +20,7 @@ import { backgroundJobShape, type JobRecord } from '../../framework/managers/Job
 import type { BaseSourcesProvider, ConnectedSource, DynamicClient, NewSource } from '../providers/BaseSourcesProvider.js';
 import type { BaseSourceClientProvider } from '../providers/BaseSourceClientProvider.js';
 import type { EventBus } from '../../events/index.js';
+import { providerRequiresLegalConsent } from '../../account/index.js';
 
 declare module '../../framework/Engine.js' {
   interface ManagerRegistry {
@@ -183,15 +184,28 @@ export class SourcesManager extends BaseManager {
     return true;
   }
 
-  /** Disconnects every source of the caller the predicate names — consent revocation's rule. */
+  /**
+   * Disconnects every source of the caller the predicate names — consent revocation's rule. The
+   * count is what this call actually disconnected: a source already disconnected is skipped rather
+   * than counted again, so a second revocation reports 0 instead of repeating the first one's
+   * number (the yourphr#528 family — a counter that overstates is a counter that lies).
+   */
   async disconnectWhere(ctx: ApiContext, predicate: (source: ConnectedSource) => boolean): Promise<number> {
     let disconnected = 0;
     for (const s of await this.list(ctx)) {
-      if (!predicate(s)) continue;
+      if (!predicate(s) || isDisconnected(s)) continue;
       await this.provider.clearTokens(s.id);
       disconnected++;
     }
     return disconnected;
+  }
+
+  /**
+   * Go's rule on consent revocation (yourphr#596, #619): the sources that required the legal
+   * consent are disconnected with it — tokens cleared, the rows kept so the page can say why.
+   */
+  disconnectConsentRequired(ctx: ApiContext): Promise<number> {
+    return this.disconnectWhere(ctx, (s) => providerRequiresLegalConsent(s.display, s.fhirBaseUrl, s.platformType));
   }
 
   /** The source's records go through the Records door; then the source and its job history. */

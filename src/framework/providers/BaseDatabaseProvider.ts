@@ -10,5 +10,7 @@ export abstract class BaseDatabaseProvider<Handle = unknown> {
   abstract get handle(): Handle;
   abstract initialize(): Promise<void>;
   abstract integrityOk(): Promise<boolean>;
+  /** Where the data lives and how big it is — the admin's Database card (yourphr#619). */
+  abstract storage(): { location: string; sizeBytes: number };
   abstract close(): Promise<void>;
 }

@@ -67,6 +67,8 @@ export abstract class BaseRecordsProvider {
 
   // --- the lifecycle the base contract demands ---
   abstract integrityOk(): Promise<boolean>;
+  /** Where the data lives and how big it is — the admin's Database card (yourphr#619). */
+  abstract storage(): { location: string; sizeBytes: number };
   /** An encrypted copy of the whole store under `key`; returns the file written. */
   abstract backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }>;
   /** Stage a backup back under this store's own key, next to its own files, for the next start. */

@@ -362,6 +362,12 @@ export class RecordsManager extends BaseManager {
     return this.provider.integrityOk();
   }
 
+  /** The admin's Database card: where the PHI store lives and its size. */
+  storage(ctx: ApiContext): { location: string; sizeBytes: number } {
+    ctx.requireAdmin();
+    return this.provider.storage();
+  }
+
   async backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }> {
     const result = await this.provider.backup(options);
     return { manager: this.name, takenAt: (options.now ?? new Date()).toISOString(), files: [result.file], ...result };

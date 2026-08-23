@@ -31,12 +31,14 @@ let users: UsersManager;
 let sessions: SessionsManager;
 let provider: FakeUsersProvider;
 let sys: ApiContext;
+let lines: string[];
 
 async function boot(factors: string[] = ['password'], providers: BaseAuthProvider[] = [new PasswordAuthProvider()]): Promise<void> {
   dir = mkdtempSync(join(tmpdir(), 'spike-us-'));
   engine = new Engine();
   provider = new FakeUsersProvider();
-  users = new UsersManager(engine, provider, new PasswordAuthProvider());
+  lines = [];
+  users = new UsersManager(engine, provider, new PasswordAuthProvider(), { log: (l) => lines.push(l) });
   sessions = new SessionsManager(engine, providers, { factors, session: { slidingSeconds: 100, absoluteSeconds: 250 }, throttle: { maxFailures: 2, windowSeconds: 60 } });
   engine.register('configuration', new ConfigurationManager(engine, new ConfigStore(dir))).register('users', users).register('sessions', sessions);
   await engine.initialize();
@@ -80,6 +82,8 @@ describe('UsersManager — accounts, roles, policy, consent, bootstrap and recov
     expect((await users.record('alice'))?.tokenGeneration).toBe(1);
     await expect(users.adminResetPassword(ops, 'nobody')).rejects.toMatchObject({ status: 404 });
     await expect(users.adminResetPassword(ApiContext.from({ username: 'alice', role: 'user' }, engine), 'alice')).rejects.toMatchObject({ status: 403 });
+    // The reset is recorded by WHO did it (yourphr#619) — the route used to log a nameless "admin".
+    expect(lines).toEqual(['ops reset the password for alice; every session of that account ended']);
   });
 
   it('consent folds into Users and goes with the account', async () => {

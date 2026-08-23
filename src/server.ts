@@ -17,7 +17,8 @@
  * does not hold. That is the finding; the cost is real but bounded, and it is far smaller than
  * rewriting 76.8k lines of Angular.
  */
-import { accessCategoryFor } from './account/index.js';
+import { accessCategoryFor, consentNow, consentStatus } from './account/index.js';
+import { appLog, VALID_LEVELS } from './log/index.js';
 import {createServer, IncomingMessage, ServerResponse} from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
 import {dirname, extname, join, resolve, sep} from 'node:path';
@@ -63,51 +64,6 @@ export interface ServerAuth {
    */
 }
 
-export interface ServerModules {
-  /** GET /api/secure/summary/ips — the IPS document for the caller (yourphr#577). */
-  ips?: (ctx: ApiContext) => Promise<unknown>;
-  /** GET /api/secure/resource/provenance/:type/:id (yourphr#579). */
-  provenanceFor?: (ctx: ApiContext, resourceType: string, id: string) => Promise<unknown>;
-  /** GET /api/secure/medications/reconciled (yourphr#580). */
-  medications?: (ctx: ApiContext) => Promise<unknown>;
-  /** The dashboard and record pages (yourphr#595): classified lists, recent activity, the typed query. */
-  records?: {
-    recent: (ctx: ApiContext, limit: number) => Promise<unknown[]>;
-    conditions: (ctx: ApiContext) => Promise<unknown[]>;
-    allergies: (ctx: ApiContext) => Promise<unknown[]>;
-    immunizations: (ctx: ApiContext) => Promise<unknown[]>;
-    /** Throws ApiError on a malformed query. */
-    query: (ctx: ApiContext, body: Record<string, unknown>) => Promise<unknown[]>;
-  };
-  /** The account page and the legal pages (yourphr#596). */
-  account?: {
-    /** GET /api/legal/:kind — public. Throws when an operator override is unusable. */
-    legalDocument: (kind: string) => unknown | undefined;
-    legalConsent: (ctx: ApiContext) => Promise<unknown> | unknown;
-    grantConsent: (ctx: ApiContext) => Promise<unknown> | unknown;
-    revokeConsent: (ctx: ApiContext) => Promise<unknown> | unknown;
-    /** Throws ApiError (401 wrong current, 400 policy); resolves the fresh session token. */
-    changePassword: (ctx: ApiContext, current: string, next: string) => Promise<string | undefined>;
-    signOutEverywhere: (ctx: ApiContext) => Promise<void>;
-    deleteAccount: (ctx: ApiContext) => Promise<void>;
-  };
-  /**
-   * Admin surface (yourphr#582): gate decides who counts as the operator. The configuration and
-   * instance cards and the instance keys are the settings manager's (yourphr#618), not closures.
-   */
-  admin?: {
-    createUser: (ctx: ApiContext, username: string, password: string, role?: string) => Promise<void>;
-    /** The Users page (yourphr#604). */
-    listUsers: (ctx: ApiContext) => Promise<unknown[]>;
-    resetUserPassword: (ctx: ApiContext, username: string) => Promise<{ username: string; password: string }>;
-    metrics: (ctx: ApiContext) => Promise<unknown> | unknown;
-    databaseInfo: (ctx: ApiContext) => Promise<unknown>;
-    logs: () => { level: string; valid_levels: string[]; lines: string[] };
-    setLogLevel: (level: string) => string;
-    relayConfig: () => unknown;
-  };
-}
-
 export interface ServerOptions {
   /** The pinned single-user repository — used only when `auth` is absent (the read-only harnesses). */
   /** The composition root (yourphr#608). When absent, a bare engine is built over `repo` for the contract harnesses. */
@@ -122,8 +78,6 @@ export interface ServerOptions {
    * existing contract harnesses, which test reads, not auth.
    */
   auth?: ServerAuth;
-  /** The assembled modules (yourphr#582). Absent keeps the bare read server. */
-  modules?: ServerModules;
   /**
    * Directory holding the BUILT Angular app (yourphr#585). When set, non-/api requests serve
    * static files with an SPA fallback to index.html — one container replaces one container at
@@ -322,8 +276,8 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
       const legalMatch = url.pathname.match(/^\/api\/legal\/([^/]+)$/);
-      if (options.modules?.account && legalMatch && req.method === 'GET') {
-        const document = options.modules.account.legalDocument(decodeURIComponent(legalMatch[1]!));
+      if (engine.has('settings') && legalMatch && req.method === 'GET') {
+        const document = engine.managers.settings.legalDocument(ApiContext.anonymous(engine), decodeURIComponent(legalMatch[1]!));
         document === undefined ? send(res, 404, {success: false, error: `unknown legal document "${legalMatch[1]}"`}) : send(res, 200, {success: true, data: document});
         return;
       }
@@ -392,22 +346,30 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // --- the account page (yourphr#596) ---
-      if (auth && options.modules?.account && url.pathname.startsWith('/api/secure/account/')) {
-        const account = options.modules.account;
+      // The route composes doors; no manager reaches through another. Consent is the users
+      // manager's fact, the disconnect that follows a revocation is the sources manager's rule
+      // (yourphr#619), and the shape both render into is Go's, because the page reads it.
+      if (auth && url.pathname.startsWith('/api/secure/account/')) {
+        const users = engine.managers.users;
         if (engine.has('audit') && url.pathname === '/api/secure/account/access-log' && req.method === 'GET') {
           send(res, 200, {success: true, data: await engine.managers.audit.list(ctx)});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent' && req.method === 'GET') {
-          send(res, 200, {success: true, data: await account.legalConsent(ctx)});
+          send(res, 200, {success: true, data: consentStatus(await users.consentAcceptedAt(ctx))});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent/grant' && req.method === 'POST') {
-          send(res, 200, {success: true, data: await account.grantConsent(ctx)});
+          const now = consentNow();
+          await users.setConsent(ctx, now);
+          send(res, 200, {success: true, data: consentStatus(now)});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent/revoke' && req.method === 'POST') {
-          send(res, 200, {success: true, data: await account.revokeConsent(ctx)});
+          await users.setConsent(ctx, '');
+          // Go's rule: revoking the consent disconnects the sources that required it.
+          const disconnected = engine.has('sources') ? await engine.managers.sources.disconnectConsentRequired(ctx) : 0;
+          send(res, 200, {success: true, data: {...consentStatus(''), medicare_sources_disconnected: disconnected}});
           return;
         }
         if (url.pathname === '/api/secure/account/password' && req.method === 'POST') {
@@ -418,7 +380,10 @@ export function createYourPhrServer(options: ServerOptions) {
             send(res, 400, {success: false, error: 'invalid request'});
             return;
           }
-          const token = await account.changePassword(ctx, current, next); // ApiError -> the error boundary
+          // 401 wrong current, 400 policy — as ApiError, into the one error boundary. The
+          // generation bump ends every session, so a fresh token is issued for this one.
+          await users.changePassword(ctx, current, next);
+          const token = await engine.managers.sessions.issueFor(ctx.username);
           // The generation bump ended this session too; a fresh one rides back on the cookie, as Go does.
           if (token) {
             res.setHeader('Set-Cookie', sessionCookie(token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
@@ -429,13 +394,19 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/account/sign-out-everywhere' && req.method === 'POST') {
-          await account.signOutEverywhere(ctx);
+          await engine.managers.sessions.revokeAll(ctx);
           res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
           send(res, 200, {success: true});
           return;
         }
         if (url.pathname === '/api/secure/account/me' && req.method === 'DELETE') {
-          await account.deleteAccount(ctx);
+          // Everything the account owns, then the account: its sources, every record (the Records
+          // manager removes rows, index and history and drops the handle), the access log, then
+          // the account itself (consent goes with it). Order matters — each door is asked in turn.
+          if (engine.has('sources')) await engine.managers.sources.removeAll(ctx);
+          await engine.managers.records.removeAll(ctx);
+          if (engine.has('audit')) await engine.managers.audit.removeForUser(ctx);
+          await users.deleteSelf(ctx);
           res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
           send(res, 200, {success: true});
           return;
@@ -454,8 +425,6 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
-      // --- the assembled modules (yourphr#582) ---
-      const modules = options.modules;
       // The two calls every page makes (yourphr#593): who runs this instance, and the job indicator.
       if (engine.has('settings') && url.pathname === '/api/secure/instance' && req.method === 'GET') {
         send(res, 200, {success: true, data: engine.managers.settings.instanceForUser(ctx)});
@@ -479,14 +448,14 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // --- the Users page (yourphr#604): the admin's list, create, and password reset ---
-      if (modules?.admin && (url.pathname === '/api/secure/users' || /^\/api\/secure\/users\/[^/]+\/password$/.test(url.pathname))) {
+      if (url.pathname === '/api/secure/users' || /^\/api\/secure\/users\/[^/]+\/password$/.test(url.pathname)) {
         // Go answers a non-admin here with 401 "Unauthorized"; the page treats both as "not for you".
         if (!ctx.isAdmin()) {
           send(res, 401, {success: false, error: 'Unauthorized'});
           return;
         }
         if (url.pathname === '/api/secure/users' && req.method === 'GET') {
-          send(res, 200, {success: true, data: await modules.admin.listUsers(ctx)});
+          send(res, 200, {success: true, data: (await engine.managers.users.listUsers(ctx)).map((u) => ({id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0}))});
           return;
         }
         if (url.pathname === '/api/secure/users' && req.method === 'POST') {
@@ -498,7 +467,7 @@ export function createYourPhrServer(options: ServerOptions) {
             send(res, 400, {success: false, error: 'username and password are required'});
             return;
           }
-          await modules.admin.createUser(ctx, username, password, role); // ApiError (400) -> the error boundary
+          await engine.managers.users.createUser(ctx, username, password, role); // ApiError (400) -> the error boundary
           // Go echoes the user it made. This stack stores no full_name or email — they are absent,
           // not invented; id is the username, as /account/me already says.
           send(res, 200, {success: true, data: {id: username, username, role}});
@@ -506,7 +475,8 @@ export function createYourPhrServer(options: ServerOptions) {
         }
         const resetMatch = url.pathname.match(/^\/api\/secure\/users\/([^/]+)\/password$/);
         if (resetMatch && req.method === 'POST') {
-          send(res, 200, {success: true, data: await modules.admin.resetUserPassword(ctx, decodeURIComponent(resetMatch[1]!))});
+          const username = decodeURIComponent(resetMatch[1]!);
+          send(res, 200, {success: true, data: {username, password: await engine.managers.users.adminResetPassword(ctx, username)}});
           return;
         }
       }
@@ -576,8 +546,10 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // The SMART relay card (yourphr#602) — before the per-source routes, whose :id would swallow it.
-      if (modules?.admin && url.pathname === '/api/secure/source/relay-config' && req.method === 'GET') {
-        send(res, 200, {success: true, data: modules.admin.relayConfig()});
+      // No SMART relay in this stack (the product's #408 is not ported): honestly not configured,
+      // rather than a shape that suggests one is coming.
+      if (url.pathname === '/api/secure/source/relay-config' && req.method === 'GET') {
+        send(res, 200, {success: true, data: {callback_url: '', configured: false, ready: false, public_url: '', poll_url: '', secret: ''}});
         return;
       }
 
@@ -661,13 +633,13 @@ export function createYourPhrServer(options: ServerOptions) {
           }
         }
       }
-      if (modules?.ips && url.pathname === '/api/secure/summary/ips' && req.method === 'GET') {
-        send(res, 200, {success: true, data: await modules.ips(ctx)});
+      if (url.pathname === '/api/secure/summary/ips' && req.method === 'GET') {
+        send(res, 200, {success: true, data: (await engine.managers.records.ips(ctx)).bundle});
         return;
       }
       const provMatch = url.pathname.match(/^\/api\/secure\/resource\/provenance\/([^/]+)\/([^/]+)$/);
-      if (modules?.provenanceFor && provMatch && req.method === 'GET') {
-        const p = await modules.provenanceFor(ctx, provMatch[1]!, provMatch[2]!);
+      if (provMatch && req.method === 'GET') {
+        const p = await engine.managers.records.provenance(ctx, provMatch[1]!, provMatch[2]!);
         if (!p) {
           send(res, 404, {success: false, error: 'not found'});
           return;
@@ -675,19 +647,19 @@ export function createYourPhrServer(options: ServerOptions) {
         send(res, 200, {success: true, data: p});
         return;
       }
-      if (modules?.medications && url.pathname === '/api/secure/medications/reconciled' && req.method === 'GET') {
-        send(res, 200, {success: true, data: await modules.medications(ctx)});
+      if (url.pathname === '/api/secure/medications/reconciled' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.records.medications(ctx)});
         return;
       }
 
       // --- the dashboard and record pages (yourphr#595) ---
-      if (modules?.records) {
-        const records = modules.records;
+      {
+        const records = engine.managers.records;
         // Find anything by words (yourphr#599): the dashboard's search box.
         if ((url.pathname === '/api/secure/resources/search' || url.pathname === '/api/secure/search') && req.method === 'GET') {
           const limit = Number(url.searchParams.get('limit') ?? 20);
           const page = Number(url.searchParams.get('page') ?? 0);
-          const items = await engine.managers.records.searchText(ctx, url.searchParams.get('q') ?? '', { limit: Number.isInteger(limit) ? limit : 20, page: Number.isInteger(page) ? page : 0 });
+          const items = await records.searchText(ctx, url.searchParams.get('q') ?? '', { limit: Number.isInteger(limit) ? limit : 20, page: Number.isInteger(page) ? page : 0 });
           const fallback = options.sourceId ?? 'spike';
           send(res, 200, {success: true, data: items.map((i) => (i.source_id === '' ? {...i, source_id: fallback} : i))});
           return;
@@ -716,7 +688,7 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
           try {
-            send(res, 200, {success: true, data: await records.query(ctx, body)});
+            send(res, 200, {success: true, data: await records.query(ctx, body as never)});
           } catch (err) {
             send(res, err instanceof ApiError ? err.status : 400, {success: false, error: (err as Error).message});
           }
@@ -739,14 +711,13 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
       }
-      if (modules?.admin && url.pathname.startsWith('/api/secure/admin/')) {
+      if (url.pathname.startsWith('/api/secure/admin/')) {
         // Operator-only. The gate is a role check, not a route secret: a non-admin gets 403 with
         // no detail about what lives here.
         if (!ctx.isAdmin()) {
           send(res, 403, {success: false, error: 'admin role required'});
           return;
         }
-        const admin = modules.admin;
         // The configuration and instance cards (yourphr#602, #618): the settings manager holds the
         // policy and throws ApiError — 400 unknown/invalid, 409 env-pinned — into the error boundary.
         if (engine.has('settings')) {
@@ -793,15 +764,32 @@ export function createYourPhrServer(options: ServerOptions) {
             return;
           }
         }
-        if (url.pathname === '/api/secure/admin/metrics' && req.method === 'GET') {
-          send(res, 200, {success: true, data: await admin.metrics(ctx)});
-          return;
-        }
-        if (url.pathname === '/api/secure/admin/database' && req.method === 'GET') {
-          send(res, 200, {success: true, data: await admin.databaseInfo(ctx)});
+        if (engine.has('sources') && url.pathname === '/api/secure/admin/metrics' && req.method === 'GET') {
+          send(res, 200, {success: true, data: await engine.managers.sources.adminMetrics(ctx)});
           return;
         }
         const backups = engine.has('backups') ? engine.managers.backups : undefined;
+        // Go's DatabaseInfoResponse over this stack's two files — a view composed from the doors,
+        // each of which answers for its own storage (yourphr#619). No manager reads another's file.
+        if (url.pathname === '/api/secure/admin/database' && req.method === 'GET') {
+          const app = engine.managers.database.storage(ctx);
+          const phi = engine.managers.records.storage(ctx);
+          send(res, 200, {success: true, data: {
+            location: [app.location, phi.location].join(' + '),
+            encryption_enabled: engine.has('settings') && engine.managers.configuration.getString('database.encryption.key') !== '',
+            size_bytes: app.sizeBytes + phi.sizeBytes,
+            users: await engine.managers.users.count(ctx),
+            sources: engine.has('sources') ? await engine.managers.sources.count() : 0,
+            integrity_ok: (await engine.managers.database.integrityOk()) && (await engine.managers.records.integrityOk()),
+            backup_destination: backups?.destination() ?? '',
+            backups: backups ? (await backups.list(ctx)).map((b) => ({name: b.name, size_bytes: b.sizeBytes, modified: b.modified})) : [],
+            schedule: backups?.schedule(),
+            backup_health: backups?.health(),
+            allowed_backup_roots: [],
+            backups_unavailable: backups?.unavailable() ?? 'no backup storage is configured on this instance',
+          }});
+          return;
+        }
         const backupFailed = (err: unknown): void => send(res, (err as ApiError).status ?? 400, {success: false, error: (err as Error).message});
         if (backups && url.pathname === '/api/secure/admin/database/backup' && req.method === 'POST') {
           try {
@@ -869,14 +857,16 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/admin/logs' && req.method === 'GET') {
-          send(res, 200, {success: true, data: admin.logs()});
+          send(res, 200, {success: true, data: {level: appLog.currentLevel(), valid_levels: VALID_LEVELS, lines: appLog.recent()}});
           return;
         }
         if (url.pathname === '/api/secure/admin/log-level' && req.method === 'PUT') {
           const body = await readJsonBody(req);
           const level = typeof body?.['level'] === 'string' ? (body['level'] as string) : '';
           try {
-            send(res, 200, {success: true, data: {level: admin.setLogLevel(level)}});
+            const set = appLog.setLevel(level);
+            appLog.info(`${ctx.actor} changed server log level to ${JSON.stringify(set)}`);
+            send(res, 200, {success: true, data: {level: set}});
           } catch (err) {
             send(res, 400, {success: false, error: (err as Error).message});
           }
@@ -894,7 +884,7 @@ export function createYourPhrServer(options: ServerOptions) {
           const body = await readJsonBody(req);
           const username = typeof body?.['username'] === 'string' ? (body['username'] as string) : '';
           const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
-          await modules.admin.createUser(ctx, username, password);
+          await engine.managers.users.createUser(ctx, username, password);
           send(res, 200, {success: true});
           return;
         }
