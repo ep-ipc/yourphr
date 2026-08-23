@@ -11,7 +11,7 @@
  * the Go stack's, because the Angular app reads them.
  */
 import type { Engine } from './Engine.js';
-import { permissionsFor, type Permission } from './policy.js';
+import type { Permission } from './policy.js';
 
 export class ApiError extends Error {
   constructor(
@@ -57,7 +57,11 @@ export class ApiContext {
     this.isAuthenticated = principal !== null;
     this.username = principal?.username ?? '';
     this.role = principal?.role ?? 'anonymous';
-    this.permissions = Object.freeze([...permissionsFor(this.role)]);
+    // Resolved live, per request, from the role — never carried in a token (yourphr#620): a
+    // demoted admin loses their powers on the next call, not when a token expires. The answer is
+    // the policy manager's, which reads the operator's configured roles (yourphr#623). An engine
+    // with no policy manager grants NOTHING: failing closed is the only safe direction here.
+    this.permissions = Object.freeze(engine.has('policy') ? [...engine.managers.policy.permissionsFor(this.role)] : []);
     this.tokenGeneration = principal?.tokenGeneration;
     this.system = system;
     Object.freeze(this);

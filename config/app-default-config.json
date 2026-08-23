@@ -1,5 +1,5 @@
 {
-  "_comment": "Shipped defaults for the YourPHR TypeScript stack (yourphr#621). READ-ONLY: this file is the product, not the instance. An operator overrides values in <data dir>/config/app-custom-config.json, which holds ONLY what they changed — never a copy of this file. Keys prefixed with _ are comments and are ignored on load.",
+  "_comment": "Shipped defaults for the YourPHR TypeScript stack (yourphr#621). READ-ONLY: this file is the product, not the instance. An operator overrides values in <data dir>/config/app-custom-config.json, which holds ONLY what they changed \u2014 never a copy of this file. Keys prefixed with _ are comments and are ignored on load.",
   "storage.data_dir": "",
   "database.location": "spike.db",
   "database.encryption.key": "",
@@ -32,5 +32,49 @@
   "operator.name": "",
   "operator.contact_email": "",
   "operator.contact_url": "",
-  "backup.encryption.key": ""
+  "backup.encryption.key": "",
+  "_comment_authorization": "yourphr#623 \u2014 permissions and roles are DATA, read from the merged configuration at startup. The permission NAMES are the enforcement contract: a role may only name one this build defines, and an unknown name refuses the boot. roles.definitions is an object, so it deep-merges PER ROLE \u2014 an operator adds a role in app-custom-config.json without restating the others. A role's permissions[] is a plain list and is replaced wholesale on override, which is intended: it is one role's list, not the catalogue. issystem marks a role this build defines; it is not the operator's to redefine out of existence, because accounts store the role name.",
+  "auth.permissions.definitions": {
+    "admin-read": {
+      "description": "See the operator screens \u2014 configuration, database, logs, metrics, the provider catalog"
+    },
+    "admin-system": {
+      "description": "Change what this instance is \u2014 configuration values, instance identity, backups, the provider catalog"
+    },
+    "user-create": {
+      "description": "Create an account"
+    },
+    "user-read": {
+      "description": "See the list of accounts and how many the instance holds"
+    },
+    "user-edit": {
+      "description": "Reset another account's password"
+    }
+  },
+  "auth.roles.definitions": {
+    "admin": {
+      "displayname": "Administrator",
+      "description": "Runs this instance: every operator screen, and the account list.",
+      "issystem": true,
+      "permissions": [
+        "admin-read",
+        "admin-system",
+        "user-create",
+        "user-edit",
+        "user-read"
+      ]
+    },
+    "user": {
+      "displayname": "Member",
+      "description": "Owns their own records. The empty list is not an oversight: a member reaches their own records by OWNERSHIP, not by a permission.",
+      "issystem": true,
+      "permissions": []
+    },
+    "anonymous": {
+      "displayname": "Not signed in",
+      "description": "A role with an empty list rather than an `if` at the edge, so the unauthenticated path goes through the same evaluator as every other.",
+      "issystem": true,
+      "permissions": []
+    }
+  }
 }

@@ -6,6 +6,7 @@ import { Engine } from '../../Engine.js';
 import { ApiContext, ApiError } from '../../ApiContext.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
 import { SettingsManager, coerceToShippedType } from '../SettingsManager.js';
+import { PolicyManager } from '../PolicyManager.js';
 import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
 
 const dirs: string[] = [];
@@ -15,7 +16,7 @@ async function boot(env: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'spike-settings-')); dirs.push(dir);
   const engine = new Engine();
   const log: string[] = [];
-  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env }));
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env })).register('policy', new PolicyManager(engine));
   const settings = new SettingsManager(engine, { log: (line) => log.push(line), dataDir: dir });
   engine.register('settings', settings);
   await engine.initialize();
@@ -28,7 +29,7 @@ async function boot(env: Record<string, string> = {}) {
 describe('SettingsManager — what the instance says about itself, with the caller passed in', () => {
   it('boots after configuration and publishes only the public keys to an anonymous caller', async () => {
     const { engine, settings, nobody } = await boot();
-    expect(engine.registered).toEqual(['configuration', 'settings']);
+    expect(engine.registered).toEqual(['configuration', 'policy', 'settings']);
     const pub = settings.publicInstance(nobody);
     expect(Object.keys(pub).sort()).toEqual(['operator.contact_url', 'operator.name', 'password.min_length']);
     expect(pub).not.toHaveProperty('operator.contact_email');

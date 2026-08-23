@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Engine } from '../Engine.js';
 import { ApiContext, ApiError } from '../ApiContext.js';
-import { ALL_PERMISSIONS } from '../policy.js';
+import { ConfigurationManager } from '../ConfigurationManager.js';
+import { PolicyManager } from '../managers/PolicyManager.js';
+import { FakeConfigProvider } from '../providers/__tests__/FakeConfigProvider.js';
 
+// Permissions come from the merged configuration (yourphr#623), so a context needs both managers.
 const engine = new Engine();
+engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: {} }));
+engine.register('policy', new PolicyManager(engine));
+const ALL_PERMISSIONS = engine.managers.policy.registry().map((p) => p.permission).sort();
 
 describe('ApiContext — who is asking, immutable, with guards that throw ApiError', () => {
   it('carries the authorization facts and freezes them', () => {
@@ -30,7 +36,7 @@ describe('ApiContext — who is asking, immutable, with guards that throw ApiErr
     expect(nobody.can('admin-read')).toBe(false);
   });
 
-  it('the role carries its permissions, anonymous is a role with none, and an unknown role grants nothing (yourphr#620)', () => {
+  it('the role carries its configured permissions, anonymous is a role with none, and an unknown role grants nothing (yourphr#620, #623)', () => {
     const nobody = ApiContext.anonymous(engine);
     const member = ApiContext.from({ username: 'alice', role: 'user' }, engine);
     const admin = ApiContext.from({ username: 'ops', role: 'admin' }, engine);

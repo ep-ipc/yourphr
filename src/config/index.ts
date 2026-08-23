@@ -95,6 +95,11 @@ export const ConfigCatalog: Record<string, ConfigKeySpec> = {
   'auth.password.min-length': { description: 'Server-enforced password minimum (yourphr#506).' },
   'auth.trusted-proxies': { description: 'Direct peers whose X-Forwarded-For is believed (yourphr#529). Empty = believe nobody.' },
   'auth.providers': { description: 'The authentication providers available (any-of alternatives). Only password exists today (yourphr#611).' },
+  // Authorization as data (yourphr#623). The names are the enforcement contract — a role may only
+  // grant a permission this build defines, checked at boot — but WHICH role holds WHICH permission
+  // is the operator's, so a caregiver or a read-only demo operator is an edit, not a release.
+  'auth.permissions.definitions': { description: 'Every permission this build enforces, as {target}-{action}, with what it governs in the operator\'s words. Not the operator\'s to extend: a name nothing enforces would be a grant that silently means nothing.' },
+  'auth.roles.definitions': { description: 'What each role may do. Deep-merged per role, so adding one in app-custom-config.json does not restate the others; a role\'s permission list is replaced wholesale on override. An unknown permission name refuses the boot.' },
   'auth.factors': { description: 'The factors EVERY sign-in must pass (all-of; password AND totp, never try-each). A factor with no provider refuses to boot.' },
   'audit.provider': { description: "Where the patient-visible access log is kept. REQUIRED (yourphr#614): there is no inert default — an unknown or unhealthy provider refuses to boot rather than run with auditing off." },
   'sources.client.provider': { description: "How connected sources are reached: 'smart' (SMART on FHIR over the guarded HTTP client) or 'null' (an instance that never syncs — nothing fetched, every sync says why). Optional capability (yourphr#612)." },

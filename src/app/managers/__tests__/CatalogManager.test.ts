@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Engine } from '../../../framework/Engine.js';
 import { ApiContext } from '../../../framework/ApiContext.js';
 import { ConfigurationManager } from '../../../framework/ConfigurationManager.js';
+import { PolicyManager } from '../../../framework/managers/PolicyManager.js';
 import { FakeConfigProvider } from '../../../framework/providers/__tests__/FakeConfigProvider.js';
 import { UsersManager } from '../../../framework/managers/UsersManager.js';
 import { PasswordAuthProvider } from '../../../framework/providers/PasswordAuthProvider.js';
@@ -67,7 +68,7 @@ async function boot(sourceClient: BaseSourceClientProvider): Promise<void> {
   sourcesProvider = new FakeSourcesProvider();
   lines = [];
   users = new UsersManager(engine, new FakeUsersProvider(), new PasswordAuthProvider());
-  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider()))
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider())).register('policy', new PolicyManager(engine))
     .register('users', users)
     .register('records', new RecordsManager(engine, new FakeRecordsProvider()))
     .register('jobs', new JobsManager(engine, new FakeJobsProvider()))

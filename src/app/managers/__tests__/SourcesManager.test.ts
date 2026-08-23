@@ -12,6 +12,9 @@ import { FakeSourcesProvider } from '../../providers/__tests__/FakeSourcesProvid
 import { BaseSourceClientProvider, NullSourceClientProvider, type AuthorizationResult, type AuthorizationStart, type FetchReport, type RefreshedTokens } from '../../providers/BaseSourceClientProvider.js';
 import type { ConnectedSource } from '../../providers/BaseSourcesProvider.js';
 import type { RecordsWriter } from '../../providers/BaseRecordsProvider.js';
+import { ConfigurationManager } from '../../../framework/ConfigurationManager.js';
+import { PolicyManager } from '../../../framework/managers/PolicyManager.js';
+import { FakeConfigProvider } from '../../../framework/providers/__tests__/FakeConfigProvider.js';
 
 /** A scripted source client: refresh rotates tokens (or fails), fetch writes N records (or fails). */
 class ScriptedClient extends BaseSourceClientProvider {
@@ -75,6 +78,8 @@ beforeEach(async () => {
   records = new RecordsManager(engine, recordsProvider);
   jobs = new JobsManager(engine, jobsProvider);
   sources = new SourcesManager(engine, sourcesProvider, client, { maxPages: 5, events, log: (l) => lines.push(l) });
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: {} }))
+    .register('policy', new PolicyManager(engine));
   engine.register('records', records).register('jobs', jobs).register('sources', sources);
   await engine.initialize();
   records.sourceDisplay = (id) => sources.displayOf(id);
@@ -86,7 +91,7 @@ beforeEach(async () => {
 
 describe('SourcesManager — ownership is the seam', () => {
   it('boots after records and jobs, initialises its provider, and names the client it was bound to', () => {
-    expect(engine.registered).toEqual(['records', 'jobs', 'sources']);
+    expect(engine.registered).toEqual(['configuration', 'policy', 'records', 'jobs', 'sources']);
     expect(sourcesProvider.initialized).toBe(true);
     expect(lines).toContain("sources: client provider 'scripted'");
   });

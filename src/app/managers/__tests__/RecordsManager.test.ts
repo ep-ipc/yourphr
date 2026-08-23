@@ -5,6 +5,9 @@ import { ApiContext, ApiError } from '../../../framework/ApiContext.js';
 import { RecordsManager, type AggregationRow } from '../RecordsManager.js';
 import { FakeRecordsProvider } from '../../providers/__tests__/FakeRecordsProvider.js';
 import { FakeFavoritesProvider } from '../../providers/__tests__/FakeFavoritesProvider.js';
+import { ConfigurationManager } from '../../../framework/ConfigurationManager.js';
+import { PolicyManager } from '../../../framework/managers/PolicyManager.js';
+import { FakeConfigProvider } from '../../../framework/providers/__tests__/FakeConfigProvider.js';
 
 const LOINC = 'http://loinc.org';
 const SNOMED = 'http://snomed.info/sct';
@@ -23,6 +26,8 @@ beforeEach(async () => {
   favorites = new FakeFavoritesProvider();
   engine = new Engine();
   records = new RecordsManager(engine, provider, favorites);
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: {} }))
+    .register('policy', new PolicyManager(engine));
   engine.register('records', records);
   await engine.initialize();
   alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);

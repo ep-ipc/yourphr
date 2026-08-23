@@ -3,6 +3,9 @@ import { Engine } from '../../Engine.js';
 import { ApiContext } from '../../ApiContext.js';
 import { JobsManager, backgroundJobShape } from '../JobsManager.js';
 import { FakeJobsProvider } from '../../providers/__tests__/FakeJobsProvider.js';
+import { ConfigurationManager } from '../../ConfigurationManager.js';
+import { PolicyManager } from '../PolicyManager.js';
+import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
 
 let provider: FakeJobsProvider;
 let engine: Engine;
@@ -17,6 +20,8 @@ beforeEach(async () => {
   provider = new FakeJobsProvider((sourceId) => (sourceId === 1 || sourceId === 2 ? 'alice' : sourceId === 9 ? 'bob' : undefined));
   engine = new Engine();
   jobs = new JobsManager(engine, provider);
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: {} }))
+    .register('policy', new PolicyManager(engine));
   engine.register('jobs', jobs);
   await engine.initialize();
   alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);

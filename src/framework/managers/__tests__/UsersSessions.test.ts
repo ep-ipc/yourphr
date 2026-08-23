@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Engine } from '../../Engine.js';
 import { ApiContext, ApiError } from '../../ApiContext.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
+import { PolicyManager } from '../PolicyManager.js';
 import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
 import { UsersManager } from '../UsersManager.js';
 import { SessionsManager, GENERIC_SIGNIN_ERROR } from '../SessionsManager.js';
@@ -40,7 +41,7 @@ async function boot(factors: string[] = ['password'], providers: BaseAuthProvide
   lines = [];
   users = new UsersManager(engine, provider, new PasswordAuthProvider(), { log: (l) => lines.push(l) });
   sessions = new SessionsManager(engine, providers, { factors, session: { slidingSeconds: 100, absoluteSeconds: 250 }, throttle: { maxFailures: 2, windowSeconds: 60 } });
-  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider())).register('users', users).register('sessions', sessions);
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider())).register('policy', new PolicyManager(engine)).register('users', users).register('sessions', sessions);
   await engine.initialize();
   sys = ApiContext.system('test', 'admin', engine);
 }

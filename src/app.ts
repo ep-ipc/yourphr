@@ -34,6 +34,7 @@ import { SqliteCatalogProvider } from './app/providers/SqliteCatalogProvider.js'
 import { Engine } from './framework/Engine.js';
 import { ConfigurationManager } from './framework/ConfigurationManager.js';
 import { SettingsManager, coerceToShippedType } from './framework/managers/SettingsManager.js';
+import { PolicyManager } from './framework/managers/PolicyManager.js';
 export { coerceToShippedType };
 import { ApiContext } from './framework/ApiContext.js';
 import { RecordsManager } from './app/managers/RecordsManager.js';
@@ -224,6 +225,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // 6. The engine: managers in validated dependency order (yourphr#608). Configuration first,
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(join(dataDir, 'records.db'), dbKey === '' ? undefined : dbKey);
+  engine.register('policy', new PolicyManager(engine, (line) => appLog.info(line))); // yourphr#623: roles and permissions from the merged configuration
   engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('database', database);
   // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.

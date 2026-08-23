@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Engine } from '../../Engine.js';
 import { ApiContext } from '../../ApiContext.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
+import { PolicyManager } from '../PolicyManager.js';
 import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
 import { BackupManager, applyStagedRestore, type BackupExporter } from '../BackupManager.js';
 import { FakeBackupProvider } from '../../providers/__tests__/FakeBackupProvider.js';
@@ -42,7 +43,7 @@ async function boot(provider: BaseBackupProvider = store, env: Record<string, st
   engine = new Engine();
   exporter = new FakeExporter(store);
   backups = new BackupManager(engine, provider, { dataDir: dir, exporter, alsoExport: ['app-db'], now: () => clock });
-  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env })).register('backups', backups);
+  engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env })).register('policy', new PolicyManager(engine)).register('backups', backups);
   await engine.initialize();
   admin = ApiContext.from({ username: 'root', role: 'admin' }, engine);
   alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);
@@ -58,7 +59,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('BackupManager — the coordinator', () => {
   it('boots after configuration, initialises its store, and defaults the destination under the data directory', () => {
-    expect(engine.registered).toEqual(['configuration', 'backups']);
+    expect(engine.registered).toEqual(['configuration', 'policy', 'backups']);
     expect(store.initialized).toBe(true);
     expect(backups.destination()).toBe(join(dir, 'backups'));
     expect(backups.unavailable()).toBe('');
