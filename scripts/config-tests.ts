@@ -77,17 +77,23 @@ function main(): void {
     try { cfg.set('auth.password.min-legnth', 16); } catch { unknown = true; }
     check('a typo\'d key fails loudly instead of vanishing', unknown);
 
-    // `bootstrap` retired with the catalogue (yourphr#629). It conflated three things, and only
-    // one of them was ever a real rule: a key pinned by the ENVIRONMENT cannot be set here, because
-    // the environment outranks the store at read time and the write would never apply.
-    const envPinned = store(dir, { YOURPHR_WEB_LISTEN_PORT: '8080' });
-    let refused = '';
-    try { envPinned.set('yourphr.web.listen.port', 9999); } catch (err) { refused = (err as Error).message; }
-    check('an env-pinned key refuses the settings store and names the variable', refused.includes('YOURPHR_WEB_LISTEN_PORT'), refused.slice(0, 60));
-    check('and the same key is settable when the environment does not pin it', (() => {
+    // Ownership is DECLARED in yourphr.config.env-keys, not detected at write time (yourphr#635).
+    // A key is owned by exactly one layer, never both — so an env-owned key is read-only whether or
+    // not the variable happens to be set. Conditional ownership was the ambiguity being removed:
+    // it made the same key editable on one instance and refused on another.
+    const refusal = (env: Record<string, string>): string => {
+      try { store(dir, env).set('yourphr.web.listen.port', 9999); return ''; } catch (err) { return (err as Error).message; }
+    };
+    check('an env-owned key is read-only and names the variable that owns it',
+      refusal({ YOURPHR_WEB_LISTEN_PORT: '8080' }).includes('YOURPHR_WEB_LISTEN_PORT'));
+    check('and it stays read-only when the variable is NOT set — ownership is not conditional',
+      refusal({}).includes('YOURPHR_WEB_LISTEN_PORT'), refusal({}).slice(0, 70));
+    check('the shipped value is a boot fallback: still in force, still not a setting',
+      store(dir, {}).getInt('yourphr.web.listen.port') === 8080);
+    check('a key nobody declared stays writable', (() => {
       const free = store(dir, {});
-      free.set('yourphr.web.listen.port', 9999);
-      return free.getInt('yourphr.web.listen.port') === 9999;
+      free.set('yourphr.operator.name', 'Ops');
+      return free.getString('yourphr.operator.name') === 'Ops';
     })());
 
     mkdirSync(join(dir, 'config'), { recursive: true });

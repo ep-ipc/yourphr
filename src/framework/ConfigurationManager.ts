@@ -19,7 +19,8 @@
 import { BaseManager, type BackupData } from './BaseManager.js';
 import type { Engine } from './Engine.js';
 import type { BaseConfigProvider } from './providers/BaseConfigProvider.js';
-import { envNameFor, legacyEnvNameFor, isConfigObject, PUBLIC_KEYS_KEY, SECRET_KEYS_KEY, type ConfigObject, type ConfigValue } from '../config/index.js';
+import { envNameFor, legacyEnvNameFor, isConfigObject, PUBLIC_KEYS_KEY, type ConfigObject, type ConfigValue } from '../config/index.js';
+import { coerceToTypeOf, describePropertySource, ENV_KEYS_CONFIG_KEY, FALLBACK_ENV_KEYS, SECRET_KEYS_CONFIG_KEY, type EnvKeyMap, type PropertyDescription } from '../config/env-keys.js';
 
 declare module './Engine.js' {
   interface ManagerRegistry {
@@ -82,7 +83,7 @@ export class ConfigurationManager extends BaseManager {
 
   /** Keys masked on the admin screen until revealed — Go's deny-list, read as data. */
   private secretKeys(): string[] {
-    const raw = this.merged[SECRET_KEYS_KEY];
+    const raw = this.merged[SECRET_KEYS_CONFIG_KEY];
     return Array.isArray(raw) ? raw.map(String) : [];
   }
 
@@ -109,10 +110,51 @@ export class ConfigurationManager extends BaseManager {
   /** The value the layers select, BEFORE environment references are resolved. */
   private configured(key: string): ConfigValue {
     if (!this.known(key)) throw new Error(`unknown configuration key: ${key}`);
+    const shipped = this.defaults[key] ?? null;
+    // A DECLARED env-owned key reads from its variable (yourphr#635). An empty value is an
+    // operator clearing the variable, not blanking the setting — handled in describePropertySource.
+    const envVar = this.envKeyMap()[key];
+    if (envVar !== undefined) {
+      const raw = this.envValue(envVar);
+      if (raw !== undefined && raw !== '') return coerceToTypeOf(raw, shipped);
+      return shipped as ConfigValue;   // the shipped value is this key's boot fallback
+    }
     const fromEnv = this.envValue(envNameFor(key)) ?? this.legacyEnvValue(key);
     if (fromEnv !== undefined) return coerceFromEnv(fromEnv, this.defaults[key], key);
     if (key in this.custom) return this.merged[key] as ConfigValue;
     return this.defaults[key] as ConfigValue;
+  }
+
+  /** Which keys the environment owns, and the variable supplying each (yourphr#635). */
+  private envKeyMap(): EnvKeyMap {
+    const raw = this.merged[ENV_KEYS_CONFIG_KEY];
+    if (isConfigObject(raw)) return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
+    // Config declares none — fall back rather than silently dropping every override, including the
+    // at-rest database key. See FALLBACK_ENV_KEYS.
+    return FALLBACK_ENV_KEYS;
+  }
+
+  /** The declared map, for the admin screen. */
+  envControlledKeys(): EnvKeyMap { return { ...this.envKeyMap() }; }
+
+  /**
+   * Where a key's value actually comes from (yourphr#635). The admin screen needs three facts
+   * `getString()` alone cannot express: the effective value, whether the environment owns the key,
+   * and which variable does.
+   */
+  describeProperty(key: string): PropertyDescription {
+    const configValue = (this.merged[key] ?? null) as ConfigValue | null;
+    const described = describePropertySource(key, this.envKeyMap(), this.env, configValue);
+    if (described.source === 'config') {
+      try {
+        return { ...described, effective: this.resolveEnvRef(described.effective as ConfigValue, key) };
+      } catch {
+        // A bare ref to an unset variable throws by design. The screen should show the value as
+        // unresolvable, not fail to render.
+        return { ...described, effective: null };
+      }
+    }
+    return described;
   }
 
   /**
@@ -270,6 +312,10 @@ export class ConfigurationManager extends BaseManager {
 
   set(key: string, value: ConfigValue): void {
     if (!this.known(key)) throw new Error(`unknown configuration key: ${key}`);
+    // Declared ownership, NOT "is the variable set right now" (yourphr#635): an env-owned key is
+    // read-only either way, or the same key is editable on one instance and refused on another.
+    const owner = this.envKeyMap()[key];
+    if (owner !== undefined) throw new Error(`${key} is owned by the environment variable ${owner} — set it there and restart; this screen cannot change it`);
     if (this.isSetByEnvironment(key)) throw new Error(`${key} is set in the environment (${envNameFor(key)}); remove the variable to manage it here`);
     if (this.customUnreadable) throw new Error(`${this.provider.customLocation()} exists but cannot be parsed — refusing to overwrite it`);
     // Writing a literal over an environment reference would move a secret out of the deployment

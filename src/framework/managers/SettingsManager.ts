@@ -158,6 +158,12 @@ export class SettingsManager extends BaseManager {
     ctx.require('admin-system');
     const config = this.configuration;
     if (!config.keys().includes(key)) throw new ApiError(400, `unknown configuration key ${JSON.stringify(key)} — only keys this build ships can be set`);
+    // Declared env ownership answers 409, whether or not the variable is currently set
+    // (yourphr#635): the key belongs to the environment layer, so this screen cannot change it.
+    const owner = config.envControlledKeys()[key];
+    if (owner !== undefined) {
+      throw new ApiError(409, `${key} is owned by the environment variable ${owner} — set it there and restart; this screen cannot change it`);
+    }
     if (config.isSetByEnvironment(key)) {
       throw new ApiError(409, `${key} is set by the environment variable ${envNameFor(key)}, which takes precedence over this screen — change it in your deployment configuration instead`);
     }

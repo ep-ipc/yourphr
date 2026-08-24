@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { stageRestore } from '../src/app/providers/sqlite-backup.js';
+import { SqliteGlossaryCache } from '../src/app/providers/SqliteGlossaryCache.js';
 import { assembleApp, sourceShape } from '../src/app.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
 
@@ -492,19 +493,45 @@ async function main(): Promise<void> {
   const setOk = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.sync.max-pages', value: '250' }) });
   const setEnv = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.database.encryption.key', value: 'x' }) });
   const setUnknown = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'nope.key', value: 1 }) });
-  // A restart-required key is SETTABLE now (yourphr#629): `bootstrap` conflated "needs a restart"
-  // with "cannot be set", and only the second was ever enforced. Saying so is yourphr#624.
-  const setRestartRequired = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.web.listen.port', value: 9 }) });
+  // An env-OWNED key answers 409 whether or not the variable is set (yourphr#635): ownership is
+  // declared in yourphr.config.env-keys, so the screen can render it read-only rather than
+  // discovering it on a failed save.
+  const setEnvOwned = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.web.listen.port', value: 9 }) });
   const setBadType = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.sync.max-pages', value: 'lots' }) });
-  check('set: coerced to the shipped type and stored; env-pinned is 409; unknown and wrong-typed are 400; a restart-required key is accepted',
-    setOk.status === 200 && app.config.getInt('yourphr.sync.max-pages') === 250 && setEnv.status === 409 && setUnknown.status === 400 && setRestartRequired.status === 200 && setBadType.status === 400,
-    `ok ${setOk.status} env ${setEnv.status} unknown ${setUnknown.status} restart ${setRestartRequired.status} badtype ${setBadType.status}`);
+  check('set: coerced to the shipped type and stored; an env-OWNED key is 409 and names its variable; unknown and wrong-typed are 400',
+    setOk.status === 200 && app.config.getInt('yourphr.sync.max-pages') === 250 && setEnv.status === 409 && setUnknown.status === 400 && setEnvOwned.status === 409
+      && String(setEnvOwned.body.error).includes('YOURPHR_WEB_LISTEN_PORT') && setBadType.status === 400,
+    `ok ${setOk.status} env ${setEnv.status} unknown ${setUnknown.status} owned ${setEnvOwned.status} badtype ${setBadType.status}`);
   const reset = await adminJson('/api/secure/admin/config/yourphr.sync.max-pages', { method: 'DELETE' });
   const resetAgain = await adminJson('/api/secure/admin/config/yourphr.sync.max-pages', { method: 'DELETE' });
   check('reset clears the override (reported), and the default is back', reset.body.data['cleared'] === true && resetAgain.body.data['cleared'] === false && app.config.getInt('yourphr.sync.max-pages') === 500);
   const nonAdminDb = await fetch(`${base}/api/secure/admin/database`, authed(opsToken));
   const strangerDb = await fetch(`${base}/api/secure/admin/database`, { headers: { authorization: `Bearer ${((await (await signIn('alice', 'another-long-enough-password')).json()) as { data: string }).data}` } });
   check('every admin card is behind the role gate', nonAdminDb.status === 200 && strangerDb.status === 403);
+
+  // The glossary (yourphr#640) over HTTP. The harness instance is bound to the real MedlinePlus
+  // provider but never reaches it: the cache is seeded directly, which is the path that matters —
+  // a code already explained must never cause an outbound request.
+  {
+    // The app database, opened the way the harness opens others — under the same at-rest key.
+    const appDb = new Database(join(dir, 'spike.db'));
+    appDb.pragma("cipher='sqlcipher'");
+    appDb.pragma("key='at-rest-key'");
+    const cache = new SqliteGlossaryCache(appDb);
+    cache.put('2160-0', '2.16.840.1.113883.6.1', {
+      title: 'Creatinine (Blood)', description: 'A waste product filtered by your kidneys.',
+      url: 'https://medlineplus.gov/lab-tests/creatinine-test/', publisher: 'MedlinePlus', updatedAt: '2026-01-01T00:00:00Z',
+    });
+    appDb.close();
+    const explained = await (await fetch(`${base}/api/secure/glossary/code?code=2160-0&code_system=${encodeURIComponent('http://loinc.org')}`, authed(adminToken))).json() as { success: boolean; data?: Record<string, unknown> };
+    check('glossary: a cached code is explained in plain language, attributed, without leaving the LAN',
+      explained.success === true && String(explained.data?.['description']).includes('kidneys') && explained.data?.['source'] === 'cache' && explained.data?.['publisher'] === 'MedlinePlus');
+
+    const unknownSystem = await fetch(`${base}/api/secure/glossary/code?code=2160-0&code_system=${encodeURIComponent('http://example.org/codes')}`, authed(adminToken));
+    const anonymous = await fetch(`${base}/api/secure/glossary/code?code=2160-0&code_system=${encodeURIComponent('http://loinc.org')}`);
+    check('glossary: an unknown code system is 400, and it requires a session — a code is not PHI but this triggers an outbound call',
+      unknownSystem.status === 400 && anonymous.status === 401, `system ${unknownSystem.status} anon ${anonymous.status}`);
+  }
 
   fake.close();
   await app.close();

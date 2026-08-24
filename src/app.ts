@@ -44,6 +44,9 @@ import { JobsManager, backgroundJobShape } from './framework/managers/JobsManage
 import { SqliteSourcesProvider } from './app/providers/SqliteSourcesProvider.js';
 import { SqliteJobsProvider } from './framework/providers/SqliteJobsProvider.js';
 import { NullSourceClientProvider, type BaseSourceClientProvider } from './app/providers/BaseSourceClientProvider.js';
+import { NullGlossaryProvider, type BaseGlossaryProvider } from './app/providers/BaseGlossaryProvider.js';
+import { GlossaryManager } from './app/managers/GlossaryManager.js';
+import { SqliteGlossaryCache } from './app/providers/SqliteGlossaryCache.js';
 export { sourceShape, backgroundJobShape };
 import { EventBus } from './events/index.js';
 import { SqliteFavoritesProvider } from './app/providers/SqliteFavoritesProvider.js';
@@ -179,6 +182,20 @@ function auditProviderFor(name: string, db: InstanceType<typeof Database>): Sqli
   throw new Error(`audit.provider: unknown provider '${name}' (sqlite) — refusing to boot with auditing off`);
 }
 
+/**
+ * The glossary lookup (yourphr#640): 'medlineplus' loads the MedlinePlus client; 'null' loads
+ * nothing and serves only what is already cached. Optional capability with an inert default —
+ * a dynamic import, so an instance bound to 'null' never loads the URL-fetching path at all.
+ */
+async function glossaryProviderFor(name: string, env: Record<string, string | undefined>): Promise<BaseGlossaryProvider> {
+  if (name === 'null') return new NullGlossaryProvider();
+  if (name === 'medlineplus') {
+    const { MedlinePlusGlossaryProvider } = await import('./app/providers/MedlinePlusGlossaryProvider.js');
+    return new MedlinePlusGlossaryProvider({ allowInternal: env['SPIKE_TEST_ALLOW_INTERNAL'] === '1' });
+  }
+  throw new Error(`glossary.provider: unknown provider '${name}' (medlineplus or null)`);
+}
+
 /** The source-client provider configuration names: 'smart' loads the SMART client; 'null' loads nothing; anything else refuses to boot. */
 async function sourceClientFor(name: string, env: Record<string, string | undefined>): Promise<BaseSourceClientProvider> {
   if (name === 'null') return new NullSourceClientProvider();
@@ -257,6 +274,8 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   }));
   // 8. Catalog (yourphr#613): what the instance can connect to; connects through Sources and the same client.
   engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(db), sourceClient, { allowInternal, log: (line) => appLog.warn(line) }));
+  // The glossary (yourphr#640): plain-language explanations of coded values, cached locally.
+  engine.register('glossary', new GlossaryManager(engine, await glossaryProviderFor(config.getString('yourphr.glossary.provider'), env), new SqliteGlossaryCache(db), (line) => appLog.info(line)));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
   const { records, sources, jobs, catalog, audit, backups } = engine.managers;

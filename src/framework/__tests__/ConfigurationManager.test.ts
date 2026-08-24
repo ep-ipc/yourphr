@@ -59,10 +59,8 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
     const { cfg } = boot({ YOURPHR_SYNC_MAX_PAGES: '9' });
     expect(() => cfg.set('nope.key', 1)).toThrow(/unknown configuration key/);
     expect(() => cfg.set('yourphr.sync.max-pages', 5)).toThrow(/set in the environment/); // env wins at read time
-    // A secret key is masked, not unwritable — Go's rule (yourphr#629). What protects the
-    // encryption key in a real deployment is that it arrives from the environment, or as a $VAR
-    // reference, and BOTH are refused above and below. Unset, there is no secret to leak.
-    expect(() => cfg.set('yourphr.database.encryption.key', 'x')).not.toThrow();
+    // Declared env ownership, not "is the variable set" (yourphr#635): read-only either way.
+    expect(() => cfg.set('yourphr.database.encryption.key', 'x')).toThrow(/owned by the environment variable YOURPHR_DATABASE_ENCRYPTION_KEY/);
   });
 
   it('clear() drops an override; resetToDefaults() drops them all', async () => {
@@ -116,7 +114,7 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
     expect(cfg.getString('yourphr.database.encryption.key')).toBe('at-rest'); // readable to code
     expect(cfg.isSecret('yourphr.web.listen.port')).toBe(false);
     // An instance can extend the list, because it is configuration.
-    cfg.set('yourphr.secret', ['yourphr.database.encryption.key', 'yourphr.operator.contact-email']);
+    cfg.set('yourphr.config.secret-keys', ['yourphr.database.encryption.key', 'yourphr.operator.contact-email']);
     expect(cfg.isSecret('yourphr.operator.contact-email')).toBe(true);
   });
 
@@ -130,6 +128,54 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
     await second.engine.initialize();
     await second.cfg.restore(data);
     expect(second.cfg.getString('yourphr.operator.name')).toBe('Ops');
+  });
+});
+
+describe('environment-owned keys — declared, not detected (yourphr#635)', () => {
+  it('a declared key is read-only whether or not the variable is set', () => {
+    const withVar = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: { YOURPHR_WEB_LISTEN_PORT: '9090' } });
+    const without = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: {} });
+    // The ambiguity ngdpbase removed: conditional ownership makes the same key editable on one
+    // instance and refused on another.
+    expect(() => withVar.set('yourphr.web.listen.port', 1)).toThrow(/owned by the environment variable/);
+    expect(() => without.set('yourphr.web.listen.port', 1)).toThrow(/owned by the environment variable/);
+  });
+
+  it('the shipped value is a boot fallback: still the effective value, still read-only', () => {
+    const cfg = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: {} });
+    const d = cfg.describeProperty('yourphr.web.listen.port');
+    expect(d).toMatchObject({ envControlled: true, envVar: 'YOURPHR_WEB_LISTEN_PORT', effective: 8080, source: 'config' });
+    expect(cfg.getInt('yourphr.web.listen.port')).toBe(8080);
+  });
+
+  it('the variable wins when set, coerced to the shipped value\'s type', () => {
+    const cfg = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: { YOURPHR_WEB_LISTEN_PORT: '9090', YOURPHR_WEB_SECURE_COOKIES: 'true' } });
+    expect(cfg.describeProperty('yourphr.web.listen.port')).toMatchObject({ effective: 9090, source: 'env' });
+    expect(cfg.getInt('yourphr.web.listen.port')).toBe(9090);        // a number, not "9090"
+    expect(cfg.getBool('yourphr.web.secure-cookies')).toBe(true);
+  });
+
+  it('an EMPTY variable is an operator clearing it, not blanking the setting', () => {
+    const cfg = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: { YOURPHR_WEB_LISTEN_PORT: '' } });
+    expect(cfg.getInt('yourphr.web.listen.port')).toBe(8080);
+    expect(cfg.describeProperty('yourphr.web.listen.port')).toMatchObject({ source: 'config', envControlled: true });
+  });
+
+  it('a value that cannot be coerced comes back raw rather than as a silent NaN', () => {
+    const cfg = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: { YOURPHR_WEB_LISTEN_PORT: 'not-a-port' } });
+    expect(cfg.describeProperty('yourphr.web.listen.port').effective).toBe('not-a-port');
+  });
+
+  it('a key nobody declared is not env-owned, and stays writable', () => {
+    const cfg = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: {} });
+    expect(cfg.describeProperty('yourphr.operator.name')).toMatchObject({ envControlled: false, envVar: null });
+    cfg.set('yourphr.operator.name', 'Ops');
+    expect(cfg.getString('yourphr.operator.name')).toBe('Ops');
+  });
+
+  it('the declared map is exposed so the admin screen can name the owning variable', () => {
+    const cfg = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: {} });
+    expect(cfg.envControlledKeys()['yourphr.database.encryption.key']).toBe('YOURPHR_DATABASE_ENCRYPTION_KEY');
   });
 });
 

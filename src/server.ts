@@ -649,6 +649,23 @@ export function createYourPhrServer(options: ServerOptions) {
         send(res, 200, {success: true, data: p});
         return;
       }
+      // The glossary (yourphr#640): what a coded value actually means, in plain language. Go
+      // serves this unauthenticated; here it sits under /api/secure because it can trigger an
+      // outbound request, and an unauthenticated endpoint that does that is an amplification
+      // surface for no benefit — a code is not PHI, so nothing is lost by requiring a session.
+      if (engine.has('glossary') && url.pathname === '/api/secure/glossary/code' && req.method === 'GET') {
+        const glossary = engine.managers.glossary;
+        const explanation = await glossary.explain(ctx, url.searchParams.get('code') ?? '', url.searchParams.get('code_system') ?? '');
+        if (explanation) {
+          send(res, 200, {success: true, data: explanation});
+          return;
+        }
+        // Not an error: neither the cache nor the source describes every code, and the screen
+        // must be able to say "no explanation available" rather than render an empty box.
+        send(res, 200, {success: false, error: glossary.unavailable() || 'no explanation is available for this code'});
+        return;
+      }
+
       if (url.pathname === '/api/secure/medications/reconciled' && req.method === 'GET') {
         send(res, 200, {success: true, data: await engine.managers.records.medications(ctx)});
         return;

@@ -44,11 +44,15 @@ export function isConfigObject(value: unknown): value is ConfigObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The allow-list of keys an anonymous caller may read (yourphr#457). Go's key and Go's shape. */
+/**
+ * The allow-list of keys an anonymous caller may read (yourphr#457). ngdpbase has no equivalent —
+ * it publishes nothing to anonymous callers — so this one is the Go stack's, kept because the
+ * Angular app depends on the endpoint.
+ */
 export const PUBLIC_KEYS_KEY = 'yourphr.public';
 
-/** The deny-list of keys masked on the Admin screen until revealed (yourphr#458). Go's key. */
-export const SECRET_KEYS_KEY = 'yourphr.secret';
+// The env-owned and secret key lists live in ./env-keys.js, ported from ngdpbase's
+// src/utils/configEnvKeys.ts (yourphr#635).
 
 /**
  * `yourphr.auth.session.sliding-seconds` -> `YOURPHR_AUTH_SESSION_SLIDING_SECONDS`. The key carries

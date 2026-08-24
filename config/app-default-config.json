@@ -23,6 +23,7 @@
   ],
   "yourphr.audit.provider": "sqlite",
   "yourphr.sources.client.provider": "smart",
+  "yourphr.glossary.provider": "medlineplus",
   "yourphr.sync.max-pages": 500,
   "yourphr.backup.storage.provider": "filesystem",
   "yourphr.backup.destination": "${YOURPHR_SLOW_STORAGE}/backups",
@@ -84,8 +85,17 @@
     "yourphr.operator.contact-url",
     "yourphr.auth.password.min-length"
   ],
-  "_comment_secret": "Keys masked on the Admin Configuration screen until an admin explicitly reveals one (yourphr#458). Deliberately SHORT: masking everything outside `public` makes an operator click through the listen port and the log level, and trains them to reveal reflexively. This list is the OPPOSITE shape to `public` and that is intentional \u2014 `public` is an allow-list because a mistake exposes a value to the internet; `secret` is a DENY-LIST because a mistake shows a value to an already-authenticated admin on their own screen. A value that is an ${VAR} environment reference masks itself and needs no entry here (yourphr#622).",
-  "yourphr.secret": [
+  "_comment_config_secret_keys": "Keys masked on the Admin Configuration screen until an admin explicitly reveals one (yourphr#458). Deliberately SHORT: masking everything outside `public` makes an operator click through the listen port and the log level, and trains them to reveal reflexively. This list is the OPPOSITE shape to `public` and that is intentional \u2014 `public` is an allow-list because a mistake exposes a value to the internet; `secret` is a DENY-LIST because a mistake shows a value to an already-authenticated admin on their own screen. A value that is an ${VAR} environment reference masks itself and needs no entry here (yourphr#622).",
+  "_comment_config_env_keys": "yourphr#635 \u2014 keys OWNED BY THE ENVIRONMENT, and the variable that supplies each. A key is owned by exactly one layer, never both: these are the environment's, so they are always read-only on Admin -> Configuration (409 on write) whether or not the variable is currently set, shown with the variable's name. Making ownership conditional on the variable being set would hand the screen the source of truth whenever it is absent, which is the ambiguity this removes. The value shipped below for such a key is a BOOT FALLBACK so a fresh install comes up, not a setting. To change one: set the variable in .env and restart. Nothing here writes .env, by design.",
+  "yourphr.config.env-keys": {
+    "yourphr.web.listen.port": "YOURPHR_WEB_LISTEN_PORT",
+    "yourphr.web.listen.host": "YOURPHR_WEB_LISTEN_HOST",
+    "yourphr.web.secure-cookies": "YOURPHR_WEB_SECURE_COOKIES",
+    "yourphr.web.static-dir": "YOURPHR_WEB_STATIC_DIR",
+    "yourphr.database.encryption.key": "YOURPHR_DATABASE_ENCRYPTION_KEY",
+    "yourphr.backup.encryption.key": "YOURPHR_BACKUP_ENCRYPTION_KEY"
+  },
+  "yourphr.config.secret-keys": [
     "yourphr.database.encryption.key",
     "yourphr.backup.encryption.key"
   ]
