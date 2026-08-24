@@ -77,11 +77,18 @@ function main(): void {
     try { cfg.set('auth.password.min-legnth', 16); } catch { unknown = true; }
     check('a typo\'d key fails loudly instead of vanishing', unknown);
 
-    let bootstrap = '';
-    // database.location stopped being bootstrap in yourphr#626 — it is now a path composed from a
-    // storage root, and settable. The listen port is still bootstrap: it is read before the app assembles.
-    try { cfg.set('yourphr.web.listen.port', 9999); } catch (err) { bootstrap = (err as Error).message; }
-    check('a bootstrap key refuses the settings store and points at the environment', bootstrap.includes('YOURPHR_WEB_LISTEN_PORT'));
+    // `bootstrap` retired with the catalogue (yourphr#629). It conflated three things, and only
+    // one of them was ever a real rule: a key pinned by the ENVIRONMENT cannot be set here, because
+    // the environment outranks the store at read time and the write would never apply.
+    const envPinned = store(dir, { YOURPHR_WEB_LISTEN_PORT: '8080' });
+    let refused = '';
+    try { envPinned.set('yourphr.web.listen.port', 9999); } catch (err) { refused = (err as Error).message; }
+    check('an env-pinned key refuses the settings store and names the variable', refused.includes('YOURPHR_WEB_LISTEN_PORT'), refused.slice(0, 60));
+    check('and the same key is settable when the environment does not pin it', (() => {
+      const free = store(dir, {});
+      free.set('yourphr.web.listen.port', 9999);
+      return free.getInt('yourphr.web.listen.port') === 9999;
+    })());
 
     mkdirSync(join(dir, 'config'), { recursive: true });
     writeFileSync(join(dir, 'config', 'app-custom-config.json'), '{not json');

@@ -11,7 +11,7 @@ import { ApiContext, ApiError } from '../src/framework/ApiContext.js';
 import { ConfigurationManager } from '../src/framework/ConfigurationManager.js';
 import { PolicyManager, PERMISSIONS_KEY, ROLES_KEY } from '../src/framework/managers/PolicyManager.js';
 import { FileConfigProvider } from '../src/framework/providers/FileConfigProvider.js';
-import { ConfigCatalog, envNameFor, legacyEnvNameFor } from '../src/config/index.js';
+import { envNameFor, legacyEnvNameFor } from '../src/config/index.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -137,7 +137,8 @@ async function main(): Promise<void> {
   // line unchanged. Underscore is RFC 3986 unreserved, so this is not a standards argument — it is
   // that nginx drops headers containing underscores by DEFAULT and silently, and that `_` vanishes
   // under link underlining. ngdpbase holds the same rule across 472 keys with zero underscores.
-  const catalogKeys = Object.keys(ConfigCatalog);
+  // The shipped file IS the list of keys now (yourphr#629) — there is no second structure.
+  const catalogKeys = policyEngine.managers.configuration.keys();
   const badShape = catalogKeys.filter((k) => !/^yourphr(\.[a-z0-9]+(-[a-z0-9]+)*)+$/.test(k));
   check('every configuration key is yourphr-prefixed, lowercase, dot-separated, hyphens inside a segment, no underscores',
     badShape.length === 0, badShape.join(', '));

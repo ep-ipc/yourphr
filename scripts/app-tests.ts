@@ -492,10 +492,13 @@ async function main(): Promise<void> {
   const setOk = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.sync.max-pages', value: '250' }) });
   const setEnv = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.database.encryption.key', value: 'x' }) });
   const setUnknown = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'nope.key', value: 1 }) });
-  const setBootstrap = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.web.listen.port', value: 9 }) });
+  // A restart-required key is SETTABLE now (yourphr#629): `bootstrap` conflated "needs a restart"
+  // with "cannot be set", and only the second was ever enforced. Saying so is yourphr#624.
+  const setRestartRequired = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.web.listen.port', value: 9 }) });
   const setBadType = await adminJson('/api/secure/admin/config', { method: 'PUT', body: JSON.stringify({ key: 'yourphr.sync.max-pages', value: 'lots' }) });
-  check('set: coerced to the shipped type and stored; env-pinned is 409; unknown, bootstrap and wrong-typed are 400',
-    setOk.status === 200 && app.config.getInt('yourphr.sync.max-pages') === 250 && setEnv.status === 409 && setUnknown.status === 400 && setBootstrap.status === 400 && setBadType.status === 400);
+  check('set: coerced to the shipped type and stored; env-pinned is 409; unknown and wrong-typed are 400; a restart-required key is accepted',
+    setOk.status === 200 && app.config.getInt('yourphr.sync.max-pages') === 250 && setEnv.status === 409 && setUnknown.status === 400 && setRestartRequired.status === 200 && setBadType.status === 400,
+    `ok ${setOk.status} env ${setEnv.status} unknown ${setUnknown.status} restart ${setRestartRequired.status} badtype ${setBadType.status}`);
   const reset = await adminJson('/api/secure/admin/config/yourphr.sync.max-pages', { method: 'DELETE' });
   const resetAgain = await adminJson('/api/secure/admin/config/yourphr.sync.max-pages', { method: 'DELETE' });
   check('reset clears the override (reported), and the default is back', reset.body.data['cleared'] === true && resetAgain.body.data['cleared'] === false && app.config.getInt('yourphr.sync.max-pages') === 500);

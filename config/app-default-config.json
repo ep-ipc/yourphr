@@ -77,5 +77,16 @@
       "issystem": true,
       "permissions": []
     }
-  }
+  },
+  "_comment_public": "Keys served by GET /api/instance/public to callers with NO login (yourphr#457). Direction matters: this is an ALLOW-LIST, so a key added anywhere else in this file is private until it is named here. A deny-list would publish anything nobody remembered to list. An instance may widen it in <data>/config/app-custom-config.json.",
+  "yourphr.public": [
+    "yourphr.operator.name",
+    "yourphr.operator.contact-url",
+    "yourphr.auth.password.min-length"
+  ],
+  "_comment_secret": "Keys masked on the Admin Configuration screen until an admin explicitly reveals one (yourphr#458). Deliberately SHORT: masking everything outside `public` makes an operator click through the listen port and the log level, and trains them to reveal reflexively. This list is the OPPOSITE shape to `public` and that is intentional \u2014 `public` is an allow-list because a mistake exposes a value to the internet; `secret` is a DENY-LIST because a mistake shows a value to an already-authenticated admin on their own screen. A value that is an ${VAR} environment reference masks itself and needs no entry here (yourphr#622).",
+  "yourphr.secret": [
+    "yourphr.database.encryption.key",
+    "yourphr.backup.encryption.key"
+  ]
 }

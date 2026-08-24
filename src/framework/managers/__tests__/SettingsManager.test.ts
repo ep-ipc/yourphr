@@ -65,7 +65,7 @@ describe('SettingsManager — what the instance says about itself, with the call
     const { settings, admin } = await boot({ YOURPHR_BACKUP_ENCRYPTION_KEY: 'from-env' });
     const snap = settings.configSnapshot(admin);
     const byKey = Object.fromEntries(snap.entries.map((e) => [e.key, e]));
-    expect(byKey['yourphr.backup.encryption.key']).toMatchObject({ masked: true, value: '••••', from_env: true, env_var: 'YOURPHR_BACKUP_ENCRYPTION_KEY', bootstrap: true });
+    expect(byKey['yourphr.backup.encryption.key']).toMatchObject({ masked: true, value: '••••', from_env: true, env_var: 'YOURPHR_BACKUP_ENCRYPTION_KEY' });
     expect(byKey['yourphr.operator.name']).toMatchObject({ public: true, source: 'default', from_env: false });
     expect(byKey['yourphr.operator.contact-email']?.public).toBe(false);
     // Where the overrides live comes from the PROVIDER, not from the manager guessing a filename
@@ -81,12 +81,14 @@ describe('SettingsManager — what the instance says about itself, with the call
   });
 
   it('set: unknown key 400, env-pinned 409, wrong shape 400, otherwise coerced to the shipped type and logged', async () => {
-    const { settings, admin, engine, log } = await boot({ YOURPHR_SYNC_MAX_PAGES: '9' });
+    const { settings, admin, engine, log } = await boot({ YOURPHR_SYNC_MAX_PAGES: '9', YOURPHR_BACKUP_ENCRYPTION_KEY: 'from-deployment' });
     const status = (fn: () => void): number => { try { fn(); return 200; } catch (err) { return (err as ApiError).status; } };
     expect(status(() => settings.configSet(admin, 'nope.key', 1))).toBe(400);
     expect(status(() => settings.configSet(admin, 'yourphr.sync.max-pages', 5))).toBe(409);
     expect(status(() => settings.configSet(admin, 'yourphr.backup.max-backups', 'many'))).toBe(400);
-    expect(status(() => settings.configSet(admin, 'yourphr.backup.encryption.key', 'x'))).toBe(400); // bootstrap: env only
+    // A secret is masked, not unwritable (yourphr#629, Go's rule). Here it is env-set, and an
+    // env-pinned key is refused 409 — which is what actually protects it in a real deployment.
+    expect(status(() => settings.configSet(admin, 'yourphr.backup.encryption.key', 'x'))).toBe(409);
     settings.configSet(admin, 'yourphr.backup.max-backups', '3');
     expect(engine.managers.configuration.getInt('yourphr.backup.max-backups')).toBe(3);
     settings.configSet(admin, 'yourphr.backup.schedule.enabled', 'true');

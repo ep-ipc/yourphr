@@ -16,7 +16,7 @@
 import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
 import { ApiError, type ApiContext } from '../ApiContext.js';
-import { envNameFor, type ConfigValue } from '../../config/index.js';
+import { envNameFor, PUBLIC_KEYS_KEY, type ConfigValue } from '../../config/index.js';
 import { loadLegalDocument, parseLegalKind, type LegalDocument } from '../../legal/index.js';
 
 declare module '../Engine.js' {
@@ -36,8 +36,6 @@ export interface ConfigEntry {
   default: ConfigValue | '••••';
   from_env: boolean;
   env_var: string;
-  description: string;
-  bootstrap: boolean;
 }
 
 export interface InstanceSettings {
@@ -53,8 +51,8 @@ export interface SettingsOptions {
   dataDir?: string;
 }
 
-/** The keys /api/instance/public publishes — Go's `public` list, as far as this stack has values. */
-const PUBLIC_KEYS = new Set(['yourphr.operator.name', 'yourphr.operator.contact-url', 'yourphr.auth.password.min-length']);
+// The allow-list moved into the shipped configuration with yourphr#629 — Go's `public` key, Go's
+// shape. An instance may widen it in app-custom-config.json, which is why `promoted` exists.
 
 export class SettingsManager extends BaseManager {
   readonly name = 'settings';
@@ -82,6 +80,11 @@ export class SettingsManager extends BaseManager {
 
   private get configuration() {
     return this.engine.managers.configuration;
+  }
+
+  /** Keys an anonymous caller may read — the allow-list as this instance has it (yourphr#457). */
+  private publicKeys(): string[] {
+    return this.configuration.getStringList(PUBLIC_KEYS_KEY);
   }
 
   /**
@@ -120,20 +123,21 @@ export class SettingsManager extends BaseManager {
     const config = this.configuration;
     return {
       entries: config.snapshot().map((row) => {
-        const spec = config.specOf(row.key)!;
         const shipped = config.shippedValue(row.key)!;
+        const secret = config.isSecret(row.key);
         return {
           key: row.key,
           value: row.value,
           masked: row.value === '••••',
           source: row.source === 'custom' ? 'custom' : 'default',
-          public: PUBLIC_KEYS.has(row.key),
-          promoted: false,
-          default: spec.secret && String(shipped) !== '' ? '••••' : shipped,
+          public: this.publicKeys().includes(row.key),
+          // Go's `promoted`: this instance widened `public` beyond the shipped set. Worth surfacing
+          // inline, because a startup log line is read approximately never.
+          promoted: this.publicKeys().includes(row.key) && !(config.shippedPublicKeys().includes(row.key)),
+          // Masked on the same rule as the value, so `reset` cannot reveal what the row hides.
+          default: secret && String(shipped) !== '' ? '••••' : shipped,
           from_env: row.source === 'environment',
           env_var: envNameFor(row.key),
-          description: row.description,
-          bootstrap: spec.bootstrap === true,
         };
       }),
       custom_config_path: config.customConfigPath(),
@@ -144,8 +148,7 @@ export class SettingsManager extends BaseManager {
   /** The raw value — a logged, deliberate act, recorded by who asked. Undefined for an unknown key. */
   configReveal(ctx: ApiContext, key: string): { key: string; value: ConfigValue; default: ConfigValue } | undefined {
     ctx.require('admin-system');
-    const spec = this.configuration.specOf(key);
-    if (!spec) return undefined;
+    if (!this.configuration.keys().includes(key)) return undefined;
     this.log(`${ctx.actor} revealed configuration value for ${key}`);
     return { key, value: this.configuration.reveal(key), default: this.configuration.shippedValue(key)! };
   }
@@ -154,8 +157,7 @@ export class SettingsManager extends BaseManager {
   configSet(ctx: ApiContext, key: string, value: unknown): void {
     ctx.require('admin-system');
     const config = this.configuration;
-    const spec = config.specOf(key);
-    if (!spec) throw new ApiError(400, `unknown configuration key ${JSON.stringify(key)} — only keys this stack describes can be set`);
+    if (!config.keys().includes(key)) throw new ApiError(400, `unknown configuration key ${JSON.stringify(key)} — only keys this build ships can be set`);
     if (config.isSetByEnvironment(key)) {
       throw new ApiError(409, `${key} is set by the environment variable ${envNameFor(key)}, which takes precedence over this screen — change it in your deployment configuration instead`);
     }
@@ -176,7 +178,7 @@ export class SettingsManager extends BaseManager {
   /** Removes an override; false when there was none. ApiError 400 for an unknown key. */
   configReset(ctx: ApiContext, key: string): boolean {
     ctx.require('admin-system');
-    if (!this.configuration.specOf(key)) throw new ApiError(400, `unknown configuration key ${JSON.stringify(key)}`);
+    if (!this.configuration.keys().includes(key)) throw new ApiError(400, `unknown configuration key ${JSON.stringify(key)}`);
     let cleared: boolean;
     try {
       cleared = this.configuration.clear(key);

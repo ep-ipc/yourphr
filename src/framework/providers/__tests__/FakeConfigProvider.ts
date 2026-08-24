@@ -4,7 +4,7 @@
  * harnesses did exactly that in tests that were not about configuration at all.
  */
 import { BaseConfigProvider, type LoadedConfig } from '../BaseConfigProvider.js';
-import { ConfigCatalog, type ConfigValue } from '../../../config/index.js';
+import type { ConfigValue } from '../../../config/index.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -51,5 +51,3 @@ export class FakeConfigProvider extends BaseConfigProvider {
     return '<in-memory>';
   }
 }
-
-export { ConfigCatalog };

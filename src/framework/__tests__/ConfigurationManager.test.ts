@@ -58,8 +58,11 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
   it('refuses the writes that would store a value that never applies', () => {
     const { cfg } = boot({ YOURPHR_SYNC_MAX_PAGES: '9' });
     expect(() => cfg.set('nope.key', 1)).toThrow(/unknown configuration key/);
-    expect(() => cfg.set('yourphr.database.encryption.key', 'x')).toThrow(/bootstrap/);   // env only
     expect(() => cfg.set('yourphr.sync.max-pages', 5)).toThrow(/set in the environment/); // env wins at read time
+    // A secret key is masked, not unwritable — Go's rule (yourphr#629). What protects the
+    // encryption key in a real deployment is that it arrives from the environment, or as a $VAR
+    // reference, and BOTH are refused above and below. Unset, there is no secret to leak.
+    expect(() => cfg.set('yourphr.database.encryption.key', 'x')).not.toThrow();
   });
 
   it('clear() drops an override; resetToDefaults() drops them all', async () => {
@@ -94,15 +97,27 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
     expect(rows['yourphr.backup.encryption.key']).toMatchObject({ value: '••••', source: 'environment' });
     expect(rows['yourphr.operator.name']).toMatchObject({ value: 'Ops', source: 'custom' });
     expect(rows['yourphr.sync.max-pages']).toMatchObject({ value: 500, source: 'default' });
-    expect(rows['yourphr.sync.max-pages']?.description).toContain('paging'); // meaning came from the catalogue
+    // Descriptions left with the catalogue (yourphr#629) — Go's ConfigEntry has none either.
   });
 
-  it('refuses to boot when the shipped values and the catalogue disagree', () => {
-    const { 'yourphr.sync.max-pages': _dropped, ...missingOne } = shipped();
-    expect(() => new ConfigurationManager(new Engine(), new FakeConfigProvider({}, missingOne), { env: {} }))
-      .toThrow(/no shipped value for yourphr\.sync\.max-pages/);
-    expect(() => new ConfigurationManager(new Engine(), new FakeConfigProvider({}, { ...shipped(), 'undescribed.key': 1 }), { env: {} }))
-      .toThrow(/no description for undescribed\.key/);
+  it('every key the shipped file defines is known, and nothing else is (yourphr#629)', () => {
+    const { cfg } = boot();
+    expect(cfg.keys()).toContain('yourphr.sync.max-pages');
+    expect(cfg.keys()).not.toContain('yourphr.storage.data-dir');   // left with #630
+    expect(() => cfg.getString('never.shipped')).toThrow(/unknown configuration key/);
+    // No second list to disagree with: the shipped file IS the catalogue.
+    expect(cfg.keys().length).toBe(Object.keys(shipped()).length);
+  });
+
+  it('the secret deny-list masks on the admin screen and is read as data, not compiled', () => {
+    const { cfg } = boot({ YOURPHR_DATABASE_ENCRYPTION_KEY: 'at-rest' });
+    expect(cfg.isSecret('yourphr.database.encryption.key')).toBe(true);
+    expect(cfg.maskedValue('yourphr.database.encryption.key')).toBe('••••');
+    expect(cfg.getString('yourphr.database.encryption.key')).toBe('at-rest'); // readable to code
+    expect(cfg.isSecret('yourphr.web.listen.port')).toBe(false);
+    // An instance can extend the list, because it is configuration.
+    cfg.set('yourphr.secret', ['yourphr.database.encryption.key', 'yourphr.operator.contact-email']);
+    expect(cfg.isSecret('yourphr.operator.contact-email')).toBe(true);
   });
 
   it('backup() carries the overrides only — never the environment — and restore() puts them back', async () => {

@@ -19,7 +19,7 @@
 import { BaseManager, type BackupData } from './BaseManager.js';
 import type { Engine } from './Engine.js';
 import type { BaseConfigProvider } from './providers/BaseConfigProvider.js';
-import { ConfigCatalog, envNameFor, legacyEnvNameFor, isConfigObject, type ConfigKeySpec, type ConfigObject, type ConfigValue } from '../config/index.js';
+import { envNameFor, legacyEnvNameFor, isConfigObject, PUBLIC_KEYS_KEY, SECRET_KEYS_KEY, type ConfigObject, type ConfigValue } from '../config/index.js';
 
 declare module './Engine.js' {
   interface ManagerRegistry {
@@ -32,12 +32,9 @@ export interface ConfigRow {
   key: string;
   value: ConfigValue | '••••';
   source: 'environment' | 'custom' | 'default';
-  description: string;
 }
 
 export interface ConfigurationOptions {
-  /** The catalogue of what each key means. Injectable so a test can describe its own keys. */
-  catalog?: Record<string, ConfigKeySpec>;
   /** The environment layer. Injectable so a test need not mutate the process. */
   env?: Record<string, string | undefined>;
   log?: (line: string) => void;
@@ -46,7 +43,6 @@ export interface ConfigurationOptions {
 export class ConfigurationManager extends BaseManager {
   readonly name = 'configuration' as const;
 
-  private readonly catalog: Record<string, ConfigKeySpec>;
   private readonly env: Record<string, string | undefined>;
   private readonly log: (line: string) => void;
 
@@ -59,7 +55,6 @@ export class ConfigurationManager extends BaseManager {
 
   constructor(engine: Engine, private readonly provider: BaseConfigProvider, options: ConfigurationOptions = {}) {
     super(engine);
-    this.catalog = options.catalog ?? ConfigCatalog;
     this.env = options.env ?? process.env;
     this.log = options.log ?? (() => undefined);
     this.reload();
@@ -78,18 +73,17 @@ export class ConfigurationManager extends BaseManager {
     // A real environment variable always wins; the provider's roots are the floor, so a template
     // resolves against the root actually in use even when nothing in the environment names it.
     this.roots = { ...this.provider.roots() };
-    const described = Object.keys(this.catalog);
-    // Two lists that must agree, and nothing else checks them: a shipped value nobody described is
-    // unfindable in the admin UI, and a described key with no value reads as undefined at runtime.
-    const undescribed = Object.keys(this.defaults).filter((k) => !described.includes(k));
-    const valueless = described.filter((k) => !(k in this.defaults));
-    if (undescribed.length || valueless.length) {
-      throw new Error(
-        'configuration: the shipped defaults and the catalogue disagree — ' +
-        [undescribed.length ? `no description for ${undescribed.join(', ')}` : '', valueless.length ? `no shipped value for ${valueless.join(', ')}` : '']
-          .filter(Boolean).join('; ')
-      );
-    }
+  }
+
+  /** Every key this build understands: the shipped file IS the list (yourphr#629). */
+  private known(key: string): boolean {
+    return key in this.defaults;
+  }
+
+  /** Keys masked on the admin screen until revealed — Go's deny-list, read as data. */
+  private secretKeys(): string[] {
+    const raw = this.merged[SECRET_KEYS_KEY];
+    return Array.isArray(raw) ? raw.map(String) : [];
   }
 
   override async initialize(config: Record<string, unknown> = {}): Promise<void> {
@@ -99,7 +93,7 @@ export class ConfigurationManager extends BaseManager {
     if (this.customUnreadable) this.log(`configuration: overrides could not be read and are being ignored, not overwritten — ${this.customUnreadable}`);
     // Resolve every key once at boot so a missing REQUIRED secret refuses here, naming itself,
     // rather than at the first request that happens to read it (yourphr#622).
-    for (const key of Object.keys(this.catalog)) this.raw(key);
+    for (const key of Object.keys(this.defaults)) this.raw(key);
     if (this.envRefHits || this.envRefBraceMisses) {
       this.log(`configuration: ${this.envRefHits} environment reference(s) resolved` +
         (this.envRefBraceMisses ? `, ${this.envRefBraceMisses} left unresolved (embedded form — they fail at point of use)` : ''));
@@ -114,12 +108,10 @@ export class ConfigurationManager extends BaseManager {
 
   /** The value the layers select, BEFORE environment references are resolved. */
   private configured(key: string): ConfigValue {
-    const spec = this.catalog[key];
-    if (!spec) throw new Error(`unknown configuration key: ${key}`);
+    if (!this.known(key)) throw new Error(`unknown configuration key: ${key}`);
     const fromEnv = this.envValue(envNameFor(key)) ?? this.legacyEnvValue(key);
     if (fromEnv !== undefined) return coerceFromEnv(fromEnv, this.defaults[key], key);
-    // A bootstrap key ignores the overrides by design: it must hold before an admin could set it.
-    if (!spec.bootstrap && key in this.custom) return this.merged[key] as ConfigValue;
+    if (key in this.custom) return this.merged[key] as ConfigValue;
     return this.defaults[key] as ConfigValue;
   }
 
@@ -185,9 +177,11 @@ export class ConfigurationManager extends BaseManager {
    */
   maskedValue(key: string): ConfigValue | '••••' {
     if (this.isEnvReference(key)) return '••••';
-    const spec = this.catalog[key];
     const value = this.raw(key);
-    return spec?.secret && String(value) !== '' ? '••••' : value;
+    // Go's deny-list, read as data rather than compiled (yourphr#629): masking a value an admin
+    // could otherwise read on their own screen. Deliberately short — masking everything outside
+    // `public` trains an operator to click reveal without reading.
+    return this.secretKeys().includes(key) && String(value) !== '' ? '••••' : value;
   }
 
   getString(key: string): string { return String(this.raw(key)); }
@@ -219,7 +213,6 @@ export class ConfigurationManager extends BaseManager {
   /** Only what this instance changed — the admin screen's "customised" view. */
   customValues(): Record<string, ConfigValue> { return { ...this.custom }; }
 
-  specOf(key: string): ConfigKeySpec | undefined { return this.catalog[key]; }
   isSetByEnvironment(key: string): boolean {
     return this.envValue(envNameFor(key)) !== undefined || this.legacyEnvValue(key) !== undefined;
   }
@@ -244,26 +237,39 @@ export class ConfigurationManager extends BaseManager {
   private readonly warnedLegacy = new Set<string>();
   customConfigPath(): string { return this.provider.customLocation(); }
 
-  /** Override keys the catalogue does not know — reported, never silently dropped (yourphr#473). */
+  /**
+   * Override keys this build does not define — reported, never silently dropped (yourphr#473).
+   * The shipped file is the list, so no second structure is needed to detect one.
+   */
   unknownKeys(): string[] {
     if (this.customUnreadable) return [`<unreadable: ${this.provider.customLocation()}>`];
-    return Object.keys(this.custom).filter((k) => !(k in this.catalog));
+    return Object.keys(this.custom).filter((k) => !this.known(k));
   }
+
+  /** Every key this build defines, for the admin screen and the drift checks. */
+  keys(): string[] { return Object.keys(this.defaults); }
+
+  /** The SHIPPED allow-list, so the admin screen can say which entries this instance added. */
+  shippedPublicKeys(): string[] {
+    const raw = this.defaults[PUBLIC_KEYS_KEY];
+    return Array.isArray(raw) ? raw.map(String) : [];
+  }
+
+  /** Is this key masked on the admin screen? Go's `secret` deny-list. */
+  isSecret(key: string): boolean { return this.secretKeys().includes(key); }
 
   /** The admin view: every known key, its effective value (secrets masked), and its source. */
   snapshot(): ConfigRow[] {
-    return Object.entries(this.catalog).map(([key, spec]) => {
-      const source = this.isSetByEnvironment(key) ? 'environment' : key in this.custom && !spec.bootstrap ? 'custom' : 'default';
-      return { key, value: this.maskedValue(key), source, description: spec.description };
+    return Object.keys(this.defaults).map((key) => {
+      const source = this.isSetByEnvironment(key) ? 'environment' : key in this.custom ? 'custom' : 'default';
+      return { key, value: this.maskedValue(key), source };
     });
   }
 
   // --- writing ---------------------------------------------------------------------------------
 
   set(key: string, value: ConfigValue): void {
-    const spec = this.catalog[key];
-    if (!spec) throw new Error(`unknown configuration key: ${key}`);
-    if (spec.bootstrap) throw new Error(`${key} is bootstrap configuration — set it in the environment (${envNameFor(key)}), not the settings store`);
+    if (!this.known(key)) throw new Error(`unknown configuration key: ${key}`);
     if (this.isSetByEnvironment(key)) throw new Error(`${key} is set in the environment (${envNameFor(key)}); remove the variable to manage it here`);
     if (this.customUnreadable) throw new Error(`${this.provider.customLocation()} exists but cannot be parsed — refusing to overwrite it`);
     // Writing a literal over an environment reference would move a secret out of the deployment
@@ -278,7 +284,7 @@ export class ConfigurationManager extends BaseManager {
 
   /** Removes an override so the key reads its shipped value again. False when there was none. */
   clear(key: string): boolean {
-    if (!this.catalog[key]) throw new Error(`unknown configuration key: ${key}`);
+    if (!this.known(key)) throw new Error(`unknown configuration key: ${key}`);
     if (this.customUnreadable) throw new Error(`${this.provider.customLocation()} exists but cannot be parsed — refusing to overwrite it`);
     if (!(key in this.custom)) return false;
     delete this.custom[key];
@@ -300,7 +306,7 @@ export class ConfigurationManager extends BaseManager {
 
   async restore(data: BackupData): Promise<void> {
     for (const [key, value] of Object.entries((data.payload ?? {}) as Record<string, ConfigValue>)) {
-      if (this.catalog[key] && !this.catalog[key]!.bootstrap) this.custom[key] = value;
+      if (this.known(key)) this.custom[key] = value;
     }
     this.merged = deepMerge(this.defaults, this.custom);
     this.provider.saveCustom(this.custom);
