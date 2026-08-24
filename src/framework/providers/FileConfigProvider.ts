@@ -58,9 +58,13 @@ export class FileConfigProvider extends BaseConfigProvider {
     return this.customPath;
   }
 
-  /** The fast root is the directory this provider was pointed at — the instance's data directory. */
+  /**
+   * The roots path templates resolve against (yourphr#630). The fast root is the directory this
+   * provider was pointed at; the slow root defaults to it, so a single-volume instance sets
+   * nothing. A real environment variable outranks both — the manager checks it first.
+   */
   override roots(): Record<string, string> {
-    return { YOURPHR_STORAGE_DATA_DIR: this.dataDir };
+    return { YOURPHR_FAST_STORAGE: this.dataDir, YOURPHR_SLOW_STORAGE: this.dataDir };
   }
 }
 

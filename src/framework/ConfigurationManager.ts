@@ -78,16 +78,6 @@ export class ConfigurationManager extends BaseManager {
     // A real environment variable always wins; the provider's roots are the floor, so a template
     // resolves against the root actually in use even when nothing in the environment names it.
     this.roots = { ...this.provider.roots() };
-    // Root keys resolve FIRST, in catalogue order, and join the resolution scope — so a path can
-    // compose from a root without this manager knowing any application key by name, and a root may
-    // build on an earlier one (yourphr#626).
-    for (const [key, spec] of Object.entries(this.catalog)) {
-      if (spec.root !== true || !(key in this.defaults)) continue;
-      const name = envNameFor(key);
-      if (this.env[name] !== undefined) continue; // a real environment variable still wins
-      const value = String(this.resolveEnvRef(this.merged[key] ?? this.defaults[key]!, key));
-      if (value !== '') this.roots[name] = value;
-    }
     const described = Object.keys(this.catalog);
     // Two lists that must agree, and nothing else checks them: a shipped value nobody described is
     // unfindable in the admin UI, and a described key with no value reads as undefined at runtime.

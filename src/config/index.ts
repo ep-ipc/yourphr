@@ -71,13 +71,6 @@ export interface ConfigKeySpec {
    * screen change a listen port that silently does not apply.
    */
   bootstrap?: boolean;
-  /**
-   * This key defines a STORAGE ROOT (yourphr#626). Root keys are resolved first, in catalogue
-   * order, and their values are then available to `${VAR}` in every other value — which is how a
-   * path composes from a root without the framework knowing any application key by name. A root
-   * may reference an earlier root; nothing else may be referenced this way.
-   */
-  root?: boolean;
   description: string;
 }
 
@@ -87,8 +80,6 @@ export interface ConfigKeySpec {
  * arrive, with a description, because an undescribed setting is unfindable in an admin UI.
  */
 export const ConfigCatalog: Record<string, ConfigKeySpec> = {
-  'yourphr.storage.data-dir': { bootstrap: true, root: true, description: 'Directory holding everything this instance owns. Bootstrap: must exist before any setting screen can.' },
-  'yourphr.storage.slow-dir': { root: true, description: 'The slow root: bulk and archives, fine on a NAS mount. Defaults to the fast root, so a single-volume instance sets nothing (yourphr#626).' },
   'yourphr.database.location': { description: 'Where the app database lives. Composed from a root; must resolve onto the FAST root — SQLite locking is unsafe over a network mount.' },
   'yourphr.records.location': { description: 'Where the PHI record store lives. Composed from a root; must resolve onto the FAST root, for the same reason as the app database.' },
   'yourphr.database.encryption.key': { bootstrap: true, secret: true, description: 'At-rest cipher key. Bootstrap and secret: env only, never the overlay.' },

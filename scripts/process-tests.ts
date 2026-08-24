@@ -58,13 +58,17 @@ async function main(): Promise<void> {
   const webDir = join(dir, 'web');
   mkdirSync(webDir);
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>YourPHR</title><app-root></app-root>');
-  const DATA = envNameFor('yourphr.storage.data-dir');
+  const DATA = 'YOURPHR_FAST_STORAGE'; // a plain environment variable, not a config key (yourphr#630)
   const WEB = envNameFor('yourphr.web.static-dir');
   const PORT = envNameFor('yourphr.web.listen.port');
 
   // --- refusals: a misconfigured process must not boot inert (yourphr#546's principle) ---
-  const noData = runOnce({ [DATA]: '', [PORT]: '0' });
-  check('refuses to start without a data dir, naming the variable', noData.status === 78 && noData.stderr.includes(DATA));
+  // NOT a refusal any more (yourphr#630): the fast storage root defaults to ./data, as ngdpbase
+  // ships it, which is what lets an unpacked copy run without an operator setting anything. An
+  // unset root is normal; an UNWRITABLE one is still fatal, which is the check below.
+  const unwritable = runOnce({ [DATA]: '/proc/cannot-write-here', [PORT]: '0' });
+  check('refuses to start when the data directory cannot be created or written, naming the path',
+    unwritable.status === 78 && unwritable.stderr.includes('cannot-write-here'), `status ${unwritable.status}`);
   const noIndex = runOnce({ [DATA]: dataDir, [WEB]: join(dir, 'nowhere'), [PORT]: '0' });
   check('refuses a static dir with no index.html, naming it', noIndex.status === 78 && noIndex.stderr.includes('index.html'));
 

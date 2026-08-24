@@ -8,6 +8,10 @@
  * directory with no index.html is a configuration error; a process that boots "inert" in that
  * state is the failure yourphr#546 names, and it is worse than a crash because nobody notices.
  */
+// MUST be first: a side-effecting import that populates process.env from .env before any other
+// module's top-level code runs (yourphr#630). Imports are hoisted, so ordering here is the
+// mechanism, not a style choice.
+import './bootstrap-env.js';
 import { accessSync, constants, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assembleApp } from './app.js';
@@ -26,10 +30,11 @@ function refuse(message: string): never {
 
 const env = process.env;
 
-const dataDir = env[envNameFor('yourphr.storage.data-dir')] ?? '';
-if (dataDir === '') {
-  refuse(`${envNameFor('yourphr.storage.data-dir')} is not set — the data directory is bootstrap configuration and has no default`);
-}
+// The fast storage root is a plain environment variable, not a configuration key: it is what
+// LOCATES the configuration, so it cannot be set inside it (yourphr#630). `./data` is the default,
+// which is what lets an unpacked copy run without an operator setting anything — ngdpbase ships
+// the same default. The pre-#630 name is still honoured so an existing deployment keeps booting.
+const dataDir = env['YOURPHR_FAST_STORAGE'] ?? env['YOURPHR_STORAGE_DATA_DIR'] ?? './data';
 try {
   mkdirSync(dataDir, { recursive: true });
   accessSync(dataDir, constants.W_OK);
@@ -51,6 +56,12 @@ const host = bootstrap.getString('yourphr.web.listen.host');
 const intervalSeconds = bootstrap.getInt('yourphr.sync.interval-seconds');
 if (bootstrap.getString('yourphr.database.encryption.key') === '') {
   appLog.warn(`${envNameFor('yourphr.database.encryption.key')} is not set — the database and the tokens in it are stored in the clear`);
+} else if (existsSync(join(dataDir, '.env'))) {
+  // The keys came from a file on the data volume, which is the arrangement yourphr#630 moves to
+  // and the one that loses them if the volume is lost. There is no way to check whether the
+  // operator recorded them elsewhere, so say it every start rather than assume: the failure is
+  // silent until a restore, and by then it is not recoverable.
+  appLog.warn(`the encryption keys are on this volume only (${join(dataDir, '.env')}) — if it is lost, the database and every backup become permanently unreadable. Record ${envNameFor('yourphr.database.encryption.key')} and ${envNameFor('yourphr.backup.encryption.key')} somewhere that is not this instance.`);
 }
 
 const version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;

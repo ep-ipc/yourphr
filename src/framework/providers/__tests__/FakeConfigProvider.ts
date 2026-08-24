@@ -30,7 +30,7 @@ export class FakeConfigProvider extends BaseConfigProvider {
 
   /** Same contract as the file provider: the root this instance was built over. */
   override roots(): Record<string, string> {
-    return { YOURPHR_STORAGE_DATA_DIR: this.dataDir };
+    return { YOURPHR_FAST_STORAGE: this.dataDir, YOURPHR_SLOW_STORAGE: this.dataDir };
   }
 
   load(): LoadedConfig {

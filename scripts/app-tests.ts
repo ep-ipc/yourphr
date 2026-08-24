@@ -562,7 +562,7 @@ async function main(): Promise<void> {
         && oneVolume.config.getString('yourphr.backup.destination') === join(fastDir, 'backups'));
     await oneVolume.close();
 
-    const twoVolume = await assembleApp(fastDir, { env: { YOURPHR_STORAGE_SLOW_DIR: '/mnt/nas', SPIKE_TEST_ALLOW_INTERNAL: '1' } });
+    const twoVolume = await assembleApp(fastDir, { env: { YOURPHR_SLOW_STORAGE: '/mnt/nas', SPIKE_TEST_ALLOW_INTERNAL: '1' } });
     check('two volumes: the archive follows the slow root, the databases stay on the fast one',
       twoVolume.config.getString('yourphr.backup.destination') === '/mnt/nas/backups'
         && twoVolume.config.getString('yourphr.database.location') === join(fastDir, 'spike.db'));

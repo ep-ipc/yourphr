@@ -118,40 +118,37 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
   });
 });
 
-describe('storage roots — instance data spans two, paths compose from them (yourphr#626)', () => {
-  const tmpRoot = (): string => tmp();
-
-  it('one volume: the slow root collapses onto the fast one and nothing else changes', () => {
-    const dir = tmpRoot();
+describe('storage roots — plain environment variables, paths compose from them (yourphr#626, #630)', () => {
+  it('one volume: the slow root defaults to the fast one and every path composes off it', () => {
+    const dir = tmp();
     const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: {} });
-    expect(cfg.getString('yourphr.storage.data-dir')).toBe(dir);
-    expect(cfg.getString('yourphr.storage.slow-dir')).toBe(dir);   // defaults to the fast root
     expect(cfg.getString('yourphr.database.location')).toBe(join(dir, 'spike.db'));
     expect(cfg.getString('yourphr.records.location')).toBe(join(dir, 'records.db'));
     expect(cfg.getString('yourphr.backup.destination')).toBe(join(dir, 'backups'));
   });
 
-  it('two volumes: backups move to the slow root, the databases stay on the fast one', () => {
-    const dir = tmpRoot();
-    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: { YOURPHR_STORAGE_SLOW_DIR: '/mnt/nas' } });
+  it('two volumes: the archive follows the slow root, the databases stay on the fast one', () => {
+    const dir = tmp();
+    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: { YOURPHR_SLOW_STORAGE: '/mnt/nas' } });
     expect(cfg.getString('yourphr.backup.destination')).toBe('/mnt/nas/backups');
-    expect(cfg.getString('yourphr.database.location')).toBe(join(dir, 'spike.db'));  // never follows the slow root
+    expect(cfg.getString('yourphr.database.location')).toBe(join(dir, 'spike.db'));
     expect(cfg.getString('yourphr.records.location')).toBe(join(dir, 'records.db'));
   });
 
+  it('the roots are NOT configuration keys — they locate the configuration, so they cannot live in it', () => {
+    const dir = tmp();
+    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: {} });
+    expect(() => cfg.getString('yourphr.storage.data-dir')).toThrow(/unknown configuration key/);
+    expect(() => cfg.getString('yourphr.storage.slow-dir')).toThrow(/unknown configuration key/);
+    expect(() => cfg.set('yourphr.storage.slow-dir', '/mnt/nas')).toThrow(/unknown configuration key/);
+  });
+
   it('an operator repoints one path in the config file without touching the roots', () => {
-    const dir = tmpRoot();
+    const dir = tmp();
     const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: {} });
     cfg.set('yourphr.backup.destination', '/mnt/elsewhere/nightly');
     expect(cfg.getString('yourphr.backup.destination')).toBe('/mnt/elsewhere/nightly');
     expect(cfg.getString('yourphr.database.location')).toBe(join(dir, 'spike.db')); // unaffected
-  });
-
-  it('a root resolves before the paths that reference it, and a real variable outranks the default', () => {
-    const dir = tmpRoot();
-    const cfg = new ConfigurationManager(new Engine(), new FileConfigProvider(dir), { env: { YOURPHR_STORAGE_SLOW_DIR: '/slow' } });
-    expect(cfg.getString('yourphr.storage.slow-dir')).toBe('/slow');
-    expect(cfg.getString('yourphr.backup.destination')).toBe('/slow/backups');
   });
 });
 

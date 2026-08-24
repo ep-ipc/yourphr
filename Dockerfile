@@ -49,8 +49,11 @@ USER node
 # YOURPHR_BACKUP_ENCRYPTION_KEY) come from the orchestrator, never from an image.
 # Names derive from the configuration keys, which carry the yourphr. prefix (yourphr#627). The
 # pre-#627 SPIKE_* names are still accepted with a warning, so a deployment whose manifests have
-# not been updated keeps booting; that fallback goes at the cut-over (yourphr#588).
-ENV YOURPHR_STORAGE_DATA_DIR=/opt/yourphr/data \
+# not been updated keeps booting; that fallback goes at the cut-over (yourphr#588). Secrets and any
+# other bootstrap value belong in <YOURPHR_FAST_STORAGE>/.env on the mounted volume (yourphr#630),
+# never in this image.
+ENV YOURPHR_FAST_STORAGE=/opt/yourphr/data \
+    YOURPHR_SLOW_STORAGE=/opt/yourphr/data \
     YOURPHR_WEB_STATIC_DIR=/opt/yourphr/web \
     YOURPHR_WEB_LISTEN_PORT=8080
 EXPOSE 8080

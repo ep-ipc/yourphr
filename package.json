@@ -31,6 +31,7 @@
     "check:boundary": "bash scripts/check-http-boundary.sh",
     "auth": "tsx scripts/auth-tests.ts",
     "config": "tsx scripts/config-tests.ts",
+    "env": "tsx scripts/env-tests.ts",
     "backup": "tsx scripts/backup-tests.ts",
     "worker": "tsx scripts/worker-tests.ts",
     "migrations": "tsx scripts/migration-tests.ts",
@@ -61,6 +62,7 @@
     "@medplum/fhirtypes": "^5.1.29",
     "bcryptjs": "^3.0.3",
     "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "dotenv": "^17.4.2",
     "fhirpath": "^5.1.1",
     "marked": "^18.0.10"
   },

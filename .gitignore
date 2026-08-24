@@ -25,3 +25,9 @@ coverage/
 e2e/.admin-pass
 playwright-report/
 test-results/
+
+# Environment files carry secrets — the at-rest database key and the backup key (yourphr#630).
+# A leak here is irreversible on a PHR. The template is committed; the real file never is.
+.env
+.env.*
+!.env.example
