@@ -152,6 +152,34 @@ The runbook is not done until the rollback has been rehearsed once for real. The
 3. Rehearse the swap and the rollback on the Ingress itself at a quiet hour: change the backend to `yourphr-ts` (already running, with whatever data it has), confirm `/api/version` answers the TypeScript version through the real host, change it back, confirm Go answers again. Two commits, ten minutes, and the one thing the real run must not discover for the first time.
 4. Write the observed times and any surprise into this document before the real run.
 
+### Rehearsal 1 — steps 1–2, run 2026-08-24
+
+Against `2026-08-24T02-00-41Z-yourphr-prod-2.10.3-backup.tar.gz` (111 MB `fasten.db`), extracted to scratch on the node. The live PVC, the running pods and the Ingress were not touched; nothing left the LAN.
+
+__Result: exit 0 — `MIGRATION VERIFIED — the spike answers what the Go stack holds`.__
+
+| | |
+|---|---|
+| __Migration time__ | __87 seconds__ (18:17:25 → 18:18:52) for 20,068 records |
+| Accounts | 3 of 3; `jwilleke` carried as admin |
+| Sources | 8 of 8 |
+| Catalog | 6 imported, 0 rejected |
+| Records | 20,068 imported, 0 rejected — 15,228 DocumentReference, 3,469 Condition, 373 Encounter, 307 Observation, 130 AllergyIntolerance, … |
+| Consent / access log | 1 account's consent, 5 access buckets |
+| __Verification__ | __53/53 (user, resource type) id lists agree across 3 accounts__ |
+| Output | `records.db` 257 MB, `spike.db` 96 KB |
+
+__The maintenance window to announce__ is 87 seconds of migration plus the freeze and scale time — minutes, not an outage. Budget generously; the number above is the copy, and the real run adds `kubectl scale`, the database copy and the rollout wait.
+
+__Two things to expect, neither a failure:__
+
+- __Six sources have no refresh token__ and will ask to be reconnected at first expiry — `jwilleke:`, `mwilleke:`, `jdoe:` ×3, `jwilleke:Epic (Sandbox)`. This is the household's to-do after the swap ([#584](https://github.com/jwilleke/yourphr/issues/584)); tell them before, not after.
+- __Three settings do not carry__ — `backup.auto-backup`, `backup.auto-backup-days`, `backup.auto-backup-time` — because the TypeScript stack schedules differently. Set them again in Admin → Configuration. The tool names them rather than dropping them silently.
+
+__One surprise, and it cost ten minutes:__ the migration tool is __not in the image__ and the spike was not checked out on the node, so the rehearsal needed `git clone` + `npm ci` first. Node 24, npm and git were already present. Shipping the tool in the image is the follow-up named below, and until it lands the real run needs the same preparation — do it __before__ the freeze, not during it.
+
+__Still unrehearsed: step 3, the Ingress swap and swap-back.__ That is the half that touches production and the one the real run must not meet for the first time.
+
 ## Follow-ups this runbook depends on
 
 - The migration tool should ship in the image so step 3 does not need a Node checkout on the node ([#587](https://github.com/jwilleke/yourphr/issues/587) follow-up: `dist/scripts/migrate-from-go.js`, run via `kubectl exec` with the Go copy mounted read-only).

@@ -8,8 +8,7 @@
 - [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
-- [#637](https://github.com/jwilleke/yourphr/issues/637) — [SPIKE] SettingsManager is an invention — ngdpbase has none; adopt its shape
-- [#635](https://github.com/jwilleke/yourphr/issues/635) — [SPIKE] Adopt ngdpbase config.env-keys and config.secret-keys — declared ownership, not a runtime check
+- [#641](https://github.com/jwilleke/yourphr/issues/641) — [SPIKE] Ship a minimal working deployment for each of the three targets — bare metal, Docker, k8s
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
 - [#632](https://github.com/jwilleke/yourphr/issues/632) — [FEATURE] In-app help pages — markdown shipped with the code, rendered as HTML
 - [#631](https://github.com/jwilleke/yourphr/issues/631) — [SPIKE] Backups must restore the instance, not just the data
@@ -37,10 +36,7 @@
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#639](https://github.com/jwilleke/yourphr/issues/639) — [SPIKE] Remove the SOPS Secret — .env on the volume supersedes it
-- [#636](https://github.com/jwilleke/yourphr/issues/636) — [SPIKE] The listen port needs its own resolver — it is bound before the engine exists
-- [#634](https://github.com/jwilleke/yourphr/issues/634) — [FEATURE] Per-key descriptions in the configuration file, for the Admin Configuration screen
 - [#625](https://github.com/jwilleke/yourphr/issues/625) — [ENHANCEMENT] Configuration: did-you-mean suggestions in the unknown-key report
-- [#606](https://github.com/jwilleke/yourphr/issues/606) — [SPIKE] Parity: the glossary — GET /api/glossary/code on the labs page
 - [#552](https://github.com/jwilleke/yourphr/issues/552) — [CHORE] Port the DICOM viewer to dwv 0.36 — removed APIs and a build path that no longer exists
 - [#551](https://github.com/jwilleke/yourphr/issues/551) — [CHORE] Migrate 647 *ngIf uses to Angular built-in control flow (@if/@for)
 - [#543](https://github.com/jwilleke/yourphr/issues/543) — [SPIKE] Phase 5: cut over, keep both, or stop — decided once, not by drift
