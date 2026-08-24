@@ -5,6 +5,7 @@
 
 ## 🟠 P1
 
+- [#635](https://github.com/jwilleke/yourphr/issues/635) — [SPIKE] Adopt ngdpbase config.env-keys and config.secret-keys — declared ownership, not a runtime check
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
@@ -29,6 +30,7 @@
 
 ## 🟡 P2
 
+- [#636](https://github.com/jwilleke/yourphr/issues/636) — [SPIKE] The listen port needs its own resolver — it is bound before the engine exists
 - [#634](https://github.com/jwilleke/yourphr/issues/634) — [FEATURE] Per-key descriptions in the configuration file, for the Admin Configuration screen
 - [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] yarn build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
