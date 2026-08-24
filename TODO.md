@@ -36,6 +36,7 @@
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#639](https://github.com/jwilleke/yourphr/issues/639) — [SPIKE] Remove the SOPS Secret — .env on the volume supersedes it
 - [#636](https://github.com/jwilleke/yourphr/issues/636) — [SPIKE] The listen port needs its own resolver — it is bound before the engine exists
 - [#634](https://github.com/jwilleke/yourphr/issues/634) — [FEATURE] Per-key descriptions in the configuration file, for the Admin Configuration screen
 - [#625](https://github.com/jwilleke/yourphr/issues/625) — [ENHANCEMENT] Configuration: did-you-mean suggestions in the unknown-key report
@@ -99,39 +100,7 @@
 
 ## 🔵 In review
 
-- [#630](https://github.com/jwilleke/yourphr/issues/630) — [SPIKE] Bootstrap: .env is the whole contract — port bootstrap-env.ts, storage roots as plain variables, drop the SOPS Secret
-- [#629](https://github.com/jwilleke/yourphr/issues/629) — [SPIKE] Configuration: retire the compiled catalogue — key metadata ships in app-default-config.json beside the value
-- [#627](https://github.com/jwilleke/yourphr/issues/627) — [SPIKE] Configuration: one key-naming convention — yourphr prefix, lowercase, hyphens, no underscores
-- [#626](https://github.com/jwilleke/yourphr/issues/626) — [SPIKE] Configuration: instance data spans a fast and a slow root, with every path composed from one of them
-- [#623](https://github.com/jwilleke/yourphr/issues/623) — [SPIKE] Configuration: permissions and roles become shipped config keys, read from the merged configuration at startup
-- [#622](https://github.com/jwilleke/yourphr/issues/622) — [SPIKE] Configuration: environment references ($VAR, ${VAR}) replace the bootstrap flag — the config file names the variable
-- [#621](https://github.com/jwilleke/yourphr/issues/621) — [SPIKE] Configuration: ConfigurationManager over a config provider — ConfigStore retired, two files, the bootstrap layer
-- [#620](https://github.com/jwilleke/yourphr/issues/620) — [SPIKE] #608 residue: policy as data — a permission registry and roles as flat lists, replacing the scattered requireAdmin() checks
-- [#619](https://github.com/jwilleke/yourphr/issues/619) — [SPIKE] #608 child: ServerModules retired — the account page, the admin users/metrics/database/logs cards and the records pass-throughs reach their managers directly; policy at the doors
-- [#618](https://github.com/jwilleke/yourphr/issues/618) — [SPIKE] #608 child: Settings manager — the admin configuration and instance cards, and the public instance keys, behind SettingsManager with the caller passed in
-- [#617](https://github.com/jwilleke/yourphr/issues/617) — [SPIKE] #608 child: the app database's shared connection and schema ledger, engine-owned — DatabaseManager over SqliteDatabaseProvider; src/migrations moves below the door
-- [#616](https://github.com/jwilleke/yourphr/issues/616) — [SPIKE] #608 child: Favourites fold into Records — FavoriteStore retired behind RecordsManager over a favourites provider
-- [#615](https://github.com/jwilleke/yourphr/issues/615) — [SPIKE] #608 child: Backup manager — schedule, health, staged restore and the artifact store behind BackupManager over an optional backup-storage provider; AdminOps retired
-- [#614](https://github.com/jwilleke/yourphr/issues/614) — [SPIKE] #608 child: Audit manager — the access log as a REQUIRED capability over SqliteAuditProvider; consent folds into the users provider; AccountStore retired
-- [#613](https://github.com/jwilleke/yourphr/issues/613) — [SPIKE] #608 child: Catalog manager — provider_catalog behind CatalogManager over SqliteCatalogProvider; authorize/connect through the source-client provider
-- [#612](https://github.com/jwilleke/yourphr/issues/612) — [SPIKE] #608 child: Sources + Jobs managers — SqliteSourcesProvider/SqliteJobsProvider, the SMART client as an optional source-client provider with an inert default
-- [#611](https://github.com/jwilleke/yourphr/issues/611) — [SPIKE] #608 child: Users + Sessions managers over PasswordAuthProvider — AuthResult with token generation, any-of/all-of cardinality, the MFA-bypass test
-- [#610](https://github.com/jwilleke/yourphr/issues/610) — [SPIKE] #608 child: unit tests (vitest, per manager over fake providers, coverage floor) and E2E tests (Playwright over the built Angular app)
-- [#609](https://github.com/jwilleke/yourphr/issues/609) — [SPIKE] #608 child: framework skeleton (Engine, BaseManager, ApiContext, ConfigurationManager, store-boundary lint) + RecordsManager over SqliteRecordsProvider
-- [#607](https://github.com/jwilleke/yourphr/issues/607) — [CHORE] govulncheck in CI — the Go side had no vulnerability scan (local vendor/ staleness was a red herring)
-- [#605](https://github.com/jwilleke/yourphr/issues/605) — [SPIKE] Parity: medical-history graph — POST /secure/resource/graph/MedicalHistory
-- [#604](https://github.com/jwilleke/yourphr/issues/604) — [SPIKE] Parity: users page — list, create, admin password reset
-- [#603](https://github.com/jwilleke/yourphr/issues/603) — [SPIKE] Parity: provider-catalog admin page and sandbox page
-- [#602](https://github.com/jwilleke/yourphr/issues/602) — [SPIKE] Parity: admin dashboard, database, logs and configuration pages
-- [#599](https://github.com/jwilleke/yourphr/issues/599) — [SPIKE] Find anything by words — full-text search over records inside the database, served through the authenticated API
-- [#597](https://github.com/jwilleke/yourphr/issues/597) — [SPIKE] Parity: a real admin role — the migrated operator must reach the admin pages
-- [#596](https://github.com/jwilleke/yourphr/issues/596) — [SPIKE] Parity: account page and legal — access log, legal consent, privacy and terms text, password change, sign out everywhere
-- [#595](https://github.com/jwilleke/yourphr/issues/595) — [SPIKE] Parity: dashboard and record pages — recent, reconciled conditions, classified allergies/immunizations, labs query, favorites
-- [#594](https://github.com/jwilleke/yourphr/issues/594) — [SPIKE] Parity: the Sources page — list, connectable catalog, events stream, per-source actions
-- [#593](https://github.com/jwilleke/yourphr/issues/593) — [SPIKE] Parity: the app shell — /api/secure/instance and /api/secure/jobs on every page
-- [#592](https://github.com/jwilleke/yourphr/issues/592) — [BUG] /settings sends `Authorization: Bearer null` and signs the user out — reads a localStorage token that has not existed since #118
-- [#587](https://github.com/jwilleke/yourphr/issues/587) — [SPIKE] Phase 5: package and deploy the spike — image, release tagging, Flux entry
-- [#586](https://github.com/jwilleke/yourphr/issues/586) — [SPIKE] Phase 5: one-command, per-user, verified migration tool
+*None.*
 
 ## ⏸ Deferred
 
