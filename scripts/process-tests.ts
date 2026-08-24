@@ -66,9 +66,15 @@ async function main(): Promise<void> {
   // NOT a refusal any more (yourphr#630): the fast storage root defaults to ./data, as ngdpbase
   // ships it, which is what lets an unpacked copy run without an operator setting anything. An
   // unset root is normal; an UNWRITABLE one is still fatal, which is the check below.
-  const unwritable = runOnce({ [DATA]: '/proc/cannot-write-here', [PORT]: '0' });
-  check('refuses to start when the data directory cannot be created or written, naming the path',
-    unwritable.status === 78 && unwritable.stderr.includes('cannot-write-here'), `status ${unwritable.status}`);
+  // A path UNDER a regular file: mkdir fails with ENOTDIR on every platform and for every user,
+  // including root in a CI container. A permission-based path is not portable — /proc behaves one
+  // way on macOS and another for root on Linux, which is how the first version of this check
+  // passed locally and hung in CI.
+  const blocker = join(mkdtempSync(join(tmpdir(), 'yourphr-blocked-')), 'not-a-directory');
+  writeFileSync(blocker, 'x');
+  const unwritable = runOnce({ [DATA]: join(blocker, 'data'), [PORT]: '0' });
+  check('refuses to start when the data directory cannot be created, naming the path',
+    unwritable.status === 78 && unwritable.stderr.includes('not-a-directory'), `status ${unwritable.status}`);
   const noIndex = runOnce({ [DATA]: dataDir, [WEB]: join(dir, 'nowhere'), [PORT]: '0' });
   check('refuses a static dir with no index.html, naming it', noIndex.status === 78 && noIndex.stderr.includes('index.html'));
 
