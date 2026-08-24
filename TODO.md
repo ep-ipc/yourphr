@@ -10,7 +10,6 @@
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
 - [#632](https://github.com/jwilleke/yourphr/issues/632) — [FEATURE] In-app help pages — markdown shipped with the code, rendered as HTML
 - [#631](https://github.com/jwilleke/yourphr/issues/631) — [SPIKE] Backups must restore the instance, not just the data
-- [#629](https://github.com/jwilleke/yourphr/issues/629) — [SPIKE] Configuration: retire the compiled catalogue — key metadata ships in app-default-config.json beside the value
 - [#628](https://github.com/jwilleke/yourphr/issues/628) — [SPIKE] Refuse to boot when a SQLite database resolves onto a network filesystem
 - [#624](https://github.com/jwilleke/yourphr/issues/624) — [SPIKE] Configuration: split the bootstrap flag — it is doing three jobs (raw-env, restart-required, secret)
 - [#608](https://github.com/jwilleke/yourphr/issues/608) — [SPIKE] Architecture: build on the ngdpbase model throughout — engine, managers as the only door, config-bound providers, request context (the agreed architecture doc, applied)
@@ -30,6 +29,7 @@
 
 ## 🟡 P2
 
+- [#634](https://github.com/jwilleke/yourphr/issues/634) — [FEATURE] Per-key descriptions in the configuration file, for the Admin Configuration screen
 - [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] yarn build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
@@ -95,6 +95,7 @@
 
 ## 🔵 In review
 
+- [#629](https://github.com/jwilleke/yourphr/issues/629) — [SPIKE] Configuration: retire the compiled catalogue — key metadata ships in app-default-config.json beside the value
 - [#630](https://github.com/jwilleke/yourphr/issues/630) — [SPIKE] Bootstrap: .env is the whole contract — port bootstrap-env.ts, storage roots as plain variables, drop the SOPS Secret
 - [#627](https://github.com/jwilleke/yourphr/issues/627) — [SPIKE] Configuration: one key-naming convention — yourphr prefix, lowercase, hyphens, no underscores
 - [#626](https://github.com/jwilleke/yourphr/issues/626) — [SPIKE] Configuration: instance data spans a fast and a slow root, with every path composed from one of them
