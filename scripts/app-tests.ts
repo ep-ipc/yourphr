@@ -265,6 +265,29 @@ async function main(): Promise<void> {
   check('and the refusals changed nothing — the demo session still works and demo sign-in still does',
     demoStillIn.status === 200 && (await demoSignin()).status === 200);
 
+  // yourphr#647: a per-IP budget on the unauthenticated sign-in routes. Demo sign-in needs it most
+  // — anonymous, no body, a bcrypt verify per call, and it spends no failure-throttle budget.
+  //
+  // Narrowing the budget to 2 puts this harness's own address over it immediately — every sign-in
+  // so far counted, which IS the behaviour: one budget per IP across all the auth routes, spent on
+  // requests rather than on failures. That is also why a tightened limit takes effect at once
+  // instead of granting a fresh window.
+  demoConfig.set('yourphr.auth.rate-limit.max-requests', 2);
+  const limitedDemo = await demoSignin();
+  const limitedSignin = await signIn('alice', 'a-long-enough-password');
+  check('the sign-in routes are rate limited per IP, answering 429 with Retry-After (yourphr#647)',
+    limitedDemo.status === 429 && Number(limitedDemo.headers.get('retry-after')) > 0 && limitedSignin.status === 429,
+    `demo ${limitedDemo.status}, signin ${limitedSignin.status}, retry-after ${limitedDemo.headers.get('retry-after')}`);
+  // Widening it again proves the 429s were the budget and not a broken route — and that the setting
+  // is read live, so an operator does not restart to change it.
+  demoConfig.set('yourphr.auth.rate-limit.max-requests', 500);
+  check('and widening the budget takes effect without a restart', (await demoSignin()).status === 200);
+  // 0 is the documented off switch (Go's yourphr#481: an automated suite driving logins from one address).
+  demoConfig.set('yourphr.auth.rate-limit.max-requests', 0);
+  check('a budget of 0 turns the limiter off rather than denying everything',
+    (await demoSignin()).status === 200 && (await signIn('alice', 'a-long-enough-password')).status === 200);
+  demoConfig.clear('yourphr.auth.rate-limit.max-requests');
+
   // Leave the instance as it was found — everything below is not a demo.
   demoConfig.clear('yourphr.demo.enabled');
   demoConfig.clear('yourphr.demo.password');

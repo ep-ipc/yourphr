@@ -29,6 +29,8 @@ import {sseFrame, type EventBus} from './events/index.js';
 import {Engine} from './framework/Engine.js';
 import {ApiContext, ApiError} from './framework/ApiContext.js';
 import {RecordsManager} from './app/managers/RecordsManager.js';
+import {SimpleRateLimiter} from './http/rate-limit.js';
+import {clientIp} from './framework/managers/SessionsManager.js';
 import {SqliteRecordsProvider} from './app/providers/SqliteRecordsProvider.js';
 
 /**
@@ -254,10 +256,57 @@ export function createYourPhrServer(options: ServerOptions) {
       })();
   const legacyUser = options.repo?.userId ?? '';
 
+  /**
+   * The per-IP budget for the unauthenticated auth routes (yourphr#647). Built once, on the first
+   * request, because the configuration manager only exists after the engine has initialised.
+   *
+   * A budget of 0 or less turns it OFF, deliberately: an automated suite driving real logins from
+   * one address is the case that needs that switch (Go learned it in yourphr#481, where the E2E run
+   * was silently collecting 429s). A non-positive WINDOW is a typo rather than an instruction, so it
+   * falls back to the shipped 60s instead of reading as "disable the backstop".
+   */
+  let authLimiter: SimpleRateLimiter | undefined;
+  let limiterSettings = '';
+  const limiterFor = (engine: Engine): SimpleRateLimiter | undefined => {
+    if (!engine.has('configuration')) return authLimiter;
+    const config = engine.managers.configuration;
+    const max = config.getInt('yourphr.auth.rate-limit.max-requests');
+    const windowSeconds = config.getInt('yourphr.auth.rate-limit.window-seconds');
+    const options = { max, windowMs: (windowSeconds > 0 ? windowSeconds : 60) * 1000 };
+    const settings = `${options.max}/${options.windowMs}`;
+    if (settings !== limiterSettings) {
+      // Re-read rather than freeze at boot, so an operator narrowing the budget on Admin ->
+      // Configuration does not need a restart — ngdpbase's `configure()` seam, same reasoning.
+      // Existing buckets are kept: tightening the limiter must not hand a live flood a clean slate.
+      limiterSettings = settings;
+      authLimiter ? authLimiter.configure(options) : (authLimiter = new SimpleRateLimiter(options));
+      if (!authLimiter.enabled) {
+        appLog.warn(`yourphr.auth.rate-limit.max-requests is ${max} — the per-IP throttle on the sign-in routes is OFF on this instance`);
+      }
+    }
+    return authLimiter;
+  };
+
+
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const engine = await engineReady;
+
+      // The auth routes answer before anything else can slow them down, so the budget is spent on
+      // the REQUEST, not on the failure. The failure throttle inside SessionsManager asks a
+      // different question — is somebody guessing this account — and both still apply.
+      const withinRateLimit = (): boolean => {
+        const limiter = limiterFor(engine);
+        if (!limiter?.enabled) return true;
+        const proxies = engine.has('configuration') ? engine.managers.configuration.getStringList('yourphr.auth.trusted-proxies') : [];
+        const xff = typeof req.headers['x-forwarded-for'] === 'string' ? req.headers['x-forwarded-for'] : undefined;
+        const result = limiter.consume(clientIp(req.socket.remoteAddress ?? '', xff, proxies));
+        if (result.allowed) return true;
+        res.setHeader('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
+        send(res, 429, {success: false, error: 'too many requests — try again shortly'});
+        return false;
+      };
 
       // GET /healthz — liveness/readiness for the orchestrator (yourphr#587). No session, no data:
       // it says the process is up and serving, nothing about who is asking.
@@ -302,6 +351,7 @@ export function createYourPhrServer(options: ServerOptions) {
       // POST /api/auth/signin — the only route that exists without a session. Throttling, the
       // generic error and the trusted-proxy rule all live in AuthStore; this is just transport.
       if (auth && url.pathname === '/api/auth/signin' && req.method === 'POST') {
+        if (!withinRateLimit()) return;
         const body = await readJsonBody(req);
         const username = typeof body?.['username'] === 'string' ? (body['username'] as string) : '';
         const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
@@ -326,6 +376,10 @@ export function createYourPhrServer(options: ServerOptions) {
       // mints the session, so a visitor never holds a password. 403 on an instance that did not opt
       // in, which is every ordinary install, so this route is inert rather than absent.
       if (auth && engine.has('demo') && url.pathname === '/api/auth/demo-signin' && req.method === 'POST') {
+        // The one that needs it most: anonymous, no body, and a bcrypt verify per call. It spends
+        // no failure-throttle budget by design (a restart loop would lock the demo out of its own
+        // front door), so this limiter is the only thing bounding it.
+        if (!withinRateLimit()) return;
         const result = await engine.managers.demo.signIn();
         if (!result.ok) {
           send(res, 403, {success: false, error: result.error});
