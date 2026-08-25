@@ -173,6 +173,20 @@ describe('environment-owned keys — declared, not detected (yourphr#635)', () =
     expect(cfg.getString('yourphr.operator.name')).toBe('Ops');
   });
 
+  it('an env-owned key still honours the pre-#627 SPIKE_ name — a live deployment sets it', () => {
+    // The regression this exists for: yourphr#635 moved the encryption keys onto the env-owned
+    // branch, which did not consult the legacy name. A deployment still setting
+    // SPIKE_DATABASE_ENCRYPTION_KEY therefore opened an encrypted database with an EMPTY key and
+    // died with SQLITE_NOTADB. Found by deploying v0.2.0; no test caught it because every test
+    // sets the new names.
+    const legacy = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: { SPIKE_DATABASE_ENCRYPTION_KEY: 'from-old-manifest' } });
+    expect(legacy.getString('yourphr.database.encryption.key')).toBe('from-old-manifest');
+    expect(legacy.isSetByEnvironment('yourphr.database.encryption.key')).toBe(true);
+    // The new name still wins when both are set.
+    const both = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: { SPIKE_DATABASE_ENCRYPTION_KEY: 'old', YOURPHR_DATABASE_ENCRYPTION_KEY: 'new' } });
+    expect(both.getString('yourphr.database.encryption.key')).toBe('new');
+  });
+
   it('the declared map is exposed so the admin screen can name the owning variable', () => {
     const cfg = new ConfigurationManager(new Engine(), new FakeConfigProvider(), { env: {} });
     expect(cfg.envControlledKeys()['yourphr.database.encryption.key']).toBe('YOURPHR_DATABASE_ENCRYPTION_KEY');

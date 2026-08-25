@@ -115,7 +115,12 @@ export class ConfigurationManager extends BaseManager {
     // operator clearing the variable, not blanking the setting — handled in describePropertySource.
     const envVar = this.envKeyMap()[key];
     if (envVar !== undefined) {
-      const raw = this.envValue(envVar);
+      // The declared variable first, then the pre-yourphr#627 SPIKE_ name. That fallback lived
+      // only on the branch below until this line existed, and yourphr#635 moved the encryption
+      // keys onto THIS branch — so a deployment still setting SPIKE_DATABASE_ENCRYPTION_KEY
+      // opened an encrypted database with an empty key and died with SQLITE_NOTADB. Found by
+      // deploying v0.2.0, not by any test: every test sets the new names.
+      const raw = this.envValue(envVar) ?? this.legacyEnvValue(key);
       if (raw !== undefined && raw !== '') return coerceToTypeOf(raw, shipped);
       return shipped as ConfigValue;   // the shipped value is this key's boot fallback
     }
