@@ -8,6 +8,8 @@
   "yourphr.web.listen.host": "0.0.0.0",
   "yourphr.web.secure-cookies": false,
   "yourphr.web.static-dir": "",
+  "_comment_environment_name": "What this instance calls itself in the UI's version string \u2014 Go's web.environment_name. Empty on a family install; 'demo' on demo.yourphr.org, which is how a visitor can tell the two apart. Published on /api/version as environment_name, which is the name the Angular app reads.",
+  "yourphr.web.environment-name": "",
   "yourphr.sync.interval-seconds": 900,
   "yourphr.auth.session.sliding-seconds": 3600,
   "yourphr.auth.session.absolute-seconds": 43200,

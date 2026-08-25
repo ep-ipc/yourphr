@@ -111,6 +111,26 @@ async function main(): Promise<void> {
   check('SIGTERM closes cleanly with exit 0', code === 0, `exit ${code}`);
 
   rmSync(dir, { recursive: true, force: true });
+  // The version the UI shows comes from package.json (main.ts reads it), and the image is built
+  // from a git tag. Nothing kept them in step, so v0.2.0 and v0.2.1 both shipped reporting 0.1.0 —
+  // visible on the production banner as `prod-0.1.0` after the cut-over (yourphr#642). A version
+  // string that lies about what is running is the misrepresentation category, not cosmetics.
+  {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version: string };
+    const described = spawnSync('git', ['describe', '--tags', '--abbrev=0'], { encoding: 'utf8' });
+    const tag = described.status === 0 ? described.stdout.trim().replace(/^v/, '') : '';
+    // AHEAD of the last tag is normal — that is an unreleased change. BEHIND is the defect: it
+    // means a tag was cut without bumping, so the release reports an older version than it is.
+    const parse = (v: string): number[] => v.split('.').map((n) => Number(n) || 0);
+    const behind = (a: string, b: string): boolean => {
+      const [x, y] = [parse(a), parse(b)];
+      for (let i = 0; i < 3; i++) { if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0); }
+      return false;
+    };
+    check('package.json version is not BEHIND the most recent tag — the UI reports what is actually running',
+      tag === '' || !behind(pkg.version, tag), `package.json ${pkg.version}, tag ${tag || '(none)'}`);
+  }
+
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
   if (failed.length) process.exit(1);

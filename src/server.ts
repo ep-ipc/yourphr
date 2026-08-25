@@ -268,7 +268,14 @@ export function createYourPhrServer(options: ServerOptions) {
 
       // The Angular app's boot calls (found by the parity audit, yourphr#591) — Go's shapes exactly.
       if (url.pathname === '/api/version' && req.method === 'GET') {
-        send(res, 200, {success: true, data: {version: options.version ?? '0.0.0-dev', environment_name: ''}});
+        // environment_name is what this instance calls itself — '' on a family install, 'demo' on
+        // the public demo, which is how a visitor tells them apart. It was hardcoded empty until
+        // yourphr#642, so every instance would have called itself the same thing. The FIELD name is
+        // Go's wire format, read by the Angular app; the config key follows our own convention.
+        send(res, 200, {success: true, data: {
+          version: options.version ?? '0.0.0-dev',
+          environment_name: engine.has('configuration') ? engine.managers.configuration.getString('yourphr.web.environment-name') : '',
+        }});
         return;
       }
       if (url.pathname === '/api/health' && req.method === 'GET') {
