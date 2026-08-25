@@ -99,6 +99,7 @@
 
 ## 🔵 In review
 
+- [#647](https://github.com/jwilleke/yourphr/issues/647) — [SPIKE] Rate-limit the unauthenticated auth endpoints — every sign-in, not just the demo one
 - [#643](https://github.com/jwilleke/yourphr/issues/643) — [FEATURE] Demo mode: the shared demo account and its one-click sign-in
 - [#642](https://github.com/jwilleke/yourphr/issues/642) — [BUG] Version banner reports the wrong build and a blank environment name
 
