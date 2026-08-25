@@ -5,9 +5,16 @@
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/base:debian",
 	// https://github.com/microsoft/vscode-remote-release/issues/7029#issuecomment-2635221267
-  "runArgs": [
+	// Publish 4200/9090 on all host interfaces (0.0.0.0) so LAN devices (e.g. an
+	// iPhone) can reach the dev servers. Cursor's port-forward tunnel binds
+	// localhost only, which is why those ports were not visible on the LAN.
+	// Rebuild the container after changing runArgs. Use `make serve-frontend-lan`
+	// so ng serve listens on 0.0.0.0; the backend already does.
+	"runArgs": [
 		"--sysctl",
-		"net.ipv6.conf.all.disable_ipv6=1"
+		"net.ipv6.conf.all.disable_ipv6=1",
+		"--publish=0.0.0.0:4200:4200",
+		"--publish=0.0.0.0:9099:9099"
 	],
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
@@ -15,21 +22,18 @@
 			"version": "1.21"
 		},
 		"ghcr.io/devcontainers/features/node:1": {
-			"version": "20"
+			"version": "22"
 		},
 		"ghcr.io/devcontainers-extra/features/angular-cli:2": {
-			"version": "14.1.3"
+			"version": "20.3.27"
 		},
 		"ghcr.io/kreemer/features/chrometesting:1": {
 			"version": "Stable"
 		}
 	},
 
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [
-		// "4200:4200",
-		// "9090:9090"
-	// ],
+	// Do not use forwardPorts for 4200/9090: that is Cursor's localhost-only
+	// tunnel. LAN access comes from the --publish flags in runArgs above.
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "make test",
@@ -43,10 +47,12 @@
 	},
 	"portsAttributes": {
 		"4200": {
-			"label": "Frontend"
+			"label": "Frontend",
+			"onAutoForward": "ignore"
 		},
 		"9090": {
-			"label": "Backend"
+			"label": "Backend",
+			"onAutoForward": "ignore"
 		}
 	},
 

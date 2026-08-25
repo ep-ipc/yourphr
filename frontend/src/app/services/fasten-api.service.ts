@@ -11,6 +11,7 @@ import {ClassifiedAllergy} from '../models/fasten/classified-allergy';
 import {ClassifiedImmunization} from '../models/fasten/classified-immunization';
 import {DatabaseInfo, BackupResult, BackupSettings, DirListing, BackupDestinationTest} from '../models/fasten/database-info';
 import {AccountUser} from '../models/fasten/account-user';
+import {AccessToken, CreateAccessTokenRequest, ServerDiscovery} from '../models/fasten/access-token';
 import {AccessEvent} from '../models/fasten/access-event';
 import {ResourceListItem} from '../models/fasten/resource-list-item';
 import {ServerLogs} from '../models/fasten/server-logs';
@@ -158,6 +159,30 @@ export class FastenApiService {
   getAccessLog(): Observable<AccessEvent[]> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/access-log`)
       .pipe(map((response: ResponseWrapper) => (response.data || []) as AccessEvent[]));
+  }
+
+  // Companion-app access tokens for "Manage connected devices". Cookie-authenticated like every
+  // other /secure call — do not attach a Bearer from localStorage; after Phase 2b (#118) that
+  // header is either "Bearer null" or a stale JWT, and RequireAuth prefers it over the session cookie.
+  getAccessTokens(): Observable<AccessToken[]> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/access/token`)
+      .pipe(map((response: ResponseWrapper) => (response.data || []) as AccessToken[]));
+  }
+
+  createAccessToken(body: CreateAccessTokenRequest): Observable<string> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/access/token`, body)
+      .pipe(map((response: ResponseWrapper) => response.data as string));
+  }
+
+  deleteAccessToken(tokenId: string): Observable<boolean> {
+    return this._httpClient.delete<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/access/token`, {
+      body: { token_id: tokenId },
+    }).pipe(map((response: ResponseWrapper) => response.success));
+  }
+
+  getServerDiscovery(): Observable<ServerDiscovery> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/sync/discovery`)
+      .pipe(map((response: ResponseWrapper) => response.data as ServerDiscovery));
   }
 
   // Ends every session for the current user, this browser included (#508). The server bumps the

@@ -1,8 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import QRCode from 'qrcode';
+import { AccountUser } from '../../models/fasten/account-user';
+import { AccessToken, ServerDiscovery } from '../../models/fasten/access-token';
+import { FastenApiService } from '../../services/fasten-api.service';
 
 @Component({
     selector: 'app-settings',
@@ -19,8 +21,8 @@ export class SettingsComponent implements OnInit {
   isRawQrCodeCollapsed = true;
   errorMessage = '';
   accessToken = '';
-  serverInfo: any = null;
-  currentUser: any = null;
+  serverInfo: ServerDiscovery | null = null;
+  currentUser: AccountUser | null = null;
   newDeviceName = '';
   newDeviceExpiration = 0; // 0 for no expiration, otherwise days
   expirationOptions = [
@@ -33,7 +35,7 @@ export class SettingsComponent implements OnInit {
   step: 'askDetails' | 'showQR' = 'askDetails';
 
   constructor(
-    private http: HttpClient,
+    private fastenApi: FastenApiService,
     private sanitizer: DomSanitizer,
     private modalService: NgbModal
   ) { }
@@ -58,7 +60,6 @@ export class SettingsComponent implements OnInit {
   }
 
   generateAccessToken(): void {
-
     console.log('Generating access token...');
     this.isLoading = true;
 

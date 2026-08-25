@@ -167,4 +167,16 @@ describe('AuthInterceptorService', () => {
     expect(toastService.toasts.length).toBe(0);
     expect(authService.Logout).not.toHaveBeenCalled();
   });
+
+  // Connected-devices used to send Authorization: Bearer ${localStorage.token}. After Phase 2b
+  // that value is null, RequireAuth prefers the header over the cookie, and the 401 signed the
+  // user out. Strip a leftover header so the HttpOnly cookie can authenticate.
+  it('strips a caller-supplied Authorization header when there is no JS-readable token', () => {
+    http.get(apiUrl, {headers: {Authorization: 'Bearer null'}}).subscribe();
+
+    const req = httpMock.expectOne(apiUrl);
+    expect(req.request.headers.has('Authorization')).toBeFalse();
+    req.flush({success: true});
+    expect(authService.Logout).not.toHaveBeenCalled();
+  });
 });

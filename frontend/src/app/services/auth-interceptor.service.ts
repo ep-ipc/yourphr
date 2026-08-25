@@ -116,10 +116,19 @@ export class AuthInterceptorService implements HttpInterceptor {
 
     // Only attach a Bearer header if we actually have a token. In Phase 2b (#118) the session
     // is the HttpOnly cookie (sent automatically same-origin), and GetAuthToken() returns null —
-    // so we send no Authorization header and let the cookie authenticate. (Sending "Bearer null"
-    // would defeat the backend's cookie fallback, since the header takes precedence.)
+    // so we send no Authorization header and let the cookie authenticate.
+    //
+    // A caller-supplied Authorization must be stripped in that case too. RequireAuth prefers the
+    // header over the cookie, so `Authorization: Bearer null` (localStorage.getItem('token') after
+    // the SPA stopped storing JWTs) 401s a perfectly valid session and this interceptor then
+    // signs the user out — which is what "Manage connected devices" was doing.
     const token = this.authService.GetAuthToken();
-    const authReq = token ? req.clone({headers: req.headers.set('Authorization', 'Bearer ' + token)}) : req;
+    let authReq = req;
+    if (token) {
+      authReq = req.clone({headers: req.headers.set('Authorization', 'Bearer ' + token)});
+    } else if (req.headers.has('Authorization')) {
+      authReq = req.clone({headers: req.headers.delete('Authorization')});
+    }
     // catch the error, make specific functions for catching specific errors and you can chain through them with more catch operators
     return next.handle(authReq).pipe(catchError(x=> this.handleAuthError(x))); //here use an arrow function, otherwise you may get "Cannot read property 'navigate' of undefined" on angular 4.4.2/net core 2/webpack 2.70
 
