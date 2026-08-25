@@ -1,6 +1,6 @@
 {
   "name": "yourphr-ts-spike",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Throwaway spike: can a TypeScript/Node FHIR store replace YourPHR's Go backend? Evaluated in yourphr docs/planning/typescript-stack-evaluation.md",
