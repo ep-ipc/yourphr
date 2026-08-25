@@ -399,8 +399,10 @@ function defaultChartOptions(kind: 'line' | 'bar', unit: string, stacked = false
         callbacks: {
           label: (ctx) => {
             const value = ctx.parsed.y;
+            if (value == null || Number.isNaN(value)) return ctx.dataset.label || '';
             const suffix = unit ? ` ${unit}` : '';
-            return `${ctx.dataset.label}: ${value}${suffix}`;
+            const formatted = unit === 'hours' ? value.toFixed(1) : String(value);
+            return `${ctx.dataset.label}: ${formatted}${suffix}`;
           },
         },
       },
