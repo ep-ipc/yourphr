@@ -120,13 +120,13 @@
               </div>
               <div class="card-body">
                 <p class="tx-gray-500 mg-b-15">Update the password for this YourPHR account.</p>
-                <!-- Public demo (#514): this account is SHARED and its password is published, so
-                     changing it here would lock every other visitor out of the demo. Said plainly
-                     and left visible, rather than hidden, so a visitor still sees the real flow. -->
+                <!-- Public demo (#514): this account is SHARED, so changing its password here would
+                     lock every other visitor out of the demo. The notice is left visible rather than
+                     hidden, so a visitor still sees the real flow. It says only that the control is
+                     disabled: the earlier wording claimed the password was "published", which stopped
+                     being true at #515 — it is generated per instance and shown to nobody. -->
                 <div *ngIf="user?.demo_account" class="alert alert-info tx-13" role="status">
                   <strong>Disabled in the public demo.</strong>
-                  Everyone shares this account and its password is published, so changing it would
-                  lock out every other visitor.
                 </div>
                 <div *ngIf="pwSuccess" class="alert alert-success tx-13">Your password has been changed.</div>
                 <div *ngIf="pwError" class="alert alert-danger tx-13">{{ pwError }}</div>
