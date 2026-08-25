@@ -5,6 +5,9 @@
 
 ## 🟠 P1
 
+- [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
+- [#645](https://github.com/jwilleke/yourphr/issues/645) — [FEATURE] Demo mode: reset to a baked-in baseline, proven safe before it destroys anything
+- [#644](https://github.com/jwilleke/yourphr/issues/644) — [FEATURE] Demo mode: a read-only demo admin who sees everything and changes nothing
 - [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
@@ -96,7 +99,8 @@
 
 ## 🔵 In review
 
-*None.*
+- [#643](https://github.com/jwilleke/yourphr/issues/643) — [FEATURE] Demo mode: the shared demo account and its one-click sign-in
+- [#642](https://github.com/jwilleke/yourphr/issues/642) — [BUG] Version banner reports the wrong build and a blank environment name
 
 ## ⏸ Deferred
 
