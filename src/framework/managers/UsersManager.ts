@@ -186,6 +186,35 @@ export class UsersManager extends BaseManager {
     return { created: true, passwordFile: file };
   }
 
+  /**
+   * Does this password verify against the stored account? Asked by demo provisioning at boot
+   * (yourphr#643), which must know whether the configured credential still matches before it
+   * rotates one. Passwords are this manager's resource, so the question is answered here rather
+   * than by a caller reaching for the hash — the manager-is-the-only-door rule from yourphr#608.
+   *
+   * Not a sign-in: no throttle entry, no generation check, no token. A boot-time check that spent
+   * throttle budget would let a restart loop lock the account out of its own front door.
+   */
+  async passwordMatches(username: string, password: string, nowSeconds = Math.floor(Date.now() / 1000)): Promise<boolean> {
+    const stored = await this.provider.get(username);
+    if (!stored) return false;
+    return (await this.passwords.authenticate(username, password, stored, nowSeconds)).ok;
+  }
+
+  /**
+   * Set a generated password on an existing account at boot, ending every session of it
+   * (yourphr#643). No ApiContext for the same reason bootstrapAdmin and recoverAccess have none:
+   * this runs before anyone is asking, so there is no actor to check — the proof is that you are
+   * the process, not that you hold a session.
+   *
+   * Deliberately NOT reachable from a route. The only caller is demo provisioning, which chooses
+   * the password itself; a route that set a caller-supplied password with no permission check
+   * would be an account-takeover primitive.
+   */
+  async provisionPassword(username: string, password: string): Promise<boolean> {
+    return this.provider.setPasswordHash(username, this.passwords.hash(password), true);
+  }
+
   /** Recovery when nobody can sign in (yourphr#510): a fresh password, 0600 in the data dir, every session ended. */
   async recoverAccess(dataDir: string, username: string): Promise<{ passwordFile: string }> {
     if (!(await this.provider.get(username))) throw new Error(`no such account: ${username}`);

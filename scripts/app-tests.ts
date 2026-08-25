@@ -199,6 +199,59 @@ async function main(): Promise<void> {
   }
   const newConditions = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition&sourceID=${newSourceId}`, authed(carolToken))).json()) as { data: unknown[] };
   check('the initial import ran in the background: a job for the new source, its records attributed to it', importedJob?.job_status === 'STATUS_DONE' && newConditions.data.length === 3);
+
+  // --- demo mode (yourphr#643): the one-click entrance, and the restriction that makes it safe ---
+  //
+  // Over the wire, on an instance that also holds ordinary accounts, because both proofs are about
+  // what a STRANGER can reach: a flag flipped without a provisioned credential must hand out
+  // nothing, and the shared account must not be able to connect a provider.
+  const demoConfig = app.engine.managers.configuration;
+  const demoSignin = () => fetch(`${base}/api/auth/demo-signin`, { method: 'POST' });
+  const publicInfo = async () => ((await (await fetch(`${base}/api/instance/public`)).json()) as { data: Record<string, unknown> }).data;
+
+  // The shipped default username, on an instance that never opted in.
+  await app.users.createUser(sys, 'demo', 'the-demo-accounts-own-password');
+  const demoOff = await demoSignin();
+  check('demo mode is inert on an ordinary install: the entrance refuses and the flag is published false',
+    demoOff.status === 403 && (await publicInfo())['demo.enabled'] === false);
+
+  // THE ONE THAT MATTERS. The flag alone, on an instance that happens to hold an account called
+  // `demo`, must not be an auth bypass — the configured password has to verify against the hash.
+  demoConfig.set('yourphr.demo.enabled', true);
+  const unprovisioned = await demoSignin();
+  check('an instance holding a user named demo but no matching configured password REFUSES demo sign-in',
+    unprovisioned.status === 403, `status ${unprovisioned.status}`);
+
+  // Provisioning is what a restart does; here it is called directly so the harness need not reboot.
+  await app.engine.managers.demo.provision();
+  const demoEntry = await demoSignin();
+  const demoToken = ((await demoEntry.json()) as { data: string }).data;
+  const demoMe = (await (await fetch(`${base}/api/secure/account/me`, authed(demoToken))).json()) as { data: { username: string; demo_account: boolean } };
+  check('once provisioned, demo sign-in posts NO credentials and returns a session for the demo account',
+    demoEntry.status === 200 && !!demoToken && demoMe.data.username === 'demo' && demoMe.data.demo_account === true
+      && (await publicInfo())['demo.enabled'] === true && !('demo.username' in (await publicInfo())),
+    `status ${demoEntry.status}`);
+
+  // yourphr#496: the demo account is SHARED, so a visitor connecting their own real provider would
+  // put their records in front of the next visitor. Refused at the first step, and at the door.
+  const demoAuthorize = await catJson(`/api/secure/provider-catalog/${fakeId}/authorize`, demoToken, { method: 'POST', body: JSON.stringify({ redirect_uri: 'http://localhost/sources/callback' }) });
+  const aliceAuthorizeStill = await catJson(`/api/secure/provider-catalog/${fakeId}/authorize`, aliceToken, { method: 'POST', body: JSON.stringify({ redirect_uri: 'http://localhost/sources/callback' }) });
+  check('a demo session cannot connect a provider (403 with Go\'s code), while another account on the same demo instance still can',
+    demoAuthorize.status === 403 && (demoAuthorize.body as { code?: string }).code === 'demo_account_restricted' && aliceAuthorizeStill.status === 200,
+    `demo ${demoAuthorize.status}, alice ${aliceAuthorizeStill.status}`);
+  let addRefused = 0;
+  try {
+    await app.engine.managers.sources.add(ApiContext.from({ username: 'demo', role: 'user' }, app.engine), {
+      userId: 'demo', display: 'Smuggled', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'x', patient: 'pa',
+      resourceTypes: ['Condition'], accessToken: 'tok', refreshToken: '', expiresAt: 0, platformType: 'ehr', environment: 'sandbox',
+    });
+  } catch (err) { addRefused = (err as { status?: number }).status ?? 0; }
+  check('and the refusal is at the DOOR, not the route: sources.add itself turns the demo account away', addRefused === 403, `status ${addRefused}`);
+
+  // Leave the instance as it was found — everything below is not a demo.
+  demoConfig.clear('yourphr.demo.enabled');
+  demoConfig.clear('yourphr.demo.password');
+
   const catRemoved = await catJson(`/api/secure/provider-catalog/${fakeId}`, adminToken, { method: 'DELETE' });
   const catGone = await catJson(`/api/secure/provider-catalog/${fakeId}`, adminToken);
   check('delete removes the entry; the connected source is unaffected', catRemoved.body.data.deleted === 1 && catGone.status === 404

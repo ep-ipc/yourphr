@@ -172,6 +172,10 @@ export class SourcesManager extends BaseManager {
   /** Connects a source for the caller; a system principal (migration, seeding) may add for the account it acts for. */
   async add(ctx: ApiContext, source: NewSource): Promise<ConnectedSource> {
     ctx.requireAuthenticated();
+    // The shared public-demo account may not bring outside data in (yourphr#496). Enforced HERE
+    // rather than at the route because this is the door every connected source comes through, so
+    // a new caller cannot arrive without the check.
+    if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
     if (source.userId !== ctx.username) throw new ApiError(403, 'a source can only be connected for the signed-in account');
     return this.provider.add(source);
   }

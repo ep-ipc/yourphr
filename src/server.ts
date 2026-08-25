@@ -321,6 +321,22 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // POST /api/auth/demo-signin (yourphr#643) — the public demo's one-click entrance. The caller
+      // posts NOTHING: the manager verifies the configured credential against the stored hash and
+      // mints the session, so a visitor never holds a password. 403 on an instance that did not opt
+      // in, which is every ordinary install, so this route is inert rather than absent.
+      if (auth && engine.has('demo') && url.pathname === '/api/auth/demo-signin' && req.method === 'POST') {
+        const result = await engine.managers.demo.signIn();
+        if (!result.ok) {
+          send(res, 403, {success: false, error: result.error});
+          return;
+        }
+        // Go's envelope: data IS the token string (the parity lesson from yourphr#591).
+        res.setHeader('Set-Cookie', sessionCookie(result.token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
+        send(res, 200, {success: true, data: result.token});
+        return;
+      }
+
       // The session gate: with auth wired, every /api/secure/* request proves who it is, and is
       // served by THAT user's repository. 401 for no token, a tampered token, an expired one, or a
       // token whose generation the account has moved past (a password change ends it mid-flight).
@@ -427,7 +443,11 @@ export function createYourPhrServer(options: ServerOptions) {
         send(res, 200, {success: true, data: {
           id: sessionUser, username: sessionUser, full_name: '', email: '', picture: '',
           role: ctx.role,
-          demo_account: false, last_login: null, login_count: 0,
+          // demo_account tells the UI to render the connect affordances as disabled rather than
+          // offering an action the server will refuse (yourphr#496). Derived from demo mode plus
+          // the configured name, so the demo account's NAME is never published.
+          demo_account: engine.has('demo') && engine.managers.demo.isDemoSession(ctx),
+          last_login: null, login_count: 0,
         }});
         return;
       }

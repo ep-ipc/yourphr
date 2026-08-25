@@ -104,6 +104,10 @@ export class SettingsManager extends BaseManager {
       'operator.name': config.getString('yourphr.operator.name'),
       'operator.contact_url': config.getString('yourphr.operator.contact-url'),
       'password.min_length': config.getInt('yourphr.auth.password.min-length'),
+      // The sign-in page decides whether to offer the one-click demo entrance (yourphr#643). Only
+      // the FLAG is public: demo.username is not published — a name is half a credential, and the
+      // entrance needs no name — and demo.password is a secret verified server-side.
+      'demo.enabled': config.getBool('yourphr.demo.enabled'),
     };
   }
 

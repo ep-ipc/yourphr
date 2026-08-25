@@ -229,6 +229,10 @@ export class CatalogManager extends BaseManager {
   /** Go's authorize answer: where to send the member, and what the callback must bring back. */
   async authorize(ctx: ApiContext, publicId: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
     ctx.requireAuthenticated();
+    // Refuse at the FIRST step for the shared demo account (yourphr#496), not at the last: the
+    // connect that follows is guarded too, but sending a visitor through a real provider's consent
+    // screen to be turned away afterwards would have them hand credentials over for nothing.
+    if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
     const e = await this.enabledEntry(publicId);
     const redirectUri = typeof body['redirect_uri'] === 'string' ? (body['redirect_uri'] as string).trim() : '';
     // Go derives the callback from its SMART relay; there is no relay in this stack (the product's #408).

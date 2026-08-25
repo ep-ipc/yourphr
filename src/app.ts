@@ -46,6 +46,7 @@ import { SqliteJobsProvider } from './framework/providers/SqliteJobsProvider.js'
 import { NullSourceClientProvider, type BaseSourceClientProvider } from './app/providers/BaseSourceClientProvider.js';
 import { NullGlossaryProvider, type BaseGlossaryProvider } from './app/providers/BaseGlossaryProvider.js';
 import { GlossaryManager } from './app/managers/GlossaryManager.js';
+import { DemoManager } from './app/managers/DemoManager.js';
 import { SqliteGlossaryCache } from './app/providers/SqliteGlossaryCache.js';
 export { sourceShape, backgroundJobShape };
 import { EventBus } from './events/index.js';
@@ -276,6 +277,9 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(db), sourceClient, { allowInternal, log: (line) => appLog.warn(line) }));
   // The glossary (yourphr#640): plain-language explanations of coded values, cached locally.
   engine.register('glossary', new GlossaryManager(engine, await glossaryProviderFor(config.getString('yourphr.glossary.provider'), env), new SqliteGlossaryCache(db), (line) => appLog.info(line)));
+  // Demo mode (yourphr#643): inert unless this instance opted in. Registered always, so the
+  // connect guard is a manager call rather than an `if` at every door that could forget one.
+  engine.register('demo', new DemoManager(engine, (line) => appLog.info(line)));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
   const { records, sources, jobs, catalog, audit, backups } = engine.managers;
@@ -315,6 +319,11 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
 
   // Bootstrap the first admin on an empty install — after the managers exist, before anything serves.
   const bootstrap = await users.bootstrapAdmin(dataDir);
+
+  // The demo credential (yourphr#643): generated here, so a public demo's one-click entrance works
+  // on a fresh instance with nobody choosing a password. Idempotent, and does nothing at all when
+  // demo mode is off. Never fatal — a demo with no way in is a log line, not a refused startup.
+  await engine.managers.demo.provision();
 
   // Provision-then-preserve.
   if (options.seeds) {
