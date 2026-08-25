@@ -31,6 +31,9 @@ async function main(): Promise<void> {
 
   // Boot: env carries bootstrap + secrets ONLY (the #472 split, enforced by the config module).
   const app = await assembleApp(dir, {
+    // A sentinel, not the real version: this proves /api/version reports what the app was BUILT
+    // with. package.json agreeing with the git tag is a separate concern, checked in process-tests.
+    version: '9.9.9-harness',
     env: {
       YOURPHR_DATABASE_ENCRYPTION_KEY: 'at-rest-key',
       YOURPHR_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key',
@@ -74,6 +77,19 @@ async function main(): Promise<void> {
   const bootBodies = await Promise.all(boot.map((r) => r.json() as Promise<{ success: boolean; data: Record<string, unknown> }>));
   check('the boot calls answer in the Go shapes: version, health, instance/public',
     boot.every((r) => r.status === 200) && typeof bootBodies[0]!.data['version'] === 'string' && bootBodies[1]!.data['first_run_wizard'] === false && bootBodies[2]!.data['password.min_length'] === 12);
+
+  // yourphr#642: both fields on /api/version were lying. The version was frozen at package.json's
+  // 0.1.0 across two releases, and environment_name was hardcoded '' so every instance called
+  // itself the same thing. The decisive test for the second one is that CHANGING THE CONFIG changes
+  // the answer — a hardcoded value passes any assertion that only reads it once.
+  check('the version served is the build the app was assembled with, not a stale literal',
+    bootBodies[0]!.data['version'] === '9.9.9-harness', `served ${String(bootBodies[0]!.data['version'])}`);
+  check("environment_name is '' on an instance that has not named itself", bootBodies[0]!.data['environment_name'] === '');
+  app.engine.managers.configuration.set('yourphr.web.environment-name', 'demo');
+  const renamed = (await (await fetch(`${base}/api/version`)).json()) as { data: Record<string, unknown> };
+  check('and it FOLLOWS the config — this is how demo.yourphr.org tells itself apart from production',
+    renamed.data['environment_name'] === 'demo', `served ${JSON.stringify(renamed.data['environment_name'])}`);
+  app.engine.managers.configuration.clear('yourphr.web.environment-name');
 
   // Admin creates alice THROUGH THE API (policy enforced server-side).
   const shortPw = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'alice', password: 'short' }) });
