@@ -48,17 +48,25 @@
   border-left: 3px solid transparent;
 }
 
+// Bootstrap's .list-group-item.active is white-on-primary. We keep a pale selected
+// background, so the title must stay dark in light mode or it vanishes on white.
 .health-metric.active {
   border-left-color: $indigo;
   background: rgba($indigo, 0.06);
+  color: $gray-900;
 }
 
 .health-metric-label {
   font-weight: 600;
+  color: inherit;
 }
 
 .health-metric-value {
   font-size: 0.85rem;
+  color: $gray-600;
+}
+
+.health-metric.active .health-metric-value {
   color: $gray-600;
 }
 
@@ -102,4 +110,21 @@
   margin-top: 12px;
   font-size: 0.9rem;
   color: $gray-700;
+}
+
+@mixin health-dark {
+  .health-metric.active {
+    background: rgba($indigo, 0.22);
+    color: var(--dark-text-color);
+  }
+
+  .health-metric.active .health-metric-value {
+    color: var(--dark-secondary-text-color);
+  }
+}
+
+:host-context(body.dark-theme) { @include health-dark; }
+
+@media (prefers-color-scheme: dark) {
+  :host-context(body:not(.light-theme)) { @include health-dark; }
 }
