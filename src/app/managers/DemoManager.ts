@@ -101,6 +101,26 @@ export class DemoManager extends BaseManager {
   }
 
   /**
+   * The other restriction (yourphr#514, the lesson Go learned by shipping without it): the three
+   * account writes a visitor can use to take the demo away from everyone else.
+   *
+   * Changing the password leaves the configured value no longer matching the stored hash, so
+   * `demo-signin` — the only advertised way in — refuses every visitor until an operator restarts
+   * the instance. Deleting the account leaves the entrance with nothing to sign in to. Signing out
+   * everywhere ends every other visitor's session mid-read. None of the three is self-healing.
+   *
+   * Contrast with wrecking the demo's RECORDS, which stays deliberately allowed: that heals at the
+   * next reset and shows the product working.
+   *
+   * `what` names the action, because unlike the connect refusal these are three different doors and
+   * a visitor deserves to know which one shut.
+   */
+  refuseWrite(ctx: ApiContext, what: string): void {
+    if (!this.isDemoSession(ctx)) return;
+    throw new ApiError(403, `${what} is disabled in the public demo — the account is shared with every other visitor`, { code: DEMO_ERROR_CODE });
+  }
+
+  /**
    * The one-click entrance. Verifies the CONFIGURED password against the stored hash and mints a
    * session for it; the caller supplies nothing. Every refusal says the same generic thing, because
    * the difference between "not enabled here", "no such account" and "the credential drifted" is an

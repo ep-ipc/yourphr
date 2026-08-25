@@ -396,6 +396,14 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/account/password' && req.method === 'POST') {
+          // The shared demo account may not do this (yourphr#514): the configured password would
+          // stop matching the stored hash, and demo sign-in — the only advertised way in — would
+          // refuse every visitor until an operator restarted the instance.
+          //
+          // Guarded HERE rather than in UsersManager, unlike the connect refusal: accounts are a
+          // framework resource and demo mode is an app concept, so the framework must not learn
+          // about it. This route table is app code, and it is the only caller.
+          if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'changing the password');
           const body = await readJsonBody(req);
           const current = typeof body?.['current_password'] === 'string' ? (body['current_password'] as string) : '';
           const next = typeof body?.['new_password'] === 'string' ? (body['new_password'] as string) : '';
@@ -417,12 +425,18 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/account/sign-out-everywhere' && req.method === 'POST') {
+          // Recoverable, unlike the other two, but it is still one visitor ending every other
+          // visitor's session mid-read (yourphr#514).
+          if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'signing out everywhere');
           await engine.managers.sessions.revokeAll(ctx);
           res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
           send(res, 200, {success: true});
           return;
         }
         if (url.pathname === '/api/secure/account/me' && req.method === 'DELETE') {
+          // Deleting the shared account leaves the one-click entrance with nothing to sign in to,
+          // for everyone, until an operator rebuilds it (yourphr#514).
+          if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'deleting the account');
           // Everything the account owns, then the account: its sources, every record (the Records
           // manager removes rows, index and history and drops the handle), the access log, then
           // the account itself (consent goes with it). Order matters — each door is asked in turn.

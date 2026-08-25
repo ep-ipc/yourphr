@@ -143,6 +143,21 @@ describe('DemoManager — the shared demo account (yourphr#643)', () => {
     expect(demo.isDemoSession(ApiContext.anonymous(engine))).toBe(false);
   });
 
+  it('refuses the three account writes that would take the demo away from everyone (yourphr#514)', async () => {
+    await boot({ [ENABLED_KEY]: true });
+    const visitor = ApiContext.from({ username: 'demo', role: 'user' }, engine);
+    const operator = ApiContext.from({ username: 'jim', role: 'admin' }, engine);
+    for (const what of ['changing the password', 'deleting the account', 'signing out everywhere']) {
+      expect(() => demo.refuseWrite(visitor, what)).toThrowError(new RegExp(what));
+      expect(() => demo.refuseWrite(operator, what)).not.toThrow();
+    }
+    try {
+      demo.refuseWrite(visitor, 'changing the password');
+    } catch (err) {
+      expect(err).toMatchObject({ status: 403, extra: { code: DEMO_ERROR_CODE } });
+    }
+  });
+
   it('does not restrict an account named demo on an instance that never opted in', async () => {
     const namesake = ApiContext.from({ username: 'demo', role: 'user' }, engine);
     expect(() => demo.refuseConnect(namesake)).not.toThrow();

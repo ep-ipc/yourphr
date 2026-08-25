@@ -248,6 +248,23 @@ async function main(): Promise<void> {
   } catch (err) { addRefused = (err as { status?: number }).status ?? 0; }
   check('and the refusal is at the DOOR, not the route: sources.add itself turns the demo account away', addRefused === 403, `status ${addRefused}`);
 
+  // yourphr#514: the three account writes a visitor could use to take the demo away from everyone —
+  // change the password (demo sign-in then refuses every visitor), delete the account (nothing left
+  // to sign in to), sign out everywhere (ends every other visitor's session).
+  const demoWrites = await Promise.all([
+    fetch(`${base}/api/secure/account/password`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${demoToken}` }, body: JSON.stringify({ current_password: 'whatever', new_password: 'a-long-enough-password' }) }),
+    fetch(`${base}/api/secure/account/sign-out-everywhere`, { method: 'POST', headers: authed(demoToken).headers }),
+    fetch(`${base}/api/secure/account/me`, { method: 'DELETE', headers: authed(demoToken).headers }),
+  ]);
+  const demoWriteBodies = await Promise.all(demoWrites.map((r) => r.json() as Promise<{ code?: string; error?: string }>));
+  check('the shared demo account cannot change its password, sign everyone out, or delete itself (yourphr#514)',
+    demoWrites.every((r) => r.status === 403) && demoWriteBodies.every((b) => b.code === 'demo_account_restricted'),
+    demoWrites.map((r) => r.status).join(','));
+  // Still the demo account's session afterwards: a refusal must not have ended it or changed anything.
+  const demoStillIn = await fetch(`${base}/api/secure/account/me`, authed(demoToken));
+  check('and the refusals changed nothing — the demo session still works and demo sign-in still does',
+    demoStillIn.status === 200 && (await demoSignin()).status === 200);
+
   // Leave the instance as it was found — everything below is not a demo.
   demoConfig.clear('yourphr.demo.enabled');
   demoConfig.clear('yourphr.demo.password');
