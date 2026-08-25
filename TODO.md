@@ -5,6 +5,14 @@
 
 ## 🟠 P1
 
+- [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
+- [#650](https://github.com/jwilleke/yourphr/issues/650) — [CHORE] Import the TypeScript stack under server/, with its history
+- [#651](https://github.com/jwilleke/yourphr/issues/651) — [CHORE] The TypeScript stack's CI becomes this repository's CI
+- [#652](https://github.com/jwilleke/yourphr/issues/652) — [CHORE] One image from this repository, on the 3.x line, and Flux follows it
+- [#653](https://github.com/jwilleke/yourphr/issues/653) — [CHORE] CHANGELOG continuity — the v0.x history folded in, 3.0.0 cut here
+- [#654](https://github.com/jwilleke/yourphr/issues/654) — [FEATURE] Ship migrate in the image — the upgrade guide already assumes it
+- [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
+- [#648](https://github.com/jwilleke/yourphr/issues/648) — [SPIKE] The role column must carry a configured role NAME, not one of two literals
 - [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
 - [#645](https://github.com/jwilleke/yourphr/issues/645) — [FEATURE] Demo mode: reset to a baked-in baseline, proven safe before it destroys anything
 - [#644](https://github.com/jwilleke/yourphr/issues/644) — [FEATURE] Demo mode: a read-only demo admin who sees everything and changes nothing
@@ -34,6 +42,7 @@
 
 ## 🟡 P2
 
+- [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
 - [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] yarn build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
 - [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
