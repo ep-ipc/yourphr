@@ -246,15 +246,15 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 				api.POST("/support/healthsystem", handler.HealthSystemRequest)
 
 				// RestrictDemoAdmin applies to the WHOLE authenticated API, deliberately (#516). The
-			// read-only demo admin is a public entrance to an admin session, and guarding it by
-			// naming dangerous routes is exactly what produced #514 — so everything is refused for
-			// that one account unless it is a read, and a route added below inherits the block
-			// instead of inheriting nothing. Inert for every other user and on every non-demo
-			// instance.
-			// AccessLog is the patient-visible "who accessed my record" trail (#563). It sits after
-			// auth so the actor is known, and only record-reading routes are recorded — see the
-			// category map in the middleware.
-			secure := api.Group("/secure").Use(middleware.RequireAuth(), middleware.RestrictDemoAdmin(), middleware.AccessLog())
+				// read-only demo admin is a public entrance to an admin session, and guarding it by
+				// naming dangerous routes is exactly what produced #514 — so everything is refused for
+				// that one account unless it is a read, and a route added below inherits the block
+				// instead of inheriting nothing. Inert for every other user and on every non-demo
+				// instance.
+				// AccessLog is the patient-visible "who accessed my record" trail (#563). It sits after
+				// auth so the actor is known, and only record-reading routes are recorded — see the
+				// category map in the middleware.
+				secure := api.Group("/secure").Use(middleware.RequireAuth(), middleware.RestrictDemoAdmin(), middleware.AccessLog())
 				{
 					secure.GET("/account/me", handler.GetCurrentUser)
 					secure.GET("/account/access-log", handler.GetAccessLog)
@@ -361,6 +361,8 @@ func (ae *AppEngine) Setup() (*gin.RouterGroup, *gin.Engine) {
 					// or misconfigured app must not be able to saturate the instance.
 					secure.POST("/health/samples", middleware.RateLimitMiddleware(60, time.Minute), middleware.BlockForDemoAccount(), handler.CreateHealthSamples)
 					secure.GET("/health/samples", handler.ListHealthSamples)
+					secure.GET("/health/metrics", handler.ListHealthMetrics)
+					secure.GET("/health/series", handler.GetHealthSeries)
 					secure.GET("/health/sync-state", handler.GetHealthSyncState)
 
 					secure.GET("/dashboards", handler.GetDashboard)

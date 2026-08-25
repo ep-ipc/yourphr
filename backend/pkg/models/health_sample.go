@@ -93,6 +93,9 @@ type HealthSyncState struct {
 type HealthSampleQueryOptions struct {
 	// MetricTypes filters to these normalized metric types; empty means all of them.
 	MetricTypes []string
+	// HKType filters to one raw HealthKit identifier. Used for types the mapping table does not
+	// yet know, which are stored with an empty metric_type.
+	HKType string
 	// StartTimeAfter and StartTimeBefore bound start_time, inclusive lower and exclusive upper.
 	StartTimeAfter  *time.Time
 	StartTimeBefore *time.Time
@@ -101,4 +104,92 @@ type HealthSampleQueryOptions struct {
 	Offset int
 	// SortAscending orders oldest first; the default is newest first.
 	SortAscending bool
+}
+
+const (
+	// HealthSeriesDefaultPoints and HealthSeriesMaxPoints clamp a chart series. A five-minute heart
+	// rate over 90 days is tens of thousands of samples; the browser cannot plot them raw, and the
+	// list endpoint's 5,000 cap is a page size, not a chart budget.
+	HealthSeriesDefaultPoints = 400
+	HealthSeriesMaxPoints     = 2000
+)
+
+// HealthSeriesMode selects how QueryHealthSeries aggregates. The UI registry picks the mode so a new
+// metric type can choose a chart without a server change; unknown types default to points.
+const (
+	HealthSeriesModePoints = "points" // one (t, v) per sample, downsampled when over MaxPoints
+	HealthSeriesModeDay    = "day"    // sum value_num per UTC calendar day (step count)
+	HealthSeriesModeStages = "stages" // hours of each category value per UTC day (sleep)
+)
+
+// HealthMetricSummary is the latest sample of one metric type (or one unrecognized HKType), plus how
+// many rows exist. The catalog page lists these; it does not page through health_samples.
+type HealthMetricSummary struct {
+	MetricType  string    `json:"metric_type"`
+	HKType      string    `json:"hk_type"`
+	Unit        string    `json:"unit,omitempty"`
+	ValueNum    *float64  `json:"value_num,omitempty"`
+	ValueText   string    `json:"value_text,omitempty"`
+	LatestAt    time.Time `json:"latest_at"`
+	EarliestAt  time.Time `json:"earliest_at"`
+	SampleCount int64     `json:"sample_count"`
+	SourceName  string    `json:"source_name,omitempty"`
+	DeviceName  string    `json:"device_name,omitempty"`
+}
+
+// HealthMetricsCatalog is GET /health/metrics. LastSyncedAt is the newest resume point across devices,
+// so the page can say when the iPhone last pushed without a second round-trip.
+type HealthMetricsCatalog struct {
+	LastSyncedAt *time.Time            `json:"last_synced_at,omitempty"`
+	Metrics      []HealthMetricSummary `json:"metrics"`
+}
+
+// HealthSeriesQueryOptions bounds a chart read. MetricTypes and HKType are mutually exclusive: known
+// metrics filter on metric_type, unrecognized ones on the raw HealthKit identifier.
+type HealthSeriesQueryOptions struct {
+	MetricTypes []string
+	HKType      string
+	// StartTimeAfter and StartTimeBefore bound start_time, inclusive lower and exclusive upper.
+	StartTimeAfter  *time.Time
+	StartTimeBefore *time.Time
+	MaxPoints       int
+	Mode            string
+}
+
+// HealthSeriesPoint is one quantity sample (or a downsample bucket's average) on a line chart.
+type HealthSeriesPoint struct {
+	T time.Time `json:"t"`
+	V float64   `json:"v"`
+}
+
+// HealthDailyBucket is one UTC calendar day's summed quantity, used for step count bars.
+type HealthDailyBucket struct {
+	Date  string  `json:"date"`
+	Value float64 `json:"value"`
+}
+
+// HealthStageNight is one UTC calendar day's category durations in hours, used for sleep stage bars.
+type HealthStageNight struct {
+	Date   string             `json:"date"`
+	Stages map[string]float64 `json:"stages"`
+}
+
+// HealthSeriesStats is min/max/avg of value_num in the queried window, before downsampling.
+type HealthSeriesStats struct {
+	Min *float64 `json:"min,omitempty"`
+	Max *float64 `json:"max,omitempty"`
+	Avg *float64 `json:"avg,omitempty"`
+}
+
+// HealthSeries is GET /health/series. Exactly one of Points, Daily, or Nights is populated, matching Mode.
+type HealthSeries struct {
+	MetricType  string              `json:"metric_type,omitempty"`
+	HKType      string              `json:"hk_type,omitempty"`
+	Unit        string              `json:"unit,omitempty"`
+	Total       int64               `json:"total"`
+	Downsampled bool                `json:"downsampled"`
+	Points      []HealthSeriesPoint `json:"points,omitempty"`
+	Daily       []HealthDailyBucket `json:"daily,omitempty"`
+	Nights      []HealthStageNight  `json:"nights,omitempty"`
+	Stats       *HealthSeriesStats  `json:"stats,omitempty"`
 }

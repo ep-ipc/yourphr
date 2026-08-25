@@ -859,6 +859,21 @@ func (mr *MockDatabaseRepositoryMockRecorder) PopulateDefaultUserSettings(ctx, u
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopulateDefaultUserSettings", reflect.TypeOf((*MockDatabaseRepository)(nil).PopulateDefaultUserSettings), ctx, userId)
 }
 
+// QueryHealthSeries mocks base method.
+func (m *MockDatabaseRepository) QueryHealthSeries(ctx context.Context, queryOptions models.HealthSeriesQueryOptions) (models.HealthSeries, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryHealthSeries", ctx, queryOptions)
+	ret0, _ := ret[0].(models.HealthSeries)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryHealthSeries indicates an expected call of QueryHealthSeries.
+func (mr *MockDatabaseRepositoryMockRecorder) QueryHealthSeries(ctx, queryOptions interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryHealthSeries", reflect.TypeOf((*MockDatabaseRepository)(nil).QueryHealthSeries), ctx, queryOptions)
+}
+
 // QueryResources mocks base method.
 func (m *MockDatabaseRepository) QueryResources(ctx context.Context, query models.QueryResource) (interface{}, error) {
 	m.ctrl.T.Helper()
@@ -1000,6 +1015,21 @@ func (m *MockDatabaseRepository) SetLegalConsentAcceptedAt(ctx context.Context, 
 func (mr *MockDatabaseRepositoryMockRecorder) SetLegalConsentAcceptedAt(ctx, acceptedAt interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetLegalConsentAcceptedAt", reflect.TypeOf((*MockDatabaseRepository)(nil).SetLegalConsentAcceptedAt), ctx, acceptedAt)
+}
+
+// SummarizeHealthMetrics mocks base method.
+func (m *MockDatabaseRepository) SummarizeHealthMetrics(ctx context.Context) ([]models.HealthMetricSummary, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SummarizeHealthMetrics", ctx)
+	ret0, _ := ret[0].([]models.HealthMetricSummary)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SummarizeHealthMetrics indicates an expected call of SummarizeHealthMetrics.
+func (mr *MockDatabaseRepositoryMockRecorder) SummarizeHealthMetrics(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SummarizeHealthMetrics", reflect.TypeOf((*MockDatabaseRepository)(nil).SummarizeHealthMetrics), ctx)
 }
 
 // UnlinkResourceWithSharedNeighbors mocks base method.

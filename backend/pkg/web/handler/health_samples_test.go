@@ -541,12 +541,13 @@ func TestListHealthSamples_PassesQueryOptionsThrough(t *testing.T) {
 		})
 
 	c, w := healthSampleContext(t, mockDB, http.MethodGet,
-		"/health/samples?metric_type=heart_rate,step_count&metric_type=sleep_stage&start_after=2026-03-01T12:00:00Z&start_before=2026-03-02T12:00:00Z&limit=25&offset=50&sort=asc", nil)
+		"/health/samples?metric_type=heart_rate,step_count&metric_type=sleep_stage&hk_type=HKQuantityTypeIdentifierRespiratoryRate&start_after=2026-03-01T12:00:00Z&start_before=2026-03-02T12:00:00Z&limit=25&offset=50&sort=asc", nil)
 	ListHealthSamples(c)
 
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, []string{"heart_rate", "step_count", "sleep_stage"}, captured.MetricTypes,
 		"repeated and comma-separated metric_type must both work")
+	require.Equal(t, "HKQuantityTypeIdentifierRespiratoryRate", captured.HKType)
 	require.Equal(t, 25, captured.Limit)
 	require.Equal(t, 50, captured.Offset)
 	require.True(t, captured.SortAscending)

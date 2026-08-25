@@ -18,6 +18,7 @@ import { MedicalHistoryComponent } from './pages/medical-history/medical-history
 import { CurrentMedicationsComponent } from './pages/current-medications/current-medications.component';
 import { AllergiesComponent } from './pages/allergies/allergies.component';
 import { ImmunizationsComponent } from './pages/immunizations/immunizations.component';
+import { HealthComponent } from './pages/health/health.component';
 import { MedicalConcernsComponent } from './pages/medical-concerns/medical-concerns.component';
 import { AccountProfileComponent } from './pages/account-profile/account-profile.component';
 import { AttributionsComponent } from './pages/attributions/attributions.component';
@@ -99,6 +100,7 @@ const routes: Routes = [
   { path: 'medications', component: CurrentMedicationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'allergies', component: AllergiesComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'immunizations', component: ImmunizationsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
+  { path: 'health', component: HealthComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'medical-concerns', component: MedicalConcernsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'procedures', component: ProceduresComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'admin', component: AdminDashboardComponent, canActivate: [ IsAuthenticatedAuthGuard, IsAdminAuthGuard ] },

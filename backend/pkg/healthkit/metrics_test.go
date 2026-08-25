@@ -36,6 +36,20 @@ func TestLookup_UnknownTypeIsNotAnError(t *testing.T) {
 	require.Empty(t, metric.MetricType)
 }
 
+func TestLookupByMetricType(t *testing.T) {
+	t.Parallel()
+
+	metric, ok := LookupByMetricType("heart_rate")
+	require.True(t, ok)
+	require.Equal(t, KindQuantity, metric.Kind)
+
+	_, ok = LookupByMetricType("not_a_metric")
+	require.False(t, ok)
+
+	_, ok = LookupByMetricType("  ")
+	require.False(t, ok)
+}
+
 func TestLookup_TrimsWhitespace(t *testing.T) {
 	t.Parallel()
 

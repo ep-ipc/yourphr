@@ -271,15 +271,15 @@ func buildHealthSample(input HealthSampleInput) (models.HealthSample, error) {
 	return sample, nil
 }
 
-// ListHealthSamples returns a bounded page of the user's Apple Health samples. It exists so ingestion
-// can be verified before any UI exists, and it is paginated by construction: this table grows by a row
-// every few minutes.
+// ListHealthSamples returns a bounded page of the user's Apple Health samples. The Health page table
+// uses this; charts go through GetHealthSeries so they can downsample instead of paging.
 func ListHealthSamples(c *gin.Context) {
 	logger := c.MustGet(pkg.ContextKeyTypeLogger).(*logrus.Entry)
 	databaseRepo := c.MustGet(pkg.ContextKeyTypeDatabase).(database.DatabaseRepository)
 
 	queryOptions := models.HealthSampleQueryOptions{
 		MetricTypes:   parseMetricTypes(c.QueryArray("metric_type")),
+		HKType:        strings.TrimSpace(c.Query("hk_type")),
 		SortAscending: strings.EqualFold(c.Query("sort"), "asc"),
 	}
 

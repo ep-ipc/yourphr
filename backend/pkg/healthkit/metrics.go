@@ -119,6 +119,21 @@ func Lookup(hkType string) (Metric, bool) {
 	return m, ok
 }
 
+// LookupByMetricType returns the Metric for a normalized name such as "heart_rate". Used by the
+// series endpoint, which is queried by metric_type rather than the raw HealthKit identifier.
+func LookupByMetricType(metricType string) (Metric, bool) {
+	metricType = strings.TrimSpace(metricType)
+	if metricType == "" {
+		return Metric{}, false
+	}
+	for _, m := range metrics {
+		if m.MetricType == metricType {
+			return m, true
+		}
+	}
+	return Metric{}, false
+}
+
 // NormalizeUnit maps an incoming unit spelling to the metric's canonical unit. It reports false for
 // units this metric does not accept, including the empty string: a quantity sample whose unit is
 // unstated cannot be safely assumed.

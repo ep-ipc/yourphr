@@ -1,0 +1,105 @@
+@import "../../../assets/scss/bootstrap/variables";
+
+.health-page {
+  max-width: 1400px;
+}
+
+.health-header {
+  padding: 24px 0 16px;
+}
+
+.health-title {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: $gray-900;
+}
+
+.health-subtitle {
+  color: $gray-600;
+  font-size: 0.95rem;
+}
+
+.health-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .health-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.health-catalog .card-header {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: $gray-600;
+  background: transparent;
+}
+
+.health-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border-left: 3px solid transparent;
+}
+
+.health-metric.active {
+  border-left-color: $indigo;
+  background: rgba($indigo, 0.06);
+}
+
+.health-metric-label {
+  font-weight: 600;
+}
+
+.health-metric-value {
+  font-size: 0.85rem;
+  color: $gray-600;
+}
+
+.health-detail-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.health-latest-value {
+  font-weight: 600;
+}
+
+.health-window {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.health-slider {
+  flex: 1;
+  min-width: 0;
+}
+
+.health-window-caption {
+  color: $gray-600;
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+}
+
+.health-chart {
+  position: relative;
+  height: 280px;
+  width: 100%;
+}
+
+.health-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: $gray-700;
+}

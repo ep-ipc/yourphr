@@ -5,8 +5,8 @@ import (
 
 	"github.com/fastenhealth/fasten-onprem/backend/pkg"
 	"github.com/fastenhealth/fasten-onprem/backend/pkg/models"
-	"github.com/fastenhealth/fasten-onprem/backend/pkg/utils/ips"
 	sourcePkg "github.com/fastenhealth/fasten-onprem/backend/pkg/sources/clients/models"
+	"github.com/fastenhealth/fasten-onprem/backend/pkg/utils/ips"
 	"github.com/google/uuid"
 )
 
@@ -139,6 +139,8 @@ type DatabaseRepository interface {
 	// skipped, so a retried or overlapping push is a no-op rather than a duplicate.
 	CreateHealthSamples(ctx context.Context, samples []models.HealthSample) (int64, error)
 	ListHealthSamples(ctx context.Context, queryOptions models.HealthSampleQueryOptions) ([]models.HealthSample, int64, error)
+	SummarizeHealthMetrics(ctx context.Context) ([]models.HealthMetricSummary, error)
+	QueryHealthSeries(ctx context.Context, queryOptions models.HealthSeriesQueryOptions) (models.HealthSeries, error)
 	UpsertHealthSyncState(ctx context.Context, state *models.HealthSyncState) error
 	GetHealthSyncStates(ctx context.Context, deviceID string) ([]models.HealthSyncState, error)
 }

@@ -343,3 +343,132 @@ func (suite *RepositoryTestSuite) TestHealthSamples_RequireAnAuthenticatedUser()
 	_, err = dbRepo.GetHealthSyncStates(context.Background(), "")
 	require.Error(suite.T(), err)
 }
+
+func (suite *RepositoryTestSuite) TestSummarizeHealthMetrics_OneRowPerTypeIncludingUnknown() {
+	dbRepo := suite.repositoryForTest()
+	_, authContext := suite.healthTestUser(dbRepo, "health_catalog")
+
+	hr1 := healthSampleFixture("hr-1", 0)
+	hr2 := healthSampleFixture("hr-2", 10)
+	steps := healthSampleFixture("steps-1", 5)
+	steps.HKType = "HKQuantityTypeIdentifierStepCount"
+	steps.MetricType = "step_count"
+	steps.Unit = "count"
+	stepVal := 1200.0
+	steps.ValueNum = &stepVal
+	unknown := healthSampleFixture("unk-1", 15)
+	unknown.HKType = "HKQuantityTypeIdentifierRespiratoryRate"
+	unknown.MetricType = ""
+	unknown.Unit = "count/min"
+	respVal := 16.0
+	unknown.ValueNum = &respVal
+
+	_, err := dbRepo.CreateHealthSamples(authContext, []models.HealthSample{hr1, hr2, steps, unknown})
+	require.NoError(suite.T(), err)
+
+	summaries, err := dbRepo.SummarizeHealthMetrics(authContext)
+	require.NoError(suite.T(), err)
+	require.Len(suite.T(), summaries, 3)
+
+	byKey := map[string]models.HealthMetricSummary{}
+	for _, summary := range summaries {
+		key := summary.MetricType
+		if key == "" {
+			key = summary.HKType
+		}
+		byKey[key] = summary
+	}
+	require.EqualValues(suite.T(), 2, byKey["heart_rate"].SampleCount)
+	require.Equal(suite.T(), hr2.StartTime.UTC(), byKey["heart_rate"].LatestAt.UTC())
+	require.EqualValues(suite.T(), 1, byKey["step_count"].SampleCount)
+	require.Equal(suite.T(), "HKQuantityTypeIdentifierRespiratoryRate", byKey["HKQuantityTypeIdentifierRespiratoryRate"].HKType)
+	require.Empty(suite.T(), byKey["HKQuantityTypeIdentifierRespiratoryRate"].MetricType)
+}
+
+func (suite *RepositoryTestSuite) TestQueryHealthSeries_PointsAndDownsample() {
+	dbRepo := suite.repositoryForTest()
+	_, authContext := suite.healthTestUser(dbRepo, "health_series")
+
+	batch := make([]models.HealthSample, 0, 20)
+	for i := 0; i < 20; i++ {
+		batch = append(batch, healthSampleFixture(fmt.Sprintf("hr-%d", i), i))
+	}
+	_, err := dbRepo.CreateHealthSamples(authContext, batch)
+	require.NoError(suite.T(), err)
+
+	full, err := dbRepo.QueryHealthSeries(authContext, models.HealthSeriesQueryOptions{
+		MetricTypes: []string{"heart_rate"},
+		Mode:        models.HealthSeriesModePoints,
+	})
+	require.NoError(suite.T(), err)
+	require.EqualValues(suite.T(), 20, full.Total)
+	require.Len(suite.T(), full.Points, 20)
+	require.False(suite.T(), full.Downsampled)
+	require.NotNil(suite.T(), full.Stats)
+	require.NotNil(suite.T(), full.Stats.Min)
+	require.Equal(suite.T(), 60.0, *full.Stats.Min)
+
+	down, err := dbRepo.QueryHealthSeries(authContext, models.HealthSeriesQueryOptions{
+		MetricTypes: []string{"heart_rate"},
+		Mode:        models.HealthSeriesModePoints,
+		MaxPoints:   5,
+	})
+	require.NoError(suite.T(), err)
+	require.EqualValues(suite.T(), 20, down.Total)
+	require.True(suite.T(), down.Downsampled)
+	require.LessOrEqual(suite.T(), len(down.Points), 6, "integer buckets can spill one past MaxPoints")
+	require.Greater(suite.T(), len(down.Points), 0)
+}
+
+func (suite *RepositoryTestSuite) TestQueryHealthSeries_DaySumsSteps() {
+	dbRepo := suite.repositoryForTest()
+	_, authContext := suite.healthTestUser(dbRepo, "health_steps")
+
+	day1 := time.Date(2026, 3, 1, 8, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 3, 2, 8, 0, 0, 0, time.UTC)
+	v1, v2, v3 := 1000.0, 500.0, 2000.0
+	_, err := dbRepo.CreateHealthSamples(authContext, []models.HealthSample{
+		{ExternalUUID: "s1", HKType: "HKQuantityTypeIdentifierStepCount", MetricType: "step_count", StartTime: day1, EndTime: day1, ValueNum: &v1, Unit: "count"},
+		{ExternalUUID: "s2", HKType: "HKQuantityTypeIdentifierStepCount", MetricType: "step_count", StartTime: day1.Add(time.Hour), EndTime: day1.Add(time.Hour), ValueNum: &v2, Unit: "count"},
+		{ExternalUUID: "s3", HKType: "HKQuantityTypeIdentifierStepCount", MetricType: "step_count", StartTime: day2, EndTime: day2, ValueNum: &v3, Unit: "count"},
+	})
+	require.NoError(suite.T(), err)
+
+	series, err := dbRepo.QueryHealthSeries(authContext, models.HealthSeriesQueryOptions{
+		MetricTypes: []string{"step_count"},
+		Mode:        models.HealthSeriesModeDay,
+	})
+	require.NoError(suite.T(), err)
+	require.EqualValues(suite.T(), 3, series.Total)
+	require.Len(suite.T(), series.Daily, 2)
+	require.Equal(suite.T(), "2026-03-01", series.Daily[0].Date)
+	require.Equal(suite.T(), 1500.0, series.Daily[0].Value)
+	require.Equal(suite.T(), "2026-03-02", series.Daily[1].Date)
+	require.Equal(suite.T(), 2000.0, series.Daily[1].Value)
+}
+
+func (suite *RepositoryTestSuite) TestQueryHealthSeries_StagesGroupSleepHours() {
+	dbRepo := suite.repositoryForTest()
+	_, authContext := suite.healthTestUser(dbRepo, "health_sleep")
+
+	night := time.Date(2026, 3, 1, 23, 0, 0, 0, time.UTC)
+	coreEnd := night.Add(2 * time.Hour)
+	deepStart := coreEnd
+	deepEnd := deepStart.Add(time.Hour)
+	_, err := dbRepo.CreateHealthSamples(authContext, []models.HealthSample{
+		{ExternalUUID: "sleep-core", HKType: "HKCategoryTypeIdentifierSleepAnalysis", MetricType: "sleep_stage", StartTime: night, EndTime: coreEnd, ValueText: "asleepCore"},
+		{ExternalUUID: "sleep-deep", HKType: "HKCategoryTypeIdentifierSleepAnalysis", MetricType: "sleep_stage", StartTime: deepStart, EndTime: deepEnd, ValueText: "asleepDeep"},
+	})
+	require.NoError(suite.T(), err)
+
+	series, err := dbRepo.QueryHealthSeries(authContext, models.HealthSeriesQueryOptions{
+		MetricTypes: []string{"sleep_stage"},
+		Mode:        models.HealthSeriesModeStages,
+	})
+	require.NoError(suite.T(), err)
+	require.EqualValues(suite.T(), 2, series.Total)
+	require.Len(suite.T(), series.Nights, 1)
+	require.Equal(suite.T(), "2026-03-01", series.Nights[0].Date)
+	require.InDelta(suite.T(), 2.0, series.Nights[0].Stages["asleepCore"], 0.01)
+	require.InDelta(suite.T(), 1.0, series.Nights[0].Stages["asleepDeep"], 0.01)
+}
