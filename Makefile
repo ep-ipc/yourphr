@@ -153,7 +153,7 @@ test-frontend: dep-frontend
 
 # End-to-end browser tests (Playwright) against the production-served path: builds the
 # frontend, then Playwright boots the Go backend (config.e2e.yaml, fresh ./db/fasten-e2e.db,
-# :9191) serving ./dist and drives a real browser. See frontend/e2e/.
+# :9191) serving ./dist/web and drives a real browser. See frontend/e2e/.
 .PHONY: test-e2e
 test-e2e: dep-frontend
 	cd frontend && yarn run build -- --configuration sandbox && yarn run e2e

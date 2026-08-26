@@ -70,7 +70,10 @@ export default defineConfig({
       // would otherwise leak into the test run. Real environment variables outrank .env, so
       // this stays hermetic either way. Replaces config.e2e.yaml (yourphr#474).
       'YOURPHR_WEB_LISTEN_PORT=9191 ' +           // never collides with the dev backend on 9090
-      'YOURPHR_WEB_SRC_FRONTEND_PATH=./dist ' +   // repo-root ./dist = the Angular build output
+      'YOURPHR_WEB_SRC_FRONTEND_PATH=./dist/web ' + // the Angular build output (yourphr#652: one
+      //                                             dist/, dist/web for the app, dist/server for
+      //                                             the compiled backend — the Angular build clears
+      //                                             its own output directory, so they cannot share)
       'YOURPHR_STORAGE_DATA_DIR=./db ' +
       'YOURPHR_DATABASE_LOCATION=./db/fasten-e2e.db ' +
       'YOURPHR_DATABASE_ENCRYPTION_ENABLED=false ' + // default is ON; E2E needs no key prompt
