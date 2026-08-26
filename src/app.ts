@@ -25,7 +25,7 @@ import { FileConfigProvider } from './framework/providers/FileConfigProvider.js'
 import { addColumnWithDefault, type Migration } from './framework/providers/sqlite-migrations.js';
 import { DatabaseManager } from './framework/managers/DatabaseManager.js';
 import { SqliteDatabaseProvider } from './framework/providers/SqliteDatabaseProvider.js';
-import { UsersManager } from './framework/managers/UsersManager.js';
+import { UsersManager, BOOTSTRAP_ADMIN_USERNAME } from './framework/managers/UsersManager.js';
 import { SessionsManager } from './framework/managers/SessionsManager.js';
 import { SqliteUsersProvider } from './framework/providers/SqliteUsersProvider.js';
 import { PasswordAuthProvider } from './framework/providers/PasswordAuthProvider.js';
@@ -54,6 +54,7 @@ import { SqliteFavoritesProvider } from './app/providers/SqliteFavoritesProvider
 import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
+import { applyDemoReset } from './demo/reset.js';
 import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
 import { BACKUP_SUFFIX, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';
@@ -232,6 +233,19 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const appDbPath = config.getString('yourphr.database.location');
   const recordsDbPath = config.getString('yourphr.records.location');
   applyStagedRestore(dataDir, [[STAGED_RECORDS, basename(recordsDbPath)], [STAGED_APP, basename(appDbPath)]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
+  // The demo reset (yourphr#645), after an operator's explicit restore and before anything opens:
+  // an operator asking for a specific database must beat the demo's automatic one. Refuses unless
+  // armed AND proven — see src/demo/reset.ts for what it proves and why it refuses.
+  applyDemoReset({
+    appDbPath,
+    recordsDbPath,
+    baselineDir: config.getString('yourphr.demo.baseline.dir'),
+    demoEnabled: config.getBool('yourphr.demo.enabled'),
+    resetOnRestart: config.getBool('yourphr.demo.reset-on-restart'),
+    databaseKey: dbKey,
+    allowedAccounts: [config.getString('yourphr.demo.username'), BOOTSTRAP_ADMIN_USERNAME],
+    log: (line) => appLog.warn(line),
+  });
   // The app database's one connection is the engine's (yourphr#617): opened and migrated by its
   // provider before any sibling provider is built over it; closed last at shutdown.
   const database = new DatabaseManager(engine, new SqliteDatabaseProvider(appDbPath, dbKey, APP_MIGRATIONS));

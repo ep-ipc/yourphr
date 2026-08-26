@@ -53,7 +53,9 @@
     "test:coverage": "vitest run --coverage",
     "test:changed": "vitest run --changed",
     "e2e": "playwright test -c e2e/playwright.config.ts",
-    "check:store": "bash scripts/check-store-boundary.sh"
+    "check:store": "bash scripts/check-store-boundary.sh",
+    "demo-reset": "tsx scripts/demo-reset-tests.ts",
+    "baseline": "tsx scripts/build-demo-baseline.ts"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",

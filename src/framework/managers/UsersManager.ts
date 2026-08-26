@@ -24,6 +24,13 @@ declare module '../Engine.js' {
   }
 }
 
+/**
+ * The account an empty install provisions itself (yourphr#504). Exported because the demo reset's
+ * proof has to name the accounts a demo is allowed to hold (yourphr#645), and a second literal
+ * 'admin' somewhere else is how that proof would quietly stop matching reality.
+ */
+export const BOOTSTRAP_ADMIN_USERNAME = 'admin';
+
 export interface LegacyUser {
   username: string;
   /** The bcrypt hash exactly as Go stored it. */
@@ -174,7 +181,7 @@ export class UsersManager extends BaseManager {
    * EMPTY user table. The generated password is written 0600 to <dataDir>/.admin_bootstrap_password;
    * the caller logs the PATH only; the file is deleted after the admin's first sign-in.
    */
-  async bootstrapAdmin(dataDir: string, username = 'admin'): Promise<{ created: boolean; passwordFile?: string }> {
+  async bootstrapAdmin(dataDir: string, username = BOOTSTRAP_ADMIN_USERNAME): Promise<{ created: boolean; passwordFile?: string }> {
     if ((await this.provider.count()) > 0) return { created: false };
     const password = randomBytes(24).toString('base64url');
     await this.provider.create({ username, passwordHash: this.passwords.hash(password), tokenGeneration: 0, role: 'admin' });

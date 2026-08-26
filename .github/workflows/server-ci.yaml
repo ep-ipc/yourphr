@@ -102,6 +102,10 @@ jobs:
         run: npm run migrate:tool
       - name: The process (boot from environment, /healthz, static, refusals, clean shutdown)
         run: npm run process
+      - name: Demo reset (the refusals — a foreign account, an encrypted database, a missing baseline)
+        run: npm run demo-reset
+      - name: The demo baseline builds
+        run: npx tsx scripts/build-demo-baseline.ts --out "$RUNNER_TEMP/baseline"
 
   # E2E: Playwright drives the built Angular app against a booted server with synthetic data.
   #
