@@ -10,11 +10,11 @@
     "ng": "ng",
     "start": "ng serve",
     "serve": "ng serve",
-    "build": "ng build --output-path=../dist",
+    "build": "ng build --output-path=../dist/web",
     "test": "ng test",
     "e2e": "playwright test",
     "lint": "ng lint",
-    "dist": "ng build --watch --output-path=../dist",
+    "dist": "ng build --watch --output-path=../dist/web",
     "storybook": "ng run fastenhealth:storybook",
     "build-storybook": "ng run fastenhealth:build-storybook"
   },

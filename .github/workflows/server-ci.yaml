@@ -33,8 +33,10 @@ jobs:
       - name: Types
         run: npm run typecheck
 
-      # What the image ships (yourphr#587): tsc must EMIT, not just check. Output is dist-server/
-      # until the Go backend goes at yourphr#646 and frees dist/ (yourphr#650).
+      # What the image ships (yourphr#587): tsc must EMIT, not just check. One dist/, all
+      # TypeScript: dist/server is the compiled backend, dist/web the Angular bundle. They are
+      # separate subdirectories because the Angular build CLEARS its output directory — sharing one
+      # would delete the server build.
       - name: Build
         run: npm run build
 
@@ -123,7 +125,7 @@ jobs:
           yarn install --frozen-lockfile
           yarn build
       - name: The bundle exists before anything tries to serve it
-        run: test -f dist/index.html
+        run: test -f dist/web/index.html
 
       - run: npm ci
       - name: Install Chromium
@@ -131,7 +133,7 @@ jobs:
       - name: Journeys
         run: npm run e2e
         env:
-          SPIKE_E2E_WEB_DIR: ${{ github.workspace }}/dist
+          SPIKE_E2E_WEB_DIR: ${{ github.workspace }}/dist/web
       - name: Upload the Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4

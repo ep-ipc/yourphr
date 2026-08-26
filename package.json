@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist-server/main.js",
+    "start": "node dist/server/main.js",
     "export": "tsx scripts/export-resources.ts",
     "smoke": "tsx scripts/smoke.ts",
     "typecheck": "tsc --noEmit",

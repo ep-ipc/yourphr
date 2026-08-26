@@ -35,7 +35,7 @@ FROM node:24-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /opt/yourphr
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /build/dist-server ./dist-server
+COPY --from=build /build/dist/server ./dist/server
 COPY package.json ./
 # The shipped defaults are part of the product (yourphr#621): the process refuses to boot without
 # them, and WORKDIR is where FileConfigProvider looks. Instance overrides live under ./data.
@@ -58,4 +58,4 @@ ENV YOURPHR_FAST_STORAGE=/opt/yourphr/data \
     YOURPHR_WEB_LISTEN_PORT=8080
 EXPOSE 8080
 VOLUME ["/opt/yourphr/data"]
-CMD ["node", "dist-server/main.js"]
+CMD ["node", "dist/server/main.js"]
