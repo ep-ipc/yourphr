@@ -155,3 +155,12 @@ dist-seed/
 .kit-check/
 .continue/
 .agents/
+
+# The TypeScript stack, imported at the root (yourphr#650). Its build output is dist-server/ until
+# the Go backend goes at yourphr#646 and it can take dist/.
+/node_modules/
+/dist-server/
+/test-results/
+/playwright-report/
+/coverage/
+/data/

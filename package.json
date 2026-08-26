@@ -1,15 +1,15 @@
 {
-  "name": "yourphr-ts-spike",
-  "version": "0.3.0",
+  "name": "yourphr",
+  "version": "3.0.0-dev",
   "private": true,
   "type": "module",
-  "description": "Throwaway spike: can a TypeScript/Node FHIR store replace YourPHR's Go backend? Evaluated in yourphr docs/planning/typescript-stack-evaluation.md",
+  "description": "YourPHR \u2014 your medical records, immediately and in your hands, for free. The TypeScript stack that succeeds the Go backend.",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js",
+    "start": "node dist-server/main.js",
     "export": "tsx scripts/export-resources.ts",
     "smoke": "tsx scripts/smoke.ts",
     "typecheck": "tsc --noEmit",

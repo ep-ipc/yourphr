@@ -18,10 +18,16 @@ MAX_BYTES=2097152 # 2 MiB — no legitimate source file in this repo is close
 
 # bash 3.2 compatible (macOS ships 3.2, which has no mapfile) — read the list into $@ via a
 # newline-only IFS rather than an array builtin that is not there.
+# The Go backend and the Angular app both keep SYNTHETIC fixtures — Synthea patients under
+# backend/**/testdata and DSTU2 bundles under frontend/src/lib/fixtures — committed years ago and
+# covered by their own CI. This guard came across with the TypeScript stack (yourphr#650) and, run at
+# this root, would fail on all of them — which trains an operator to pass --no-verify, the one habit
+# it exists to prevent. So --all scans the TypeScript stack's own tree while both backends live here.
+# Delete this scoping when backend/ goes at yourphr#646: --all should mean --all again.
 if [[ "${1:-}" == "--all" ]]; then
-  FILE_LIST=$(git ls-files)
+  FILE_LIST=$(git ls-files -- src scripts config e2e docs private '*.md' '*.json' '*.ts' 2>/dev/null | grep -vE '^(backend|frontend)/' || true)
 else
-  FILE_LIST=$(git diff --cached --name-only --diff-filter=ACMR)
+  FILE_LIST=$(git diff --cached --name-only --diff-filter=ACMR | grep -vE '^(backend|frontend)/' || true)
 fi
 
 fail=0
