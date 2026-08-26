@@ -1,0 +1,25 @@
+# The PHI guard runs in CI as well as in the pre-commit hook, because a hook is advisory: it lives
+# on one machine, it is skipped by --no-verify, and it is absent entirely for anyone who clones
+# without running npm install. CI is the copy that cannot be bypassed by accident.
+#
+# Carried over with the TypeScript stack (yourphr#650, yourphr#651). While both backends live here
+# the guard scans the TypeScript tree — Go's Synthea fixtures and the Angular app's DSTU2 bundles are
+# synthetic, committed years ago, and covered by their own CI; failing on them every run would teach
+# people to reach for --no-verify, which is the habit this exists to prevent. The scoping goes when
+# backend/ does (yourphr#646).
+name: PHI guard
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-phi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse patient data in tracked files
+        run: bash scripts/check-no-phi.sh --all

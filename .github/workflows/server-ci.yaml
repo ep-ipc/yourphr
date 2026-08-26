@@ -1,0 +1,141 @@
+# The TypeScript stack's own verification (yourphr#651), carried over from the spike repository when
+# the code moved in (yourphr#650).
+#
+# SEPARATE from ci.yaml, which tests the Go backend, because both stacks live here until the demo
+# instance is swapped (yourphr#646) and a single workflow testing both would have to be unpicked
+# again afterwards. Two workflows, two names, no shared state.
+#
+# Every harness here runs WITHOUT patient data. The ones that read a real export (load, diff, writes,
+# isolation, http) stay on the operator's machine, deliberately — CI must never see PHI.
+name: Server CI (TypeScript)
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      # What the image ships (yourphr#587): tsc must EMIT, not just check. Output is dist-server/
+      # until the Go backend goes at yourphr#646 and frees dist/ (yourphr#650).
+      - name: Build
+        run: npm run build
+
+      # The two guards that only ever run here. A laptop run skips them, so "green locally" says
+      # nothing about either boundary.
+      - name: Network access confined to src/http
+        run: npm run check:boundary
+      - name: Store boundary — the driver lives in providers, nothing reaches past a manager
+        run: npm run check:store
+
+      - name: Framework skeleton (typed registry, boot order, guards)
+        run: npm run framework
+      - name: Unit tests with coverage floors on src/framework and src/app
+        run: npm run test:coverage
+
+      - name: SSRF guard
+        run: npm run ssrf
+      - name: SMART client
+        run: npm run smart
+      - name: Sync and resync
+        run: npm run sync
+
+      # yourphr#540 — the read stack stays honest in CI. The corpus is GENERATED here, fully
+      # synthetic and deterministic; committing an .ndjson would (rightly) trip the PHI guard.
+      - name: Generate synthetic corpus
+        run: npx tsx scripts/make-synthetic-corpus.ts --out "$RUNNER_TEMP/corpus.ndjson"
+      - name: Smoke (reference implementation holds the corpus)
+        run: npx tsx scripts/smoke.ts --in "$RUNNER_TEMP/corpus.ndjson"
+      - name: Differential (sqlite repository agrees with the reference)
+        run: npx tsx scripts/diff-repositories.ts --in "$RUNNER_TEMP/corpus.ndjson" --db "$RUNNER_TEMP/diff.db"
+      - name: Write path (create, update, delete, reindex)
+        run: npx tsx scripts/write-tests.ts --in "$RUNNER_TEMP/corpus.ndjson" --db "$RUNNER_TEMP/writes.db"
+
+      - name: Auth (sessions, revocation, throttling, the wire)
+        run: npm run auth
+      - name: Configuration system (precedence, overlay, refusals)
+        run: npm run config
+      - name: Bootstrap environment (.env precedence)
+        run: npm run env
+      - name: Encrypted backup (ciphertext, roundtrip, refusals)
+        run: npm run backup
+      - name: Provider catalog + sync worker (secrets, seeding, refresh, isolation)
+        run: npm run worker
+      - name: Migrations (run-once, rollback, downgrade protection)
+        run: npm run migrations
+      - name: IPS composition + narratives (required sections, legibility, determinism)
+        run: npm run ips
+      - name: Provenance (source attribution, re-confirmation, honesty)
+        run: npm run provenance
+      - name: Medication reconciliation (dedup, state honesty, conflicts surfaced)
+        run: npm run medication
+      - name: Record pages (conditions, allergies, immunizations, recent, favourites, the typed query)
+        run: npm run records
+      - name: Dynamic Client Registration (endpoint gauntlet, refusals, persistence)
+        run: npm run dcr
+      - name: The assembly (boot -> sign-in -> record read, every module engaged)
+        run: npm run app
+      - name: Source + token migration (Go reader, one-way import, refresh without reconnect)
+        run: npm run migrate
+      - name: Frontend serving (SPA fallback, traversal containment, API precedence)
+        run: npm run web
+      - name: One-command migration (users, catalog, sources, records, config; verification gate with teeth)
+        run: npm run migrate:tool
+      - name: The process (boot from environment, /healthz, static, refusals, clean shutdown)
+        run: npm run process
+
+  # E2E: Playwright drives the built Angular app against a booted server with synthetic data.
+  #
+  # The app is now built FROM SOURCE rather than extracted from the published product image, which
+  # is what folding the stacks together bought (yourphr#650): a frontend change and the server that
+  # serves it are tested at the same commit, instead of the frontend being whatever the last release
+  # baked. Costs a couple of minutes of Angular build.
+  e2e:
+    name: E2E (Playwright over the built Angular app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Build the Angular app
+        working-directory: frontend
+        run: |
+          yarn install --frozen-lockfile
+          yarn build
+      - name: The bundle exists before anything tries to serve it
+        run: test -f dist/index.html
+
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Journeys
+        run: npm run e2e
+        env:
+          SPIKE_E2E_WEB_DIR: ${{ github.workspace }}/dist
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 3
