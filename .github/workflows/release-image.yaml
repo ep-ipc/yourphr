@@ -14,6 +14,17 @@ name: Docker (release)
 on:
   push:
     tags: ['v*.*.*']
+  # A SECOND TRIGGER, deliberately (yourphr#658). Pushing v3.1.0 created no workflow run at all —
+  # not a failed one, none — while the three tags before it fired normally. The contract says a tag
+  # publishes an image, and the failure mode was silence: no red run, nothing to notice, and Flux
+  # quietly keeping the old digest. Publishing the GitHub Release now fires the same build, so the
+  # two ways a release is announced are also two chances for it to be built.
+  #
+  # Both firing rebuilds the same tag, which is wasteful and harmless: same source, same tags
+  # pushed, and the layer cache makes the second pass cheap. A duplicate build is a much better
+  # failure than a missing one.
+  release:
+    types: [published]
   # Manual re-publish of an existing tag (base-image refresh, frontend pin bump) — run from the tag.
   workflow_dispatch:
 

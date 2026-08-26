@@ -18,7 +18,12 @@ Two images are published. Both follow the same semver contract.
 | Registry image | `ghcr.io/jwilleke/yourphr` |
 | Visibility | __public__ (anonymous pull + tag scanning) |
 | Platform | `linux/amd64`, `linux/arm64` |
-| Built by | [`.github/workflows/docker-jwilleke.yaml`](../../.github/workflows/docker-jwilleke.yaml) |
+| Built by | [`.github/workflows/release-image.yaml`](../../.github/workflows/release-image.yaml) |
+| Contains | the TypeScript server and the Angular app, built from the same commit (yourphr#652) |
+
+From __3.0.0__ this image is the TypeScript stack. The Go stack is finished at 2.10.3 and lives on,
+byte for byte, as `ghcr.io/jwilleke/yourphr-go:2.10.3` — copied by digest, not rebuilt. Anything
+still pulling `ghcr.io/jwilleke/yourphr:2.10.3` keeps working; nothing new will appear under 2.x.
 
 ### SMART on FHIR relay
 
@@ -103,3 +108,18 @@ Apply the same "highest `:X.Y.Z`" rule:
 
 Cut a release. There is no "merge to deploy" path — including for hotfixes, which ship as a __patch__
 release. See [`docs/releasing.md`](../releasing.md) for the steps.
+
+### Cutting one is not finished until you have checked it happened
+
+Two steps, and neither is optional, because __both failure modes here are silent__:
+
+1. __Confirm the image was built.__ `gh run list --workflow=release-image.yaml` must show a run for
+   the tag you just pushed. Pushing `v3.1.0` once produced no run at all — not a failed one, none
+   (yourphr#658) — and a missing image looks exactly like a working deployment: Flux simply keeps
+   the digest it already has. If no run appeared, dispatch one from the tag:
+   `gh workflow run release-image.yaml --ref vX.Y.Z`.
+2. __Publish the GitHub Release.__ The Releases page is where a self-hoster looks to answer "what
+   changed and should I upgrade", and for four releases it said the newest YourPHR was the frozen Go
+   one (yourphr#659). Take the body from the matching `CHANGELOG.md` entry. Publishing also fires the
+   image build a second time, which is the point: the two announcements of a release are also two
+   chances for it to exist.
