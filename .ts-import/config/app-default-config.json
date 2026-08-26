@@ -1,0 +1,113 @@
+{
+  "_comment": "Shipped defaults for the YourPHR TypeScript stack (yourphr#621). READ-ONLY: this file is the product, not the instance. An operator overrides values in <data dir>/config/app-custom-config.json, which holds ONLY what they changed \u2014 never a copy of this file. Keys prefixed with _ are comments and are ignored on load.",
+  "_comment_storage": "yourphr#630 \u2014 YOURPHR_FAST_STORAGE and YOURPHR_SLOW_STORAGE are plain environment variables, not configuration keys: they are what LOCATE this file, so they cannot be set inside it. Both default to ./data, so a single-volume instance sets nothing. Fast holds small, hot, lock-dependent stores (the databases, config, .env); slow holds bulk and archives and is fine on a NAS. Every path below composes from one of them, so what goes where is decided HERE and not in code. SQLite must stay on the fast root \u2014 its locking is unsafe over NFS/SMB (yourphr#628).",
+  "yourphr.database.location": "${YOURPHR_FAST_STORAGE}/spike.db",
+  "yourphr.records.location": "${YOURPHR_FAST_STORAGE}/records.db",
+  "yourphr.database.encryption.key": "",
+  "yourphr.web.listen.port": 8080,
+  "yourphr.web.listen.host": "0.0.0.0",
+  "yourphr.web.secure-cookies": false,
+  "yourphr.web.static-dir": "",
+  "_comment_environment_name": "What this instance calls itself in the UI's version string \u2014 Go's web.environment_name. Empty on a family install; 'demo' on demo.yourphr.org, which is how a visitor can tell the two apart. Published on /api/version as environment_name, which is the name the Angular app reads.",
+  "yourphr.web.environment-name": "",
+  "yourphr.sync.interval-seconds": 900,
+  "yourphr.auth.session.sliding-seconds": 3600,
+  "yourphr.auth.session.absolute-seconds": 43200,
+  "yourphr.auth.throttle.max-failures": 5,
+  "yourphr.auth.throttle.window-seconds": 900,
+  "yourphr.auth.password.min-length": 12,
+  "yourphr.auth.trusted-proxies": [],
+  "_comment_auth_rate_limit": "yourphr#647 \u2014 a per-IP FIXED WINDOW on the unauthenticated sign-in routes (/api/auth/signin and /api/auth/demo-signin). Separate from the throttle above, which counts FAILURES per account and per IP: this one counts REQUESTS, because demo sign-in runs a bcrypt verify for an anonymous caller who posts nothing, and a caller who never fails is not slowed by a failure counter. Setting max-requests to 0 or less turns it OFF, deliberately \u2014 an automated suite driving real logins from one address is the case that needs that switch. A non-positive window is a typo rather than an instruction, so it falls back to 60 seconds instead of reading as 'disable the backstop'. Counters are per PROCESS, so N replicas allow N times the budget.",
+  "yourphr.auth.rate-limit.max-requests": 60,
+  "yourphr.auth.rate-limit.window-seconds": 60,
+  "yourphr.auth.providers": [
+    "password"
+  ],
+  "yourphr.auth.factors": [
+    "password"
+  ],
+  "_comment_demo": "yourphr#643 \u2014 a PUBLIC DEMO signs every visitor into one shared account with POST /api/auth/demo-signin, which posts no credentials. `enabled` is published to callers with no login (the sign-in page decides whether to offer the button); the USERNAME is never published, and the password is verified server-side and never reaches a browser. The password is GENERATED at startup and written here as an override \u2014 nobody chooses it and nobody types it \u2014 and is regenerated whenever the stored hash and this value drift apart, which is what a freshly restored seed looks like. Leaving `enabled` false, the shipped default, makes every part of this inert.",
+  "yourphr.demo.enabled": false,
+  "yourphr.demo.username": "demo",
+  "yourphr.demo.password": "",
+  "yourphr.audit.provider": "sqlite",
+  "yourphr.sources.client.provider": "smart",
+  "yourphr.glossary.provider": "medlineplus",
+  "yourphr.sync.max-pages": 500,
+  "yourphr.backup.storage.provider": "filesystem",
+  "yourphr.backup.destination": "${YOURPHR_SLOW_STORAGE}/backups",
+  "yourphr.backup.max-backups": 7,
+  "yourphr.backup.schedule.enabled": false,
+  "yourphr.backup.schedule.time": "02:00",
+  "yourphr.backup.schedule.days": "daily",
+  "yourphr.operator.name": "",
+  "yourphr.operator.contact-email": "",
+  "yourphr.operator.contact-url": "",
+  "yourphr.backup.encryption.key": "",
+  "_comment_authorization": "yourphr#623 \u2014 permissions and roles are DATA, read from the merged configuration at startup. The permission NAMES are the enforcement contract: a role may only name one this build defines, and an unknown name refuses the boot. roles.definitions is an object, so it deep-merges PER ROLE \u2014 an operator adds a role in app-custom-config.json without restating the others. A role's permissions[] is a plain list and is replaced wholesale on override, which is intended: it is one role's list, not the catalogue. issystem marks a role this build defines; it is not the operator's to redefine out of existence, because accounts store the role name.",
+  "yourphr.auth.permissions.definitions": {
+    "admin-read": {
+      "description": "See the operator screens \u2014 configuration, database, logs, metrics, the provider catalog"
+    },
+    "admin-system": {
+      "description": "Change what this instance is \u2014 configuration values, instance identity, backups, the provider catalog"
+    },
+    "user-create": {
+      "description": "Create an account"
+    },
+    "user-read": {
+      "description": "See the list of accounts and how many the instance holds"
+    },
+    "user-edit": {
+      "description": "Reset another account's password"
+    }
+  },
+  "yourphr.auth.roles.definitions": {
+    "admin": {
+      "displayname": "Administrator",
+      "description": "Runs this instance: every operator screen, and the account list.",
+      "issystem": true,
+      "permissions": [
+        "admin-read",
+        "admin-system",
+        "user-create",
+        "user-edit",
+        "user-read"
+      ]
+    },
+    "user": {
+      "displayname": "Member",
+      "description": "Owns their own records. The empty list is not an oversight: a member reaches their own records by OWNERSHIP, not by a permission.",
+      "issystem": true,
+      "permissions": []
+    },
+    "anonymous": {
+      "displayname": "Not signed in",
+      "description": "A role with an empty list rather than an `if` at the edge, so the unauthenticated path goes through the same evaluator as every other.",
+      "issystem": true,
+      "permissions": []
+    }
+  },
+  "_comment_public": "Keys served by GET /api/instance/public to callers with NO login (yourphr#457). Direction matters: this is an ALLOW-LIST, so a key added anywhere else in this file is private until it is named here. A deny-list would publish anything nobody remembered to list. An instance may widen it in <data>/config/app-custom-config.json.",
+  "yourphr.public": [
+    "yourphr.operator.name",
+    "yourphr.operator.contact-url",
+    "yourphr.auth.password.min-length",
+    "yourphr.demo.enabled"
+  ],
+  "_comment_config_secret_keys": "Keys masked on the Admin Configuration screen until an admin explicitly reveals one (yourphr#458). Deliberately SHORT: masking everything outside `public` makes an operator click through the listen port and the log level, and trains them to reveal reflexively. This list is the OPPOSITE shape to `public` and that is intentional \u2014 `public` is an allow-list because a mistake exposes a value to the internet; `secret` is a DENY-LIST because a mistake shows a value to an already-authenticated admin on their own screen. A value that is an ${VAR} environment reference masks itself and needs no entry here (yourphr#622).",
+  "_comment_config_env_keys": "yourphr#635 \u2014 keys OWNED BY THE ENVIRONMENT, and the variable that supplies each. A key is owned by exactly one layer, never both: these are the environment's, so they are always read-only on Admin -> Configuration (409 on write) whether or not the variable is currently set, shown with the variable's name. Making ownership conditional on the variable being set would hand the screen the source of truth whenever it is absent, which is the ambiguity this removes. The value shipped below for such a key is a BOOT FALLBACK so a fresh install comes up, not a setting. To change one: set the variable in .env and restart. Nothing here writes .env, by design.",
+  "yourphr.config.env-keys": {
+    "yourphr.web.listen.port": "YOURPHR_WEB_LISTEN_PORT",
+    "yourphr.web.listen.host": "YOURPHR_WEB_LISTEN_HOST",
+    "yourphr.web.secure-cookies": "YOURPHR_WEB_SECURE_COOKIES",
+    "yourphr.web.static-dir": "YOURPHR_WEB_STATIC_DIR",
+    "yourphr.database.encryption.key": "YOURPHR_DATABASE_ENCRYPTION_KEY",
+    "yourphr.backup.encryption.key": "YOURPHR_BACKUP_ENCRYPTION_KEY"
+  },
+  "yourphr.config.secret-keys": [
+    "yourphr.database.encryption.key",
+    "yourphr.backup.encryption.key",
+    "yourphr.demo.password"
+  ]
+}

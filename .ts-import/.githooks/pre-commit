@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Version-controlled hook. Installed by `npm run hooks` (also run automatically by `npm install`
+# via the prepare script), because .git/hooks is not cloned and an uninstalled guard is no guard.
+exec "$(dirname "$0")/../scripts/check-no-phi.sh"

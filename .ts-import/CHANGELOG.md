@@ -1,0 +1,56 @@
+# Changelog
+
+The TypeScript stack that succeeds YourPHR's Go backend. Versions here are `0.x` — the pre-release history of the stack, before it takes over the product's version line as YourPHR v3 ([yourphr#649](https://github.com/jwilleke/yourphr/issues/649), [yourphr#653](https://github.com/jwilleke/yourphr/issues/653)).
+
+Issue references are `yourphr#NNN` and resolve against <https://github.com/jwilleke/yourphr>, where all the tracking lives.
+
+Format follows the product repo's: what changed and why it mattered, in the terms of someone running the thing.
+
+## [0.3.0](https://github.com/jwilleke/yourphr-ts-spike/compare/v0.2.2...v0.3.0) (2026-08-25)
+
+Demo mode, and the first request-rate limiting this stack has ever had.
+
+### Features
+
+- __Demo mode: the shared account and its one-click entrance__ ([yourphr#643](https://github.com/jwilleke/yourphr/issues/643)). `POST /api/auth/demo-signin` posts no credentials — the server verifies the configured password against the stored hash and mints the session, so a visitor never holds one. The password is generated at boot and regenerated only when the configured value and the stored hash drift apart, which is what a freshly restored seed looks like, so a reset needs no operator step. The verify is the point: minting a token for whoever `yourphr.demo.username` names would turn one mis-set flag into an auth bypass on any instance holding an account called `demo`. Keys: `yourphr.demo.enabled` (published to anonymous callers so the sign-in page can offer the button), `yourphr.demo.username` (never published), `yourphr.demo.password` (secret). Connecting a provider is refused for the demo account at `SourcesManager.add` — the door every connected source comes through — and again at the catalog's authorize, so a visitor is not sent through a real provider's consent screen to be turned away afterwards.
+- __The shared demo account may not take the demo away from everyone__ ([yourphr#514](https://github.com/jwilleke/yourphr/issues/514)). Changing the password, deleting the account and signing out everywhere are refused with `demo_account_restricted`: the first leaves the configured password no longer matching the stored hash so demo sign-in refuses every visitor, the second leaves the entrance with nothing to sign in to, the third ends every other visitor's session mid-read. Wrecking the demo's records stays deliberately allowed — that heals at the next reset and it shows the product working.
+- __A per-IP budget on every sign-in route__ ([yourphr#647](https://github.com/jwilleke/yourphr/issues/647)). The stack had no request rate limiting at all, only a failure throttle that counts wrong passwords. Demo sign-in is the clearest case — anonymous, no body, a bcrypt verify per call — but ordinary sign-in was bounded only by failures too. One budget per IP across both routes, `429` with `Retry-After`, ported from ngdpbase's `SimpleRateLimiter`. `yourphr.auth.rate-limit.max-requests` (60) and `yourphr.auth.rate-limit.window-seconds` (60); a budget of 0 or less turns it off, deliberately, because an automated suite driving real logins from one address is the case that needs that switch. Read live, so narrowing it on Admin → Configuration takes effect without a restart.
+
+## [0.2.2](https://github.com/jwilleke/yourphr-ts-spike/compare/v0.2.1...v0.2.2) (2026-08-25)
+
+### Bug Fixes
+
+- __The version banner reports the build that is actually running__ ([yourphr#642](https://github.com/jwilleke/yourphr/issues/642)). Both fields of `/api/version` were lying: the version was frozen at `package.json`'s 0.1.0 across two releases, and `environment_name` was hardcoded empty, so every instance called itself the same thing. The version now comes from the build, and the name follows `yourphr.web.environment-name` — which is how `demo` tells itself apart from production in the footer.
+
+## [0.2.1](https://github.com/jwilleke/yourphr-ts-spike/compare/v0.2.0...v0.2.1) (2026-08-25)
+
+### Bug Fixes
+
+- __An env-owned key still honours its pre-rename `SPIKE_` name__ ([yourphr#635](https://github.com/jwilleke/yourphr/issues/635)). The deployed manifests carry `SPIKE_*` variables, two of them SOPS-encrypted with the variable name inside the payload, so the [yourphr#627](https://github.com/jwilleke/yourphr/issues/627) rename would have crash-looped the running pod on a key it could not read. The new name is read first and the old one accepted with a one-time warning, to be dropped once the manifests are updated.
+
+## [0.2.0](https://github.com/jwilleke/yourphr-ts-spike/compare/v0.1.0...v0.2.0) (2026-08-25)
+
+The release the cut-over served: the household instance moved from the Go backend to this one on 2026-08-25.
+
+### Features
+
+- __The ngdpbase architecture, throughout__ ([yourphr#608](https://github.com/jwilleke/yourphr/issues/608)). An engine, a base contract every manager answers, a request context built per request and passed into every call, and managers as the only door to a resource — with providers bound by configuration behind them. Users and Sessions ([yourphr#611](https://github.com/jwilleke/yourphr/issues/611)), Sources and Jobs ([yourphr#612](https://github.com/jwilleke/yourphr/issues/612)), Catalog ([yourphr#613](https://github.com/jwilleke/yourphr/issues/613)), Audit ([yourphr#614](https://github.com/jwilleke/yourphr/issues/614)), Backups ([yourphr#615](https://github.com/jwilleke/yourphr/issues/615)), Favourites folded into Records ([yourphr#616](https://github.com/jwilleke/yourphr/issues/616)), Database ([yourphr#617](https://github.com/jwilleke/yourphr/issues/617)) and Settings ([yourphr#618](https://github.com/jwilleke/yourphr/issues/618)). `ServerModules` retired: every route reaches its manager directly ([yourphr#619](https://github.com/jwilleke/yourphr/issues/619)).
+- __Authorization as data__ ([yourphr#620](https://github.com/jwilleke/yourphr/issues/620), [yourphr#623](https://github.com/jwilleke/yourphr/issues/623)). A permission registry and flat roles replaced 18 scattered `requireAdmin()` sites; permissions and role definitions then moved into the shipped configuration and are read at startup, so a role an operator narrows is a config edit rather than a build. A role granting a permission this build does not enforce refuses the boot, naming it.
+- __Configuration as three layers with one vocabulary__ ([yourphr#621](https://github.com/jwilleke/yourphr/issues/621), [yourphr#622](https://github.com/jwilleke/yourphr/issues/622), [yourphr#626](https://github.com/jwilleke/yourphr/issues/626), [yourphr#627](https://github.com/jwilleke/yourphr/issues/627), [yourphr#629](https://github.com/jwilleke/yourphr/issues/629), [yourphr#630](https://github.com/jwilleke/yourphr/issues/630)). Environment above instance overrides above shipped defaults; `$VAR` references so the config file names the variable instead of hiding a secret; instance data spanning a fast and a slow storage root with every path composed in the file rather than in code; one key-naming convention (`yourphr.<domain>.<name>`, lowercase, hyphens); the compiled catalogue retired so the shipped file *is* the list of keys; and `.env` as the whole bootstrap contract.
+- __The pages the product actually has__: dashboard and record pages ([yourphr#595](https://github.com/jwilleke/yourphr/issues/595)), Sources ([yourphr#594](https://github.com/jwilleke/yourphr/issues/594)), account and legal ([yourphr#596](https://github.com/jwilleke/yourphr/issues/596)), admin dashboard, database, logs and configuration ([yourphr#602](https://github.com/jwilleke/yourphr/issues/602)), the provider catalog and sandbox pages ([yourphr#603](https://github.com/jwilleke/yourphr/issues/603)), Users ([yourphr#604](https://github.com/jwilleke/yourphr/issues/604)), a real admin role carried from Go ([yourphr#597](https://github.com/jwilleke/yourphr/issues/597)), full-text search over each record's own text ([yourphr#599](https://github.com/jwilleke/yourphr/issues/599)) and the MedicalHistory resource graph ([yourphr#605](https://github.com/jwilleke/yourphr/issues/605)).
+- __Plain-language explanations of coded values__ ([yourphr#640](https://github.com/jwilleke/yourphr/issues/640)). A glossary manager over an optional lookup provider, cache-first, so a record that says `2160-0` can say "Creatinine — a waste product filtered by your kidneys". An instance that must not reach the internet binds nothing, keeps serving what it has cached, and says why a new code cannot be explained.
+- __Tests that mean something__ ([yourphr#610](https://github.com/jwilleke/yourphr/issues/610)): vitest with coverage floors per manager over fake providers, and Playwright journeys over the built Angular app against a booted instance with synthetic data.
+
+## [0.1.0](https://github.com/jwilleke/yourphr-ts-spike/releases/tag/v0.1.0) (2026-08-21)
+
+The spike answering its own question — can a TypeScript/Node FHIR store replace the Go backend — and the assembly that made it a product rather than an experiment.
+
+### Features
+
+- __The read and write stack proven against real data__ ([yourphr#537](https://github.com/jwilleke/yourphr/issues/537), [yourphr#539](https://github.com/jwilleke/yourphr/issues/539), [yourphr#540](https://github.com/jwilleke/yourphr/issues/540)): fetch-and-store against a live FHIR server, a cross-source id collision refused rather than silently overwritten, and CI that keeps the read stack honest on every push using a synthetic corpus and no PHI.
+- __Auth, sessions and the session gate__ ([yourphr#541](https://github.com/jwilleke/yourphr/issues/541)): sign-in, revocation by token generation, failure throttling, bootstrap provisioning, operator recovery, and `/api/secure/*` served as the caller's *verified* user.
+- __The Phase 4 modules__ ([yourphr#542](https://github.com/jwilleke/yourphr/issues/542)): configuration, encrypted backups, the provider catalog and background sync worker, and dated run-once transactional migrations that refuse a downgrade.
+- __Patient-legible output__: the classifier carried decision-for-decision from Go ([yourphr#578](https://github.com/jwilleke/yourphr/issues/578)), IPS composition with narratives ([yourphr#577](https://github.com/jwilleke/yourphr/issues/577)), provenance — which source said what, when ([yourphr#579](https://github.com/jwilleke/yourphr/issues/579)) — and medication reconciliation with conflicts surfaced ([yourphr#580](https://github.com/jwilleke/yourphr/issues/580)).
+- __The migration from Go__ ([yourphr#583](https://github.com/jwilleke/yourphr/issues/583), [yourphr#584](https://github.com/jwilleke/yourphr/issues/584), [yourphr#586](https://github.com/jwilleke/yourphr/issues/586)): one command, per user, verified — accounts with bcrypt verify-then-rehash so nobody resets a password, and sources with their tokens so a sync continues without a reconnect.
+- __One process, one image, one release__ ([yourphr#585](https://github.com/jwilleke/yourphr/issues/585), [yourphr#587](https://github.com/jwilleke/yourphr/issues/587)): the built Angular app served by the same process, and a release-gated multi-arch image.
+- __RFC 7591 dynamic client registration__ ([yourphr#581](https://github.com/jwilleke/yourphr/issues/581)).

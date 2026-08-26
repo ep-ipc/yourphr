@@ -1,0 +1,11 @@
+# The image is built from package*.json, tsconfig*.json, src/ and config/ only. Everything else is
+# either not shipped (harness scripts, docs, CI) or must never be near a build context (PHI,
+# databases). config/ holds the shipped defaults, which are part of the product (yourphr#621) —
+# the process refuses to boot without them.
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.build.json
+!src/
+!config/

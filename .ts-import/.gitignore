@@ -1,0 +1,33 @@
+# PHI — NEVER commit patient data. A leak here is irreversible.
+# Mirrors the hard rule in yourphr's AGENTS.md. These directories are where real
+# exports land; nothing inside them may ever enter git history.
+/phi/
+/patient-data/
+/sample-data/
+*.ndjson
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+
+node_modules/
+dist/
+*.log
+.DS_Store
+private/
+.claude/settings.local.json
+.claude/worktrees/
+.kit-sync/
+.kit-check/
+.continue/
+.agents/
+coverage/
+e2e/.admin-pass
+playwright-report/
+test-results/
+
+# Environment files carry secrets — the at-rest database key and the backup key (yourphr#630).
+# A leak here is irreversible on a PHR. The template is committed; the real file never is.
+.env
+.env.*
+!.env.example
