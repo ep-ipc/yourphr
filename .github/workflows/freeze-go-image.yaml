@@ -1,0 +1,50 @@
+# Copy the frozen Go image to the name it keeps: ghcr.io/jwilleke/yourphr-go (yourphr#652).
+#
+# WHY. ghcr.io/jwilleke/yourphr is about to mean the TypeScript stack, from 3.0.0 onward. The Go
+# image is finished at 2.10.3 and still runs demo.yourphr.org until yourphr#646 — so it needs a name
+# of its own before the old one changes meaning underneath it.
+#
+# A COPY, NOT A REBUILD. `imagetools create` copies the existing multi-arch manifest by digest, so
+# what lands under the new name is byte-for-byte what has been running, with no Go toolchain
+# involved and no chance of a "same version, different build" surprise. GitHub has no rename
+# operation for packages; this is the operation it does have.
+#
+# The old tag is NOT deleted. Anything still pulling ghcr.io/jwilleke/yourphr:2.10.3 keeps working,
+# and 2.10.3 can never be reused by the 3.x line because semver only goes forward.
+name: Freeze the Go image under yourphr-go
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The Go version to copy (no leading v)
+        required: true
+        default: 2.10.3
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log into ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy the manifest under the frozen name
+        run: |
+          set -euo pipefail
+          v='${{ inputs.version }}'
+          docker buildx imagetools create --tag "ghcr.io/jwilleke/yourphr-go:${v}" "ghcr.io/jwilleke/yourphr:${v}"
+
+      - name: The copy is multi-arch and matches the original
+        run: |
+          set -euo pipefail
+          v='${{ inputs.version }}'
+          docker buildx imagetools inspect "ghcr.io/jwilleke/yourphr-go:${v}" | tee new.txt
+          grep -q 'linux/amd64' new.txt && grep -q 'linux/arm64' new.txt
