@@ -559,7 +559,10 @@ export function createYourPhrServer(options: ServerOptions) {
           const body = await readJsonBody(req);
           const username = typeof body?.['username'] === 'string' ? (body['username'] as string).trim() : '';
           const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
-          const role = body?.['role'] === 'admin' ? 'admin' : 'user';
+          // Any role name this instance defines (yourphr#648) — the manager refuses one it does not,
+          // naming the ones it does. Coercing an unknown name to 'user' here would silently give the
+          // operator a different account from the one they asked for.
+          const role = typeof body?.['role'] === 'string' && (body['role'] as string).trim() !== '' ? (body['role'] as string).trim() : 'user';
           if (!body || username === '' || password === '') {
             send(res, 400, {success: false, error: 'username and password are required'});
             return;
@@ -1000,7 +1003,11 @@ export function createYourPhrServer(options: ServerOptions) {
           const body = await readJsonBody(req);
           const username = typeof body?.['username'] === 'string' ? (body['username'] as string) : '';
           const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
-          await engine.managers.users.createUser(ctx, username, password);
+          // Both create routes take a role NAME and let the manager refuse an undefined one
+          // (yourphr#648). This one used to ignore `role` entirely, which meant an operator could
+          // ask for an admin here and silently get a member.
+          const role = typeof body?.['role'] === 'string' && (body['role'] as string).trim() !== '' ? (body['role'] as string).trim() : 'user';
+          await engine.managers.users.createUser(ctx, username, password, role);
           send(res, 200, {success: true});
           return;
         }

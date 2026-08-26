@@ -31,6 +31,13 @@ declare module '../Engine.js' {
  */
 export const BOOTSTRAP_ADMIN_USERNAME = 'admin';
 
+/**
+ * The role the bootstrap admin is created with, and the one `isAdmin` asks about. A shipped role
+ * name (yourphr#623's `yourphr.auth.roles.definitions`), named once here rather than spelled as a
+ * literal wherever it is needed — the same reason the account's name is.
+ */
+export const ADMIN_ROLE = 'admin';
+
 export interface LegacyUser {
   username: string;
   /** The bcrypt hash exactly as Go stored it. */
@@ -77,12 +84,41 @@ export class UsersManager extends BaseManager {
     await this.provider.setPasswordHash(username, hash, false);
   }
 
+  /**
+   * The role this account effectively holds — the STORED name resolved against the roles this
+   * instance defines (yourphr#648). A name the configuration no longer defines resolves to the
+   * least-privileged role rather than to whatever it used to mean, because the alternative is an
+   * account whose powers are decided by a role definition somebody deleted.
+   */
   async roleOf(username: string): Promise<Role | undefined> {
-    return (await this.provider.get(username))?.role;
+    const stored = (await this.provider.get(username))?.role;
+    if (stored === undefined) return undefined;
+    const resolved = normaliseRole(stored, this.knownRoles());
+    if (resolved !== stored) this.log(`account ${JSON.stringify(username)} holds role ${JSON.stringify(stored)}, which this instance does not define — treating it as ${resolved}`);
+    return resolved;
+  }
+
+  /** The roles the merged configuration defines; empty with no policy manager, which fails closed. */
+  private knownRoles(): string[] {
+    return this.engine.has('policy') ? this.engine.managers.policy.roleNames() : [];
+  }
+
+  /**
+   * Refuse a role this instance does not define, naming the ones it does (yourphr#648). Assignment
+   * is where an unknown name has to be caught: accepting it would store a name that resolves to
+   * `user` on the next read, so the operator would see the role they asked for in the request and a
+   * different one in the account.
+   */
+  private checkRole(role: Role): Role {
+    const known = this.knownRoles();
+    if (!known.includes(role)) {
+      throw new ApiError(400, `unknown role ${JSON.stringify(role)} — this instance defines ${known.join(', ') || '(no roles: the policy manager is not wired)'}`);
+    }
+    return role;
   }
 
   async isAdmin(username: string): Promise<boolean> {
-    return (await this.roleOf(username)) === 'admin';
+    return (await this.roleOf(username)) === ADMIN_ROLE;
   }
 
   /** Every session of the account ends (the Sessions manager's sign-out-everywhere). */
@@ -116,7 +152,7 @@ export class UsersManager extends BaseManager {
     this.checkUsername(username);
     this.checkPolicy(password);
     if (await this.provider.get(username)) throw new ApiError(400, 'User already exists');
-    await this.provider.create({ username, passwordHash: this.passwords.hash(password), tokenGeneration: 0, role: normaliseRole(role) });
+    await this.provider.create({ username, passwordHash: this.passwords.hash(password), tokenGeneration: 0, role: this.checkRole(role) });
   }
 
   /** Every account, for the admin's Users page: names, roles, when created — never a hash. */
@@ -184,7 +220,7 @@ export class UsersManager extends BaseManager {
   async bootstrapAdmin(dataDir: string, username = BOOTSTRAP_ADMIN_USERNAME): Promise<{ created: boolean; passwordFile?: string }> {
     if ((await this.provider.count()) > 0) return { created: false };
     const password = randomBytes(24).toString('base64url');
-    await this.provider.create({ username, passwordHash: this.passwords.hash(password), tokenGeneration: 0, role: 'admin' });
+    await this.provider.create({ username, passwordHash: this.passwords.hash(password), tokenGeneration: 0, role: ADMIN_ROLE });
     mkdirSync(dataDir, { recursive: true });
     const file = join(dataDir, '.admin_bootstrap_password');
     writeFileSync(file, password + '\n', { mode: 0o600 });
@@ -241,10 +277,13 @@ export class UsersManager extends BaseManager {
     for (const user of users) {
       if (await this.provider.get(user.username)) { report.skippedExisting.push(user.username); continue; }
       if (!isLegacyBcrypt(user.passwordHash)) throw new Error(`refusing to import ${user.username}: password hash is not a Go bcrypt hash`);
-      const role = normaliseRole(user.role);
+      // Go's role name, resolved against what THIS instance defines (yourphr#648). Go had two
+      // roles and this stack may have more, so an unmapped name lands on the least-privileged one
+      // rather than being invented — an import must never hand out powers the source did not.
+      const role = normaliseRole(user.role, this.knownRoles());
       await this.provider.create({ username: user.username, passwordHash: user.passwordHash, tokenGeneration: user.tokenGeneration, role });
       report.imported.push(user.username);
-      if (role === 'admin') report.admins.push(user.username);
+      if (role === ADMIN_ROLE) report.admins.push(user.username);
     }
     return report;
   }

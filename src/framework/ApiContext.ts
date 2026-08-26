@@ -25,7 +25,8 @@ export class ApiError extends Error {
   }
 }
 
-export type Role = 'admin' | 'user';
+/** A role name as the configuration defines it (yourphr#648); the users table stores one of these. */
+export type Role = string;
 
 /**
  * The role a CONTEXT carries. `anonymous` is a role with an empty permission list rather than an

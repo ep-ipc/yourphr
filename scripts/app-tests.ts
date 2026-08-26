@@ -98,6 +98,15 @@ async function main(): Promise<void> {
   check('the admin creates a user over the wire', created.status === 200);
   check('and that user is a user, not an admin (yourphr#597)', (await app.users.roleOf('alice')) === 'user');
 
+  // yourphr#648: the role is a configured NAME. An undefined one is refused over the wire, naming
+  // what this instance does define — it is not quietly coerced to `user`, which would hand back an
+  // account different from the one asked for.
+  const madeUpRole = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'nina', password: 'a-long-enough-password', role: 'demo-admin' }) });
+  const madeUpBody = (await madeUpRole.json()) as { error?: string };
+  check('an undefined role is refused over the wire, naming the roles this instance defines (yourphr#648)',
+    madeUpRole.status === 400 && (madeUpBody.error ?? '').includes('admin') && (await app.users.roleOf('nina')) === undefined,
+    `${madeUpRole.status}: ${madeUpBody.error ?? ''}`);
+
   const aliceToken = ((await (await signIn('alice', 'a-long-enough-password')).json()) as { data: string }).data;
 
   // Connect a source for alice and run the worker once — the sync half of the assembly.

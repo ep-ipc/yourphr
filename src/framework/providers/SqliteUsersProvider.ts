@@ -2,7 +2,7 @@
  * The accounts table in the app database (yourphr#611). Every raw query over auth_users lives here.
  */
 import type Database from 'better-sqlite3-multiple-ciphers';
-import { BaseUsersProvider, normaliseRole, type UserRecord } from './BaseUsersProvider.js';
+import { BaseUsersProvider, type UserRecord } from './BaseUsersProvider.js';
 
 /**
  * The table as the provider creates it on a fresh database. The app migration that added `role`
@@ -32,7 +32,10 @@ export class SqliteUsersProvider extends BaseUsersProvider {
   async initialize(): Promise<void> { /* the schema is ensured in the constructor, before any migration-dependent caller */ }
 
   private toRecord(r: Row): UserRecord {
-    return { username: r.username, passwordHash: r.password_hash, tokenGeneration: r.token_generation, role: normaliseRole(r.role), createdAt: r.created_at };
+    // The STORED name, unresolved. Storage is not where a role is interpreted (yourphr#648): the
+    // provider cannot see the configured roles, and resolving here without them would demote every
+    // admin to `user` on read. UsersManager.roleOf does the resolving, against the policy.
+    return { username: r.username, passwordHash: r.password_hash, tokenGeneration: r.token_generation, role: String(r.role ?? ''), createdAt: r.created_at };
   }
 
   async create(record: Omit<UserRecord, 'createdAt'> & { createdAt?: string }): Promise<void> {

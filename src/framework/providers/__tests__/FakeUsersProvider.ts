@@ -2,6 +2,16 @@
 import { BaseUsersProvider, type UserRecord } from '../BaseUsersProvider.js';
 
 export class FakeUsersProvider extends BaseUsersProvider {
+  /**
+   * Write a role name straight into storage, past the manager's validation (yourphr#648). Only a
+   * test needs this: it is how a role deleted from the configuration after the account was created
+   * is reproduced, which is the case the resolution rule exists for.
+   */
+  async setRoleForTest(username: string, role: string): Promise<void> {
+    const record = this.rows.get(username);
+    if (record) this.rows.set(username, { ...record, role });
+  }
+
   readonly rows = new Map<string, UserRecord>();
   initialized = false;
   async initialize(): Promise<void> { this.initialized = true; }

@@ -23,10 +23,13 @@ describe('SqliteUsersProvider — the accounts table', () => {
     await expect(p.create({ username: 'ops', passwordHash: 'x', tokenGeneration: 0, role: 'user' })).rejects.toThrow(/UNIQUE/);
   });
 
-  it('never reads an unknown role as a privilege', async () => {
+  it('returns the STORED role name, leaving interpretation to the manager (yourphr#648)', async () => {
     const db = new Database(':memory:');
     const p = new SqliteUsersProvider(db);
     db.prepare("INSERT INTO auth_users (username, password_hash, token_generation, created_at, role) VALUES ('x', 'h', 0, 'now', 'ADMIN')").run();
-    expect((await p.get('x'))?.role).toBe('user');
+    // Not 'user': the provider cannot see which roles this instance defines, and resolving without
+    // them would demote every admin on read. UsersManager.roleOf resolves against the policy — the
+    // "an unknown name is never a privilege" invariant lives there now, and is tested there.
+    expect((await p.get('x'))?.role).toBe('ADMIN');
   });
 });

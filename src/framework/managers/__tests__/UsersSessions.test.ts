@@ -47,6 +47,41 @@ async function boot(factors: string[] = ['password'], providers: BaseAuthProvide
 }
 beforeEach(async () => { await boot(); });
 
+describe('UsersManager — roles are configured NAMES, not two literals (yourphr#648)', () => {
+  it('refuses a role this instance does not define, and names the ones it does', async () => {
+    await expect(users.createUser(sys, 'nina', PW, 'demo-admin')).rejects.toMatchObject({ status: 400 });
+    await expect(users.createUser(sys, 'nina', PW, 'demo-admin')).rejects.toThrow(/admin/); // the message lists what IS defined
+    expect(await users.roleOf('nina')).toBeUndefined(); // and nothing was created
+  });
+
+  it('assigns any role the configuration defines, and it survives a round trip', async () => {
+    await users.createUser(sys, 'ops', PW, 'admin');
+    await users.createUser(sys, 'mem', PW, 'user');
+    expect(await users.roleOf('ops')).toBe('admin');
+    expect(await users.roleOf('mem')).toBe('user');
+    expect(await users.isAdmin('ops')).toBe(true);
+  });
+
+  // The invariant the old 'admin' | 'user' union was really carrying, kept: a name that is not
+  // defined — a typo, or a role deleted from the configuration after the account was created —
+  // resolves DOWN. Written by the provider directly, because the manager refuses to store one.
+  it('a stored role this instance does not define resolves to the least-privileged role, never up', async () => {
+    await users.createUser(sys, 'stale', PW, 'user');
+    await provider.setRoleForTest('stale', 'ADMIN'); // wrong case: not the shipped name
+    expect(await users.roleOf('stale')).toBe('user');
+    expect(await users.isAdmin('stale')).toBe(false);
+    expect(lines.join('\n')).toContain('which this instance does not define');
+  });
+
+  it('a session built from a stale role carries the least-privileged permissions, not none', async () => {
+    await users.createUser(sys, 'drifted', PW, 'user');
+    const token = await sessions.issueFor('drifted');
+    await provider.setRoleForTest('drifted', 'gone-from-the-config');
+    const verified = await sessions.verify(token!);
+    expect(verified.ok && verified.principal.role).toBe('user');
+  });
+});
+
 describe('UsersManager — accounts, roles, policy, consent, bootstrap and recovery', () => {
   it('initialises its provider and reads the policy from configuration', async () => {
     expect(provider.initialized).toBe(true);

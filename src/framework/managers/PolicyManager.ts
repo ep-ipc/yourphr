@@ -33,6 +33,9 @@ declare module '../Engine.js' {
   }
 }
 
+/** The role a request carries when nobody is signed in — never a stored one (yourphr#620, #648). */
+export const ANONYMOUS_ROLE = 'anonymous';
+
 export const PERMISSIONS_KEY = 'yourphr.auth.permissions.definitions';
 export const ROLES_KEY = 'yourphr.auth.roles.definitions';
 
@@ -88,6 +91,18 @@ export class PolicyManager extends BaseManager {
   }
 
   isPermission(name: string): boolean { return this.permissions.has(name); }
+
+  /** Does this instance define that role? What an account's stored name is checked against (yourphr#648). */
+  hasRole(name: string): boolean { return this.roles.has(name); }
+
+  /**
+   * The role names an account may hold — named in the refusal, so an operator sees the options.
+   *
+   * `anonymous` is excluded: it is the role a REQUEST carries when nobody is signed in (yourphr#620),
+   * not something an account can be. Offering it would let an operator create an account that,
+   * signed in, holds exactly the powers of not being signed in.
+   */
+  roleNames(): string[] { return [...this.roles.keys()].filter((name) => name !== ANONYMOUS_ROLE); }
 
   /** Every permission this build enforces — the admin screen's registry, and the drift check's. */
   registry(): PermissionDefinition[] { return [...this.permissions.values()]; }

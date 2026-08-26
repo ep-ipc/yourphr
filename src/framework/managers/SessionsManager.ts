@@ -179,7 +179,12 @@ export class SessionsManager extends BaseManager {
     if (claims.exp - nowSeconds < this.policy.slidingSeconds / 2) {
       renewed = issueToken(this.sessionKey, { ...claims, exp: Math.min(nowSeconds + this.policy.slidingSeconds, claims.cap) });
     }
-    return { ok: true, principal: { username: claims.u, role: stored.role, tokenGeneration: claims.g }, ...(renewed ? { renewed } : {}) };
+    // The role is resolved through the Users door, not read raw off the record (yourphr#648): a
+    // stored name this instance no longer defines has to behave as the least-privileged role, the
+    // same way it does everywhere else. Reading it raw would hand ApiContext a name the policy does
+    // not know, and the caller would get NO permissions — not even to read their own records.
+    const role = (await this.engine.managers.users.roleOf(claims.u)) ?? stored.role;
+    return { ok: true, principal: { username: claims.u, role, tokenGeneration: claims.g }, ...(renewed ? { renewed } : {}) };
   }
 
   /** A fresh session for an account that just proved itself another way (after a password change). */
