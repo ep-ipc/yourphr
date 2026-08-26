@@ -243,7 +243,14 @@ export async function openStores(dataDir: string, env: Record<string, string | u
     demoEnabled: config.getBool('yourphr.demo.enabled'),
     resetOnRestart: config.getBool('yourphr.demo.reset-on-restart'),
     databaseKey: dbKey,
-    allowedAccounts: [config.getString('yourphr.demo.username'), BOOTSTRAP_ADMIN_USERNAME],
+    // Every account a demo is allowed to hold: the shared patient account, the read-only admin tour
+    // (yourphr#644 — omitted at first, which refused the reset on every demo that enables it), and
+    // the bootstrap admin. Anything else and the reset refuses, which is the point.
+    allowedAccounts: [
+      config.getString('yourphr.demo.username'),
+      config.getString('yourphr.demo.admin.username'),
+      BOOTSTRAP_ADMIN_USERNAME,
+    ],
     log: (line) => appLog.warn(line),
   });
   // The app database's one connection is the engine's (yourphr#617): opened and migrated by its

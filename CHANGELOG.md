@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.0.2](https://github.com/jwilleke/yourphr/compare/v3.0.1...v3.0.2) (2026-08-26)
+
+### Bug Fixes
+
+- __A demo running the read-only admin tour could never reset itself.__ The reset proves every account in the database belongs to the demo before replacing it, and the list of accounts it accepts was written before the admin tour existed — so on any instance with `demo.admin.enabled`, it found `demoadmin`, treated it as a stranger, and refused. Refusing was the correct behaviour for what it knew; the list was wrong. It now accepts the demo account, the demo admin and the bootstrap admin, and the harness covers the combination that only appears when both features are on.
+
 ## [3.0.1](https://github.com/jwilleke/yourphr/compare/v3.0.0...v3.0.1) (2026-08-26)
 
 3.0.0 could not start. Upgrade straight to this release; do not deploy 3.0.0.

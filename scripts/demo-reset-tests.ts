@@ -61,7 +61,7 @@ function request(overrides: Partial<Parameters<typeof applyDemoReset>[0]> & { ap
     demoEnabled: true,
     resetOnRestart: true,
     databaseKey: '',
-    allowedAccounts: ['demo', 'admin'],
+    allowedAccounts: ['demo', 'demoadmin', 'admin'],
     log: () => undefined,
     ...overrides,
   });
@@ -84,7 +84,21 @@ function main(): void {
       `app ${markerOf(app)}, records ${markerOf(records)}`);
   }
 
-  // 2. THE IMPORTANT ONE. A database holding any account this demo does not own is refused, and
+  // 2. The read-only admin tour's account belongs to the demo too. Left out of the allowed list at
+  //    first, which refused the reset on every demo that enables the tour — found on the real
+  //    instance rather than here, because the case only appears once both features are on.
+  {
+    const live = scratch();
+    const app = join(live, 'spike.db');
+    const records = join(live, 'records.db');
+    makeDb(app, ['demo', 'demoadmin', 'admin'], 'WITH-THE-ADMIN-TOUR');
+    makeDb(records, [], 'WITH-THE-ADMIN-TOUR');
+    const outcome = request({ appDbPath: app, recordsDbPath: records, baselineDir: baseline });
+    check('a demo running the read-only admin tour still resets — demoadmin is one of its accounts',
+      outcome.applied && markerOf(app) === 'BASELINE', outcome.applied ? 'applied' : outcome.reason);
+  }
+
+  // 3. THE IMPORTANT ONE. A database holding any account this demo does not own is refused, and
   //    every byte of it is still there afterwards.
   {
     const live = scratch();
