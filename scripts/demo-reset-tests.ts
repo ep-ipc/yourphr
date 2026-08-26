@@ -12,7 +12,7 @@ import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
-import { applyDemoReset, BASELINE_APP, BASELINE_RECORDS, baselineIsPresent } from '../src/demo/reset.js';
+import { applyDemoReset, BASELINE_APP, BASELINE_RECORDS, baselineIsPresent } from '../src/app/providers/demo-reset.js';
 import { assembleApp } from '../src/app.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];

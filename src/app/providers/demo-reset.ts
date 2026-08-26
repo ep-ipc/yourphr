@@ -2,6 +2,11 @@
  * Demo reset: put the baked-in baseline back, at startup, before anything opens the databases
  * (yourphr#645).
  *
+ * It lives among the PROVIDERS, beside sqlite-backup.ts, for the reason the store-boundary guard
+ * exists (yourphr#609): it opens the database file directly to read the accounts it is about to
+ * destroy, and the driver belongs to providers. It is a function rather than a class because it
+ * runs before the engine exists — the same shape as the staged restore it follows.
+ *
  * WHY IN THE APP AND NOT IN kubectl. A public demo is only safe to leave alone if it heals itself.
  * Go decided this (yourphr#518) and it is right: an operator should not have to be present for the
  * demo to be clean, and "restart the pod" is something an image bump already does on its own.

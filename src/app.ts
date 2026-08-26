@@ -54,7 +54,7 @@ import { SqliteFavoritesProvider } from './app/providers/SqliteFavoritesProvider
 import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
-import { applyDemoReset } from './demo/reset.js';
+import { applyDemoReset } from './app/providers/demo-reset.js';
 import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
 import { BACKUP_SUFFIX, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';

@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { assembleApp } from '../src/app.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
-import { BASELINE_APP, BASELINE_RECORDS, baselineIsPresent } from '../src/demo/reset.js';
+import { BASELINE_APP, BASELINE_RECORDS, baselineIsPresent } from '../src/app/providers/demo-reset.js';
 import { startFakeProvider } from './lib/fake-provider.js';
 
 const argv = process.argv.slice(2);
