@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.0.1](https://github.com/jwilleke/yourphr/compare/v3.0.0...v3.0.1) (2026-08-26)
+
+3.0.0 could not start. Upgrade straight to this release; do not deploy 3.0.0.
+
+### Bug Fixes
+
+- __The server crash-looped at startup on the version read.__ It located `package.json` with a path relative to the compiled entrypoint, which was correct while that entrypoint was `dist/main.js` and wrong once the build output moved to `dist/server/`. The process exited at import time, before serving anything, on a file that exists in the source tree and not in the image. It now searches upward for `package.json`, so both the source layout and the compiled one find the same file — and an instance that cannot find it at all reports `0.0.0-unknown` and keeps serving records, rather than refusing to start.
+- __The test suite now boots what the image boots.__ Nothing caught the above because the process harness ran the entrypoint from source through `tsx`, where `main.ts` sits beside `package.json`. It now also boots the compiled `dist/server/main.js` and asserts the version it reports.
+
 ## [3.0.0](https://github.com/jwilleke/yourphr/compare/v2.10.3...v3.0.0) (2026-08-26)
 
 __The backend is a rewrite.__ v2 was Go; v3 is TypeScript. Same records, same address, same passwords — a different program serving them.
