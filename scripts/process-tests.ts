@@ -6,7 +6,7 @@
  *   npm run process
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
@@ -129,6 +129,40 @@ async function main(): Promise<void> {
     };
     check('package.json version is not BEHIND the most recent tag — the UI reports what is actually running',
       tag === '' || !behind(pkg.version, tag), `package.json ${pkg.version}, tag ${tag || '(none)'}`);
+  }
+
+  // --- the BUILT entrypoint, not the source one ---
+  //
+  // Everything above runs src/main.ts through tsx, which is the source layout: main.ts sits beside
+  // package.json. The IMAGE runs dist/server/main.js, one directory deeper, and that difference
+  // crash-looped production on 3.0.0 — the version read resolved '../package.json' to a path that
+  // exists in the source tree and not in the image, at import time, before anything served.
+  //
+  // So this boots what the image boots. A test that only ever exercises the source layout cannot
+  // see a bug that only exists in the compiled one.
+  {
+    const built = join(process.cwd(), 'dist', 'server', 'main.js');
+    if (!existsSync(built)) spawnSync('npm', ['run', 'build'], { encoding: 'utf8', timeout: 120_000 });
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version: string };
+    const dir2 = mkdtempSync(join(tmpdir(), 'spike-built-'));
+    const port2 = 8100 + Math.floor(Number(process.pid) % 300);
+    const child2 = spawn(process.execPath, [built], {
+      env: { ...process.env, YOURPHR_FAST_STORAGE: dir2, YOURPHR_SLOW_STORAGE: dir2, YOURPHR_WEB_LISTEN_PORT: String(port2), YOURPHR_DATABASE_ENCRYPTION_KEY: '', YOURPHR_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child2.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+    try {
+      await waitForListening(child2);
+      const version = await get(port2, '/api/version');
+      check('the BUILT entrypoint boots and reports package.json\'s version — the layout the image runs',
+        version.status === 200 && JSON.parse(version.body).data.version === pkg.version,
+        `${version.status} ${version.body.slice(0, 80)}`);
+    } catch (err) {
+      check('the BUILT entrypoint boots and reports package.json\'s version — the layout the image runs', false, `${(err as Error).message} ${stderr.slice(0, 200)}`);
+    }
+    child2.kill('SIGTERM');
+    rmSync(dir2, { recursive: true, force: true });
   }
 
   const failed = results.filter((r) => !r.ok);

@@ -13,7 +13,8 @@
 // mechanism, not a style choice.
 import './bootstrap-env.js';
 import { accessSync, constants, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { assembleApp } from './app.js';
 import { envNameFor } from './config/index.js';
 import { Engine } from './framework/Engine.js';
@@ -64,7 +65,32 @@ if (bootstrap.getString('yourphr.database.encryption.key') === '') {
   appLog.warn(`the encryption keys are on this volume only (${join(dataDir, '.env')}) — if it is lost, the database and every backup become permanently unreadable. Record ${envNameFor('yourphr.database.encryption.key')} and ${envNameFor('yourphr.backup.encryption.key')} somewhere that is not this instance.`);
 }
 
-const version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
+/**
+ * The version the UI shows, read from package.json beside the compiled output — found by walking UP
+ * rather than by counting directories.
+ *
+ * `../package.json` was right while main.js sat at dist/main.js and wrong the moment the build
+ * output moved to dist/server/ (yourphr#652). It crash-looped the instance at import time, before
+ * anything served, on a path that exists in the source tree and not in the image — the kind of
+ * mistake a relative literal makes and a search does not. tsx runs this from src/ and the image
+ * runs it from dist/server/; both find the same file.
+ */
+function readVersion(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let up = 0; up < 5; up++) {
+    const candidate = join(dir, 'package.json');
+    if (existsSync(candidate)) return (JSON.parse(readFileSync(candidate, 'utf8')) as { version: string }).version;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  // Not fatal: an instance that cannot name its own version should still serve records. The banner
+  // says 0.0.0-unknown, which is visibly wrong rather than quietly stale (yourphr#642's lesson).
+  appLog.warn('could not find package.json beside the build output — reporting the version as 0.0.0-unknown');
+  return '0.0.0-unknown';
+}
+
+const version = readVersion();
 
 const app = await assembleApp(dataDir, {
   env,
