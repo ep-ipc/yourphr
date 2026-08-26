@@ -1,5 +1,41 @@
 # Changelog
 
+## [3.0.0](https://github.com/jwilleke/yourphr/compare/v2.10.3...v3.0.0) (2026-08-26)
+
+__The backend is a rewrite.__ v2 was Go; v3 is TypeScript. Same records, same address, same passwords — a different program serving them.
+
+Why the jump to 3.0.0 rather than the 2.0.0 the planning documents said: Go reached 2.10.3, so 2.x is taken. Go is v2. This is what comes after it.
+
+### The stack
+
+- __One image, built from one commit__ ([#650](https://github.com/jwilleke/yourphr/issues/650), [#652](https://github.com/jwilleke/yourphr/issues/652)). The TypeScript server and the Angular app now live in this repository and are built together, so the UI and the server that serves it can no longer be from different releases. `ghcr.io/jwilleke/yourphr:3.x` is the TypeScript stack; the frozen Go image lives on as `ghcr.io/jwilleke/yourphr-go:2.10.3`, unchanged, still pullable.
+- __The architecture the stack was rebuilt on__: an engine, managers as the only door to a resource, providers chosen by configuration, and a request context that says who is asking on every call ([#608](https://github.com/jwilleke/yourphr/issues/608)). Two CI-only guards keep it honest — nothing outside `src/http` reaches the network, and no database handle escapes a provider.
+- __Configuration is three layers with one vocabulary__ ([#621](https://github.com/jwilleke/yourphr/issues/621)–[#630](https://github.com/jwilleke/yourphr/issues/630)): environment above instance overrides above shipped defaults, `$VAR` references so the file names the variable instead of hiding a secret, and every path composed from a fast or a slow storage root in the file rather than in code.
+- __Permissions and roles are data__ ([#620](https://github.com/jwilleke/yourphr/issues/620), [#623](https://github.com/jwilleke/yourphr/issues/623), [#648](https://github.com/jwilleke/yourphr/issues/648)). An operator can define a role and now assign it. A role name this instance does not define resolves to the least-privileged role — never to an elevated one.
+
+### For a public demo
+
+- __Demo mode__ ([#643](https://github.com/jwilleke/yourphr/issues/643)): a shared account with a one-click entrance that posts no credentials. The password is generated per instance and verified server-side, so nothing about it is published and no image carries a working credential.
+- __A read-only admin tour__ ([#644](https://github.com/jwilleke/yourphr/issues/644)): every operator screen, no writes. Read-only is enforced default-deny by method on the server, so a route added next year is refused by inheritance rather than by somebody remembering.
+- __The demo heals itself__ ([#645](https://github.com/jwilleke/yourphr/issues/645)): a restart restores a baked-in synthetic baseline — but only after proving every account in the database belongs to the demo. Anything unrecognised and the reset refuses and the instance starts normally, data intact.
+- __What a demo visitor cannot do__ ([#496](https://github.com/jwilleke/yourphr/issues/496), [#514](https://github.com/jwilleke/yourphr/issues/514)): connect a provider, change the shared password, sign everyone out, or delete the account. Wrecking the demo's own synthetic records stays allowed — it heals at the next reset.
+
+### Security
+
+- __Every sign-in route is rate limited per IP__ ([#647](https://github.com/jwilleke/yourphr/issues/647)), which the stack had no form of before. Configurable, and switchable off for an automated suite driving real logins from one address.
+- __A read that cannot be logged fails__ rather than completing silently ([#614](https://github.com/jwilleke/yourphr/issues/614)): the access log is a required capability, not a convenience.
+- __Backups are ciphertext from the first byte__ ([#461](https://github.com/jwilleke/yourphr/issues/461)), so at-rest encryption no longer means "no backups".
+
+### Upgrading from v2
+
+Read [`docs/deployment/upgrading-v1-to-v2.md`](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/upgrading-v1-to-v2.md) before starting — it is being renumbered for v3 in [#655](https://github.com/jwilleke/yourphr/issues/655), and until [#654](https://github.com/jwilleke/yourphr/issues/654) ships the migration command inside the image, the migration needs a source checkout.
+
+Your data is __not__ rewritten in place: the migration reads the v2 database and writes a new one beside it, so v2 remains exactly as it was and rollback is starting the old container again. Accounts, roles, records, connected sources with their tokens, the provider catalog, legal consent and the access log all carry. __What does not:__ sources with no refresh token will ask to be reconnected when their current token expires (v2 never stored one for them), and three backup-schedule settings must be set again because v3 schedules differently. The migration report names anything it did not carry — read it rather than assuming silence means completeness.
+
+### Note
+
+The 0.x releases of this stack were published from `jwilleke/yourphr-ts-spike` while it was a separate experiment; that history is kept in [`docs/typescript-0.x-changelog.md`](https://github.com/jwilleke/yourphr/blob/main/docs/typescript-0.x-changelog.md).
+
 ## [2.10.3](https://github.com/jwilleke/yourphr/compare/v2.10.2...v2.10.3) (2026-08-22)
 
 Opening the Settings page no longer signs you out.
