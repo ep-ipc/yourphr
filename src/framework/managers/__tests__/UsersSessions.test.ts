@@ -49,12 +49,16 @@ beforeEach(async () => { await boot(); });
 
 describe('UsersManager — roles are configured NAMES, not two literals (yourphr#648)', () => {
   it('refuses a role this instance does not define, and names the ones it does', async () => {
-    await expect(users.createUser(sys, 'nina', PW, 'demo-admin')).rejects.toMatchObject({ status: 400 });
-    await expect(users.createUser(sys, 'nina', PW, 'demo-admin')).rejects.toThrow(/admin/); // the message lists what IS defined
+    await expect(users.createUser(sys, 'nina', PW, 'wizard')).rejects.toMatchObject({ status: 400 });
+    await expect(users.createUser(sys, 'nina', PW, 'wizard')).rejects.toThrow(/admin/); // the message lists what IS defined
     expect(await users.roleOf('nina')).toBeUndefined(); // and nothing was created
   });
 
   it('assigns any role the configuration defines, and it survives a round trip', async () => {
+    // demo-admin is a shipped role (yourphr#644) and assignable like any other — which is the point
+    // of yourphr#648: it is a configuration entry, not a new branch in the code.
+    await users.createUser(sys, 'tour', PW, 'demo-admin');
+    expect(await users.roleOf('tour')).toBe('demo-admin');
     await users.createUser(sys, 'ops', PW, 'admin');
     await users.createUser(sys, 'mem', PW, 'user');
     expect(await users.roleOf('ops')).toBe('admin');

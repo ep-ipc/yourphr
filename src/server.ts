@@ -391,6 +391,21 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // POST /api/auth/demo-signin/admin (yourphr#644) — the read-only admin tour. Same mechanics
+      // as the patient entrance and gated on demo.admin.enabled as well, so it is inert on a demo
+      // that only offers the patient tour.
+      if (auth && engine.has('demo') && url.pathname === '/api/auth/demo-signin/admin' && req.method === 'POST') {
+        if (!withinRateLimit()) return;
+        const result = await engine.managers.demo.signInAsAdmin();
+        if (!result.ok) {
+          send(res, 403, {success: false, error: result.error});
+          return;
+        }
+        res.setHeader('Set-Cookie', sessionCookie(result.token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
+        send(res, 200, {success: true, data: result.token});
+        return;
+      }
+
       // The session gate: with auth wired, every /api/secure/* request proves who it is, and is
       // served by THAT user's repository. 401 for no token, a tampered token, an expired one, or a
       // token whose generation the account has moved past (a password change ends it mid-flight).
@@ -413,6 +428,11 @@ export function createYourPhrServer(options: ServerOptions) {
         sessionUser = session.principal.username;
         // Who is asking, for every manager call this request makes (yourphr#608).
         ctx = ApiContext.from(session.principal, engine);
+        // The read-only demo admin (yourphr#644), enforced here rather than route by route:
+        // DEFAULT-DENY by method, so a route added next year is refused by inheritance instead of
+        // by somebody remembering to guard it. Inert for every other caller and every other
+        // instance — see DemoManager.refuseUnlessRead for what it refuses and why.
+        if (engine.has('demo')) engine.managers.demo.refuseUnlessRead(ctx, req.method ?? 'GET', url.pathname);
       }
 
       // The access log (yourphr#596, #614): a listed GET by a signed-in user is an access of their

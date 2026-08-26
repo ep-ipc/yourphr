@@ -101,7 +101,7 @@ async function main(): Promise<void> {
   // yourphr#648: the role is a configured NAME. An undefined one is refused over the wire, naming
   // what this instance does define — it is not quietly coerced to `user`, which would hand back an
   // account different from the one asked for.
-  const madeUpRole = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'nina', password: 'a-long-enough-password', role: 'demo-admin' }) });
+  const madeUpRole = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'nina', password: 'a-long-enough-password', role: 'wizard' }) });
   const madeUpBody = (await madeUpRole.json()) as { error?: string };
   check('an undefined role is refused over the wire, naming the roles this instance defines (yourphr#648)',
     madeUpRole.status === 400 && (madeUpBody.error ?? '').includes('admin') && (await app.users.roleOf('nina')) === undefined,
@@ -256,6 +256,47 @@ async function main(): Promise<void> {
     });
   } catch (err) { addRefused = (err as { status?: number }).status ?? 0; }
   check('and the refusal is at the DOOR, not the route: sources.add itself turns the demo account away', addRefused === 403, `status ${addRefused}`);
+
+  // --- the read-only demo admin (yourphr#644) ---
+  //
+  // Every assertion here is over HTTP, because these routes answer curl whatever the UI renders.
+  demoConfig.set('yourphr.demo.admin.enabled', true);
+  const adminEntrance = () => fetch(`${base}/api/auth/demo-signin/admin`, { method: 'POST' });
+  // Provisioning creates the account and its credential — what a restart does; called directly so
+  // the harness need not reboot.
+  await app.engine.managers.demo.provision();
+  const tour = await adminEntrance();
+  const tourToken = ((await tour.json()) as { data: string }).data;
+  const tourMe = (await (await fetch(`${base}/api/secure/account/me`, authed(tourToken))).json()) as { data: { username: string; role: string } };
+  check('the read-only admin tour is a second one-click entrance, and the account holds the demo-admin role',
+    tour.status === 200 && !!tourToken && tourMe.data.role === 'demo-admin' && (await publicInfo())['demo.admin.enabled'] === true,
+    `status ${tour.status}, role ${tourMe.data?.role}`);
+
+  const tourInstance = (await (await fetch(`${base}/api/secure/instance`, authed(tourToken))).json()) as { data: Record<string, unknown> };
+  const tourSeesConfig = await fetch(`${base}/api/secure/admin/config`, authed(tourToken));
+  const tourSeesLogs = await fetch(`${base}/api/secure/admin/logs`, authed(tourToken));
+  check('it can SEE the operator screens, and says so to the UI banner (demo.admin.session)',
+    tourSeesConfig.status === 200 && tourSeesLogs.status === 200 && tourInstance.data['demo.admin.session'] === true);
+
+  // Default-deny by METHOD: the writes are refused without anyone listing them route by route.
+  const tourWrites = await Promise.all([
+    fetch(`${base}/api/secure/admin/config`, { method: 'PUT', headers: { 'content-type': 'application/json', authorization: `Bearer ${tourToken}` }, body: JSON.stringify({ key: 'yourphr.operator.name', value: 'hijacked' }) }),
+    fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tourToken}` }, body: JSON.stringify({ username: 'sneaky', password: 'a-long-enough-password' }) }),
+    fetch(`${base}/api/secure/account/password`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${tourToken}` }, body: JSON.stringify({ current_password: 'x', new_password: 'a-long-enough-password' }) }),
+    fetch(`${base}/api/secure/account/me`, { method: 'DELETE', headers: authed(tourToken).headers }),
+  ]);
+  check('and it can change NOTHING: every write refused by default, not by a deny-list',
+    tourWrites.every((r) => r.status === 403) && (await app.users.roleOf('sneaky')) === undefined,
+    tourWrites.map((r) => r.status).join(','));
+
+  const tourReveal = await fetch(`${base}/api/secure/admin/config/reveal/yourphr.demo.password`, authed(tourToken));
+  check('a read that would expose a configured secret is refused too — read-only is not the same as harmless',
+    tourReveal.status === 403, `status ${tourReveal.status}`);
+
+  // The operator's own admin on the same instance is untouched by any of this.
+  const realAdminStillWrites = await fetch(`${base}/api/secure/admin/users`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` }, body: JSON.stringify({ username: 'opswrites', password: 'a-long-enough-password' }) });
+  check('the operator\'s own admin keeps writing on the same instance', realAdminStillWrites.status === 200);
+  demoConfig.clear('yourphr.demo.admin.enabled');
 
   // yourphr#514: the three account writes a visitor could use to take the demo away from everyone —
   // change the password (demo sign-in then refuses every visitor), delete the account (nothing left

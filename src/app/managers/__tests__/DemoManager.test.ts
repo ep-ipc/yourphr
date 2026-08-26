@@ -158,6 +158,39 @@ describe('DemoManager — the shared demo account (yourphr#643)', () => {
     }
   });
 
+  it('the read-only admin tour: a second entrance, gated on its own flag as well (yourphr#644)', async () => {
+    await boot({ [ENABLED_KEY]: true, 'yourphr.demo.admin.enabled': true });
+    await createDemoAccount();
+    // Provisioning creates the demo admin itself, unlike the demo account: it holds nothing, and
+    // exists only to be looked through.
+    await demo.provision();
+    const result = await demo.signInAsAdmin();
+    expect(result.ok).toBe(true);
+    expect(await users.roleOf('demoadmin')).toBe('demo-admin');
+
+    // The same instance with the admin flag off offers the patient tour and refuses this one.
+    await boot({ [ENABLED_KEY]: true });
+    await createDemoAccount();
+    await demo.provision();
+    expect((await demo.signIn()).ok).toBe(true);
+    expect(await demo.signInAsAdmin()).toMatchObject({ ok: false, error: 'the demo admin is not enabled on this instance' });
+  });
+
+  it('read-only is DEFAULT-DENY by method, so a route added later is refused without being listed', async () => {
+    await boot({ [ENABLED_KEY]: true, 'yourphr.demo.admin.enabled': true });
+    const tour = ApiContext.from({ username: 'demoadmin', role: 'demo-admin' }, engine);
+    const operator = ApiContext.from({ username: 'jim', role: 'admin' }, engine);
+
+    expect(() => demo.refuseUnlessRead(tour, 'GET', '/api/secure/admin/config')).not.toThrow();
+    for (const [method, path] of [['POST', '/api/secure/admin/users'], ['PUT', '/api/secure/admin/config'], ['DELETE', '/api/secure/account/me'], ['PATCH', '/api/secure/a/route/invented/next/year']]) {
+      expect(() => demo.refuseUnlessRead(tour, method!, path!)).toThrowError(/read-only/);
+    }
+    // A GET that would expose a configured secret is refused as well.
+    expect(() => demo.refuseUnlessRead(tour, 'GET', '/api/secure/admin/config/reveal/yourphr.demo.password')).toThrowError(/secret/);
+    // And none of it touches the operator's own admin on the same instance.
+    expect(() => demo.refuseUnlessRead(operator, 'DELETE', '/api/secure/account/me')).not.toThrow();
+  });
+
   it('does not restrict an account named demo on an instance that never opted in', async () => {
     const namesake = ApiContext.from({ username: 'demo', role: 'user' }, engine);
     expect(() => demo.refuseConnect(namesake)).not.toThrow();

@@ -104,10 +104,13 @@ export class SettingsManager extends BaseManager {
       'operator.name': config.getString('yourphr.operator.name'),
       'operator.contact_url': config.getString('yourphr.operator.contact-url'),
       'password.min_length': config.getInt('yourphr.auth.password.min-length'),
-      // The sign-in page decides whether to offer the one-click demo entrance (yourphr#643). Only
-      // the FLAG is public: demo.username is not published — a name is half a credential, and the
-      // entrance needs no name — and demo.password is a secret verified server-side.
+      // The sign-in page decides whether to offer the one-click demo entrances (yourphr#643,
+      // yourphr#644). Only the FLAGS are public: neither username is published — a name is half a
+      // credential, and the entrances need no name — and both passwords are secrets verified
+      // server-side. demo.admin.enabled is false unless demo mode is on as well, so the UI cannot
+      // offer an admin tour on an instance that is not a demo.
       'demo.enabled': config.getBool('yourphr.demo.enabled'),
+      'demo.admin.enabled': config.getBool('yourphr.demo.enabled') && config.getBool('yourphr.demo.admin.enabled'),
     };
   }
 
@@ -117,7 +120,10 @@ export class SettingsManager extends BaseManager {
     return {
       ...this.publicInstance(ctx),
       'operator.contact_email': this.configuration.getString('yourphr.operator.contact-email'), // wire format, not the config key
-      'demo.admin.session': false, // this stack has no demo admin; the UI reads strictly true
+      // Whether THIS session is the read-only demo admin (yourphr#644) — what the header banner
+      // reads. Strictly a boolean the UI compares against true; the engine may have no demo manager
+      // at all in the contract harnesses, which reads as false, correctly.
+      'demo.admin.session': this.engine.has('demo') && this.engine.managers.demo.isDemoAdminSession(ctx),
     };
   }
 

@@ -20,7 +20,12 @@ describe('PolicyManager — permissions and roles read from the merged configura
     const { policy } = boot();
     expect(policy.registry().map((p) => p.permission).sort())
       .toEqual(['admin-read', 'admin-system', 'user-create', 'user-edit', 'user-read']);
-    expect(policy.roleDefinitions().map((r) => r.role)).toEqual(['admin', 'user', 'anonymous']);
+    expect(policy.roleDefinitions().map((r) => r.role)).toEqual(['admin', 'demo-admin', 'user', 'anonymous']);
+    // The read-only demo admin (yourphr#644): every operator SCREEN, none of the writing, and not
+    // the account list — a stranger has no business reading it on an instance with no lock.
+    expect(policy.permissionsFor('demo-admin')).toEqual(['admin-read']);
+    // `anonymous` is a role a REQUEST carries, never one an account can hold (yourphr#648).
+    expect(policy.roleNames()).toEqual(['admin', 'demo-admin', 'user']);
     expect(policy.permissionsFor('admin')).toContain('admin-system');
     expect(policy.permissionsFor('user')).toEqual([]);      // ownership, not a permission
     expect(policy.permissionsFor('anonymous')).toEqual([]); // a role, not an `if` at the edge
@@ -44,7 +49,7 @@ describe('PolicyManager — permissions and roles read from the merged configura
 
   it('an operator can ADD a role without restating the shipped ones — roles deep-merge per entry', () => {
     const { policy } = boot({ [ROLES_KEY]: { caregiver: { displayname: 'Caregiver', issystem: false, permissions: ['user-read'] } } });
-    expect(policy.roleDefinitions().map((r) => r.role).sort()).toEqual(['admin', 'anonymous', 'caregiver', 'user']);
+    expect(policy.roleDefinitions().map((r) => r.role).sort()).toEqual(['admin', 'anonymous', 'caregiver', 'demo-admin', 'user']);
     expect(policy.permissionsFor('caregiver')).toEqual(['user-read']);
     expect(policy.permissionsFor('admin')).toHaveLength(5); // still whole
     expect(policy.roleDefinitions().find((r) => r.role === 'caregiver')?.system).toBe(false);
