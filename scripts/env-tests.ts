@@ -5,10 +5,19 @@
  *
  *   npm run env
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+
+/**
+ * Where `npm run build` emits, read from the build config rather than written twice. The output
+ * moved to dist-server/ when the stack came into the product repo (yourphr#650) — the Go Makefile
+ * owns dist/ until yourphr#646 — and this probe was the one place that had the name hardcoded.
+ */
+const BUILD_DIR = (JSON.parse(readFileSync(join(process.cwd(), 'tsconfig.build.json'), 'utf8')) as {
+  compilerOptions: { outDir: string };
+}).compilerOptions.outDir;
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -19,7 +28,7 @@ function check(name: string, ok: boolean, detail = ''): void {
 /** Boot the real module in a child process and report what it put in the environment. */
 function boot(cwd: string, env: Record<string, string>, keys: string[]): Record<string, string> {
   const probe = join(cwd, 'probe.mjs');
-  writeFileSync(probe, `import '${join(process.cwd(), 'dist', 'bootstrap-env.js')}';
+  writeFileSync(probe, `import '${join(process.cwd(), BUILD_DIR, 'bootstrap-env.js')}';
 console.log(JSON.stringify(Object.fromEntries(${JSON.stringify(keys)}.map((k) => [k, process.env[k] ?? null]))));`);
   const out = execFileSync(process.execPath, [probe], { cwd, env: { PATH: process.env['PATH'] ?? '', ...env }, encoding: 'utf8' });
   return JSON.parse(out.trim()) as Record<string, string>;
