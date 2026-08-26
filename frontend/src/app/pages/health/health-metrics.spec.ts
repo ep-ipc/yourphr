@@ -2,9 +2,12 @@ import {HealthMetricSummary} from '../../models/fasten/health-sample';
 import {
   CatalogEntry,
   formatLatest,
+  formatWeight,
   groupSummaries,
   humanizeHkType,
+  kgToWeightUnit,
   KNOWN_METRICS,
+  parseStoredWeightUnit,
   seriesMode,
 } from './health-metrics';
 
@@ -107,5 +110,48 @@ describe('formatLatest', () => {
       latestLabel: '',
     };
     expect(formatLatest(entry.def, entry.summaries)).toBe('72.4 bpm');
+  });
+
+  it('converts weight using the selected unit', () => {
+    const def = KNOWN_METRICS.find((m) => m.id === 'body_mass');
+    const summaries = [{
+      metric_type: 'body_mass',
+      hk_type: 'HKQuantityTypeIdentifierBodyMass',
+      unit: 'kg',
+      value_num: 81.2,
+      latest_at: '2026-08-24T12:00:00Z',
+      earliest_at: '2026-01-01T00:00:00Z',
+      sample_count: 1,
+    }];
+    expect(formatLatest(def, summaries, 'kg')).toBe('81.2 kg');
+    expect(formatLatest(def, summaries, 'lbs')).toBe('179.0 lbs');
+    expect(formatLatest(def, summaries, 'st')).toBe('12 st 11 lb');
+  });
+});
+
+describe('weight units', () => {
+  it('converts kilograms to pounds and decimal stone', () => {
+    expect(kgToWeightUnit(81.2, 'kg')).toBe(81.2);
+    expect(kgToWeightUnit(81.2, 'lbs')).toBeCloseTo(179.015, 3);
+    expect(kgToWeightUnit(81.2, 'st')).toBeCloseTo(12.787, 3);
+  });
+
+  it('formats headlines as kg, lbs, or stones plus remaining pounds', () => {
+    expect(formatWeight(81.2, 'kg')).toBe('81.2 kg');
+    expect(formatWeight(81.2, 'lbs')).toBe('179.0 lbs');
+    expect(formatWeight(81.2, 'st')).toBe('12 st 11 lb');
+  });
+
+  it('carries remaining pounds into the next stone when they round to 14', () => {
+    // 14 lb exactly is 1 st 0 lb.
+    expect(formatWeight(14 / 2.2046226218, 'st')).toBe('1 st 0 lb');
+  });
+
+  it('reads only kg, lbs, or st from storage', () => {
+    expect(parseStoredWeightUnit('lbs')).toBe('lbs');
+    expect(parseStoredWeightUnit('st')).toBe('st');
+    expect(parseStoredWeightUnit('kg')).toBe('kg');
+    expect(parseStoredWeightUnit('stone')).toBe('kg');
+    expect(parseStoredWeightUnit(null)).toBe('kg');
   });
 });

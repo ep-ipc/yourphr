@@ -10,11 +10,20 @@ import {LoadingSpinnerComponent} from '../../components/loading-spinner/loading-
 import {
   CatalogEntry,
   displayUnit,
+  formatLatest,
+  formatStoneFromDecimal,
+  formatWeight,
   groupSummaries,
+  kgToWeightUnit,
   MetricDef,
+  parseStoredWeightUnit,
   seriesMode,
   SLEEP_STAGE_LABELS,
   SLEEP_STAGE_ORDER,
+  WEIGHT_UNIT_STORAGE_KEY,
+  WEIGHT_UNITS,
+  WeightUnit,
+  weightUnitLabel,
 } from './health-metrics';
 
 export type RangePreset = '24h' | '5d' | '30d' | '90d' | 'all';
@@ -89,12 +98,19 @@ export class HealthComponent implements OnInit {
   tableOffset = 0;
   tablePageSize = TABLE_PAGE;
 
+  weightUnit: WeightUnit = 'kg';
+  weightUnits = WEIGHT_UNITS;
+  private rawSeries: HealthSeries | null = null;
+  private rawSamples: HealthSample[] = [];
+
   constructor(private fastenApi: FastenApiService) {}
 
   ngOnInit(): void {
+    this.weightUnit = parseStoredWeightUnit(safeLocalStorageGet(WEIGHT_UNIT_STORAGE_KEY));
     this.fastenApi.getHealthMetrics().subscribe({
       next: (catalog) => {
         this.entries = groupSummaries(catalog.metrics || []);
+        this.applyWeightLabels();
         this.lastSyncedAt = catalog.last_synced_at || null;
         this.selectedId = this.entries[0]?.id || '';
         this.loading = false;
@@ -220,6 +236,40 @@ export class HealthComponent implements OnInit {
     this.loadDetail();
   }
 
+  setWeightUnit(unit: WeightUnit): void {
+    if (unit === this.weightUnit) return;
+    this.weightUnit = unit;
+    safeLocalStorageSet(WEIGHT_UNIT_STORAGE_KEY, unit);
+    this.applyWeightLabels();
+    const entry = this.selected;
+    if (entry?.id !== 'body_mass') return;
+    if (this.view === 'table') {
+      this.tableRows = toTableRows(entry.def, this.rawSamples, this.weightUnit);
+      return;
+    }
+    if (this.rawSeries) this.applySeries(entry.def, this.rawSeries);
+  }
+
+  get showWeightUnits(): boolean {
+    return this.selected?.id === 'body_mass';
+  }
+
+  formatChartStat(value: number | undefined | null): string {
+    if (value == null || Number.isNaN(value)) return '';
+    if (this.showWeightUnits && this.weightUnit === 'st') {
+      return formatStoneFromDecimal(value);
+    }
+    return value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 1});
+  }
+
+  private applyWeightLabels(): void {
+    for (const entry of this.entries) {
+      if (entry.id === 'body_mass') {
+        entry.latestLabel = formatLatest(entry.def, entry.summaries, this.weightUnit);
+      }
+    }
+  }
+
   private loadDetail(): void {
     const entry = this.selected;
     if (!entry) return;
@@ -281,7 +331,8 @@ export class HealthComponent implements OnInit {
     }).subscribe({
       next: (page) => {
         this.tableTotal = page.total;
-        this.tableRows = toTableRows(entry.def, page.samples);
+        this.rawSamples = page.samples;
+        this.tableRows = toTableRows(entry.def, page.samples, this.weightUnit);
         this.view = 'table';
         this.detailLoading = false;
       },
@@ -290,10 +341,12 @@ export class HealthComponent implements OnInit {
   }
 
   private applySeries(def: MetricDef, series: HealthSeries): void {
+    this.rawSeries = series;
     this.seriesTotal = series.total || 0;
-    this.seriesStats = series.stats || null;
+    this.seriesStats = convertStats(series.stats, def, this.weightUnit);
     this.downsampled = !!series.downsampled;
-    this.seriesUnit = displayUnit(def, series.unit);
+    this.seriesUnit = displayUnit(def, series.unit, this.weightUnit);
+    const convert = (v: number) => def.id === 'body_mass' ? kgToWeightUnit(v, this.weightUnit) : v;
     if (def.viz === 'bar-daily') {
       this.chartType = 'bar';
       const labels = (series.daily || []).map((d) => d.date);
@@ -302,7 +355,7 @@ export class HealthComponent implements OnInit {
         labels,
         datasets: [{
           label: def.label,
-          data: (series.daily || []).map((d) => d.value),
+          data: (series.daily || []).map((d) => convert(d.value)),
           backgroundColor: INDIGO,
         }],
       };
@@ -333,7 +386,7 @@ export class HealthComponent implements OnInit {
       labels: points.map((p) => formatTick(p.t, this.range)),
       datasets: [{
         label: def.label,
-        data: points.map((p) => p.v),
+        data: points.map((p) => convert(p.v)),
         borderColor: INDIGO,
         backgroundColor: INDIGO_FILL,
         pointRadius: points.length > 80 ? 0 : 2,
@@ -365,6 +418,22 @@ export class HealthComponent implements OnInit {
 
 function emptySeries(): HealthSeries {
   return {total: 0, downsampled: false, points: []};
+}
+
+function safeLocalStorageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // display preference only
+  }
 }
 
 function earliestOf(entry: CatalogEntry): Date | null {
@@ -401,7 +470,12 @@ function defaultChartOptions(kind: 'line' | 'bar', unit: string, stacked = false
             const value = ctx.parsed.y;
             if (value == null || Number.isNaN(value)) return ctx.dataset.label || '';
             const suffix = unit ? ` ${unit}` : '';
-            const formatted = unit === 'hours' ? value.toFixed(1) : String(value);
+            if (unit === 'st') {
+              return `${ctx.dataset.label}: ${formatStoneFromDecimal(value)}`;
+            }
+            const formatted = (unit === 'hours' || unit === 'kg' || unit === 'lbs')
+              ? value.toFixed(1)
+              : String(value);
             return `${ctx.dataset.label}: ${formatted}${suffix}`;
           },
         },
@@ -431,7 +505,21 @@ function mergeDual(sys: HealthSeriesPoint[], dia: HealthSeriesPoint[]): {labels:
   };
 }
 
-function toTableRows(def: MetricDef, samples: HealthSample[]): TableRow[] {
+function convertStats(
+  stats: HealthSeries['stats'],
+  def: MetricDef,
+  weightUnit: WeightUnit,
+): {min?: number, max?: number, avg?: number} | null {
+  if (!stats) return null;
+  if (def.id !== 'body_mass') return stats;
+  return {
+    min: stats.min != null ? kgToWeightUnit(stats.min, weightUnit) : undefined,
+    max: stats.max != null ? kgToWeightUnit(stats.max, weightUnit) : undefined,
+    avg: stats.avg != null ? kgToWeightUnit(stats.avg, weightUnit) : undefined,
+  };
+}
+
+function toTableRows(def: MetricDef, samples: HealthSample[], weightUnit: WeightUnit = 'kg'): TableRow[] {
   if (def.viz === 'dual-line') {
     const byCorr = new Map<string, {time: string, sys?: number, dia?: number, source: string}>();
     const unpaired: TableRow[] = [];
@@ -460,12 +548,30 @@ function toTableRows(def: MetricDef, samples: HealthSample[]): TableRow[] {
     }));
     return [...paired, ...unpaired].sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
   }
-  return samples.map((sample) => ({
-    time: sample.start_time,
-    value: sample.value_num != null
-      ? (Number.isInteger(sample.value_num) ? String(sample.value_num) : sample.value_num.toFixed(1))
-      : (SLEEP_STAGE_LABELS[sample.value_text] || sample.value_text || ''),
-    unit: displayUnit(def, sample.unit),
-    source: sample.device_name || sample.source_name || '',
-  }));
+  return samples.map((sample) => {
+    if (def.id === 'body_mass' && sample.value_num != null) {
+      if (weightUnit === 'st') {
+        return {
+          time: sample.start_time,
+          value: formatWeight(sample.value_num, 'st'),
+          unit: '',
+          source: sample.device_name || sample.source_name || '',
+        };
+      }
+      return {
+        time: sample.start_time,
+        value: kgToWeightUnit(sample.value_num, weightUnit).toFixed(1),
+        unit: weightUnitLabel(weightUnit),
+        source: sample.device_name || sample.source_name || '',
+      };
+    }
+    return {
+      time: sample.start_time,
+      value: sample.value_num != null
+        ? (Number.isInteger(sample.value_num) ? String(sample.value_num) : sample.value_num.toFixed(1))
+        : (SLEEP_STAGE_LABELS[sample.value_text] || sample.value_text || ''),
+      unit: displayUnit(def, sample.unit, weightUnit),
+      source: sample.device_name || sample.source_name || '',
+    };
+  });
 }

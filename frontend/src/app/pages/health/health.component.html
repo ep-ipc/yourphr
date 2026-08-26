@@ -67,6 +67,12 @@
                         [class.btn-outline-primary]="view !== 'table' && selected.def.viz !== 'table'"
                         (click)="setView('table')">Table</button>
               </div>
+              <div class="btn-group" role="group" aria-label="Weight unit" *ngIf="showWeightUnits">
+                <button type="button" class="btn btn-sm" *ngFor="let unit of weightUnits"
+                        [class.btn-az-primary]="weightUnit === unit.id"
+                        [class.btn-outline-primary]="weightUnit !== unit.id"
+                        (click)="setWeightUnit(unit.id)">{{ unit.label }}</button>
+              </div>
             </div>
 
             <div class="health-window" *ngIf="range !== 'all'">
@@ -92,9 +98,9 @@
               </div>
               <div class="alert alert-info" *ngIf="!hasChartData">No samples in this time range.</div>
               <div class="health-stats" *ngIf="hasChartData">
-                <span *ngIf="seriesStats?.min != null">Min {{ seriesStats.min | number:'1.0-1' }}</span>
-                <span *ngIf="seriesStats?.max != null">Max {{ seriesStats.max | number:'1.0-1' }}</span>
-                <span *ngIf="seriesStats?.avg != null">Avg {{ seriesStats.avg | number:'1.0-1' }}</span>
+                <span *ngIf="seriesStats?.min != null">Min {{ formatChartStat(seriesStats.min) }}</span>
+                <span *ngIf="seriesStats?.max != null">Max {{ formatChartStat(seriesStats.max) }}</span>
+                <span *ngIf="seriesStats?.avg != null">Avg {{ formatChartStat(seriesStats.avg) }}</span>
                 <span>Samples {{ seriesTotal | number }}</span>
                 <span *ngIf="downsampled" class="tx-gray-600">averaged to fit the chart</span>
               </div>

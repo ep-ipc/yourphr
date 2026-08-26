@@ -42,6 +42,57 @@ export const SLEEP_STAGE_LABELS: Record<string, string> = {
   inBed: 'In bed',
 };
 
+export type WeightUnit = 'kg' | 'lbs' | 'st';
+
+export const WEIGHT_UNITS: {id: WeightUnit, label: string}[] = [
+  {id: 'kg', label: 'kg'},
+  {id: 'lbs', label: 'lbs'},
+  {id: 'st', label: 'stone'},
+];
+
+export const WEIGHT_UNIT_STORAGE_KEY = 'yourphr.health.weightUnit';
+
+const KG_TO_LB = 2.2046226218;
+
+export function kgToWeightUnit(kg: number, unit: WeightUnit): number {
+  if (unit === 'lbs') return kg * KG_TO_LB;
+  if (unit === 'st') return kg * KG_TO_LB / 14;
+  return kg;
+}
+
+export function weightUnitLabel(unit: WeightUnit): string {
+  if (unit === 'lbs') return 'lbs';
+  if (unit === 'st') return 'st';
+  return 'kg';
+}
+
+// Stone is shown as stones + remaining pounds (12 st 11 lb). kg and lbs stay decimal.
+export function formatWeight(kg: number, unit: WeightUnit): string {
+  if (unit === 'st') {
+    const totalLb = kg * KG_TO_LB;
+    let stones = Math.floor(totalLb / 14);
+    let pounds = Math.round(totalLb - stones * 14);
+    if (pounds === 14) {
+      stones += 1;
+      pounds = 0;
+    }
+    return `${stones} st ${pounds} lb`;
+  }
+  if (unit === 'lbs') return `${(kg * KG_TO_LB).toFixed(1)} lbs`;
+  return `${Number.isInteger(kg) ? String(kg) : kg.toFixed(1)} kg`;
+}
+
+// Chart y-values for stone are decimal stone; tooltips convert back to st + remaining lb.
+export function formatStoneFromDecimal(st: number): string {
+  const kg = st * 14 / KG_TO_LB;
+  return formatWeight(kg, 'st');
+}
+
+export function parseStoredWeightUnit(raw: string | null): WeightUnit {
+  if (raw === 'lbs' || raw === 'st' || raw === 'kg') return raw;
+  return 'kg';
+}
+
 // groupSummaries folds the backend's one-row-per-metric_type catalog into the UI list: blood pressure
 // is one entry, unknown HealthKit types still appear, and known types keep a stable order.
 export function groupSummaries(summaries: HealthMetricSummary[]): CatalogEntry[] {
@@ -104,7 +155,7 @@ export function humanizeHkType(hkType: string): string {
   return stripped.replace(/([a-z])([A-Z])/g, '$1 $2');
 }
 
-export function formatLatest(def: MetricDef, summaries: HealthMetricSummary[]): string {
+export function formatLatest(def: MetricDef, summaries: HealthMetricSummary[], weightUnit: WeightUnit = 'kg'): string {
   if (def.viz === 'dual-line') {
     const sys = summaries.find((s) => s.metric_type === 'blood_pressure_systolic');
     const dia = summaries.find((s) => s.metric_type === 'blood_pressure_diastolic');
@@ -120,11 +171,13 @@ export function formatLatest(def: MetricDef, summaries: HealthMetricSummary[]): 
   if (latest.value_num == null) {
     return latest.value_text || '';
   }
+  if (def.id === 'body_mass') return formatWeight(latest.value_num, weightUnit);
   const unit = displayUnit(def, latest.unit);
   return `${formatNumber(latest.value_num, def)}${unit ? ' ' + unit : ''}`;
 }
 
-export function displayUnit(def: MetricDef, stored?: string): string {
+export function displayUnit(def: MetricDef, stored?: string, weightUnit: WeightUnit = 'kg'): string {
+  if (def.id === 'body_mass') return weightUnitLabel(weightUnit);
   if (def.unit) return def.unit;
   if (stored === 'count/min') return 'bpm';
   return stored || '';
