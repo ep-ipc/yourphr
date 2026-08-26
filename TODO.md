@@ -1,5 +1,23 @@
 # TODO
 
+<!-- RESUME:START -->
+## ▶ Resume here — 2026-08-26
+
+- Last worked on: the whole demo chain landed in TypeScript and demo.yourphr.org left Go — #645 reset, #648 role names, #644 read-only admin tour, #646 the swap itself; the stack folded into this repo (#650, #651, #652) and shipped as v3.0.1 -> v3.1.0.
+- Branch / state: main, clean, pushed. mj-infra-flux and yourphr-ts-spike both clean and pushed.
+- Running / in-flight: none. No CI in progress, no PRs open, no background agents. Cluster: yourphr-ts on 3.1.0, demo-yourphr-ts on 3.1.0 serving demo.yourphr.org, both Go pods still running and pinned to yourphr-go:2.10.3 as the rollback.
+- Parked / half-done: none uncommitted.
+- Next steps:
+  - #654 — ship `migrate` in the image. The biggest real gap: the upgrade guide tells self-hosters to run a command the image does not have, so nobody can follow it without a source checkout.
+  - #653 — fold the 0.x history into CHANGELOG.md (it is preserved at docs/typescript-0.x-changelog.md).
+  - #655 — renumber the upgrade doc v2 -> v3 and drop its "not yet true" banner once #654 lands.
+  - Then the Go removal, after the demo has held a release cycle: delete backend/, the Go E2E job, and PRUNE `Test Backend` + `Compile Storybook` from branch protection IN THE SAME COMMIT — a required check that stops reporting blocks every PR forever.
+- Blockers / significant notes:
+  - #658 is P0 and OPEN, cause unknown: pushing v3.1.0 created no workflow run at all. Mitigated (publishing a Release now also builds, and the contract says to verify the run exists) but not diagnosed — the same silence would swallow a security release.
+  - The spike repo jwilleke/yourphr-ts-spike is STALE and still publishes images; its main predates #644/#645/#648. #656 archives it.
+  - demo.yourphr.org rollback is one Service selector in mj-infra-flux apps/production/demo-yourphr/service.yaml (app: demo-yourphr-ts -> app: demo-yourphr). Note that cloudflared holds keep-alive connections: after flipping it, delete the pod being switched away from or the tunnel keeps serving the old one.
+<!-- RESUME:END -->
+
 > Generated from live GitHub state — ranked by priority label.
 > __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
 
