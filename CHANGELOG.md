@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.1.0](https://github.com/jwilleke/yourphr/compare/v3.0.2...v3.1.0) (2026-08-26)
+
+### Features
+
+- __The demo now holds a record worth looking at__ ([#646](https://github.com/jwilleke/yourphr/issues/646)). The baked-in baseline was built from the test provider's fixture — three conditions and a medication — so a visitor landed on a page that could not show whether the product works. It is now built from the synthetic corpus generator CI already uses, asked for one patient over thirty months: __112 records across seven resource types__, including 90 vitals spanning 2022 to 2024 and 15 encounters. Everything in it is generated and PHI-free, and it is pulled in through the ordinary sync path — connect a source, run the worker — rather than written into the database, so the baseline is something the product could actually have produced.
+- __The corpus generator takes a shape__: `--patients` and `--months`. The defaults are the old behaviour and its output is byte-for-byte unchanged, so every harness that reads it sees exactly what it saw before.
+
+### Bug Fixes
+
+- __Synthetic dates past September were invalid.__ The generator built them as `` `2024-0${month}` ``, which is correct for one digit and silently produces `2024-012-15` for the twelfth. Dates are now real calendar dates, counted back from a fixed end so a longer run reaches further into the past rather than inventing future ones.
+
 ## [3.0.2](https://github.com/jwilleke/yourphr/compare/v3.0.1...v3.0.2) (2026-08-26)
 
 ### Bug Fixes

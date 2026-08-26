@@ -14,6 +14,37 @@ const argv = process.argv.slice(2);
 const at = argv.indexOf('--out');
 const out = resolve(at === -1 ? 'tmp-synthetic-corpus.ndjson' : (argv[at + 1] ?? 'tmp-synthetic-corpus.ndjson'));
 
+/**
+ * Optional shape, added for the demo baseline (yourphr#646): `--patients 1 --months 24`.
+ *
+ * The DEFAULTS ARE THE OLD BEHAVIOUR — two patients, six months — so every harness that reads this
+ * corpus sees byte-for-byte what it saw before. The demo needs a fuller record than a test does: a
+ * visitor landing on three conditions and nothing else cannot tell whether the product works.
+ */
+function option(name: string, fallback: number): number {
+  const i = argv.indexOf(`--${name}`);
+  if (i === -1) return fallback;
+  const value = Number(argv[i + 1]);
+  if (!Number.isInteger(value) || value < 1) throw new Error(`--${name} must be a positive integer`);
+  return value;
+}
+const monthCount = option('months', 6);
+const patientCount = option('patients', 2);
+
+/**
+ * Month N as a real calendar date, counting back from a fixed start so a longer run reaches into
+ * earlier years. The dates used to be built as `2024-0${month}`, which is correct for one digit and
+ * silently produces `2024-012-15` for the twelfth — an invalid date nobody notices until a record
+ * page sorts wrong.
+ */
+function monthly(index: number, day: number): string {
+  // The LAST month is always June 2024, so a longer run reaches further back rather than forward
+  // into invented future dates — and the six-month default lands on January..June 2024 exactly as
+  // it did when these were string literals. Defaults byte-for-byte unchanged.
+  const d = new Date(Date.UTC(2024, 5 - (monthCount - index), day));
+  return d.toISOString().slice(0, 10);
+}
+
 const resources: Record<string, unknown>[] = [];
 
 const patients = [
@@ -21,7 +52,7 @@ const patients = [
   { id: 'syn-patient-2', family: 'Testcase', given: 'Beta', dob: '1985-06-15', gender: 'male' },
 ];
 
-for (const p of patients) {
+for (const p of patients.slice(0, patientCount)) {
   resources.push({
     resourceType: 'Patient',
     id: p.id,
@@ -46,7 +77,7 @@ const loinc = [
 ];
 
 let serial = 0;
-for (const p of patients) {
+for (const p of patients.slice(0, patientCount)) {
   const subject = { reference: `Patient/${p.id}` };
 
   conditionCodes.forEach((c, i) => {
@@ -62,11 +93,11 @@ for (const p of patients) {
           code: i % 2 === 0 ? 'active' : 'resolved',
         }],
       },
-      recordedDate: `2024-0${i + 1}-10`,
+      recordedDate: monthly(i + 1, 10),
     });
   });
 
-  for (let month = 1; month <= 6; month++) {
+  for (let month = 1; month <= monthCount; month++) {
     for (const l of loinc) {
       serial++;
       resources.push({
@@ -75,13 +106,13 @@ for (const p of patients) {
         status: 'final',
         subject,
         code: { coding: [{ system: 'http://loinc.org', code: l.code, display: l.display }], text: l.display },
-        effectiveDateTime: `2024-0${month}-15T09:00:00Z`,
+        effectiveDateTime: `${monthly(month, 15)}T09:00:00Z`,
         valueQuantity: { value: l.value + serial % 7, unit: l.unit },
       });
     }
   }
 
-  for (let e = 1; e <= 4; e++) {
+  for (let e = 1; e <= Math.max(4, Math.floor(monthCount / 2)); e++) {
     serial++;
     resources.push({
       resourceType: 'Encounter',
@@ -89,7 +120,7 @@ for (const p of patients) {
       status: 'finished',
       class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'AMB' },
       subject,
-      period: { start: `2024-0${e}-05T10:00:00Z`, end: `2024-0${e}-05T10:30:00Z` },
+      period: { start: `${monthly(e, 5)}T10:00:00Z`, end: `${monthly(e, 5)}T10:30:00Z` },
       serviceProvider: { reference: 'Organization/syn-org-1' },
     });
   }
