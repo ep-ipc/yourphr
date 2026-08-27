@@ -12,7 +12,6 @@
     "serve": "ng serve",
     "build": "ng build --output-path=../dist/web",
     "test": "ng test",
-    "e2e": "playwright test",
     "lint": "ng lint",
     "dist": "ng build --watch --output-path=../dist/web",
     "storybook": "ng run fastenhealth:storybook",

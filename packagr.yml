@@ -1,4 +1,0 @@
-mgr_keep_lock_file: true
-#addl_version_metadata_paths:
-#  node:
-#    - 'frontend/package.json'

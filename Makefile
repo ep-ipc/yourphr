@@ -5,7 +5,13 @@
 # General
 ########################################################################################################################
 .PHONY: test
-test: test-backend test-frontend
+test: test-server test-frontend
+
+# The TypeScript server's suites. `npm test` is vitest; the harnesses under scripts/ are the
+# integration layer CI runs job by job (see .github/workflows/server-ci.yaml).
+.PHONY: test-server
+test-server:
+	npm test
 
 .PHONY: build-storybook
 build-storybook: dep-frontend
@@ -31,66 +37,32 @@ serve-frontend-lan: dep-frontend
 serve-frontend-prod: dep-frontend
 	cd frontend && yarn dist -- -c prod
 
-# Reads ./.env from the repo root (cp .env.dev.example .env). No --config: the YAML layer was
-# removed in yourphr#474.
-.PHONY: serve-backend
-serve-backend: dep-backend
-	go run backend/cmd/fasten/fasten.go start --debug
+# Reads <YOURPHR_FAST_STORAGE>/.env, then ./.env (cp .env.dev.example .env).
+.PHONY: serve-server
+serve-server:
+	npx tsx src/main.ts
 
+# Import a Go (v2) instance into this one. The same command the image ships (yourphr#654).
 .PHONY: migrate
-migrate: dep-backend
-	go run backend/cmd/fasten/fasten.go migrate --debug
-
-.PHONY: serve-docker-prod
-serve-docker-prod:
-	docker compose -f docker-compose-prod.yml up -d
-
-.PHONY: serve-docker
-serve-docker:
-	docker compose up -d
+migrate:
+	npm run migrate:go -- $(ARGS)
 
 
 ########################################################################################################################
-# Backend
+# Relay
 ########################################################################################################################
+# All that is left of the Go stack (yourphr#677): a pure-stdlib store-and-poll OAuth relay, still
+# deployed and still published at every release. No dependencies, so no `go mod vendor` step and
+# nothing to keep tidy.
 
-.PHONY: clean-backend
-clean-backend:
-	go clean
+.PHONY: test-relay
+test-relay:
+	go vet ./relay/
+	go test ./relay/...
 
-.PHONY: dep-backend
-dep-backend:
-	go mod tidy && go mod vendor
-	cd scripts && go generate ./...
-
-
-.PHONY: test-backend
-test-backend: dep-backend
-	go vet ./...
-	go test -timeout 25m -v ./...
-
-.PHONY: test-backend-coverage
-# -timeout 25m: the encrypted-sqlite + FHIR-ingestion suites run near Go's 10m default per-package
-# limit on slow CI runners, causing flaky timeouts (#150). Coverage instrumentation makes it slower.
-test-backend-coverage: dep-backend
-	go test -timeout 25m -coverprofile=backend-coverage.txt -covermode=atomic -v ./...
-
-.PHONY: generate-backend
-generate-backend:
-	go generate ./...
-	tygo generate
-
-# Regenerate the embedded offline RxTerms crosswalk (#387) from the latest NLM release. Downloads the
-# release, unzips, and rewrites backend/pkg/rxterms/data/rxterms_crosswalk.tsv.gz — commit the result.
-# Override the release with: make gen-rxterms-crosswalk RXTERMS_RELEASE=RxTerms<YYYYMM>
-RXTERMS_RELEASE ?= RxTerms202606
-.PHONY: gen-rxterms-crosswalk
-gen-rxterms-crosswalk:
-	tmp=$$(mktemp -d) && \
-	curl -sSL -o $$tmp/rxterms.zip "https://data.lhncbc.nlm.nih.gov/public/rxterms/release/$(RXTERMS_RELEASE).zip" && \
-	unzip -o $$tmp/rxterms.zip -d $$tmp >/dev/null && \
-	go run backend/pkg/rxterms/gen_crosswalk.go $$tmp/$(RXTERMS_RELEASE).txt && \
-	rm -rf $$tmp
+.PHONY: build-relay
+build-relay:
+	CGO_ENABLED=0 go build -o dist-relay/relay ./relay
 
 ########################################################################################################################
 # Frontend
@@ -151,12 +123,15 @@ build-frontend-offline-sandbox: dep-frontend
 test-frontend: dep-frontend
 	cd frontend && npx ng test --watch=false
 
-# End-to-end browser tests (Playwright) against the production-served path: builds the
-# frontend, then Playwright boots the Go backend (config.e2e.yaml, fresh ./db/fasten-e2e.db,
-# :9191) serving ./dist/web and drives a real browser. See frontend/e2e/.
+# End-to-end browser tests (Playwright) against the production-served path: builds the Angular
+# app, then Playwright boots the TypeScript server over it and drives a real browser. See e2e/.
+#
+# This used to boot the GO backend from frontend/e2e/. That suite went with the Go stack
+# (yourphr#677); the coverage it had and this one does not is recorded on yourphr#678.
 .PHONY: test-e2e
 test-e2e: dep-frontend
-	cd frontend && yarn run build -- --configuration sandbox && yarn run e2e
+	cd frontend && yarn build -- -c prod
+	npm run e2e
 
 .PHONY: test-frontend-coverage
 # reduce logging, disable angular-cli analytics for ci environment

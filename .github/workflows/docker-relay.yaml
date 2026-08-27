@@ -17,7 +17,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "backend/cmd/relay/**"
+      - "relay/**"
       - "Dockerfile.relay"
       - ".github/workflows/docker-relay.yaml"
       - "go.mod"
