@@ -37,13 +37,21 @@ describe('FooterComponent', () => {
     expect(component.appVersion).toBe('demo-1.18.2');
   });
 
-  it('falls back to build-time environment_name when API omits it', () => {
+  // yourphr#673: the old behaviour here was to fall back to the name compiled into the bundle,
+  // and then to the literal 'prod'. Both are guesses about an instance the bundle knows nothing
+  // about — one image serves every instance — and the first of them put "sandbox-3.1.0" on a
+  // production PHR. An unnamed instance shows its version and nothing else.
+  it('shows the version alone when the instance has not named itself — never a guessed label', () => {
     apiSpy.getVersion.and.returnValue(of({ version: '1.18.2', environment_name: '' }));
     component.ngOnInit();
-    // TestBed uses the default environment.ts (sandbox) unless fileReplacements apply.
-    expect(component.appVersion).toMatch(/^.+-1\.18\.2$/);
-    expect(component.appVersion.endsWith('-1.18.2')).toBeTrue();
-    expect(component.appVersion.startsWith('demo-')).toBeFalse();
+    expect(component.appVersion).toBe('1.18.2');
+  });
+
+  it('never reports a name the backend did not give it', () => {
+    apiSpy.getVersion.and.returnValue(of({ version: '1.18.2', environment_name: '' }));
+    component.ngOnInit();
+    expect(component.appVersion).not.toContain('sandbox');
+    expect(component.appVersion).not.toContain('prod');
   });
 
   it('links to the Contact Us page', () => {

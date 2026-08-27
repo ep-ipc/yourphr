@@ -19,7 +19,26 @@ RUN yarn install --frozen-lockfile --network-timeout 600000
 COPY frontend ./
 # Writes to /build/dist/web — one dist/, all TypeScript, and the Angular build CLEARS its output
 # directory, which is why the two halves have their own subdirectories.
-RUN yarn build
+#
+# `-c prod` IS LOAD-BEARING (yourphr#673). angular.json declares no defaultConfiguration, so a bare
+# `ng build` applies no fileReplacements and ships src/environments/environment.ts — the DEVELOPMENT
+# file, with production:false (enableProdMode never runs) and environment_name "sandbox". 3.0.0 and
+# 3.1.0 both shipped it, which is how a production PHR came to display "sandbox-3.1.0" and to tell
+# patients on the sources page that it "cannot access real patient information".
+#
+# The Go image built with `--configuration ${YOURPHR_ENV}`; that flag was lost when the frontend
+# build moved into this repository (yourphr#652). It is `prod` unconditionally now rather than a
+# build argument: one image serves every instance, and what an instance IS is runtime configuration
+# (yourphr.web.environment-name), never something compiled in.
+RUN yarn build -- -c prod
+# The tooth. `outputHashing: "all"` lives in the CONFIGURATIONS, not the base options, so hashed
+# filenames are the structural signature that a configuration was applied at all. Asserting on that
+# rather than on a string inside the bundle is deliberate: a marker string is a guard that rots
+# silently the day someone edits the environment file, and this failure mode is already one that
+# looked exactly like success.
+RUN test ! -e /build/dist/web/main.js \
+    && ls /build/dist/web/main.*.js > /dev/null \
+    || (echo "REFUSED: the Angular output is unhashed — 'ng build' ran with no configuration, so it has shipped environment.ts (development). See yourphr#673." >&2; exit 1)
 
 # --- compile TypeScript once, on the build platform -------------------------------------------
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS build

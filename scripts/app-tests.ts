@@ -84,7 +84,8 @@ async function main(): Promise<void> {
   // the answer — a hardcoded value passes any assertion that only reads it once.
   check('the version served is the build the app was assembled with, not a stale literal',
     bootBodies[0]!.data['version'] === '9.9.9-harness', `served ${String(bootBodies[0]!.data['version'])}`);
-  check("environment_name is '' on an instance that has not named itself", bootBodies[0]!.data['environment_name'] === '');
+  check("environment_name is the shipped 'yourPHR' on an instance that has not renamed itself (yourphr#673)",
+    bootBodies[0]!.data['environment_name'] === 'yourPHR', `served ${JSON.stringify(bootBodies[0]!.data['environment_name'])}`);
   app.engine.managers.configuration.set('yourphr.web.environment-name', 'demo');
   const renamed = (await (await fetch(`${base}/api/version`)).json()) as { data: Record<string, unknown> };
   check('and it FOLLOWS the config — this is how demo.yourphr.org tells itself apart from production',

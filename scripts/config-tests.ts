@@ -45,6 +45,33 @@ function main(): void {
     rmSync(dir, { recursive: true, force: true });
   }
 
+  // --- the instance's own name reaches BOTH doors (yourphr#673) ---
+  //
+  // This key is the one an operator uses to tell instances apart, so it has to work in two very
+  // different deployments: a bare-metal box running several daemons, where the answer belongs in
+  // <FAST_STORAGE>/.env beside the process, and a container, where an admin sets it on the
+  // Configuration screen. That is only true while the key is NOT declared in config.env-keys —
+  // declaring ownership makes the variable the sole source and the screen read-only forever. The
+  // check exists because that declaration looks like a tidy-up, and this is what it would cost.
+  {
+    const dir = mkdtempSync(join(tmpdir(), 'spike-config-name-'));
+    const NAME = 'yourphr.web.environment-name';
+    const shipped = store(dir, {});
+    check("an instance that has not renamed itself ships as 'yourPHR', never blank",
+      shipped.getString(NAME) === 'yourPHR', `read ${JSON.stringify(shipped.getString(NAME))}`);
+
+    // door one: the container / admin-screen path
+    shipped.set(NAME, 'willeke');
+    check('Admin -> Configuration can name the instance, and it survives a restart',
+      shipped.getString(NAME) === 'willeke' && store(dir, {}).getString(NAME) === 'willeke');
+
+    // door two: the bare-metal path, and it outranks the overlay
+    const fromEnv = store(dir, { [envNameFor(NAME)]: 'deby-2' });
+    check(`${envNameFor(NAME)} names the daemon on bare metal and outranks the overlay`,
+      fromEnv.getString(NAME) === 'deby-2', `read ${JSON.stringify(fromEnv.getString(NAME))}`);
+    rmSync(dir, { recursive: true, force: true });
+  }
+
   // --- the overlay holds only what the operator changed ---
   {
     const dir = mkdtempSync(join(tmpdir(), 'spike-config-'));
