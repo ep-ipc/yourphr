@@ -32,7 +32,7 @@ From a clean `main` with everything pushed and tests green:
 
 The live instance deploys __strictly off release tags__ — not off `main`:
 
-- Pushing the `vX.Y.Z` tag triggers `docker-jwilleke.yaml`, which builds + pushes `ghcr.io/jwilleke/yourphr:X.Y.Z` (+ `:X.Y`, `:latest`).
+- Pushing the `vX.Y.Z` tag triggers [`release-image.yaml`](../.github/workflows/release-image.yaml), which builds + pushes `ghcr.io/jwilleke/yourphr:X.Y.Z` (+ `:X.Y`, `:latest`). Publishing the GitHub Release fires the same workflow again ([#658](https://github.com/jwilleke/yourphr/issues/658)) — a duplicate build is a far better failure than a missing one. __That is the name to use when confirming a release built__; `docker-jwilleke.yaml` is the old name and no longer exists, so `gh run list --workflow=docker-jwilleke.yaml` returns an empty list that looks exactly like the failure it is supposed to detect.
 - The same tag triggers `docker-relay-release.yaml`, which publishes `ghcr.io/jwilleke/yourphr-relay:X.Y.Z` (+ `:X.Y`, `:latest`) — so both images are always available at the same version, even if the relay's sources did not change in that release ([#450](https://github.com/jwilleke/yourphr/issues/450)).
 - Flux's `ImagePolicy` (in `jwilleke/mj-infra-flux`, `apps/production/image-automation/yourphr-policy.yaml`) filters __semver__ tags and bumps the deployment to the newest release. So the live instance updates __only when you cut a release__.
 - Pushes to `main` are CI-tested but produce __no image and no deploy__. To ship anything to the live instance — including a hotfix — cut a release (a `patch` release for hotfixes).

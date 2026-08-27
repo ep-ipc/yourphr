@@ -1,12 +1,12 @@
 name: Docker (YourPHR relay)
 # Builds the SMART on FHIR store-and-poll relay (EPIC #20, issue #50) from
 # Dockerfile.relay and pushes to ghcr.io/<owner>/<repo>-relay (=> ghcr.io/jwilleke/yourphr-relay).
-# Separate from docker-jwilleke.yaml so the tiny relay only rebuilds when its
+# Separate from release-image.yaml so the tiny relay only rebuilds when its
 # own sources change. Deployed via jwilleke/mj-infra-flux (apps/production/yourphr-relay).
 #
 # MULTI-ARCH (#405): linux/amd64 + linux/arm64 from a single amd64 runner, no QEMU and no matrix —
 # Dockerfile.relay cross-compiles (CGO_ENABLED=0, $BUILDPLATFORM builder, GOOS/GOARCH retarget) and
-# its final stage is COPY-only. Contrast docker-jwilleke.yaml, whose CGO/SQLCipher + Angular build
+# its final stage is COPY-only. Contrast release-image.yaml, whose CGO/SQLCipher + Angular build
 # needs native runners.
 #
 # DEV TAGS ONLY (main / main-<N>). Semver tags (:X.Y.Z / :X.Y / :latest) are published on release

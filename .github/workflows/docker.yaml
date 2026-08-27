@@ -1,6 +1,6 @@
 name: Docker
 # NEUTRALIZED in jwilleke fork — this multi-arch build requires depot.dev credentials
-# (upstream-only, paid). The fork uses docker-jwilleke.yaml instead.
+# (upstream-only, paid). The fork uses release-image.yaml instead.
 # The `release: published` auto-trigger has been removed so it no longer fires (and fails)
 # on releases, and the job is gated to the upstream repository. Kept for reference.
 on:
