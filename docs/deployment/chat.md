@@ -53,8 +53,13 @@ prescription that never mentions fits. Full-text search cannot do that on its ow
 words.
 
 So `local` asks your model to turn the question into search terms first, then searches each term
-separately and ranks a record by how many terms it matched. One extra short model call, no extra
-storage, and it handles the case above correctly.
+separately and ranks a record by how many terms it matched. No extra storage, and it handles the
+case above correctly.
+
+__This means every question makes two calls to your model__: a short one to expand the question
+(capped at 60 tokens) and then the one that answers it. Budget for that if the model host is shared
+or slow. If the expansion call fails, the question is searched as typed rather than the answer being
+abandoned — a worse search beats no answer.
 
 Two details that cost a live failure each, both now handled:
 
@@ -84,18 +89,32 @@ diagnoses:
 | 30 | listed __blood tests as diagnoses__ | — |
 
 A small model degrades as context grows: it first gets noisy, then refuses, then confabulates. A
-27B model improves with the extra material and answers more completely — the same question about
-vaccinations returned five vaccines with both dose dates at 25 records, against a truncated list at
-10. Raise this only alongside a model that can use it, and check that answers actually improve.
+27B model improves with the extra material. Raise this only alongside a model that can use it, and
+check that answers actually improve.
 
-## Context window
+Both columns were measured on the `typesense` provider. The shape of the curve is a property of the
+model rather than of the retrieval, so it carries over — but `local` ranks by keyword coverage
+rather than vector distance, so the exact record at each depth differs, and the same 27B answering
+the vaccination question returned all six vaccines under `local` against five under `typesense`.
+
+## Context budget
 
 `yourphr.chat.model.max-bytes` (env `YOURPHR_CHAT_MODEL_MAX_BYTES`, shipped default `57344`) caps how
-much context Typesense assembles per turn: system prompt, retrieved records, and conversation
-history. A small budget truncates the medical context the model actually sees and it answers from
-less. `28672` was the Go default; `57344` measured noticeably better — fewer "I don't have enough
+much text one answer may be built from. __What exactly it caps differs by provider:__
+
+- __`local`__ — the retrieved record text only. The system prompt and the conversation history are
+  not counted against it, and are not truncated by it.
+- __`typesense`__ — everything the engine assembles per turn: system prompt, retrieved records and
+  history together.
+
+A small budget truncates the medical context the model actually sees and it answers from less.
+`28672` was the Go default; `57344` measured noticeably better — fewer "I don't have enough
 information" answers, and answers that referenced more of the imported records. Raise it further if
 your model's own context window and the host's memory allow.
+
+Note that on `local` this is a second, independent cap alongside
+`yourphr.chat.retrieval.max-records` below: whichever is reached first is what stops the context
+growing.
 
 ## The create-once model (`typesense` only)
 
@@ -120,8 +139,9 @@ of an answer.
 The `local` provider has no index, nothing to backfill, and cannot go stale — it reads the records
 where they are, so a record is answerable the moment it is written.
 
-Neither provider indexes __billing__: `Claim`, `ExplanationOfBenefit`, `Coverage` and friends are
-administrative, not clinical. In one Synthea bundle they were 10,917 of roughly 20,000 indexed
+Neither provider lets __billing__ into an answer: `Claim`, `ExplanationOfBenefit`, `Coverage` and
+friends are administrative, not clinical. `typesense` keeps them out of its index; `local`, which
+has no index, filters them out of retrieval. In one Synthea bundle they were 10,917 of roughly 20,000 indexed
 characters — more than half — against 193 characters for all three of the patient's diagnoses, and
 they crowded real records out of every answer.
 
@@ -168,10 +188,17 @@ information, because it does — the questions people ask about their own bodies
 ## Outbound access
 
 The SSRF guard refuses connections to internal addresses, which is what a self-hosted model endpoint
-and a sidecar both are. Chat is therefore granted a __named-host exemption__ for exactly the
-hostnames it is configured with — `yourphr.chat.model.url`, and `yourphr.chat.typesense.uri` where
-that provider is bound. Nothing else: cloud metadata, other internal hosts, and any redirect away
-from the named host all stay refused. See `isAllowedHost` in `src/http/ssrf.ts`.
+and a sidecar both are. Chat is therefore granted a __named-host exemption__ — but only for the one
+host it actually connects to, which is not the same host under each provider:
+
+- __`local`__ exempts `yourphr.chat.model.url`. It calls the model itself.
+- __`typesense`__ exempts `yourphr.chat.typesense.uri`, and __not__ the model URL: this instance
+  never connects to the model under that provider. The sidecar does, and it is not bound by this
+  guard — which is worth knowing, because it means the model endpoint has to be reachable from the
+  `typesense` container rather than from `fasten`.
+
+Nothing else is exempted: cloud metadata, other internal hosts, and any redirect away from the named
+host all stay refused. See `isAllowedHost` in `src/http/ssrf.ts`.
 
 ## Turning it off
 
