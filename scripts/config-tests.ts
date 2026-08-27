@@ -50,7 +50,7 @@ function main(): void {
   // This key is the one an operator uses to tell instances apart, so it has to work in two very
   // different deployments: a bare-metal box running several daemons, where the answer belongs in
   // <FAST_STORAGE>/.env beside the process, and a container, where an admin sets it on the
-  // Configuration screen. That is only true while the key is NOT declared in config.env-keys —
+  // Configuration screen. That is only true while the key is NOT declared in yourphr.config.env-keys —
   // declaring ownership makes the variable the sole source and the screen read-only forever. The
   // check exists because that declaration looks like a tidy-up, and this is what it would cost.
   {
