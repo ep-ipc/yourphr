@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.2.0](https://github.com/jwilleke/yourphr/compare/v3.1.0...v3.2.0) (2026-08-27)
+
+__Upgrade from here, not from 3.1.0, if you are coming off the Go stack.__ This is the first release whose image can actually perform the migration, and the first whose UI reports the environment it is really running in.
+
+### Features
+
+- __`migrate` ships in the image__ ([#654](https://github.com/jwilleke/yourphr/issues/654)). The upgrade guide has always told self-hosters to run `docker run … <image> migrate --go … --data …`, and until now the image had no such command — the migration was proven, verified against a real 20,068-record instance, and reachable only from a source checkout. The entrypoint now takes a command: `start` (the default, and what an argument-less run keeps doing), `migrate`, `reset-password`, `version` and `help`. An unknown command exits non-zero with the usage and never starts a server, because a typo that quietly boots an instance against the wrong data directory is the worst outcome available here.
+- __`reset-password`__, for when nobody can sign in at all ([#510](https://github.com/jwilleke/yourphr/issues/510)). The behaviour existed and nothing exposed it. It writes a generated password to `<data>/.recovery_password` at mode 0600 and ends every session of that account — never printing it, because a container's output goes to the log.
+
+### Bug Fixes
+
+- __The image was shipping the development frontend, so production called itself a sandbox__ ([#673](https://github.com/jwilleke/yourphr/issues/673)). The Angular build ran with no configuration, so no `fileReplacements` applied and the bundle carried `environment.ts` verbatim: `production: false`, so `enableProdMode()` never ran, and the name `sandbox`. The visible symptom was a footer reading `sandbox-3.1.0`, but the serious part was the Connected Sources page telling patients "In Sandbox mode YourPHR cannot access real patient information" — on an instance holding their real records. Both 3.0.0 and 3.1.0 shipped this. The image build now fails outright if the frontend output is unhashed, which is the structural signature of a build with no configuration applied.
+- __The footer no longer guesses what to call the instance.__ It showed the backend's name, then a name compiled into the bundle, then the literal `prod`. One image serves every instance, so a compiled-in name can only be a guess — and that guess is what put `sandbox` on production. An instance that has not named itself now shows its version alone.
+
+### Configuration
+
+- __`yourphr.web.environment-name` ships as `yourPHR`__ instead of empty, and can be set from either door: `YOURPHR_WEB_ENVIRONMENT_NAME` in `<data>/.env`, which is how a bare-metal operator running several daemons tells which one answered, or Admin → Configuration when no variable is set.
+
+### Documentation
+
+- __The upgrade guide is renumbered and finished__ ([#655](https://github.com/jwilleke/yourphr/issues/655)): [`docs/deployment/upgrading-v2-to-v3.md`](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/upgrading-v2-to-v3.md). Go is v2 and this is v3, its example pulls an image that exists, and every command on the page was run against a built image rather than reasoned about. It also now says to decide about database encryption __before__ migrating: v3 reads its keys from `.env` on its data volume, and a database written unencrypted cannot be encrypted by restarting with a key set.
+- __The CHANGELOG's v0.x continuity__ is settled ([#653](https://github.com/jwilleke/yourphr/issues/653)), and the release instructions no longer tell you to bump the frozen Go version constant — a v3 instance reads `package.json` and nothing else, so following the old step would have tagged a release whose UI reported the previous version.
+
 ## [3.1.0](https://github.com/jwilleke/yourphr/compare/v3.0.2...v3.1.0) (2026-08-26)
 
 ### Features
