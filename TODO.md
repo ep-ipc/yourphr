@@ -5,7 +5,6 @@
 
 ## 🔴 P0 — Security & Critical
 
-- [#681](https://github.com/jwilleke/yourphr/issues/681) — [security] Double-unescaping in record-text stripTags — escaped markup becomes live markup
 - [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably automatic
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
@@ -95,6 +94,7 @@
 
 ## 🔵 In review
 
+- [#681](https://github.com/jwilleke/yourphr/issues/681) — [security] Double-unescaping in record-text stripTags — escaped markup becomes live markup
 - [#647](https://github.com/jwilleke/yourphr/issues/647) — [SPIKE] Rate-limit the unauthenticated auth endpoints — every sign-in, not just the demo one
 - [#645](https://github.com/jwilleke/yourphr/issues/645) — [FEATURE] Demo mode: reset to a baked-in baseline, proven safe before it destroys anything
 - [#644](https://github.com/jwilleke/yourphr/issues/644) — [FEATURE] Demo mode: a read-only demo admin who sees everything and changes nothing
