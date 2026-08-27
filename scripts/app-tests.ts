@@ -65,14 +65,14 @@ async function main(): Promise<void> {
 
   // --- the browser contract (yourphr#591 parity audit): the Angular app never holds a token ---
   const setCookie = adminSignin.headers.get('set-cookie') ?? '';
-  check('sign-in sets the HttpOnly fasten_session cookie the Angular app relies on',
-    setCookie.startsWith('fasten_session=') && /HttpOnly/.test(setCookie) && /SameSite=Strict/.test(setCookie) && /Max-Age=\d+/.test(setCookie));
+  check('sign-in sets the HttpOnly yourphr_session cookie the Angular app relies on',
+    setCookie.startsWith('yourphr_session=') && /HttpOnly/.test(setCookie) && /SameSite=Strict/.test(setCookie) && /Max-Age=\d+/.test(setCookie));
   const cookieOnly = await fetch(`${base}/api/secure/account/me`, { headers: { cookie: setCookie.split(';')[0]! } });
   const me = (await cookieOnly.json()) as { data: { username: string; role: string } };
   check('the cookie ALONE authenticates /api/secure/account/me, which names the user and the role',
     cookieOnly.status === 200 && me.data.username === 'admin' && me.data.role === 'admin');
   const logout = await fetch(`${base}/api/auth/logout`, { method: 'POST' });
-  check('logout clears the cookie (Max-Age=0) — the one thing JavaScript cannot do', /fasten_session=;.*Max-Age=0/.test(logout.headers.get('set-cookie') ?? ''));
+  check('logout clears the cookie (Max-Age=0) — the one thing JavaScript cannot do', /yourphr_session=;.*Max-Age=0/.test(logout.headers.get('set-cookie') ?? ''));
   const boot = await Promise.all(['/api/version', '/api/health', '/api/instance/public'].map((p) => fetch(`${base}${p}`)));
   const bootBodies = await Promise.all(boot.map((r) => r.json() as Promise<{ success: boolean; data: Record<string, unknown> }>));
   check('the boot calls answer in the Go shapes: version, health, instance/public',
@@ -512,14 +512,14 @@ async function main(): Promise<void> {
   const oldTokenAfter = await fetch(`${base}/api/secure/account/me`, authed(aliceToken));
   const newTokenWorks = await fetch(`${base}/api/secure/account/me`, authed(changedBody.data));
   check('password change: wrong current is 401, policy refusal is 400, success ends the old session and hands back a fresh one on the cookie',
-    wrongCurrent.status === 401 && tooShort.status === 400 && changed.status === 200 && typeof changedBody.data === 'string' && (changed.headers.get('set-cookie') ?? '').startsWith('fasten_session=')
+    wrongCurrent.status === 401 && tooShort.status === 400 && changed.status === 200 && typeof changedBody.data === 'string' && (changed.headers.get('set-cookie') ?? '').startsWith('yourphr_session=')
       && oldTokenAfter.status === 401 && newTokenWorks.status === 200);
   const aliceToken2 = changedBody.data;
   const signedOut = await fetch(`${base}/api/secure/account/sign-out-everywhere`, { method: 'POST', ...authed(aliceToken2) });
   const afterSignOut = await fetch(`${base}/api/secure/account/me`, authed(aliceToken2));
   const backIn = await signIn('alice', 'another-long-enough-password');
   check('sign out everywhere ends every session including this one, clears the cookie, and the new password signs back in',
-    signedOut.status === 200 && /fasten_session=;.*Max-Age=0/.test(signedOut.headers.get('set-cookie') ?? '') && afterSignOut.status === 401 && backIn.status === 200);
+    signedOut.status === 200 && /yourphr_session=;.*Max-Age=0/.test(signedOut.headers.get('set-cookie') ?? '') && afterSignOut.status === 401 && backIn.status === 200);
 
   // Deleting the account (yourphr#619): every door the closure used to call, in the same order —
   // sources, records, the access log, then the account. Nothing checked this journey before.

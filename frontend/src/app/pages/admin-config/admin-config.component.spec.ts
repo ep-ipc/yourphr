@@ -30,7 +30,7 @@ describe('AdminConfigComponent', () => {
       entry({key: 'jwt.issuer.key', value: '••••••••', masked: true, public: false, default: '••••••••'}),
       entry({key: 'metrics.port', value: 9091, masked: true, public: false, default: 9091}),
     ],
-    custom_config_path: '/opt/fasten/db/config/app-custom-config.json',
+    custom_config_path: '/opt/yourphr/data/config/app-custom-config.json',
     warnings: [],
     ...over,
   });
@@ -65,7 +65,7 @@ describe('AdminConfigComponent', () => {
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('operator.name');
     expect(text).toContain('jwt.issuer.key');
-    expect(text).toContain('/opt/fasten/db/config/app-custom-config.json');
+    expect(text).toContain('/opt/yourphr/data/config/app-custom-config.json');
   });
 
   // The masked placeholder is what the server sent — the real value is not in the page until the

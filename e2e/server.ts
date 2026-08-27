@@ -19,7 +19,7 @@ import { ADMIN_PASS_FILE, E2E_PASS, E2E_PORT, E2E_PW_PASS, E2E_PW_USER, E2E_RESE
 
 const webDir = process.env['SPIKE_E2E_WEB_DIR'] ?? '/tmp/spike-web';
 if (!existsSync(join(webDir, 'index.html'))) {
-  console.error(`[e2e] no built Angular app at ${webDir} (index.html missing). Set SPIKE_E2E_WEB_DIR to the bundle — the image holds it at /opt/fasten/web.`);
+  console.error(`[e2e] no built Angular app at ${webDir} (index.html missing). Set SPIKE_E2E_WEB_DIR to the bundle — the image holds it at /opt/yourphr/web.`);
   process.exit(78);
 }
 

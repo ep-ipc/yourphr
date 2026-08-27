@@ -34,11 +34,20 @@ import {clientIp} from './framework/managers/SessionsManager.js';
 import {SqliteRecordsProvider} from './app/providers/SqliteRecordsProvider.js';
 
 /**
- * The Go cookie name, on purpose: a browser that moves between the two stacks during the cut-over
- * (yourphr#588) keeps one session entry, and the Angular app (yourphr#118 Phase 2b) never sees a
- * token — it relies entirely on this HttpOnly cookie being set on sign-in and read on /api/secure/*.
+ * The session cookie. HttpOnly throughout: the Angular app (yourphr#118 Phase 2b) never sees a
+ * token and relies entirely on this being set on sign-in and read on /api/secure/*.
+ *
+ * It was `fasten_session` — the Go name, kept deliberately so a browser moving between the two
+ * stacks during the cut-over (yourphr#588) held one session entry. The cut-over is done: both
+ * instances serve TypeScript, and the Go pods are a rollback nobody browses to. So the name goes
+ * with the rest of the upstream vocabulary (yourphr#676).
+ *
+ * Renaming it ENDS EVERY SESSION once, on the release that carries it. There is no migration to
+ * write and none worth writing: the old cookie stops being read, its holder is treated as signed
+ * out, and signing in again issues the new one. A dual-read fallback would keep the old name alive
+ * in the codebase for the sake of skipping one sign-in.
  */
-export const SESSION_COOKIE = 'fasten_session';
+export const SESSION_COOKIE = 'yourphr_session';
 
 function sessionCookie(token: string, maxAgeSeconds: number, secure: boolean): string {
   return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Strict${secure ? '; Secure' : ''}`;
