@@ -5,6 +5,8 @@
  * one; the ring is the last N for the screen. Level changes are runtime-only, as in Go: a restart
  * returns to the configured level.
  */
+import { redact } from './redact.js';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export const VALID_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -27,8 +29,14 @@ export class AppLog {
     return this.level;
   }
 
+  /**
+   * One choke point, and redaction happens BEFORE the ring (yourphr#638). The buffered copy is
+   * what `GET /api/secure/admin/logs` serves, so redacting only on the way to stdout would leave
+   * the plaintext in memory behind an `admin-read` route — the surface that issue is about.
+   * Inert until refreshRedactedSecrets() runs; see src/log/redact.ts for why it is pushed in.
+   */
   log(level: LogLevel, message: string): void {
-    const line = `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} ${message}`;
+    const line = `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} ${redact(message)}`;
     this.lines.push({ level, line });
     if (this.lines.length > this.capacity) this.lines.splice(0, this.lines.length - this.capacity);
     if (RANK[level] >= RANK[this.level]) this.sink(level, line);

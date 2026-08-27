@@ -59,6 +59,7 @@ import { FilesystemBackupProvider } from './framework/providers/FilesystemBackup
 import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
 import { BACKUP_SUFFIX, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
+import { refreshRedactedSecrets } from './log/redact.js';
 import { createYourPhrServer, toResourceFhir } from './server.js';
 import { SqliteFhirRepository } from './SqliteFhirRepository.js';
 import { randomBytes } from 'node:crypto';
@@ -219,6 +220,20 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const unknown = config.unknownKeys();
   if (unknown.length > 0) {
     appLog.warn(`config: keys with no effect: ${unknown.join(', ')}`); // yourphr#473 — reported, not dropped
+  }
+
+  // Now that configuration resolves, teach the logger which values must never appear in a line
+  // (yourphr#638). This has to happen HERE and not in src/log: that module imports nothing, which
+  // is what keeps it importable by ConfigurationManager itself. Skips are reported rather than
+  // silent — a secret key that contributes no redaction is a key whose secret is still loggable,
+  // and 'too-short' additionally means the value is weak enough to corrupt unrelated output.
+  {
+    const { active, skipped } = refreshRedactedSecrets(config);
+    appLog.info(`log redaction: ${active} secret value(s) will be struck from log lines`);
+    for (const s of skipped) {
+      if (s.reason === 'unset' || s.reason === 'empty') continue; // not set on this instance; nothing to leak
+      appLog.warn(`log redaction: ${s.key} is not redacted (${s.reason}) — a value that reaches a log line will be readable`);
+    }
   }
 
   // 2. The app database + migrations before anything opens for business.

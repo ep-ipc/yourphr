@@ -6,6 +6,7 @@
  *   npm run app
  */
 import { startFakeProvider } from './lib/fake-provider.js';
+import { reporter } from './lib/scrub.js';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -15,11 +16,10 @@ import { SqliteGlossaryCache } from '../src/app/providers/SqliteGlossaryCache.js
 import { assembleApp, sourceShape } from '../src/app.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
 
-const results: { name: string; ok: boolean; detail: string }[] = [];
-function check(name: string, ok: boolean, detail = ''): void {
-  results.push({ name, ok, detail });
-  console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
-}
+// The shared reporter scrubs credential-shaped text out of `detail` before it is printed or kept
+// (yourphr#682). `detail` is free text and this harness holds live session tokens; CodeQL flagged
+// the risk here even though the line it picked interpolates only status codes.
+const { results, check } = reporter();
 
 async function main(): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'spike-app-'));
