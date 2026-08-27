@@ -33,6 +33,9 @@ class FakeConversations extends BaseChatConversationsProvider {
     for (const [id, v] of [...this.owners.entries()]) if (v.userId === userId) { this.owners.delete(id); n++; }
     return n;
   }
+  // Unused by this provider: Typesense keeps its own transcript. Present because the seam is shared.
+  async append(): Promise<void> { throw new Error('the Typesense provider does not store transcripts here'); }
+  async transcript(): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]> { return []; }
 }
 
 interface Seen { method: string; path: string; query: URLSearchParams; body: unknown; apiKey: string }
@@ -110,7 +113,7 @@ beforeEach(async () => {
       apiKey: 'test-key',
       collection: 'resources',
       conversationCollection: 'conversation_store',
-      model: { id: 'm1', name: 'vllm/medgemma:4b', vllmUrl: 'http://model.invalid:11434', maxBytes: 57_344 },
+      model: { id: 'm1', name: 'medgemma:4b', vllmUrl: 'http://model.invalid:11434', maxBytes: 57_344 },
       maxRecords: 10,
       allowInternal: true,
     },
@@ -136,6 +139,9 @@ describe('TypesenseChatProvider — what actually goes on the wire', () => {
   it('freezes the operator’s model settings into the conversation model', async () => {
     await provider.initialize();
     const model = seen.find((s) => s.path === '/conversations/models' && s.method === 'POST')!.body as Record<string, unknown>;
+    // The `vllm/` prefix is this engine's own convention and is added by the provider — an operator
+    // configures the bare model name. Without the prefix Typesense calls OpenAI's hosted API
+    // instead of the operator's endpoint, which would send the records off the premises.
     expect(model['model_name']).toBe('vllm/medgemma:4b');
     expect(model['vllm_url']).toBe('http://model.invalid:11434');
     expect(model['max_bytes']).toBe(57_344);

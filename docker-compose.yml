@@ -57,11 +57,12 @@ services:
     expose:
       - "8080"
 
-  # Typesense powers the optional CHAT feature (yourphr#594) — `yourphr.chat.provider`, OFF by
-  # default. Present here so enabling chat is a matter of configuration rather than editing compose;
-  # unused, it costs an idle container.
+  # Typesense backs the `typesense` CHAT provider (yourphr#594) — the PORTED design, kept for
+  # instances already running it. It is NOT needed for `yourphr.chat.provider = local`, which is the
+  # native provider and the one to choose for a new install: that searches your records where they
+  # already live and needs no service at all. Chat is OFF by default either way.
   #
-  # Don't want it? `docker compose up --scale typesense=0`, or leave YOURPHR_CHAT_PROVIDER unset.
+  # Don't need it? `docker compose up --scale typesense=0`. On `local` it is never contacted.
   #
   # INTERNAL ONLY — `expose`, never `ports`. This is the change that matters versus the Go
   # implementation this replaces, which PUBLISHED 8108 because the browser talked to Typesense

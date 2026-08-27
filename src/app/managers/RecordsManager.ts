@@ -133,6 +133,27 @@ export class RecordsManager extends BaseManager {
     return this.provider.list(this.who(ctx), filter);
   }
 
+  /**
+   * The caller's records matching `q`, as stored — the same full-text index the dashboard's search
+   * box uses (yourphr#599), returning the records themselves rather than a list view of them.
+   *
+   * This is what lets chat retrieve WITHOUT a second copy of every record in a separate engine.
+   * `searchText` above answers the same question for a browser and shapes the result for a list;
+   * this answers it for something that needs to read what the record actually says.
+   */
+  async searchStored(ctx: ApiContext, q: string, limit: number): Promise<StoredRecord[]> {
+    const userId = this.who(ctx);
+    const query = q.trim();
+    if (query.length < 2) return [];
+    const hits = await this.provider.textSearch(userId, query, { limit: Math.min(Math.max(limit, 1), 200), offset: 0 });
+    const out: StoredRecord[] = [];
+    for (const hit of hits) {
+      const stored = await this.provider.read(userId, hit.resourceType, hit.id);
+      if (stored) out.push(stored);
+    }
+    return out;
+  }
+
   /** The dashboard's recent activity: newest records across every type, Go's list-item shape. */
   async recent(ctx: ApiContext, limit: number): Promise<RecentItem[]> {
     const items = (await this.provider.list(this.who(ctx))).map((r) => {

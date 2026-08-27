@@ -198,7 +198,7 @@ export class ChatManager extends BaseManager {
    * Returns whether it landed, for the backfill's count.
    */
   async index(userId: string, record: StoredRecord): Promise<boolean> {
-    if (!this.available()) return false;
+    if (!this.available() || !this.provider.needsIndexing) return false;
     if (NOT_CLINICAL.has(record.resourceType)) return false;
     try {
       await this.provider.index(ChatManager.documentFor(userId, record));
@@ -272,6 +272,7 @@ export class ChatManager extends BaseManager {
   async reindex(ctx: ApiContext, options: { force?: boolean } = {}): Promise<{ indexed: number; skipped: boolean }> {
     const userId = this.who(ctx);
     this.requireAvailable();
+    if (!this.provider.needsIndexing) return { indexed: 0, skipped: true };
     if (this.backfilling.has(userId)) return { indexed: 0, skipped: true };
     if (!options.force && (await this.provider.indexedCount(userId)) > 0) return { indexed: 0, skipped: true };
 
@@ -301,6 +302,8 @@ export class ChatManager extends BaseManager {
   async status(ctx: ApiContext): Promise<{ available: boolean; reason: string; indexed: number; indexing: boolean }> {
     const userId = this.who(ctx);
     if (!this.available()) return { available: false, reason: this.unavailable(), indexed: 0, indexing: false };
+    // A provider that reads the records where they live has nothing to count and nothing to fill.
+    if (!this.provider.needsIndexing) return { available: true, reason: '', indexed: 0, indexing: false };
     let indexed = 0;
     try {
       indexed = await this.provider.indexedCount(userId);

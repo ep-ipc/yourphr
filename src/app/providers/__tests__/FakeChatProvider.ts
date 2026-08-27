@@ -11,6 +11,8 @@ export class FakeChatProvider extends BaseChatProvider {
   readonly name = 'fake';
   available = true;
   readonly unavailableReason = '';
+  /** Mirrors the Typesense provider, which is what the manager's index tests exercise. */
+  needsIndexing = true;
 
   /** Every document handed down, in order — what the index assertions read. */
   readonly indexed: ChatIndexedRecord[] = [];

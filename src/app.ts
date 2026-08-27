@@ -203,36 +203,77 @@ async function glossaryProviderFor(name: string, env: Record<string, string | un
 }
 
 /**
- * Chat (yourphr#594): 'typesense' binds the sidecar and the operator's model; 'null' is inert and
- * says so. Optional capability with an inert default, and a dynamic import so an instance bound to
- * 'null' never loads the path that reaches a language model at all.
+ * Chat (yourphr#594). Three bindings, and the default is inert:
  *
- * The settings it needs are checked HERE, before the provider is built, because the alternative is
- * what the Go version did: an empty api-key produced a client that retried a ping thirty times and
- * then killed the process. A missing setting is an operator's typo and deserves a sentence, not a
- * two-minute timeout.
+ *   'local'      the native provider — searches the records where they already live, assembles the
+ *                prompt itself, calls the operator's model directly. No extra service.
+ *   'typesense'  the ported design — a sidecar holding a second copy of every record. Kept for
+ *                anyone already running it.
+ *   'null'       inert, and says so.
+ *
+ * Dynamic imports, so an instance bound to 'null' never loads a path that reaches a model at all.
+ *
+ * The settings each one needs are checked HERE, before the provider is built, because the
+ * alternative is what the Go version did: an empty api-key produced a client that retried a ping
+ * thirty times and then killed the process. A missing setting is an operator's typo and deserves a
+ * sentence, not a two-minute timeout.
  */
 async function chatProviderFor(
   name: string,
   config: ConfigurationManager,
   conversations: SqliteChatConversations,
+  engineRef: () => Engine,
   env: Record<string, string | undefined>
 ): Promise<BaseChatProvider> {
   if (name === 'null') return new NullChatProvider();
-  if (name !== 'typesense') throw new Error(`chat.provider: unknown provider '${name}' (typesense or null)`);
-
-  const required = ['yourphr.chat.typesense.uri', 'yourphr.chat.typesense.api-key', 'yourphr.chat.model.name', 'yourphr.chat.model.vllm-url'];
-  const missing = required.filter((key) => config.getString(key).trim() === '');
-  if (missing.length > 0) {
-    throw new Error(`chat.provider = typesense, but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} empty — set ${missing.map((k) => envNameFor(k)).join(', ')} or bind chat.provider = null`);
-  }
-  const modelName = config.getString('yourphr.chat.model.name');
-  if (!modelName.startsWith('vllm/')) {
-    // Without the prefix Typesense calls OpenAI's hosted API instead of the operator's endpoint —
-    // which means the records would leave the building. Refused at boot, not discovered later.
-    throw new Error(`chat.model.name must start with 'vllm/' (got '${modelName}') — the prefix is what sends the request to your own endpoint instead of OpenAI's hosted API`);
+  if (name !== 'local' && name !== 'typesense') {
+    throw new Error(`chat.provider: unknown provider '${name}' (local, typesense or null)`);
   }
 
+  const need = (keys: string[]): void => {
+    const missing = keys.filter((key) => config.getString(key).trim() === '');
+    if (missing.length > 0) {
+      throw new Error(`chat.provider = ${name}, but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} empty — set ${missing.map((k) => envNameFor(k)).join(', ')} or bind chat.provider = null`);
+    }
+  };
+  need(['yourphr.chat.model.url', 'yourphr.chat.model.name']);
+  const allowInternal = env['SPIKE_TEST_ALLOW_INTERNAL'] === '1';
+  const maxRecords = config.getInt('yourphr.chat.retrieval.max-records');
+  const maxBytes = config.getInt('yourphr.chat.model.max-bytes');
+
+  if (name === 'local') {
+    const { LocalChatProvider } = await import('./app/providers/LocalChatProvider.js');
+    // Retrieval goes through the Records door, acting for the account that asked — the same named
+    // system principal the worker and the migration tool use. The provider never sees the manager.
+    const retrieve = async (userId: string, terms: string, limit: number) => {
+      const engine = engineRef();
+      const ctx = ApiContext.system('chat', userId, engine);
+      const records = await engine.managers.records.searchStored(ctx, terms, limit);
+      return records
+        .filter((r) => ChatManager.isClinical(r.resourceType))
+        .map((r) => ({
+          resourceType: r.resourceType,
+          resourceId: r.id,
+          sourceId: r.sourceId,
+          title: String(toResourceFhir(r.resource, r.sourceId)['sort_title'] ?? ''),
+          text: ChatManager.textOf(r, toResourceFhir(r.resource, r.sourceId)),
+        }));
+    };
+    return new LocalChatProvider(
+      {
+        url: config.getString('yourphr.chat.model.url'),
+        name: config.getString('yourphr.chat.model.name'),
+        maxRecords,
+        maxBytes,
+        allowInternal,
+        log: (line) => appLog.info(line),
+      },
+      retrieve,
+      conversations
+    );
+  }
+
+  need(['yourphr.chat.typesense.uri', 'yourphr.chat.typesense.api-key']);
   const { TypesenseChatProvider } = await import('./app/providers/TypesenseChatProvider.js');
   return new TypesenseChatProvider(
     {
@@ -242,12 +283,12 @@ async function chatProviderFor(
       conversationCollection: config.getString('yourphr.chat.typesense.conversation-collection'),
       model: {
         id: config.getString('yourphr.chat.model.id'),
-        name: modelName,
-        vllmUrl: config.getString('yourphr.chat.model.vllm-url'),
-        maxBytes: config.getInt('yourphr.chat.model.max-bytes'),
+        name: config.getString('yourphr.chat.model.name'),
+        vllmUrl: config.getString('yourphr.chat.model.url'),
+        maxBytes,
       },
-      maxRecords: config.getInt('yourphr.chat.retrieval.max-records'),
-      allowInternal: env['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
+      maxRecords,
+      allowInternal,
       log: (line) => appLog.info(line),
     },
     conversations
@@ -360,7 +401,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // Chat (yourphr#594): registered always, inert unless an operator bound a provider — so the
   // route is a manager call that refuses with a reason, not an `if` at the door that could forget one.
   const chatConversations = new SqliteChatConversations(db);
-  engine.register('chat', new ChatManager(engine, await chatProviderFor(config.getString('yourphr.chat.provider'), config, chatConversations, env), (line) => appLog.info(line)));
+  engine.register('chat', new ChatManager(engine, await chatProviderFor(config.getString('yourphr.chat.provider'), config, chatConversations, engineRef, env), (line) => appLog.info(line)));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
   const { records, sources, jobs, catalog, audit, backups } = engine.managers;

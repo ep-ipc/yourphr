@@ -34,12 +34,13 @@ const dir = mkdtempSync(join(tmpdir(), 'chat-live-'));
 
 const app = await assembleApp(dir, {
   env: {
-    YOURPHR_CHAT_PROVIDER: 'typesense',
+    YOURPHR_CHAT_PROVIDER: process.env['YOURPHR_CHAT_PROVIDER'] ?? 'local',
     YOURPHR_CHAT_TYPESENSE_URI: process.env['YOURPHR_CHAT_TYPESENSE_URI'] ?? 'http://127.0.0.1:8108',
     YOURPHR_CHAT_TYPESENSE_API_KEY: process.env['YOURPHR_CHAT_TYPESENSE_API_KEY'] ?? '',
     YOURPHR_CHAT_MODEL_ID: process.env['YOURPHR_CHAT_MODEL_ID'] ?? 'yourphr-chat',
-    YOURPHR_CHAT_MODEL_NAME: process.env['YOURPHR_CHAT_MODEL_NAME'] ?? 'vllm/medgemma:4b',
-    YOURPHR_CHAT_MODEL_VLLM_URL: process.env['YOURPHR_CHAT_MODEL_VLLM_URL'] ?? '',
+    YOURPHR_CHAT_MODEL_NAME: process.env['YOURPHR_CHAT_MODEL_NAME'] ?? 'medgemma:27b-it-q4_K_M',
+    YOURPHR_CHAT_MODEL_URL: process.env['YOURPHR_CHAT_MODEL_URL'] ?? '',
+    YOURPHR_CHAT_RETRIEVAL_MAX_RECORDS: process.env['YOURPHR_CHAT_RETRIEVAL_MAX_RECORDS'] ?? '25',
     YOURPHR_DATABASE_ENCRYPTION_KEY: 'chat-live-at-rest-key',
     YOURPHR_BACKUP_ENCRYPTION_KEY: 'chat-live-backup-key',
   },

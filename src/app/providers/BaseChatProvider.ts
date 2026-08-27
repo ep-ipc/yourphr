@@ -78,6 +78,18 @@ export abstract class BaseChatProvider {
   abstract readonly unavailableReason: string;
 
   /**
+   * Whether this provider keeps a SEPARATE COPY of the records that has to be filled and kept up to
+   * date. True for an engine holding its own index; false for one that reads the records where they
+   * already live.
+   *
+   * The manager reads this to decide whether a backfill exists at all. It is not a performance hint:
+   * a provider that needs no index cannot go stale, has nothing to re-index, and can answer about a
+   * record the moment it is written — so asking it "how many are indexed" and offering to fix the
+   * answer would be inventing a problem it does not have.
+   */
+  abstract readonly needsIndexing: boolean;
+
+  /**
    * Bring the retrieval index and the conversation model into being. Idempotent: an index that
    * already exists is left alone, which is what makes this safe to run at every boot.
    */
@@ -109,6 +121,7 @@ export abstract class BaseChatProvider {
 export class NullChatProvider extends BaseChatProvider {
   readonly name = 'null';
   readonly available = false;
+  readonly needsIndexing = false;
   readonly unavailableReason =
     'chat is not configured on this instance — it needs a search sidecar and a language model, which an operator turns on deliberately';
 

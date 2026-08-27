@@ -14,6 +14,18 @@ export class SqliteChatConversations extends BaseChatConversationsProvider {
       created_at INTEGER NOT NULL
     )`);
     db.exec('CREATE INDEX IF NOT EXISTS chat_conversations_user ON chat_conversations (user_id, created_at DESC)');
+    // The turns, for a provider that runs the conversation itself. `seq` rather than a timestamp is
+    // the ordering: a question and its answer land in the same millisecond often enough that a
+    // clock cannot separate them, which is exactly the bug the Typesense transcript had — it
+    // returned the answer above the question that produced it.
+    db.exec(`CREATE TABLE IF NOT EXISTS chat_messages (
+      conversation_id TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (conversation_id, seq)
+    )`);
   }
 
   async initialize(): Promise<void> { /* schema ensured in the constructor */ }
@@ -40,14 +52,30 @@ export class SqliteChatConversations extends BaseChatConversationsProvider {
   }
 
   async release(userId: string, conversationId: string): Promise<boolean> {
-    return (
-      this.db
-        .prepare('DELETE FROM chat_conversations WHERE conversation_id = ? AND user_id = ?')
-        .run(conversationId, userId).changes > 0
-    );
+    const gone = this.db.prepare('DELETE FROM chat_conversations WHERE conversation_id = ? AND user_id = ?').run(conversationId, userId).changes > 0;
+    if (gone) this.db.prepare('DELETE FROM chat_messages WHERE conversation_id = ?').run(conversationId);
+    return gone;
   }
 
   async releaseAll(userId: string): Promise<number> {
+    const ids = this.db.prepare('SELECT conversation_id FROM chat_conversations WHERE user_id = ?').all(userId) as { conversation_id: string }[];
+    const dropTurns = this.db.prepare('DELETE FROM chat_messages WHERE conversation_id = ?');
+    for (const row of ids) dropTurns.run(row.conversation_id);
     return this.db.prepare('DELETE FROM chat_conversations WHERE user_id = ?').run(userId).changes;
+  }
+
+  async append(conversationId: string, turn: { role: 'user' | 'assistant'; message: string; at: Date }): Promise<void> {
+    const next = (this.db.prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM chat_messages WHERE conversation_id = ?').get(conversationId) as { n: number }).n;
+    this.db
+      .prepare('INSERT INTO chat_messages (conversation_id, seq, role, message, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(conversationId, next, turn.role, turn.message, turn.at.getTime());
+  }
+
+  async transcript(conversationId: string): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]> {
+    return (
+      this.db
+        .prepare('SELECT role, message, created_at AS at FROM chat_messages WHERE conversation_id = ? ORDER BY seq')
+        .all(conversationId) as { role: 'user' | 'assistant'; message: string; at: number }[]
+    );
   }
 }

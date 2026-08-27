@@ -48,7 +48,7 @@ export interface TypesenseChatConfig {
   model: {
     /** The conversation model's id in Typesense. Changing it creates a NEW model — see below. */
     id: string;
-    /** Must be `vllm/<name>`: the prefix is how Typesense decides to call `vllmUrl` and not OpenAI. */
+    /** The model as the endpoint names it, bare. The `vllm/` prefix is added here — see below. */
     name: string;
     vllmUrl: string;
     /** Bytes of context Typesense assembles per turn: prompt + records + history. */
@@ -102,6 +102,8 @@ export class TypesenseChatProvider extends BaseChatProvider {
   readonly name = 'typesense';
   readonly available = true;
   readonly unavailableReason = '';
+  /** The engine holds its own copy of every record, so it has to be filled and kept current. */
+  readonly needsIndexing = true;
 
   private readonly http: OutboundHttp;
   private readonly base: string;
@@ -259,7 +261,11 @@ export class TypesenseChatProvider extends BaseChatProvider {
     if (status !== 404) throw new Error(`typesense: cannot inspect conversation model (HTTP ${status})`);
     await this.must('POST', '/conversations/models', {
       id: this.config.model.id,
-      model_name: this.config.model.name,
+      // Typesense decides WHERE to send the request from this prefix: `vllm/` means the configured
+      // vllm_url, anything else means OpenAI's hosted API. That is this engine's convention, not
+      // something an operator should have to know, so it is applied here rather than asked for in
+      // configuration — and getting it wrong sends records off the premises.
+      model_name: `vllm/${this.config.model.name}`,
       vllm_url: this.config.model.vllmUrl,
       history_collection: this.config.conversationCollection,
       system_prompt: SYSTEM_PROMPT,
