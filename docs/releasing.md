@@ -16,11 +16,13 @@ Semver `MAJOR.MINOR.PATCH`, chosen by what changed since the last tag:
 
 Between releases the running build reports __git-describe__ (`vX.Y.Z-N-g<sha>`) — the last tag, commits since, and the short hash. That is expected; it is not "unreleased = broken."
 
+The UI shows `<environment-name>-<version>`, e.g. `willeke-3.2.0`. The name is the instance's own (`yourphr.web.environment-name`, or `YOURPHR_WEB_ENVIRONMENT_NAME` in `<data>/.env`), not something compiled into a build — one image serves every instance ([#673](https://github.com/jwilleke/yourphr/issues/673)).
+
 ## Cutting a release
 
 From a clean `main` with everything pushed and tests green:
 
-1. Bump the version constant: `backend/pkg/version/version.go` → `const VERSION = "X.Y.Z"`.
+1. Bump the version: `package.json` → `"version": "X.Y.Z"`. That file is the __only__ source — the running instance reads it beside its own compiled output and serves it on `/api/version`, which is what the footer shows. (`backend/pkg/version/version.go` is the frozen Go stack's constant and stops at 2.10.3; bumping it changes nothing a v3 instance reports.) `npm run process` fails if `package.json` is behind the newest tag, so a release cut without this step goes red — but only after the tag exists, which is why it is step one.
 2. Prepend a section to `CHANGELOG.md` (`## [X.Y.Z](compare-link) (DATE)` with Features / Bug Fixes).
 3. Commit: `chore(release): vX.Y.Z`.
 4. Tag + push: `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin main --tags`.

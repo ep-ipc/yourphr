@@ -54,7 +54,7 @@ Why the jump to 3.0.0 rather than the 2.0.0 the planning documents said: Go reac
 
 ### Upgrading from v2
 
-Read [`docs/deployment/upgrading-v1-to-v2.md`](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/upgrading-v1-to-v2.md) before starting — it is being renumbered for v3 in [#655](https://github.com/jwilleke/yourphr/issues/655), and until [#654](https://github.com/jwilleke/yourphr/issues/654) ships the migration command inside the image, the migration needs a source checkout.
+Read [`docs/deployment/upgrading-v2-to-v3.md`](https://github.com/jwilleke/yourphr/blob/main/docs/deployment/upgrading-v2-to-v3.md) before starting. At the time 3.0.0 was released the migration did not ship in the image and this step needed a source checkout; [#654](https://github.com/jwilleke/yourphr/issues/654) has since put it there, and the page has been renumbered and finished ([#655](https://github.com/jwilleke/yourphr/issues/655)).
 
 Your data is __not__ rewritten in place: the migration reads the v2 database and writes a new one beside it, so v2 remains exactly as it was and rollback is starting the old container again. Accounts, roles, records, connected sources with their tokens, the provider catalog, legal consent and the access log all carry. __What does not:__ sources with no refresh token will ask to be reconnected when their current token expires (v2 never stored one for them), and three backup-schedule settings must be set again because v3 schedules differently. The migration report names anything it did not carry — read it rather than assuming silence means completeness.
 

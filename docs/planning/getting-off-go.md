@@ -51,7 +51,7 @@ Then the swap is a Flux commit changing what sits behind the Service the tunnel 
 
 ### 3. Everyone else
 
-Neither instance is the product. A self-hoster on v1 has __no route to v2 today__ — the migration command does not ship in the image and there is no v2 compose file. [`../deployment/upgrading-v1-to-v2.md`](../deployment/upgrading-v1-to-v2.md) is written and says plainly that it is not yet followable; [#641](https://github.com/jwilleke/yourphr/issues/641) is the packaging. This blocks v2.0.0 reaching anyone but us, and it is the difference between a cut-over and a release.
+Neither instance is the product. That gap is now closed: the migration ships in the image ([#654](https://github.com/jwilleke/yourphr/issues/654)) and [`../deployment/upgrading-v2-to-v3.md`](../deployment/upgrading-v2-to-v3.md) is followable end to end without a source checkout ([#655](https://github.com/jwilleke/yourphr/issues/655)). What is still outstanding is a ready-made compose file and example manifests ([#641](https://github.com/jwilleke/yourphr/issues/641)); the page carries the `docker run` equivalent meanwhile. Note the numbering this section predates: Go is v2 and the TypeScript stack is v3, because Go had already reached 2.10.3.
 
 ## The stop rule applies to both
 

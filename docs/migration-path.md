@@ -4,7 +4,7 @@ A working checklist for the cut-over decided in [strategy-typescript-transition.
 
 > __The order both instances move in__ is [`planning/getting-off-go.md`](planning/getting-off-go.md): `yourphr` first because downtime is acceptable there, `demo-yourphr` second because demo mode does not exist in the TypeScript stack yet.
 >
-> __Two documents carry this out.__ [`deployment/cutover-runbook.md`](deployment/cutover-runbook.md) is *this* instance — kubectl, PVCs, the Ingress line — and now records the 2026-08-24 rehearsal: 20,068 records migrated and verified in 87 seconds, 53/53 id lists agreeing. [`deployment/upgrading-v1-to-v2.md`](deployment/upgrading-v1-to-v2.md) is everyone else, on Docker or bare metal, and is the one that decides whether v2 can ship to anybody but us.
+> __Two documents carry this out.__ [`deployment/cutover-runbook.md`](deployment/cutover-runbook.md) is *this* instance — kubectl, PVCs, the Ingress line — and now records the 2026-08-24 rehearsal: 20,068 records migrated and verified in 87 seconds, 53/53 id lists agreeing. [`deployment/upgrading-v2-to-v3.md`](deployment/upgrading-v2-to-v3.md) is everyone else, on Docker or bare metal, and is the one that decides whether v3 can ship to anybody but us.
 
 Go is frozen (ratified 2026-08-20): patches only for security, data correctness and misrepresentation. Every new capability goes to [yourphr-ts-spike](https://github.com/jwilleke/yourphr-ts-spike).
 
