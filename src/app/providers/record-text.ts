@@ -9,8 +9,31 @@ const DATE_KEYS = new Set(['effectiveDateTime', 'issued', 'onsetDateTime', 'abat
 const SKIP_KEYS = new Set(['id', 'reference', 'system', 'code', 'url', 'identifier', 'meta', 'extension', 'modifierExtension', 'data', 'contentType', 'fullUrl', 'versionId', 'lastUpdated', 'profile', 'fhir_comments']);
 const MAX_CHARS = 8_000;
 
+/**
+ * Narrative HTML reduced to the words in it.
+ *
+ * ORDER IS THE WHOLE CORRECTNESS ARGUMENT (yourphr#681). `&amp;` must be resolved LAST, because it
+ * is the escape for the escape character — every other entity it could produce has already been
+ * handled by the time it runs. Resolving it first, as this did, makes the pass eat its own output:
+ *
+ *   &amp;lt;script&amp;gt;   ->  &lt;script&gt;   (after &amp; -> &)
+ *                            ->  <script>         (after &lt; -> <)
+ *
+ * Text that arrived deliberately escaped comes back as live markup. Nothing renders this string as
+ * HTML today — it feeds the FTS5 index and is served as search snippets, which the Angular app
+ * interpolates — so the bug was latent rather than exploited. It is fixed anyway: this function's
+ * contract is "the words a person would recognise", and silently manufacturing markup breaks that
+ * for whatever consumes it next. The records it reads are documents other people wrote.
+ */
 function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&apos;/g, "'")
+    .replace(/&amp;/g, '&'); // LAST — see above
 }
 
 export function textFor(resource: unknown): string {

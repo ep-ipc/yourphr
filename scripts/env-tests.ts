@@ -11,9 +11,10 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 /**
- * Where `npm run build` emits, read from the build config rather than written twice. The output
- * moved to dist-server/ when the stack came into the product repo (yourphr#650) — the Go Makefile
- * owns dist/ until yourphr#646 — and this probe was the one place that had the name hardcoded.
+ * Where `npm run build` emits, read from the build config rather than written twice. This probe was
+ * the one place that had the name hardcoded, and the name has moved twice: to dist-server/ while
+ * the Go Makefile still owned dist/ (yourphr#650), and back to dist/server once Go was deleted
+ * (yourphr#677). Reading tsconfig.build.json is what made both moves free.
  */
 const BUILD_DIR = (JSON.parse(readFileSync(join(process.cwd(), 'tsconfig.build.json'), 'utf8')) as {
   compilerOptions: { outDir: string };

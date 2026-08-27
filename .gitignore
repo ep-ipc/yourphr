@@ -65,6 +65,11 @@ fabric.properties
 .direnv/
 
 /dist/
+# The TypeScript server's build output briefly lived here (yourphr#650) while the Go Makefile
+# still owned /dist/. Go is gone (yourphr#677) and the outDir is /dist/server, so this is stale —
+# but 224 compiled files were TRACKED, which is how CodeQL came to report every source defect twice,
+# once in src/ and once in a build artifact nobody was going to edit (yourphr#681).
+/dist-server/
 vendor
 test.go
 /.couchdb
