@@ -3,19 +3,25 @@
 > Generated from live GitHub state — ranked by priority label.
 > __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
 
-## 🔴 P0
+## 🔴 P0 — Security & Critical
 
-- [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects
-- [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably firing
+- [#681](https://github.com/jwilleke/yourphr/issues/681) — [security] Double-unescaping in record-text stripTags — escaped markup becomes live markup
+- [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably automatic
+- [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟠 P1
 
-- [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
-- [#653](https://github.com/jwilleke/yourphr/issues/653) — [CHORE] CHANGELOG continuity — the v0.x history folded in, 3.0.0 cut here
-- [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
+- [#664](https://github.com/jwilleke/yourphr/pull/664) — chore(ci): bump docker/setup-buildx-action from 3 to 4 *(PR · ready)* — refs [#475](https://github.com/jwilleke/yourphr/issues/475), refs [#482](https://github.com/jwilleke/yourphr/issues/482), refs [#485](https://github.com/jwilleke/yourphr/issues/485), refs [#472](https://github.com/jwilleke/yourphr/issues/472), refs [#436](https://github.com/jwilleke/yourphr/issues/436), refs [#408](https://github.com/jwilleke/yourphr/issues/408), refs [#370](https://github.com/jwilleke/yourphr/issues/370), refs [#389](https://github.com/jwilleke/yourphr/issues/389), refs [#590](https://github.com/jwilleke/yourphr/issues/590)
 - [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
+- [#680](https://github.com/jwilleke/yourphr/issues/680) — [BUG] The Angular app calls 12 endpoints the TypeScript server does not serve
+- [#679](https://github.com/jwilleke/yourphr/issues/679) — [CHORE] Close or rewrite every Go-era issue — no open work against a deleted codebase
+- [#678](https://github.com/jwilleke/yourphr/issues/678) — [BUG] E2E coverage gap: the record-display specs went with the Go stack
+- [#677](https://github.com/jwilleke/yourphr/issues/677) — [CHORE] Delete the Go application; keep the relay
+- [#676](https://github.com/jwilleke/yourphr/issues/676) — [EPIC] The word "fasten" stops appearing in anything we ship
+- [#675](https://github.com/jwilleke/yourphr/issues/675) — [BUG] demo.yourphr.org is orphaned from image automation — pinned at 3.1.0 forever
+- [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
 - [#641](https://github.com/jwilleke/yourphr/issues/641) — [SPIKE] Ship a minimal working deployment for each of the three targets — bare metal, Docker, k8s
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
 - [#632](https://github.com/jwilleke/yourphr/issues/632) — [FEATURE] In-app help pages — markdown shipped with the code, rendered as HTML
@@ -25,46 +31,34 @@
 - [#608](https://github.com/jwilleke/yourphr/issues/608) — [SPIKE] Architecture: build on the ngdpbase model throughout — engine, managers as the only door, config-bound providers, request context (the agreed architecture doc, applied)
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
-- [#544](https://github.com/jwilleke/yourphr/issues/544) — [EPIC] Transition: freeze Go, build forward in TypeScript
-- [#538](https://github.com/jwilleke/yourphr/issues/538) — [CHORE] Phase 0: leave Fasten, stay on Go — adopt the stub under our own name
-- [#537](https://github.com/jwilleke/yourphr/issues/537) — [SPIKE] TypeScript stack: prove auth, the HTTP layer and sync, or stop
 - [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
-- [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
-- [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
-- [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 
 ## 🟡 P2
 
-- [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
-- [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] yarn build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
-- [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
+- [#682](https://github.com/jwilleke/yourphr/issues/682) — [security] Test harness logs a demo session value in clear text
+- [#669](https://github.com/jwilleke/yourphr/pull/669) — chore(deps): bump webcrypto-liner from 1.4.0 to 1.4.3 in /frontend *(PR · ready)* — likely [#532](https://github.com/jwilleke/yourphr/issues/532)
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#674](https://github.com/jwilleke/yourphr/issues/674) — [BUG] A display label is used as a feature flag — "sandbox mode" keys off the instance's name
+- [#668](https://github.com/jwilleke/yourphr/pull/668) — chore(deps): bump idb from 7.1.1 to 8.0.3 in /frontend *(PR · ready)* — refs [#343](https://github.com/jwilleke/yourphr/issues/343), refs [#336](https://github.com/jwilleke/yourphr/issues/336)
+- [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
 - [#639](https://github.com/jwilleke/yourphr/issues/639) — [SPIKE] Remove the SOPS Secret — .env on the volume supersedes it
 - [#625](https://github.com/jwilleke/yourphr/issues/625) — [ENHANCEMENT] Configuration: did-you-mean suggestions in the unknown-key report
 - [#552](https://github.com/jwilleke/yourphr/issues/552) — [CHORE] Port the DICOM viewer to dwv 0.36 — removed APIs and a build path that no longer exists
 - [#551](https://github.com/jwilleke/yourphr/issues/551) — [CHORE] Migrate 647 *ngIf uses to Angular built-in control flow (@if/@for)
-- [#543](https://github.com/jwilleke/yourphr/issues/543) — [SPIKE] Phase 5: cut over, keep both, or stop — decided once, not by drift
-- [#542](https://github.com/jwilleke/yourphr/issues/542) — [SPIKE] Phase 4: the long tail — 22.7k lines with no library to adopt
 - [#535](https://github.com/jwilleke/yourphr/issues/535) — [FEATURE] No list view for Organizations (individual ones display fine)
-- [#534](https://github.com/jwilleke/yourphr/issues/534) — [CHORE] related_versions.json is tracked but build-generated, so it dirties the tree on every build
 - [#502](https://github.com/jwilleke/yourphr/issues/502) — [ARCH] Evaluate moving Azia's hand-rolled dark stylesheet onto Bootstrap 5.3 colour modes (data-bs-theme)
 - [#500](https://github.com/jwilleke/yourphr/issues/500) — [FEATURE] ui.theme-name: theme.name is published but wired to nothing — wire it up or remove it
 - [#499](https://github.com/jwilleke/yourphr/issues/499) — [FEATURE] ui.color-mode: instance default for light/dark (user's own choice still wins)
 - [#487](https://github.com/jwilleke/yourphr/issues/487) — [CHORE] Migrating off Karma must not silently defang the contrast test (jsdom has no real cascade)
-- [#485](https://github.com/jwilleke/yourphr/issues/485) — [FEATURE] Reject obfuscated numeric hosts when a source is added, not when it syncs
-- [#482](https://github.com/jwilleke/yourphr/issues/482) — [FEATURE] Upgrade angular Angular to 22.x
-- [#475](https://github.com/jwilleke/yourphr/issues/475) — [FEATURE] display the bootstrap values
-- [#472](https://github.com/jwilleke/yourphr/issues/472) — [CHORE] Reference deployment: env carries bootstrap and secrets, not settings
 - [#471](https://github.com/jwilleke/yourphr/issues/471) — [FEATURE] Show which provider entries were provisioned from environment variables
 - [#469](https://github.com/jwilleke/yourphr/issues/469) — [CHORE] Remove AllowedBackupRoots, keep path hygiene
 - [#465](https://github.com/jwilleke/yourphr/issues/465) — [FEATURE] Record the document digest on the consent record
 - [#462](https://github.com/jwilleke/yourphr/issues/462) — [FEATURE] Share records as a SMART Health Link (shlink)
-- [#455](https://github.com/jwilleke/yourphr/issues/455) — [CHORE] Route all config reads through config.Interface (retire direct os.Getenv and ad-hoc settings files)
 - [#415](https://github.com/jwilleke/yourphr/issues/415) — [docs] Manual SMART connect golden-path checklist (relay + catalog)
 - [#413](https://github.com/jwilleke/yourphr/issues/413) — [BUG] authorizeSource (BYO) drops redirect_uri from API response mapping
 - [#409](https://github.com/jwilleke/yourphr/issues/409) — [CHORE] Retire or quarantine legacy connect-gateway.service.ts (Fasten Lighthouse)
@@ -72,7 +66,6 @@
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#385](https://github.com/jwilleke/yourphr/issues/385) — [EPIC] Realistic test-data corpus + golden-test harness
-- [#370](https://github.com/jwilleke/yourphr/issues/370) — [FEATURE] Add VA Clinical Health (FHIR) as a SMART provider
 - [#369](https://github.com/jwilleke/yourphr/issues/369) — [FEATURE] /medical-history — server-side grouping endpoint (counts + paged detail) for scale
 - [#364](https://github.com/jwilleke/yourphr/issues/364) — [FEATURE] Admin Database card — polish (free space, schema version, totals, vacuum)
 - [#360](https://github.com/jwilleke/yourphr/issues/360) — [FEATURE] Attach `classified` on resource-graph / list rows (per-row synthesized badges)
@@ -80,10 +73,8 @@
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
-- [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
 - [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
-- [#336](https://github.com/jwilleke/yourphr/issues/336) — [FEATURE] Explore — Send to Email
 - [#335](https://github.com/jwilleke/yourphr/issues/335) — [FEATURE] Explore — Export to PDF
 - [#334](https://github.com/jwilleke/yourphr/issues/334) — [FEATURE] Explore — Save Report
 - [#333](https://github.com/jwilleke/yourphr/issues/333) — [EPIC] Explore — record export options (Save Report, PDF, Email)
@@ -91,7 +82,6 @@
 - [#307](https://github.com/jwilleke/yourphr/issues/307) — [FEATURE] Manual records — frontend: entry/edit/delete forms
 - [#305](https://github.com/jwilleke/yourphr/issues/305) — [FEATURE] Manual records — backend: store/edit/delete user-created records (FHIR-consistent)
 - [#300](https://github.com/jwilleke/yourphr/issues/300) — [FEATURE] Angular surface for Medicare claims & coverage (insurance view)
-- [#288](https://github.com/jwilleke/yourphr/issues/288) — [ARCH] Decide the future of fasten-sources-stub: fold into the main module vs keep as the owned source layer
 - [#287](https://github.com/jwilleke/yourphr/issues/287) — [FEATURE] Upload/import UI polish — make all supported file types selectable + clearer 'add my data' affordances
 - [#280](https://github.com/jwilleke/yourphr/issues/280) — [FEATURE] Raw fhir-cards: resolve a referenced resource's display name (e.g. Medication/{id})
 - [#256](https://github.com/jwilleke/yourphr/issues/256) — [FEATURE] Sharing PHR data.
@@ -105,17 +95,19 @@
 
 ## 🔵 In review
 
-- [#659](https://github.com/jwilleke/yourphr/issues/659) — [BUG] The Releases page says the latest YourPHR is v2.10.3 — the v3 releases have no notes
-- [#654](https://github.com/jwilleke/yourphr/issues/654) — [FEATURE] Ship migrate in the image — the upgrade guide already assumes it
-- [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
-- [#650](https://github.com/jwilleke/yourphr/issues/650) — [CHORE] Import the TypeScript stack under server/, with its history
-- [#651](https://github.com/jwilleke/yourphr/issues/651) — [CHORE] The TypeScript stack's CI becomes this repository's CI
-- [#652](https://github.com/jwilleke/yourphr/issues/652) — [CHORE] One image from this repository, on the 3.x line, and Flux follows it
-- [#648](https://github.com/jwilleke/yourphr/issues/648) — [SPIKE] The role column must carry a configured role NAME, not one of two literals
+- [#647](https://github.com/jwilleke/yourphr/issues/647) — [SPIKE] Rate-limit the unauthenticated auth endpoints — every sign-in, not just the demo one
 - [#645](https://github.com/jwilleke/yourphr/issues/645) — [FEATURE] Demo mode: reset to a baked-in baseline, proven safe before it destroys anything
 - [#644](https://github.com/jwilleke/yourphr/issues/644) — [FEATURE] Demo mode: a read-only demo admin who sees everything and changes nothing
-- [#647](https://github.com/jwilleke/yourphr/issues/647) — [SPIKE] Rate-limit the unauthenticated auth endpoints — every sign-in, not just the demo one
 - [#643](https://github.com/jwilleke/yourphr/issues/643) — [FEATURE] Demo mode: the shared demo account and its one-click sign-in
+- [#673](https://github.com/jwilleke/yourphr/issues/673) — [BUG] The image ships the sandbox Angular build — prod says "sandbox-3.1.0" and shows a false PHI-safety notice
+- [#659](https://github.com/jwilleke/yourphr/issues/659) — [BUG] The Releases page says the latest YourPHR is v2.10.3 — the v3 releases have no GitHub Release
+- [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
+- [#654](https://github.com/jwilleke/yourphr/issues/654) — [FEATURE] Ship migrate in the image — the upgrade guide already assumes it
+- [#652](https://github.com/jwilleke/yourphr/issues/652) — [CHORE] One image from this repository, on the 3.x line, and Flux follows it
+- [#651](https://github.com/jwilleke/yourphr/issues/651) — [CHORE] The TypeScript stack's CI becomes this repository's CI
+- [#650](https://github.com/jwilleke/yourphr/issues/650) — [CHORE] Import the TypeScript stack at src/, with its history — one build path
+- [#648](https://github.com/jwilleke/yourphr/issues/648) — [SPIKE] The role column must carry a configured role NAME, not one of two literals
+- [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
 - [#642](https://github.com/jwilleke/yourphr/issues/642) — [BUG] Version banner reports the wrong build and a blank environment name
 
 ## ⏸ Deferred
@@ -123,24 +115,16 @@
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
-- [#278](https://github.com/jwilleke/yourphr/issues/278) — [EPIC] Rename Fasten* → YourPHR (deferred; only on committing to a hard fork)
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
-- [#239](https://github.com/jwilleke/yourphr/issues/239) — [chore] Revisit gofhir-models 0.1.x once encoding/json/v2 is default in Go
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
 
 ## ❓ Needs triage
 
-- [#672](https://github.com/jwilleke/yourphr/pull/672) — chore(deps): bump dwv from 0.31.0 to 0.36.4 in /frontend
-- [#671](https://github.com/jwilleke/yourphr/pull/671) — chore(deps): bump lforms from 43.0.0 to 43.1.0 in /frontend
-- [#670](https://github.com/jwilleke/yourphr/pull/670) — chore(deps): bump typescript-eslint from 8.46.4 to 8.67.0 in /frontend
-- [#669](https://github.com/jwilleke/yourphr/pull/669) — chore(deps): bump webcrypto-liner from 1.4.0 to 1.4.3 in /frontend
-- [#668](https://github.com/jwilleke/yourphr/pull/668) — chore(deps): bump idb from 7.1.1 to 8.0.3 in /frontend
-- [#667](https://github.com/jwilleke/yourphr/pull/667) — chore(ci): bump docker/build-push-action from 6 to 7
-- [#666](https://github.com/jwilleke/yourphr/pull/666) — chore(deps): bump github.com/sirupsen/logrus from 1.10.0 to 1.10.1
-- [#665](https://github.com/jwilleke/yourphr/pull/665) — chore(ci): bump actions/checkout from 4 to 7
-- [#664](https://github.com/jwilleke/yourphr/pull/664) — chore(ci): bump docker/setup-buildx-action from 3 to 4
-- [#663](https://github.com/jwilleke/yourphr/pull/663) — chore(deps): bump github.com/stretchr/testify from 1.11.1 to 1.12.1
-- [#662](https://github.com/jwilleke/yourphr/pull/662) — chore(deps): bump github.com/johnfercher/maroto/v2 from 2.4.0 to 2.4.1
-- [#661](https://github.com/jwilleke/yourphr/pull/661) — chore(ci): bump actions/setup-node from 4 to 7
-- [#660](https://github.com/jwilleke/yourphr/pull/660) — chore(ci): bump docker/login-action from 3 to 4
+- [#672](https://github.com/jwilleke/yourphr/pull/672) — chore(deps): bump dwv from 0.31.0 to 0.36.4 in /frontend *(PR · ready)* — no linked issue
+- [#671](https://github.com/jwilleke/yourphr/pull/671) — chore(deps): bump lforms from 43.0.0 to 43.1.0 in /frontend *(PR · ready)* — no linked issue
+- [#670](https://github.com/jwilleke/yourphr/pull/670) — chore(deps): bump typescript-eslint from 8.46.4 to 8.67.0 in /frontend *(PR · ready)* — no linked issue
+- [#667](https://github.com/jwilleke/yourphr/pull/667) — chore(ci): bump docker/build-push-action from 6 to 7 *(PR · ready)* — no linked issue
+- [#665](https://github.com/jwilleke/yourphr/pull/665) — chore(ci): bump actions/checkout from 4 to 7 *(PR · ready)* — no linked issue
+- [#661](https://github.com/jwilleke/yourphr/pull/661) — chore(ci): bump actions/setup-node from 4 to 7 *(PR · ready)* — no linked issue
+- [#660](https://github.com/jwilleke/yourphr/pull/660) — chore(ci): bump docker/login-action from 3 to 4 *(PR · ready)* — no linked issue
 - [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
