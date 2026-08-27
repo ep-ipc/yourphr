@@ -88,6 +88,13 @@ export function formatStoneFromDecimal(st: number): string {
   return formatWeight(kg, 'st');
 }
 
+// HealthKit's percent unit is a fraction of 1 (0.97 = 97%). Values already in 0–100 pass through
+// so a manual reading of 97 still displays as 97%.
+export function asPercent(value: number): number {
+  if (value >= 0 && value <= 1) return Math.round(value * 1000) / 10;
+  return value;
+}
+
 export function parseStoredWeightUnit(raw: string | null): WeightUnit {
   if (raw === 'lbs' || raw === 'st' || raw === 'kg') return raw;
   return 'kg';
@@ -209,9 +216,10 @@ function newest(summaries: HealthMetricSummary[]): HealthMetricSummary | undefin
 }
 
 function formatNumber(value: number, def: MetricDef): string {
-  if (def.id === 'step_count') return Math.round(value).toLocaleString();
+  const n = def.id === 'oxygen_saturation' ? asPercent(value) : value;
+  if (def.id === 'step_count') return Math.round(n).toLocaleString();
   if (def.unit === 'kg' || def.unit === '°C' || def.unit === '%') {
-    return Number.isInteger(value) ? String(value) : value.toFixed(1);
+    return Number.isInteger(n) ? String(n) : n.toFixed(1);
   }
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }

@@ -22,7 +22,7 @@
 			"version": "1.21"
 		},
 		"ghcr.io/devcontainers/features/node:1": {
-			"version": "22"
+			"version": "24"
 		},
 		"ghcr.io/devcontainers-extra/features/angular-cli:2": {
 			"version": "20.3.27"

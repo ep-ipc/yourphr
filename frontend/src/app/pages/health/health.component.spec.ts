@@ -1,6 +1,6 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {of, throwError} from 'rxjs';
-import {HealthComponent} from './health.component';
+import {buildTimeTicks, HealthComponent, RANGE_MS, timeAxisBounds, toDayPoints, toTimePoints, utcDayMs} from './health.component';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {HealthMetricSummary} from '../../models/fasten/health-sample';
 
@@ -185,7 +185,7 @@ describe('HealthComponent', () => {
     fixture.detectChanges();
     expect(component.selected.latestLabel).toBe('179.0 lbs');
     expect(mockApi.getHealthSeries.calls.count()).toBe(seriesCalls);
-    expect(component.chartData.datasets[0].data[0] as number).toBeCloseTo(179.0, 1);
+    expect((component.chartData.datasets[0].data[0] as {x: number, y: number}).y).toBeCloseTo(179.0, 1);
     expect(localStorage.getItem('yourphr.health.weightUnit')).toBe('lbs');
 
     component.setWeightUnit('st');
@@ -222,5 +222,136 @@ describe('HealthComponent', () => {
     fixture.detectChanges();
     expect(component.weightUnit).toBe('lbs');
     expect(component.selected.latestLabel).toBe('179.0 lbs');
+  });
+
+  it('plots oxygen saturation as a percentage rather than a HealthKit fraction', () => {
+    const oxygen: HealthMetricSummary = {
+      metric_type: 'oxygen_saturation',
+      hk_type: 'HKQuantityTypeIdentifierOxygenSaturation',
+      unit: '%',
+      value_num: 0.97,
+      latest_at: '2026-08-24T12:00:00Z',
+      earliest_at: '2026-08-01T00:00:00Z',
+      sample_count: 2,
+    };
+    mockApi.getHealthMetrics.and.returnValue(of({metrics: [oxygen]}));
+    mockApi.getHealthSeries.and.returnValue(of({
+      metric_type: 'oxygen_saturation',
+      unit: '%',
+      total: 2,
+      downsampled: false,
+      points: [
+        {t: '2026-08-24T10:00:00Z', v: 0.97},
+        {t: '2026-08-24T11:00:00Z', v: 0.985},
+      ],
+      stats: {min: 0.97, max: 0.985, avg: 0.9775},
+    }));
+    fixture = TestBed.createComponent(HealthComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    expect(component.selected.latestLabel).toBe('97 %');
+    const data = component.chartData.datasets[0].data as {x: number, y: number}[];
+    expect(data[0].y).toBe(97);
+    expect(data[1].y).toBe(98.5);
+    expect(component.seriesStats?.min).toBe(97);
+    expect(component.seriesStats?.max).toBe(98.5);
+  });
+
+  it('spaces sparse samples across the selected time window', () => {
+    mockApi.getHealthSeries.and.returnValue(of({
+      metric_type: 'heart_rate',
+      unit: 'count/min',
+      total: 2,
+      downsampled: false,
+      points: [
+        {t: '2026-08-21T12:00:00Z', v: 60},
+        {t: '2026-08-25T12:00:00Z', v: 80},
+      ],
+    }));
+    const windowStart = Date.parse('2026-08-21T00:00:00Z');
+    component.onSliderInput(String(windowStart));
+
+    const data = component.chartData.datasets[0].data as {x: number, y: number}[];
+    expect(data.map((p) => p.x)).toEqual([
+      Date.parse('2026-08-21T12:00:00Z'),
+      Date.parse('2026-08-25T12:00:00Z'),
+    ]);
+    expect(data[1].x - data[0].x).toBe(4 * 24 * 60 * 60 * 1000);
+    const xScale = component.chartOptions?.scales?.['x'] as {type?: string, min?: number, max?: number};
+    expect(xScale.type).toBe('linear');
+    expect(xScale.min).toBe(windowStart);
+    expect(xScale.max).toBe(windowStart + RANGE_MS['5d']);
+  });
+
+  it('places daily bars on the same linear time axis so missing days leave a gap', () => {
+    const steps: HealthMetricSummary = {
+      metric_type: 'step_count',
+      hk_type: 'HKQuantityTypeIdentifierStepCount',
+      unit: 'count',
+      value_num: 4000,
+      latest_at: '2026-08-25T12:00:00Z',
+      earliest_at: '2026-08-01T00:00:00Z',
+      sample_count: 2,
+    };
+    mockApi.getHealthMetrics.and.returnValue(of({metrics: [steps]}));
+    mockApi.getHealthSeries.and.returnValue(of({
+      metric_type: 'step_count',
+      unit: 'count',
+      total: 2,
+      downsampled: false,
+      daily: [
+        {date: '2026-08-21', value: 1000},
+        {date: '2026-08-25', value: 4000},
+      ],
+    }));
+    fixture = TestBed.createComponent(HealthComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    const windowStart = Date.parse('2026-08-21T00:00:00Z');
+    component.onSliderInput(String(windowStart));
+
+    const data = component.chartData.datasets[0].data as {x: number, y: number}[];
+    expect(component.chartType).toBe('bar');
+    expect(data[0].x).toBe(utcDayMs('2026-08-21'));
+    expect(data[1].x).toBe(utcDayMs('2026-08-25'));
+    expect(data[1].x - data[0].x).toBe(4 * 24 * 60 * 60 * 1000);
+  });
+});
+
+describe('health chart time helpers', () => {
+  it('converts series points to timestamps rather than category indexes', () => {
+    const points = toTimePoints([
+      {t: '2026-08-21T12:00:00Z', v: 60},
+      {t: '2026-08-25T12:00:00Z', v: 80},
+    ]);
+    expect(points[1].x - points[0].x).toBe(4 * 24 * 60 * 60 * 1000);
+    expect(points.map((p) => p.y)).toEqual([60, 80]);
+  });
+
+  it('pins the axis to the selected window so empty days still occupy space', () => {
+    const start = new Date('2026-08-21T00:00:00Z');
+    const end = new Date('2026-08-26T00:00:00Z');
+    expect(timeAxisBounds('5d', start, end)).toEqual({min: start.getTime(), max: end.getTime()});
+    expect(timeAxisBounds('all', start, end)).toEqual({});
+  });
+
+  it('emits one tick per local day in a 5-day window', () => {
+    const min = new Date(2026, 7, 21).getTime();
+    const max = new Date(2026, 7, 26).getTime();
+    const ticks = buildTimeTicks(min, max, '5d');
+    expect(ticks).toEqual([
+      new Date(2026, 7, 21).getTime(),
+      new Date(2026, 7, 22).getTime(),
+      new Date(2026, 7, 23).getTime(),
+      new Date(2026, 7, 24).getTime(),
+      new Date(2026, 7, 25).getTime(),
+      new Date(2026, 7, 26).getTime(),
+    ]);
+  });
+
+  it('places a daily bar at local noon so it sits on that calendar date', () => {
+    expect(toDayPoints([{date: '2026-08-21', value: 1000}])).toEqual([
+      {x: new Date(2026, 7, 21, 12, 0, 0, 0).getTime(), y: 1000},
+    ]);
   });
 });

@@ -8,6 +8,7 @@ import {FastenApiService} from '../../services/fasten-api.service';
 import {HealthSample, HealthSeries, HealthSeriesPoint} from '../../models/fasten/health-sample';
 import {LoadingSpinnerComponent} from '../../components/loading-spinner/loading-spinner.component';
 import {
+  asPercent,
   CatalogEntry,
   displayUnit,
   formatLatest,
@@ -86,7 +87,11 @@ export class HealthComponent implements OnInit {
 
   chartType: 'line' | 'bar' = 'line';
   chartData: ChartData = {labels: [], datasets: []};
-  chartOptions: ChartConfiguration['options'] = defaultChartOptions('line', '');
+  chartOptions: ChartConfiguration['options'] = defaultChartOptions('line', '', {
+    range: '5d',
+    windowStart: null,
+    windowEnd: new Date(),
+  });
   hasChartData = false;
   seriesTotal = 0;
   seriesStats: {min?: number, max?: number, avg?: number} | null = null;
@@ -297,7 +302,7 @@ export class HealthComponent implements OnInit {
         dia: this.fastenApi.getHealthSeries({metricTypes: ['blood_pressure_diastolic'], mode, ...bounds}),
       }).pipe(catchError(() => of({sys: emptySeries(), dia: emptySeries()}))).subscribe({
         next: ({sys, dia}) => {
-          this.applyDualSeries(entry.def, sys, dia);
+          this.applyDualSeries(sys, dia);
           this.detailLoading = false;
         },
         error: () => { this.detailLoading = false; },
@@ -346,47 +351,49 @@ export class HealthComponent implements OnInit {
     this.seriesStats = convertStats(series.stats, def, this.weightUnit);
     this.downsampled = !!series.downsampled;
     this.seriesUnit = displayUnit(def, series.unit, this.weightUnit);
-    const convert = (v: number) => def.id === 'body_mass' ? kgToWeightUnit(v, this.weightUnit) : v;
+    const convert = (v: number) => {
+      if (def.id === 'body_mass') return kgToWeightUnit(v, this.weightUnit);
+      if (def.id === 'oxygen_saturation') return asPercent(v);
+      return v;
+    };
     if (def.viz === 'bar-daily') {
       this.chartType = 'bar';
-      const labels = (series.daily || []).map((d) => d.date);
-      this.hasChartData = labels.length > 0;
+      const data = toDayPoints(series.daily || [], convert);
+      this.hasChartData = data.length > 0;
       this.chartData = {
-        labels,
         datasets: [{
           label: def.label,
-          data: (series.daily || []).map((d) => convert(d.value)),
+          data,
           backgroundColor: INDIGO,
+          maxBarThickness: 40,
         }],
       };
-      this.chartOptions = defaultChartOptions('bar', this.seriesUnit || def.unit || '');
+      this.chartOptions = this.chartOptionsFor('bar', this.seriesUnit || def.unit || '');
       return;
     }
     if (def.viz === 'sleep-stages') {
       this.chartType = 'bar';
       const nights = series.nights || [];
       this.hasChartData = nights.length > 0;
-      const labels = nights.map((n) => n.date);
       this.chartData = {
-        labels,
         datasets: SLEEP_STAGE_ORDER.filter((stage) => nights.some((n) => (n.stages?.[stage] || 0) > 0)).map((stage) => ({
           label: SLEEP_STAGE_LABELS[stage] || stage,
-          data: nights.map((n) => n.stages?.[stage] || 0),
+          data: toDayPoints(nights.map((n) => ({date: n.date, value: n.stages?.[stage] || 0}))),
           backgroundColor: SLEEP_COLORS[stage],
           stack: 'sleep',
+          maxBarThickness: 40,
         })),
       };
-      this.chartOptions = defaultChartOptions('bar', 'hours', true);
+      this.chartOptions = this.chartOptionsFor('bar', 'hours', true);
       return;
     }
     this.chartType = 'line';
-    const points = series.points || [];
+    const points = toTimePoints(series.points || [], convert);
     this.hasChartData = points.length > 0;
     this.chartData = {
-      labels: points.map((p) => formatTick(p.t, this.range)),
       datasets: [{
         label: def.label,
-        data: points.map((p) => convert(p.v)),
+        data: points,
         borderColor: INDIGO,
         backgroundColor: INDIGO_FILL,
         pointRadius: points.length > 80 ? 0 : 2,
@@ -394,25 +401,34 @@ export class HealthComponent implements OnInit {
         tension: 0.2,
       }],
     };
-    this.chartOptions = defaultChartOptions('line', this.seriesUnit);
+    this.chartOptions = this.chartOptionsFor('line', this.seriesUnit);
   }
 
-  private applyDualSeries(def: MetricDef, sys: HealthSeries, dia: HealthSeries): void {
-    const merged = mergeDual(sys.points || [], dia.points || []);
+  private applyDualSeries(sys: HealthSeries, dia: HealthSeries): void {
+    const sysPoints = toTimePoints(sys.points || []);
+    const diaPoints = toTimePoints(dia.points || []);
     this.chartType = 'line';
     this.seriesTotal = (sys.total || 0) + (dia.total || 0);
     this.downsampled = !!(sys.downsampled || dia.downsampled);
     this.seriesUnit = 'mmHg';
     this.seriesStats = sys.stats || dia.stats || null;
-    this.hasChartData = merged.labels.length > 0;
+    this.hasChartData = sysPoints.length > 0 || diaPoints.length > 0;
     this.chartData = {
-      labels: merged.labels.map((t) => formatTick(t, this.range)),
       datasets: [
-        {label: 'Systolic', data: merged.sys, borderColor: INDIGO, pointRadius: 3, spanGaps: true, tension: 0.1},
-        {label: 'Diastolic', data: merged.dia, borderColor: TEAL, pointRadius: 3, spanGaps: true, tension: 0.1},
+        {label: 'Systolic', data: sysPoints, borderColor: INDIGO, pointRadius: 3, tension: 0.1},
+        {label: 'Diastolic', data: diaPoints, borderColor: TEAL, pointRadius: 3, tension: 0.1},
       ],
     };
-    this.chartOptions = defaultChartOptions('line', 'mmHg');
+    this.chartOptions = this.chartOptionsFor('line', 'mmHg');
+  }
+
+  private chartOptionsFor(kind: 'line' | 'bar', unit: string, stacked = false): ChartConfiguration['options'] {
+    return defaultChartOptions(kind, unit, {
+      stacked,
+      range: this.range,
+      windowStart: this.windowStart,
+      windowEnd: this.windowEnd,
+    });
   }
 }
 
@@ -446,26 +462,114 @@ function formatDay(d: Date): string {
   return d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
 }
 
-function formatTick(iso: string, range: RangePreset): string {
-  const d = new Date(iso);
+export interface HealthChartPoint {
+  x: number
+  y: number
+}
+
+export function toTimePoints(points: HealthSeriesPoint[], convert: (v: number) => number = (v) => v): HealthChartPoint[] {
+  return points
+    .map((p) => ({x: Date.parse(p.t), y: convert(p.v)}))
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+}
+
+export function toDayPoints(days: {date: string, value: number}[], convert: (v: number) => number = (v) => v): HealthChartPoint[] {
+  return days
+    .map((d) => ({x: utcDayMs(d.date), y: convert(d.value)}))
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+}
+
+// Daily buckets are UTC calendar dates (YYYY-MM-DD). Plot at local noon so the bar sits on that
+// calendar date on a local time axis, rather than shifting when UTC midnight falls on the prior day.
+export function utcDayMs(date: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return Date.parse(date);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0).getTime();
+}
+
+export function timeAxisBounds(
+  range: RangePreset,
+  windowStart: Date | null,
+  windowEnd: Date,
+): {min?: number, max?: number} {
+  if (range === 'all' || !windowStart) return {};
+  return {min: windowStart.getTime(), max: windowEnd.getTime()};
+}
+
+export function buildTimeTicks(min: number, max: number, range: RangePreset): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
+  const ticks: number[] = [];
+  const cursor = new Date(min);
+  if (range === '24h') {
+    const hour = cursor.getHours();
+    cursor.setHours(hour - (hour % 4), 0, 0, 0);
+    if (cursor.getTime() < min) cursor.setHours(cursor.getHours() + 4);
+    while (cursor.getTime() <= max && ticks.length < 12) {
+      ticks.push(cursor.getTime());
+      cursor.setHours(cursor.getHours() + 4);
+    }
+    return ticks;
+  }
+  cursor.setHours(0, 0, 0, 0);
+  if (cursor.getTime() < min) cursor.setDate(cursor.getDate() + 1);
+  const stepDays = tickStepDays(range, max - min);
+  while (cursor.getTime() <= max && ticks.length < 12) {
+    ticks.push(cursor.getTime());
+    cursor.setDate(cursor.getDate() + stepDays);
+  }
+  return ticks;
+}
+
+function tickStepDays(range: RangePreset, spanMs: number): number {
+  if (range === '5d') return 1;
+  if (range === '30d') return 5;
+  if (range === '90d') return 14;
+  const day = 24 * 60 * 60 * 1000;
+  if (spanMs <= 16 * day) return 1;
+  if (spanMs <= 90 * day) return 7;
+  if (spanMs <= 400 * day) return 30;
+  return 90;
+}
+
+function formatTickMs(ms: number, range: RangePreset): string {
+  const d = new Date(ms);
   if (range === '24h') {
     return d.toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'});
   }
   if (range === '5d') {
-    return d.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric'});
+    return d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
   }
   return d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
 }
 
-function defaultChartOptions(kind: 'line' | 'bar', unit: string, stacked = false): ChartConfiguration['options'] {
+function formatTooltipTime(ms: number, kind: 'line' | 'bar'): string {
+  const d = new Date(ms);
+  if (kind === 'bar') {
+    return d.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+  }
+  return d.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+}
+
+function defaultChartOptions(
+  kind: 'line' | 'bar',
+  unit: string,
+  args: {stacked?: boolean, range: RangePreset, windowStart: Date | null, windowEnd: Date},
+): ChartConfiguration['options'] {
+  const stacked = !!args.stacked;
+  const bounds = timeAxisBounds(args.range, args.windowStart, args.windowEnd);
   return {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: {mode: 'index', intersect: false},
+    interaction: {mode: 'nearest', axis: 'x', intersect: false},
     plugins: {
       legend: {display: kind === 'bar' ? stacked : true, position: 'bottom'},
       tooltip: {
         callbacks: {
+          title: (items) => {
+            const x = items[0]?.parsed?.x;
+            if (x == null || Number.isNaN(x)) return '';
+            return formatTooltipTime(x, kind);
+          },
           label: (ctx) => {
             const value = ctx.parsed.y;
             if (value == null || Number.isNaN(value)) return ctx.dataset.label || '';
@@ -482,7 +586,21 @@ function defaultChartOptions(kind: 'line' | 'bar', unit: string, stacked = false
       },
     },
     scales: {
-      x: {grid: {display: false}, ticks: {maxRotation: 0, autoSkip: true, maxTicksLimit: 8}},
+      x: {
+        type: 'linear',
+        ...(bounds.min != null ? {min: bounds.min} : {}),
+        ...(bounds.max != null ? {max: bounds.max} : {}),
+        grid: {display: false},
+        ticks: {
+          maxRotation: 0,
+          autoSkip: false,
+          callback: (value) => formatTickMs(Number(value), args.range),
+        },
+        afterBuildTicks: (axis) => {
+          const ticks = buildTimeTicks(axis.min, axis.max, args.range);
+          if (ticks.length) axis.ticks = ticks.map((value) => ({value}));
+        },
+      },
       y: {
         beginAtZero: kind === 'bar',
         stacked,
@@ -494,28 +612,22 @@ function defaultChartOptions(kind: 'line' | 'bar', unit: string, stacked = false
   };
 }
 
-function mergeDual(sys: HealthSeriesPoint[], dia: HealthSeriesPoint[]): {labels: string[], sys: (number | null)[], dia: (number | null)[]} {
-  const times = Array.from(new Set([...sys.map((p) => p.t), ...dia.map((p) => p.t)])).sort();
-  const sysMap = new Map(sys.map((p) => [p.t, p.v]));
-  const diaMap = new Map(dia.map((p) => [p.t, p.v]));
-  return {
-    labels: times,
-    sys: times.map((t) => (sysMap.has(t) ? sysMap.get(t) : null)),
-    dia: times.map((t) => (diaMap.has(t) ? diaMap.get(t) : null)),
-  };
-}
-
 function convertStats(
   stats: HealthSeries['stats'],
   def: MetricDef,
   weightUnit: WeightUnit,
 ): {min?: number, max?: number, avg?: number} | null {
   if (!stats) return null;
-  if (def.id !== 'body_mass') return stats;
+  const convert = (v: number) => {
+    if (def.id === 'body_mass') return kgToWeightUnit(v, weightUnit);
+    if (def.id === 'oxygen_saturation') return asPercent(v);
+    return v;
+  };
+  if (def.id !== 'body_mass' && def.id !== 'oxygen_saturation') return stats;
   return {
-    min: stats.min != null ? kgToWeightUnit(stats.min, weightUnit) : undefined,
-    max: stats.max != null ? kgToWeightUnit(stats.max, weightUnit) : undefined,
-    avg: stats.avg != null ? kgToWeightUnit(stats.avg, weightUnit) : undefined,
+    min: stats.min != null ? convert(stats.min) : undefined,
+    max: stats.max != null ? convert(stats.max) : undefined,
+    avg: stats.avg != null ? convert(stats.avg) : undefined,
   };
 }
 
@@ -565,10 +677,13 @@ function toTableRows(def: MetricDef, samples: HealthSample[], weightUnit: Weight
         source: sample.device_name || sample.source_name || '',
       };
     }
+    const displayValue = def.id === 'oxygen_saturation' && sample.value_num != null
+      ? asPercent(sample.value_num)
+      : sample.value_num;
     return {
       time: sample.start_time,
-      value: sample.value_num != null
-        ? (Number.isInteger(sample.value_num) ? String(sample.value_num) : sample.value_num.toFixed(1))
+      value: displayValue != null
+        ? (Number.isInteger(displayValue) ? String(displayValue) : displayValue.toFixed(1))
         : (SLEEP_STAGE_LABELS[sample.value_text] || sample.value_text || ''),
       unit: displayUnit(def, sample.unit, weightUnit),
       source: sample.device_name || sample.source_name || '',

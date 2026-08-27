@@ -1,5 +1,6 @@
 import {HealthMetricSummary} from '../../models/fasten/health-sample';
 import {
+  asPercent,
   CatalogEntry,
   formatLatest,
   formatWeight,
@@ -127,6 +128,20 @@ describe('formatLatest', () => {
     expect(formatLatest(def, summaries, 'lbs')).toBe('179.0 lbs');
     expect(formatLatest(def, summaries, 'st')).toBe('12 st 11 lb');
   });
+
+  it('renders HealthKit oxygen fractions as a percentage', () => {
+    const def = KNOWN_METRICS.find((m) => m.id === 'oxygen_saturation');
+    const summaries = [{
+      metric_type: 'oxygen_saturation',
+      hk_type: 'HKQuantityTypeIdentifierOxygenSaturation',
+      unit: '%',
+      value_num: 0.97,
+      latest_at: '2026-08-24T12:00:00Z',
+      earliest_at: '2026-08-01T00:00:00Z',
+      sample_count: 1,
+    }];
+    expect(formatLatest(def, summaries)).toBe('97 %');
+  });
 });
 
 describe('weight units', () => {
@@ -153,5 +168,15 @@ describe('weight units', () => {
     expect(parseStoredWeightUnit('kg')).toBe('kg');
     expect(parseStoredWeightUnit('stone')).toBe('kg');
     expect(parseStoredWeightUnit(null)).toBe('kg');
+  });
+});
+
+describe('asPercent', () => {
+  it('turns HealthKit fractions into 0–100 and leaves already-percent values alone', () => {
+    expect(asPercent(0.97)).toBe(97);
+    expect(asPercent(0.978)).toBe(97.8);
+    expect(asPercent(1)).toBe(100);
+    expect(asPercent(97)).toBe(97);
+    expect(asPercent(98.5)).toBe(98.5);
   });
 });
