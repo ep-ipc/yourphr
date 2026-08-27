@@ -36,6 +36,7 @@ class FakeConversations extends BaseChatConversationsProvider {
   // Unused by this provider: Typesense keeps its own transcript. Present because the seam is shared.
   async append(): Promise<void> { throw new Error('the Typesense provider does not store transcripts here'); }
   async transcript(): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]> { return []; }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
 }
 
 interface Seen { method: string; path: string; query: URLSearchParams; body: unknown; apiKey: string }

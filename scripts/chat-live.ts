@@ -25,7 +25,11 @@ const webDir = process.env['CHAT_LIVE_WEB_DIR'];
 const port = Number(process.env['CHAT_LIVE_PORT'] ?? 18222);
 const USER = 'demo';
 const PASS = 'demo-long-enough-password';
-/** A second account that imports NOTHING — the control for the isolation check. */
+/**
+ * A second account, for the isolation check. It gets its OWN, different bundle when
+ * CHAT_LIVE_BUNDLE_2 is set — which is the test that matters: an empty second account can only show
+ * the absence of an answer, never that one account's records stayed out of the other's.
+ */
 const OTHER = 'nosy';
 const OTHER_PASS = 'nosy-long-enough-password';
 const SOURCE = 'synthea-import';
@@ -55,23 +59,22 @@ await app.users.setConsent(who, new Date().toISOString().replace(/\.\d{3}Z$/, 'Z
 await app.users.createUser(admin, OTHER, OTHER_PASS);
 await app.users.setConsent(ApiContext.system('chat-live', OTHER, app.engine), new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'));
 
-// --- import the bundle through the Records door, exactly as a sync would ---
-const bundle = JSON.parse(readFileSync(bundlePath, 'utf8')) as { entry?: { resource?: Resource }[] };
-const writer = app.engine.managers.records.writer(who, SOURCE);
-let written = 0;
-const skipped: Record<string, number> = {};
-for (const entry of bundle.entry ?? []) {
-  const resource = entry.resource;
-  if (!resource?.resourceType || !resource.id) continue;
-  try {
-    await writer.upsert(resource);
-    written++;
-  } catch (err) {
-    skipped[resource.resourceType] = (skipped[resource.resourceType] ?? 0) + 1;
-    if (Object.keys(skipped).length < 4) console.warn(`[chat-live] skipped ${resource.resourceType}/${resource.id}: ${(err as Error).message}`);
+// --- import through the Records door, exactly as a sync would ---
+async function importBundle(username: string, file: string): Promise<void> {
+  const ctx = ApiContext.system('chat-live', username, app.engine);
+  const bundle = JSON.parse(readFileSync(file, 'utf8')) as { entry?: { resource?: Resource }[] };
+  const writer = app.engine.managers.records.writer(ctx, SOURCE);
+  let written = 0;
+  for (const entry of bundle.entry ?? []) {
+    const resource = entry.resource;
+    if (!resource?.resourceType || !resource.id) continue;
+    try { await writer.upsert(resource); written++; } catch { /* a bundle carries rows the store declines; the count says how many landed */ }
   }
+  console.log(`[chat-live] ${username}: imported ${written} resource(s) from ${file.split('/').pop()}`);
 }
-console.log(`[chat-live] imported ${written} resource(s)${Object.keys(skipped).length ? `; skipped ${JSON.stringify(skipped)}` : ''}`);
+await importBundle(USER, bundlePath);
+const bundle2 = process.env['CHAT_LIVE_BUNDLE_2'];
+if (bundle2 && existsSync(bundle2)) await importBundle(OTHER, bundle2);
 
 // --- index them for chat ---
 const chat = app.engine.managers.chat;
@@ -81,10 +84,14 @@ if (!chat.available()) {
 }
 const result = await chat.reindex(who, { force: true });
 console.log(`[chat-live] indexed ${result.indexed} record(s) for ${USER}`);
+if (bundle2) {
+  const r2 = await chat.reindex(ApiContext.system('chat-live', OTHER, app.engine), { force: true });
+  console.log(`[chat-live] indexed ${r2.indexed} record(s) for ${OTHER}`);
+}
 
 await new Promise<void>((resolve) => app.server.listen(port, '127.0.0.1', resolve));
 console.log(`[chat-live] listening on http://127.0.0.1:${port} — sign in as ${USER} / ${PASS}`);
-console.log(`[chat-live] second account, holds no records: ${OTHER} / ${OTHER_PASS}`);
+console.log(`[chat-live] second account: ${OTHER} / ${OTHER_PASS}`);
 console.log(`[chat-live] data in ${dir}${webDir ? `; web ${webDir}` : '; API only'}`);
 
 const stop = async (): Promise<void> => { await app.close(); process.exit(0); };

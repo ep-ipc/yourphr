@@ -285,7 +285,7 @@ export class LocalChatProvider extends BaseChatProvider {
     const records = await this.search(userId, terms, this.config.maxRecords);
     const context = this.contextOf(records);
 
-    const history = conversationId === undefined ? [] : await this.conversations_.transcript(conversationId);
+    const history = conversationId === undefined ? [] : await this.conversations_.transcript(userId, conversationId);
     const answer = await this.complete([
       { role: 'system', content: SYSTEM_PROMPT },
       ...history.map((turn) => ({ role: turn.role, content: turn.message })),
@@ -302,8 +302,8 @@ export class LocalChatProvider extends BaseChatProvider {
     const id = conversationId ?? this.newId();
     const at = this.now();
     if (conversationId === undefined) await this.conversations_.claim(userId, id, at);
-    await this.conversations_.append(id, { role: 'user', message: question, at });
-    await this.conversations_.append(id, { role: 'assistant', message: answer, at });
+    await this.conversations_.append(userId, id, { role: 'user', message: question, at });
+    await this.conversations_.append(userId, id, { role: 'assistant', message: answer, at });
 
     return {
       conversationId: id,
@@ -318,15 +318,16 @@ export class LocalChatProvider extends BaseChatProvider {
     const owned = await this.conversations_.list(userId);
     const out: ChatConversation[] = [];
     for (const record of owned) {
-      const turns = await this.conversations_.transcript(record.conversationId);
+      const turns = await this.conversations_.transcript(userId, record.conversationId);
       out.push({ id: record.conversationId, firstMessage: turns.find((t) => t.role === 'user')?.message ?? '', at: record.at });
     }
     return out.sort((a, b) => b.at - a.at);
   }
 
   override async messages(userId: string, conversationId: string): Promise<ChatMessage[]> {
-    if (!(await this.conversations_.owns(userId, conversationId))) return [];
-    return this.conversations_.transcript(conversationId);
+    // The scoped query is the guard now; `owns()` here is belt to its braces, and answers the
+    // "is this gone or was it never yours" question the same way either way — an empty transcript.
+    return this.conversations_.transcript(userId, conversationId);
   }
 
   override async forget(userId: string, conversationId: string): Promise<boolean> {

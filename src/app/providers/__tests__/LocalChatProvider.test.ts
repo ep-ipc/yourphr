@@ -28,12 +28,15 @@ class MemoryConversations extends BaseChatConversationsProvider {
     for (const [id, v] of [...this.owners.entries()]) if (v.userId === userId) { this.owners.delete(id); this.turns.delete(id); n++; }
     return n;
   }
-  async append(id: string, turn: { role: 'user' | 'assistant'; message: string; at: Date }): Promise<void> {
+  // Mirrors the SQLite provider's scoping, so a test that passes here means something about it.
+  async append(userId: string, id: string, turn: { role: 'user' | 'assistant'; message: string; at: Date }): Promise<void> {
+    if (this.owners.get(id)?.userId !== userId) throw new Error('cannot append to a conversation this account does not own');
     const list = this.turns.get(id) ?? [];
     list.push({ role: turn.role, message: turn.message, at: turn.at.getTime() });
     this.turns.set(id, list);
   }
-  async transcript(id: string): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]> {
+  async transcript(userId: string, id: string): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]> {
+    if (this.owners.get(id)?.userId !== userId) return [];
     return this.turns.get(id) ?? [];
   }
 }

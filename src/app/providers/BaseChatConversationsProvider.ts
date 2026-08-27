@@ -47,9 +47,23 @@ export abstract class BaseChatConversationsProvider {
   //
   // Unused by a provider whose engine keeps its own; see the header.
 
-  /** Append one turn. `at` is the wall clock, and ordering within it is insertion order. */
-  abstract append(conversationId: string, turn: { role: 'user' | 'assistant'; message: string; at: Date }): Promise<void>;
+  /**
+   * Append one turn. `at` is the wall clock; ordering within it is insertion order.
+   *
+   * Takes the account and REFUSES a conversation that is not theirs, rather than trusting the caller
+   * to have checked. Throws, because by the time a turn is being written the ownership question has
+   * already been answered somewhere upstream — a failure here means a caller got it wrong, and a
+   * silent no-op would hide that until someone noticed a transcript with holes in it.
+   */
+  abstract append(userId: string, conversationId: string, turn: { role: 'user' | 'assistant'; message: string; at: Date }): Promise<void>;
 
-  /** Every turn of one conversation, oldest first. Ownership is the caller's to check. */
-  abstract transcript(conversationId: string): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]>;
+  /**
+   * Every turn of one of `userId`'s conversations, oldest first. Empty when it is not theirs.
+   *
+   * The account is a parameter and not an assumption. These two methods used to take a conversation
+   * id alone and leave the ownership check to whoever called them: correct in every caller, and one
+   * forgotten check away from handing somebody another person's transcript. Scoping the query is
+   * the difference between a convention and an invariant.
+   */
+  abstract transcript(userId: string, conversationId: string): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]>;
 }

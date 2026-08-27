@@ -64,18 +64,26 @@ export class SqliteChatConversations extends BaseChatConversationsProvider {
     return this.db.prepare('DELETE FROM chat_conversations WHERE user_id = ?').run(userId).changes;
   }
 
-  async append(conversationId: string, turn: { role: 'user' | 'assistant'; message: string; at: Date }): Promise<void> {
-    const next = (this.db.prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM chat_messages WHERE conversation_id = ?').get(conversationId) as { n: number }).n;
-    this.db
-      .prepare('INSERT INTO chat_messages (conversation_id, seq, role, message, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(conversationId, next, turn.role, turn.message, turn.at.getTime());
+  async append(userId: string, conversationId: string, turn: { role: 'user' | 'assistant'; message: string; at: Date }): Promise<void> {
+    // The WHERE EXISTS is the guard, in the statement rather than in front of it: a turn cannot be
+    // written into a conversation the account does not own, whatever the caller believed.
+    const written = this.db
+      .prepare(`INSERT INTO chat_messages (conversation_id, seq, role, message, created_at)
+        SELECT ?, COALESCE((SELECT MAX(seq) FROM chat_messages WHERE conversation_id = ?), 0) + 1, ?, ?, ?
+        WHERE EXISTS (SELECT 1 FROM chat_conversations WHERE conversation_id = ? AND user_id = ?)`)
+      .run(conversationId, conversationId, turn.role, turn.message, turn.at.getTime(), conversationId, userId).changes;
+    if (written === 0) throw new Error('cannot append to a conversation this account does not own');
   }
 
-  async transcript(conversationId: string): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]> {
+  async transcript(userId: string, conversationId: string): Promise<{ role: 'user' | 'assistant'; message: string; at: number }[]> {
     return (
       this.db
-        .prepare('SELECT role, message, created_at AS at FROM chat_messages WHERE conversation_id = ? ORDER BY seq')
-        .all(conversationId) as { role: 'user' | 'assistant'; message: string; at: number }[]
+        .prepare(`SELECT m.role, m.message, m.created_at AS at
+          FROM chat_messages m
+          JOIN chat_conversations c ON c.conversation_id = m.conversation_id
+          WHERE m.conversation_id = ? AND c.user_id = ?
+          ORDER BY m.seq`)
+        .all(conversationId, userId) as { role: 'user' | 'assistant'; message: string; at: number }[]
     );
   }
 }
