@@ -90,6 +90,41 @@ __Phase 4 — the long tail.__ Provider catalog, DCR, background jobs, backup an
 
 __Phase 5 — cut over, or keep both.__ Only after 2–4.
 
+> __OUTCOME (2026-08-27): CUT OVER. One stack. Go is deleted.__ Recorded here because this document
+> promised the decision would be written down whichever way it went, and for nine days it was not —
+> the plan quietly stopped describing reality, which is the failure [#543](https://github.com/jwilleke/yourphr/issues/543) exists to prevent.
+>
+> __What was decided, and when.__ Phase 3 and Phase 4 were not executed as planned phases; the
+> TypeScript stack was built out directly and the long tail ([#542](https://github.com/jwilleke/yourphr/issues/542)) was re-planned as its own
+> issue stream, which is what that issue asked for. The household instance cut over on 2026-08-25
+> and demo.yourphr.org followed on 2026-08-26 ([#646](https://github.com/jwilleke/yourphr/issues/646)), leaving no Go instance serving anything.
+>
+> __The evidence the cut-over rested on.__ A migration of a real instance — 20,068 records, a 111 MB
+> database — verified record for record: 53/53 (user, resource type) id lists agreeing across three
+> accounts, in 87 seconds. Not a sample, and not the synthetic corpus.
+>
+> __The stop rule decided it, exactly as written.__ "If two stacks are both serving production for
+> more than one release cycle, stop and pick one." Both served for one cycle, from the household
+> cut-over on 2026-08-25 to the demo swap on 2026-08-26. One was picked before the second cycle
+> began, and the Go application was deleted on 2026-08-27 ([#677](https://github.com/jwilleke/yourphr/issues/677)) — 557 files, including 132 MB
+> of vendored dependencies.
+>
+> __What was kept, and honestly.__ One piece of Go survives: the SMART store-and-poll OAuth relay,
+> at `relay/`, because it is deployed, published at every release, and has no TypeScript
+> replacement. The stack says so rather than pretending — `/api/secure/source/relay-config` reports
+> that no relay is configured. Live provider sync through the relay is therefore __not__ a v3
+> capability today; that is [#408](https://github.com/jwilleke/yourphr/issues/408)'s ground, not something this cut-over delivered.
+>
+> __The rollback, stated accurately.__ Go's PVCs are untouched and `ghcr.io/jwilleke/yourphr-go:2.10.3`
+> is preserved by digest, so the images and data to run Go again both exist. What was never rehearsed
+> is the Ingress swap-back itself — the cut-over runbook says so, and deleting the source does not
+> change it either way, because a rollback runs the published image and not the tree.
+>
+> __What did not carry, named rather than discovered later.__ Sources with no refresh token ask to
+> be reconnected at first expiry; three backup-schedule settings do not carry; the Go E2E suite's
+> record-display coverage went with it ([#678](https://github.com/jwilleke/yourphr/issues/678)); and the tygo generator that produced the
+> frontend's patient-access-brands types no longer exists, so those files are now ordinary source.
+
 ## Stop rules, agreed in advance
 
 A migration without a defined failure is one that cannot fail, only drag.
