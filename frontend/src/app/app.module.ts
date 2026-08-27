@@ -48,6 +48,7 @@ import { PractitionerHistoryComponent } from './pages/practitioner-history/pract
 import { SettingsComponent } from './pages/settings/settings.component';
 import { SetupEncryptionKeyComponent } from './pages/setup-encryption-key/setup-encryption-key.component';
 import { GetEncryptionKeyWizardComponent } from './pages/get-encryption-key-wizard/get-encryption-key-wizard.component';
+import { ChatComponent } from './pages/chat/chat.component';
 
 @NgModule({ declarations: [
         AppComponent,
@@ -76,6 +77,7 @@ import { GetEncryptionKeyWizardComponent } from './pages/get-encryption-key-wiza
         PractitionerHistoryComponent,
         SetupEncryptionKeyComponent,
         GetEncryptionKeyWizardComponent,
+        ChatComponent,
     ],
     exports: [],
     bootstrap: [AppComponent],

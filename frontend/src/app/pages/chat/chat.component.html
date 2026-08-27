@@ -1,0 +1,54 @@
+<div class="main-chat-layout">
+  <div class="conversations-sidebar">
+    <button class="new-chat-button" (click)="newConversation()">+ New Chat</button>
+    <div class="conversation-list">
+      <div *ngFor="let conv of (conversations | async)"
+           class="conversation-item"
+           [ngClass]="{'active': (currentConversationId | async) === conv.id}"
+           (click)="selectConversation(conv.id)">
+        <span class="conversation-text">{{ conv.firstMessage | slice:0:50 }}{{ conv.firstMessage.length > 50 ? '…' : '' }}</span>
+        <button class="delete-conversation-item-button" aria-label="Delete conversation"
+                (click)="deleteConversation(conv.id); $event.stopPropagation();">
+          <img src="assets/icons/delete.svg" alt="Delete conversation">
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="chat-container">
+    <!--
+      Say what is actually going on. A chat that is unreachable, or one whose records have not been
+      indexed yet, otherwise presents as a model that answers "I don't have enough information" —
+      which sends the person looking for the wrong problem.
+    -->
+    <div *ngIf="(status | async) as s">
+      <div *ngIf="!s.available" class="chat-notice chat-notice-error">{{ s.reason }}</div>
+      <div *ngIf="s.available && s.indexing" class="chat-notice">
+        Preparing your records for the first time — answers will improve as this finishes.
+      </div>
+    </div>
+
+    <div class="messages-area" [ngClass]="{'empty-chat-messages-area': (messages | async)?.length === 0}">
+      <div *ngIf="(messages | async)?.length === 0" class="welcome-message">
+        <p>How can I help you today?</p>
+      </div>
+      <div *ngFor="let message of (messages | async)"
+           class="message-bubble"
+           [ngClass]="{'user-message': message.sender === 'user', 'bot-message': message.sender === 'bot', 'failed-message': message.failed}">
+        <p *ngIf="!message.pending">{{ message.text }}</p>
+        <p *ngIf="message.pending" class="typing-indicator"><span></span><span></span><span></span></p>
+      </div>
+    </div>
+    <div class="input-area">
+      <div class="textarea-wrapper">
+        <textarea placeholder="Type your message here..."
+                  aria-label="Ask a question about your records"
+                  [(ngModel)]="userMessage"
+                  [disabled]="(awaiting | async) === true"
+                  (keyup.enter)="sendMessage()"></textarea>
+        <button class="send-button" aria-label="Send" [disabled]="(awaiting | async) === true" (click)="sendMessage()">
+          <img src="assets/icons/send-message.svg" alt="Send">
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

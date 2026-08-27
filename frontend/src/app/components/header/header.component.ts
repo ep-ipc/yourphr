@@ -7,6 +7,7 @@ import {BackgroundJob} from '../../models/fasten/background-job';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {SupportRequest} from '../../models/fasten/support-request';
 import {environment} from '../../../environments/environment';
+import { ChatService } from '../../services/chat.service';
 import {versionInfo} from '../../../environments/versions';
 import {Subscription} from 'rxjs';
 import {ToastNotification, ToastType} from '../../models/fasten/toast';
@@ -44,6 +45,8 @@ export class HeaderComponent implements OnInit, OnDestroy {
   isDarkModeSubscription: Subscription = null
 
   is_environment_desktop: boolean = environment.environment_desktop
+  /** Whether to offer the Chat link at all — asked of the server, which knows if the model is reachable. */
+  chatEnabled: boolean = false
 
   isAdmin = false;
 
@@ -56,7 +59,8 @@ export class HeaderComponent implements OnInit, OnDestroy {
     private router: Router,
     private fastenApi: FastenApiService,
     private modalService: NgbModal,
-    private themeService: ThemeService) {
+    private themeService: ThemeService,
+    private chatService: ChatService) {
     }
 
   ngOnInit() {
@@ -64,6 +68,14 @@ export class HeaderComponent implements OnInit, OnDestroy {
     this.authService.GetCurrentUser()
       .then((claims) => this.current_user_claims = claims)
       .catch(() => this.current_user_claims = new UserRegisteredClaims())
+
+    // Chat (yourphr#594) is optional and may be configured but unreachable, so the nav asks the
+    // server rather than reading a flag. A failure just leaves the link off — the rest of the
+    // header must render regardless.
+    this.chatService.status().subscribe({
+      next: (status) => this.chatEnabled = status.available,
+      error: () => this.chatEnabled = false,
+    });
 
     this.authService.IsAdmin().then((isAdmin) => this.isAdmin = isAdmin);
 

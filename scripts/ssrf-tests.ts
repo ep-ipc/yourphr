@@ -130,6 +130,52 @@ async function main(): Promise<void> {
     obfuscated || 'NOTHING THROWN'
   );
 
+  // --- the operator-declared exemption (yourphr#594) ---
+  //
+  // A sidecar an operator deploys and names is reachable; everything else internal still is not.
+  // The risk this must not become is `allowInternal` by another name, so the checks below are as
+  // much about what STAYS refused as about what is now permitted.
+  console.log('\nnamed-host exemption\n');
+
+  const sidecar = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); });
+  await new Promise<void>((resolve) => sidecar.listen(0, '127.0.0.1', resolve));
+  const sidecarPort = (sidecar.address() as AddressInfo).port;
+
+  check('an exempted host passes URL validation', validateUrl('http://127.0.0.1:1234/x', false, new Set(['127.0.0.1'])).ok);
+  check('exemption is case-insensitive on the host', validateUrl('http://LocalHost:1234/x', false, new Set(['localhost'])).ok);
+  check('a DIFFERENT internal host is still refused', !validateUrl('http://10.0.0.5/x', false, new Set(['127.0.0.1'])).ok);
+  check('cloud metadata is still refused when something else was exempted', !validateUrl('http://169.254.169.254/latest/meta-data/', false, new Set(['typesense'])).ok);
+  check('an empty exemption set changes nothing', !validateUrl('http://127.0.0.1/x', false, new Set()).ok);
+
+  const exempted = new OutboundHttp({ allowHosts: ['127.0.0.1'] });
+  let reached = '';
+  try {
+    const response = await exempted.get(`http://127.0.0.1:${sidecarPort}/health`);
+    reached = `HTTP ${response.status}`;
+  } catch (err) {
+    reached = (err as Error).message;
+  }
+  check('a request to the exempted host actually connects', reached === 'HTTP 200', reached);
+
+  // The exemption names one host. Another loopback FORM is a different name, and must not inherit it.
+  let neighbour = '';
+  try {
+    await exempted.get(`http://[::1]:${sidecarPort}/health`);
+  } catch (err) {
+    neighbour = (err as Error).message;
+  }
+  check('a host that was NOT named stays refused on the same client', neighbour.includes(REFUSAL), neighbour || 'NOTHING THROWN');
+
+  // The guard is still on for everyone else: a default client cannot reach the same sidecar.
+  let unexempted = '';
+  try {
+    await new OutboundHttp().get(`http://127.0.0.1:${sidecarPort}/health`);
+  } catch (err) {
+    unexempted = (err as Error).message;
+  }
+  check('a client with no exemption cannot reach it', unexempted.includes(REFUSAL), unexempted || 'NOTHING THROWN');
+
+  sidecar.close();
   target.close();
   redirector.close();
 

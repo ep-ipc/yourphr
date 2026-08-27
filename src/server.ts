@@ -807,6 +807,48 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // --- chat (yourphr#594): ask a question about your own records ---
+      //
+      // Every one of these goes through the manager with the request context, which is the whole
+      // point of the port: the retrieval engine's key stays here, and the caller's identity is what
+      // scopes the search. The Go stack answered the equivalent from the browser with a key it had
+      // published on an unauthenticated endpoint, and no owner filter at all.
+      {
+        const chat = engine.managers.chat;
+        if (url.pathname === '/api/secure/chat/status' && req.method === 'GET') {
+          send(res, 200, {success: true, data: await chat.status(ctx)});
+          return;
+        }
+        if (url.pathname === '/api/secure/chat' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          const question = typeof body?.['message'] === 'string' ? body['message'] : '';
+          const conversationId = typeof body?.['conversation_id'] === 'string' && body['conversation_id'] !== '' ? body['conversation_id'] : undefined;
+          send(res, 200, {success: true, data: await chat.ask(ctx, question, conversationId)});
+          return;
+        }
+        if (url.pathname === '/api/secure/chat/conversations' && req.method === 'GET') {
+          send(res, 200, {success: true, data: await chat.conversations(ctx)});
+          return;
+        }
+        if (url.pathname === '/api/secure/chat/reindex' && req.method === 'POST') {
+          send(res, 200, {success: true, data: await chat.reindex(ctx, {force: true})});
+          return;
+        }
+        const conversation = /^\/api\/secure\/chat\/conversations\/([^/]+)$/.exec(url.pathname);
+        if (conversation) {
+          const id = decodeURIComponent(conversation[1]!);
+          if (req.method === 'GET') {
+            send(res, 200, {success: true, data: await chat.messages(ctx, id)});
+            return;
+          }
+          if (req.method === 'DELETE') {
+            const forgotten = await chat.forget(ctx, id);
+            send(res, forgotten ? 200 : 404, forgotten ? {success: true, data: true} : {success: false, error: 'conversation not found'});
+            return;
+          }
+        }
+      }
+
       if (url.pathname === '/api/secure/medications/reconciled' && req.method === 'GET') {
         send(res, 200, {success: true, data: await engine.managers.records.medications(ctx)});
         return;

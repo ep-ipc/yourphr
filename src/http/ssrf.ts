@@ -35,6 +35,33 @@ import { Agent as HttpsAgent } from 'node:https';
 /** Message every refusal carries, so callers and tests can recognise the guard's own decision. */
 export const REFUSAL = 'refusing to connect to an internal address';
 
+/** No host exempted — the normal state, and what every default argument below means. */
+const EMPTY_HOSTS: ReadonlySet<string> = new Set<string>();
+
+/**
+ * Hosts an OPERATOR named in configuration, exempted from the internal-address refusal.
+ *
+ * This exists for one shape of dependency the guard would otherwise make impossible: a sidecar the
+ * operator deploys and addresses by name on their own network — `http://typesense:8108` beside the
+ * app in the same compose file (yourphr#594's chat). Refusing that is not security, it is the guard
+ * being wrong about who chose the address.
+ *
+ * Three properties keep this from becoming the hole `allowInternal` would be:
+ *
+ *   - It is a SET OF NAMED HOSTS, not a switch. Exempting `typesense` says nothing about
+ *     169.254.169.254, and a provider whose configured URI is attacker-influenced still cannot
+ *     reach anything but the host the operator wrote down.
+ *   - It is supplied ONCE, when the capability is constructed from configuration, and stripped from
+ *     the per-request options (see `RequestOptions` in ./index.ts). A call site cannot widen it.
+ *   - It is matched on the HOSTNAME the URL carries, before resolution, so it exempts the name the
+ *     operator declared rather than whatever that name currently resolves to. A redirect to a
+ *     different internal host is still refused.
+ */
+export function isAllowedHost(host: string, allowHosts: ReadonlySet<string>): boolean {
+  if (allowHosts.size === 0) return false;
+  return allowHosts.has(host.toLowerCase().replace(/\.$/, ''));
+}
+
 /**
  * Hostnames that never leave the machine, refused by name before any resolution.
  *
@@ -116,7 +143,7 @@ export function isBlockedIp(address: string): boolean {
  * because a name with several A records must not pass on the strength of one public answer while
  * another points inward.
  */
-export function guardedLookup(allowInternal = false): typeof dnsLookup {
+export function guardedLookup(allowInternal = false, allowHosts: ReadonlySet<string> = EMPTY_HOSTS): typeof dnsLookup {
   const guarded = (hostname: string, options: unknown, callback: unknown): void => {
     // Node calls lookup(hostname, options, cb) or lookup(hostname, cb).
     const cb = (typeof options === 'function' ? options : callback) as (
@@ -126,7 +153,9 @@ export function guardedLookup(allowInternal = false): typeof dnsLookup {
     ) => void;
     const opts = (typeof options === 'function' ? {} : options ?? {}) as Record<string, unknown>;
 
-    if (!allowInternal && isBlockedHostname(hostname)) {
+    const exempt = allowInternal || isAllowedHost(hostname, allowHosts);
+
+    if (!exempt && isBlockedHostname(hostname)) {
       cb(Object.assign(new Error(`${REFUSAL}: ${hostname}`), { code: 'ESSRFBLOCKED' }));
       return;
     }
@@ -137,7 +166,7 @@ export function guardedLookup(allowInternal = false): typeof dnsLookup {
         return;
       }
       const resolved = addresses as LookupAddress[];
-      if (!allowInternal) {
+      if (!exempt) {
         const blocked = resolved.find((a) => isBlockedIp(a.address));
         if (blocked) {
           cb(
@@ -169,8 +198,8 @@ export interface GuardedAgents {
 }
 
 /** Agents whose every connection goes through the guarded lookup. */
-export function guardedAgents(allowInternal = false): GuardedAgents {
-  const options = { lookup: guardedLookup(allowInternal), keepAlive: false };
+export function guardedAgents(allowInternal = false, allowHosts: ReadonlySet<string> = EMPTY_HOSTS): GuardedAgents {
+  const options = { lookup: guardedLookup(allowInternal, allowHosts), keepAlive: false };
   return { http: new HttpAgent(options), https: new HttpsAgent(options) };
 }
 
@@ -179,7 +208,7 @@ export function guardedAgents(allowInternal = false): GuardedAgents {
  * operator typing a bad address gets a clear message instead of a connection error, and it
  * deliberately refuses an unparseable URL rather than passing it along.
  */
-export function validateUrl(raw: string, allowInternal = false): { ok: true; url: URL } | { ok: false; reason: string } {
+export function validateUrl(raw: string, allowInternal = false, allowHosts: ReadonlySet<string> = EMPTY_HOSTS): { ok: true; url: URL } | { ok: false; reason: string } {
   let url: URL;
   try {
     url = new URL(raw);
@@ -194,6 +223,9 @@ export function validateUrl(raw: string, allowInternal = false): { ok: true; url
   }
   // URL puts IPv6 literals in brackets.
   const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (isAllowedHost(host, allowHosts)) {
+    return { ok: true, url };
+  }
   if (isBlockedHostname(host)) {
     return { ok: false, reason: `${REFUSAL}: ${host}` };
   }

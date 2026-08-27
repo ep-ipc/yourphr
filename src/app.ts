@@ -46,6 +46,9 @@ import { SqliteJobsProvider } from './framework/providers/SqliteJobsProvider.js'
 import { NullSourceClientProvider, type BaseSourceClientProvider } from './app/providers/BaseSourceClientProvider.js';
 import { NullGlossaryProvider, type BaseGlossaryProvider } from './app/providers/BaseGlossaryProvider.js';
 import { GlossaryManager } from './app/managers/GlossaryManager.js';
+import { ChatManager } from './app/managers/ChatManager.js';
+import { NullChatProvider, type BaseChatProvider } from './app/providers/BaseChatProvider.js';
+import { SqliteChatConversations } from './app/providers/SqliteChatConversations.js';
 import { DemoManager } from './app/managers/DemoManager.js';
 import { SqliteGlossaryCache } from './app/providers/SqliteGlossaryCache.js';
 export { sourceShape, backgroundJobShape };
@@ -59,6 +62,7 @@ import { FilesystemBackupProvider } from './framework/providers/FilesystemBackup
 import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
 import { BACKUP_SUFFIX, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
+import { envNameFor } from './config/index.js';
 import { createYourPhrServer, toResourceFhir } from './server.js';
 import { SqliteFhirRepository } from './SqliteFhirRepository.js';
 import { randomBytes } from 'node:crypto';
@@ -198,6 +202,58 @@ async function glossaryProviderFor(name: string, env: Record<string, string | un
   throw new Error(`glossary.provider: unknown provider '${name}' (medlineplus or null)`);
 }
 
+/**
+ * Chat (yourphr#594): 'typesense' binds the sidecar and the operator's model; 'null' is inert and
+ * says so. Optional capability with an inert default, and a dynamic import so an instance bound to
+ * 'null' never loads the path that reaches a language model at all.
+ *
+ * The settings it needs are checked HERE, before the provider is built, because the alternative is
+ * what the Go version did: an empty api-key produced a client that retried a ping thirty times and
+ * then killed the process. A missing setting is an operator's typo and deserves a sentence, not a
+ * two-minute timeout.
+ */
+async function chatProviderFor(
+  name: string,
+  config: ConfigurationManager,
+  conversations: SqliteChatConversations,
+  env: Record<string, string | undefined>
+): Promise<BaseChatProvider> {
+  if (name === 'null') return new NullChatProvider();
+  if (name !== 'typesense') throw new Error(`chat.provider: unknown provider '${name}' (typesense or null)`);
+
+  const required = ['yourphr.chat.typesense.uri', 'yourphr.chat.typesense.api-key', 'yourphr.chat.model.name', 'yourphr.chat.model.vllm-url'];
+  const missing = required.filter((key) => config.getString(key).trim() === '');
+  if (missing.length > 0) {
+    throw new Error(`chat.provider = typesense, but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} empty — set ${missing.map((k) => envNameFor(k)).join(', ')} or bind chat.provider = null`);
+  }
+  const modelName = config.getString('yourphr.chat.model.name');
+  if (!modelName.startsWith('vllm/')) {
+    // Without the prefix Typesense calls OpenAI's hosted API instead of the operator's endpoint —
+    // which means the records would leave the building. Refused at boot, not discovered later.
+    throw new Error(`chat.model.name must start with 'vllm/' (got '${modelName}') — the prefix is what sends the request to your own endpoint instead of OpenAI's hosted API`);
+  }
+
+  const { TypesenseChatProvider } = await import('./app/providers/TypesenseChatProvider.js');
+  return new TypesenseChatProvider(
+    {
+      uri: config.getString('yourphr.chat.typesense.uri'),
+      apiKey: config.getString('yourphr.chat.typesense.api-key'),
+      collection: config.getString('yourphr.chat.typesense.collection'),
+      conversationCollection: config.getString('yourphr.chat.typesense.conversation-collection'),
+      model: {
+        id: config.getString('yourphr.chat.model.id'),
+        name: modelName,
+        vllmUrl: config.getString('yourphr.chat.model.vllm-url'),
+        maxBytes: config.getInt('yourphr.chat.model.max-bytes'),
+      },
+      maxRecords: config.getInt('yourphr.chat.retrieval.max-records'),
+      allowInternal: env['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
+      log: (line) => appLog.info(line),
+    },
+    conversations
+  );
+}
+
 /** The source-client provider configuration names: 'smart' loads the SMART client; 'null' loads nothing; anything else refuses to boot. */
 async function sourceClientFor(name: string, env: Record<string, string | undefined>): Promise<BaseSourceClientProvider> {
   if (name === 'null') return new NullSourceClientProvider();
@@ -301,11 +357,20 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // Demo mode (yourphr#643): inert unless this instance opted in. Registered always, so the
   // connect guard is a manager call rather than an `if` at every door that could forget one.
   engine.register('demo', new DemoManager(engine, (line) => appLog.info(line)));
+  // Chat (yourphr#594): registered always, inert unless an operator bound a provider — so the
+  // route is a manager call that refuses with a reason, not an `if` at the door that could forget one.
+  const chatConversations = new SqliteChatConversations(db);
+  engine.register('chat', new ChatManager(engine, await chatProviderFor(config.getString('yourphr.chat.provider'), config, chatConversations, env), (line) => appLog.info(line)));
   await engine.initialize();
   appLog.info(`engine: ${engine.registered.join(' -> ')}`);
   const { records, sources, jobs, catalog, audit, backups } = engine.managers;
   // The Records manager names a source for the records that carry its id — asked of the Sources door.
   records.sourceDisplay = (sourceId) => sources.displayOf(sourceId);
+  // Every record written also reaches chat's retrieval index (yourphr#594). Deliberately not
+  // awaited: the sync pass must not wait on a sidecar, and ChatManager.index() already swallows and
+  // logs its own failures rather than letting one reach the writer.
+  const chat = engine.managers.chat;
+  records.onRecordWritten = (userId, record) => { void chat.index(userId, record); };
 
   return {
     config, db, dbKey, users, sessions, catalog, sources, jobs, events, audit, backups, engine, records, recordsProvider,

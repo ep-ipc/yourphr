@@ -59,6 +59,15 @@ export class RecordsManager extends BaseManager {
   override readonly dependsOn = [] as const;
   /** Maps a source id to its display name; '' when unknown — never invent. Set by the app until Sources is a manager. */
   sourceDisplay: (sourceId: string) => Promise<string> | string = () => '';
+  /**
+   * Notified after a record is written, so an OPTIONAL capability can follow the write without
+   * this manager knowing what it is (yourphr#594: chat's retrieval index). The same seam shape as
+   * `sourceDisplay` above, and set the same way — in the composition root, never by a route.
+   *
+   * Never awaited and never allowed to throw into the writer: an index is a convenience, and a
+   * sync that lost records because one was unreachable is a far worse outcome than a stale index.
+   */
+  onRecordWritten: (userId: string, record: StoredRecord) => void = () => undefined;
 
   constructor(engine: Engine, private readonly provider: BaseRecordsProvider, private readonly favoritesProvider?: BaseFavoritesProvider) {
     super(engine);
@@ -111,6 +120,17 @@ export class RecordsManager extends BaseManager {
 
   async typesHeld(ctx: ApiContext): Promise<string[]> {
     return this.provider.typesHeld(this.who(ctx));
+  }
+
+  /**
+   * Everything the caller holds, as stored. For a capability that must process the records
+   * themselves rather than a view of them — chat's backfill (yourphr#594) is the only caller.
+   *
+   * Deliberately NOT a route: this is the whole account in one array, which is the right shape for
+   * a one-off backfill and the wrong shape for anything a browser asks for.
+   */
+  async storedFor(ctx: ApiContext, filter: { resourceType?: string; sourceId?: string } = {}): Promise<StoredRecord[]> {
+    return this.provider.list(this.who(ctx), filter);
   }
 
   /** The dashboard's recent activity: newest records across every type, Go's list-item shape. */
@@ -349,7 +369,26 @@ export class RecordsManager extends BaseManager {
 
   /** A writer bound to the caller's account and one source — what a sync pass or an import writes through. */
   writer(ctx: ApiContext, sourceId: string): RecordsWriter {
-    return this.provider.writer(this.who(ctx), sourceId);
+    const userId = this.who(ctx);
+    const inner = this.provider.writer(userId, sourceId);
+    return {
+      exists: (resourceType, id) => inner.exists(resourceType, id),
+      upsert: async (resource) => {
+        const outcome = await inner.upsert(resource);
+        try {
+          this.onRecordWritten(userId, {
+            resourceType: String(resource.resourceType),
+            id: String(resource.id ?? ''),
+            sourceId,
+            lastUpdated: resource.meta?.lastUpdated ?? new Date().toISOString(),
+            resource,
+          });
+        } catch {
+          // The observer is a side channel. It does not get to fail a write.
+        }
+        return outcome;
+      },
+    };
   }
 
   async exists(ctx: ApiContext, resourceType: string, id: string): Promise<boolean> {

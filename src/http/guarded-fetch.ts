@@ -23,7 +23,13 @@ export interface GuardedFetchOptions {
   headers?: Record<string, string>;
   /** Test-only escape hatch, exactly as the Go side has. Never set in production. */
   allowInternal?: boolean;
-  method?: 'GET' | 'POST';
+  /**
+   * Hostnames an operator named in configuration, exempted from the internal-address refusal — a
+   * sidecar on their own network. Supplied by the capability, never by a call site; see
+   * `isAllowedHost` in ./ssrf.ts for why this is a set of names and not a switch.
+   */
+  allowHosts?: ReadonlySet<string>;
+  method?: 'GET' | 'POST' | 'DELETE';
   /** Sent form-encoded. Used by the OAuth token endpoint, which is why this exists at all. */
   form?: Record<string, string>;
   /** Sent as application/json. Used by RFC 7591 dynamic client registration (yourphr#581). */
@@ -47,13 +53,14 @@ export async function guardedFetch(target: string, options: GuardedFetchOptions 
   const maxBytes = options.maxBytes ?? DEFAULTS.maxBytes;
   const timeoutMs = options.timeoutMs ?? DEFAULTS.timeoutMs;
   const allowInternal = options.allowInternal ?? false;
-  const agents = guardedAgents(allowInternal);
+  const allowHosts = options.allowHosts ?? new Set<string>();
+  const agents = guardedAgents(allowInternal, allowHosts);
 
   const chain: string[] = [];
   let current = target;
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    const checked = validateUrl(current, allowInternal);
+    const checked = validateUrl(current, allowInternal, allowHosts);
     if (!checked.ok) {
       throw new Error(checked.reason);
     }
@@ -99,11 +106,13 @@ export async function guardedFetch(target: string, options: GuardedFetchOptions 
     });
 
     const location = response.headers.location;
-    // A POST is never replayed to a redirect target. The token endpoint carries a client secret and
-    // an authorization code; following a redirect would hand both to wherever the response pointed.
-    if (method === 'POST' && response.statusCode && response.statusCode >= 300 && response.statusCode < 400) {
+    // A request that is not a GET is never replayed to a redirect target. The token endpoint carries
+    // a client secret and an authorization code; following a redirect would hand both to wherever
+    // the response pointed. The same reasoning covers DELETE, where replaying to an unverified
+    // target means destroying something somewhere nobody chose.
+    if (method !== 'GET' && response.statusCode && response.statusCode >= 300 && response.statusCode < 400) {
       response.resume();
-      throw new Error(`refusing to follow a redirect from a POST to ${url.href} — credentials would be replayed`);
+      throw new Error(`refusing to follow a redirect from a ${method} to ${url.href} — credentials would be replayed`);
     }
     if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && location) {
       response.resume(); // drain, so the socket is released

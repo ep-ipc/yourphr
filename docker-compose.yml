@@ -56,3 +56,32 @@ services:
     restart: unless-stopped
     expose:
       - "8080"
+
+  # Typesense powers the optional CHAT feature (yourphr#594) — `yourphr.chat.provider`, OFF by
+  # default. Present here so enabling chat is a matter of configuration rather than editing compose;
+  # unused, it costs an idle container.
+  #
+  # Don't want it? `docker compose up --scale typesense=0`, or leave YOURPHR_CHAT_PROVIDER unset.
+  #
+  # INTERNAL ONLY — `expose`, never `ports`. This is the change that matters versus the Go
+  # implementation this replaces, which PUBLISHED 8108 because the browser talked to Typesense
+  # directly with an API key that `GET /api/settings` handed out unauthenticated. Anyone who could
+  # reach the port could read the indexed records. Now only `fasten` speaks to it, at
+  # http://typesense:8108, and the key never leaves the server — so the port has no reason to be
+  # reachable from anywhere else, and is not.
+  #
+  # TYPESENSE_API_KEY and YOURPHR_CHAT_TYPESENSE_API_KEY are the same value by construction.
+  # Full setup: docs/deployment/chat.md
+  typesense:
+    image: typesense/typesense:29.0
+    restart: unless-stopped
+    expose:
+      - "8108"
+    volumes:
+      - typesense-data:/data
+    environment:
+      - TYPESENSE_API_KEY=${YOURPHR_CHAT_TYPESENSE_API_KEY:-changeme}
+      - TYPESENSE_DATA_DIR=/data
+
+volumes:
+  typesense-data:
