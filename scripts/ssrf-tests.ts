@@ -144,7 +144,7 @@ async function main(): Promise<void> {
   check('an exempted host passes URL validation', validateUrl('http://127.0.0.1:1234/x', false, new Set(['127.0.0.1'])).ok);
   check('exemption is case-insensitive on the host', validateUrl('http://LocalHost:1234/x', false, new Set(['localhost'])).ok);
   check('a DIFFERENT internal host is still refused', !validateUrl('http://10.0.0.5/x', false, new Set(['127.0.0.1'])).ok);
-  check('cloud metadata is still refused when something else was exempted', !validateUrl('http://169.254.169.254/latest/meta-data/', false, new Set(['typesense'])).ok);
+  check('cloud metadata is still refused when something else was exempted', !validateUrl('http://169.254.169.254/latest/meta-data/', false, new Set(['ollama.lan'])).ok);
   check('an empty exemption set changes nothing', !validateUrl('http://127.0.0.1/x', false, new Set()).ok);
 
   const exempted = new OutboundHttp({ allowHosts: ['127.0.0.1'] });

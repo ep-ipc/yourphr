@@ -1,14 +1,15 @@
 /**
  * Chat (yourphr#594) — the browser's side of it.
  *
- * This replaces the Go stack's `TypesenseService`, which held the search engine's API key in the
- * browser (handed to it in plaintext by the unauthenticated `GET /api/settings`) and queried the
- * sidecar directly, with no owner filter on either the retrieval or the conversation list. So on
- * an instance with more than one account, one member's question could retrieve another member's
- * records.
+ * The browser talks to this instance and nothing else. It holds no search client and no key, and
+ * the session cookie is what identifies the asker — the same way every other call on this page
+ * works.
  *
- * Now the browser talks to this instance and nothing else. The key stays on the server, and the
- * session cookie is what identifies the asker — the same way every other call on this page works.
+ * That is worth stating because the Go implementation this replaces did the opposite: the browser
+ * held a search engine's API key, handed to it in plaintext by an unauthenticated endpoint, and
+ * queried that engine directly with no owner filter on either the retrieval or the conversation
+ * list. On an instance with more than one account, one member's question could reach another
+ * member's records.
  */
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -18,13 +19,11 @@ import { environment } from '../../environments/environment';
 import { GetEndpointAbsolutePath } from '../../lib/utils/endpoint_absolute_path';
 import { ResponseWrapper } from '../models/response-wrapper';
 
-/** Whether chat can answer at all, and whether this account's records are indexed yet. */
+/** Whether chat can answer at all. There is no index, so there is nothing else to report. */
 export interface ChatStatus {
   available: boolean;
   /** Why not, when `available` is false. Shown to the person rather than swallowed. */
   reason: string;
-  indexed: number;
-  indexing: boolean;
 }
 
 export interface ChatCitation {
@@ -60,7 +59,7 @@ export class ChatService {
     return `${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/chat`;
   }
 
-  /** Asked when the page opens: it also starts the one-off backfill for an account with nothing indexed. */
+  /** Asked when the page opens, and by the nav before it offers a Chat link at all. */
   status(): Observable<ChatStatus> {
     return this._httpClient.get<ResponseWrapper>(`${this.base()}/status`).pipe(map((r) => r.data as ChatStatus));
   }

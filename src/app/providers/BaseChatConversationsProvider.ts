@@ -1,21 +1,19 @@
 /**
  * Who owns which conversation (yourphr#594).
  *
- * This exists because of one thing the retrieval engine cannot do. Typesense writes the transcript
- * itself, into a collection whose schema it owns — `conversation_id`, `model_id`, `timestamp`,
- * `role`, `message` — and there is no field on it for an account. So the owner filter that scopes
- * every other read (`filter_by: user_id:=…`) has nothing to bind to on the transcript, and the Go
- * version simply did not scope it: every account's chat page listed every account's conversations.
+ * It is a table of its own, rather than a column on something else, because of where this started.
+ * An earlier design had a search-engine sidecar run the conversation and keep the transcript in a
+ * collection whose schema it owned — no field on it for an account — so there was nothing for an
+ * owner filter to bind to, and the version that shipped simply did not scope it: every account's
+ * chat page listed every account's conversations.
  *
  * The ownership map is kept here instead, in the app database, and checked before any transcript is
  * read or deleted.
  *
- * TRANSCRIPTS THEMSELVES depend on the provider. A retrieval engine that runs the conversation
- * writes and keeps its own (`TypesenseChatProvider`), and for that one this is ownership only — an
- * account name, an opaque id and a timestamp, nothing that is PHI. A provider that runs the
- * conversation ITSELF (`LocalChatProvider`) has nowhere else to put the turns, and stores them here
- * through `append`/`transcript` below — in the app database, which is encrypted at rest, rather
- * than in a sidecar's unencrypted volume.
+ * TRANSCRIPTS live here too, through `append`/`transcript` below — in the app database, which is
+ * encrypted at rest along with everything else. The questions people ask about their own bodies are
+ * PHI, and an earlier design that let a search-engine sidecar keep them in its own unencrypted
+ * volume is exactly what this avoids.
  */
 
 /** One conversation an account owns. */

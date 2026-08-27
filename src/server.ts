@@ -830,10 +830,6 @@ export function createYourPhrServer(options: ServerOptions) {
           send(res, 200, {success: true, data: await chat.conversations(ctx)});
           return;
         }
-        if (url.pathname === '/api/secure/chat/reindex' && req.method === 'POST') {
-          send(res, 200, {success: true, data: await chat.reindex(ctx, {force: true})});
-          return;
-        }
         const conversation = /^\/api\/secure\/chat\/conversations\/([^/]+)$/.exec(url.pathname);
         if (conversation) {
           const id = decodeURIComponent(conversation[1]!);

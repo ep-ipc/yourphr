@@ -7,20 +7,6 @@ language-model endpoint __you__ run. Nothing here reaches a hosted model.
 __Off by default__ (`yourphr.chat.provider: null`). A stock `docker compose up -d` with no `.env`
 never sends anything to a model.
 
-## Two providers
-
-| | `local` (recommended) | `typesense` |
-|---|---|---|
-| Extra service | none | a sidecar container |
-| Where it searches | your records, where they already are | a second copy, in the sidecar |
-| Indexing | none — a record is answerable the moment it is written | backfill, then index-on-write |
-| Transcripts | the app database, encrypted at rest | the sidecar's volume, __not__ encrypted |
-| Prompt changes | take effect on the next question | need a new `model.id` (see below) |
-| Retrieval | full text, with the question expanded into keywords by your model | vector embeddings |
-
-`local` is the native implementation. `typesense` is the port of the Go stack's design and survives
-for anyone already running it; it is not the one to choose for a new install.
-
 ## Required `.env` values
 
 ```
@@ -34,25 +20,20 @@ Notes on each:
 - __`YOURPHR_CHAT_MODEL_URL`__ — any OpenAI-compatible chat-completions endpoint. For Ollama use the
   bare URL, `http://<host>:11434`, with __no__ `/v1` suffix. If Ollama runs on the same machine as
   Docker Desktop, use `http://host.docker.internal:11434`.
-- __`YOURPHR_CHAT_MODEL_NAME`__ — the model as your endpoint names it, with no prefix. (The `vllm/`
-  prefix the `typesense` provider needs is that engine's own convention and is added internally.)
+- __`YOURPHR_CHAT_MODEL_NAME`__ — the model as your endpoint names it, verbatim and with no prefix.
 - __Load the model into memory first.__ `ollama pull` only downloads it. Ollama loads a model on its
   first inference request and unloads it after a few minutes idle, so the first question after a
   restart can time out while it loads. Run `ollama run <model-name>` once on the model host; you can
   `/bye` straight out of the prompt and it stays loaded.
 - Restart `fasten` after changing any of these.
 
-For the `typesense` provider, additionally set `YOURPHR_CHAT_PROVIDER=typesense` and
-`YOURPHR_CHAT_TYPESENSE_API_KEY` (which also becomes the sidecar's own `TYPESENSE_API_KEY`, so the
-two cannot drift apart).
+## How retrieval works
 
-## How retrieval works without embeddings
+Chat searches the same full-text index the dashboard's own search box uses, over the records where
+they already are. There is no second copy of your records anywhere, and nothing to index.
 
-The sidecar embedded every record, so "what am I taking for my fits?" could reach a clonazepam
-prescription that never mentions fits. Full-text search cannot do that on its own — it matches
-words.
-
-So `local` asks your model to turn the question into search terms first, then searches each term
+Full-text search matches words, though, and a question rarely uses the record's words: "what am I
+taking for my fits?" shares nothing with a clonazepam prescription. So `local` asks your model to turn the question into search terms first, then searches each term
 separately and ranks a record by how many terms it matched. No extra storage, and it handles the
 case above correctly.
 
@@ -92,62 +73,40 @@ A small model degrades as context grows: it first gets noisy, then refuses, then
 27B model improves with the extra material. Raise this only alongside a model that can use it, and
 check that answers actually improve.
 
-Both columns were measured on the `typesense` provider. The shape of the curve is a property of the
-model rather than of the retrieval, so it carries over — but `local` ranks by keyword coverage
-rather than vector distance, so the exact record at each depth differs, and the same 27B answering
-the vaccination question returned all six vaccines under `local` against five under `typesense`.
+Those columns were measured against an earlier, embedding-based retrieval. The shape of the curve is
+a property of the model rather than of the retrieval, so it carries over — but ranking by keyword
+coverage surfaces a different record at each depth, so treat the numbers as the shape of the
+trade-off rather than as exact thresholds.
 
 ## Context budget
 
 `yourphr.chat.model.max-bytes` (env `YOURPHR_CHAT_MODEL_MAX_BYTES`, shipped default `57344`) caps how
-much text one answer may be built from. __What exactly it caps differs by provider:__
-
-- __`local`__ — the retrieved record text only. The system prompt and the conversation history are
-  not counted against it, and are not truncated by it.
-- __`typesense`__ — everything the engine assembles per turn: system prompt, retrieved records and
-  history together.
+much __retrieved record text__ one answer may be built from. The system prompt and the conversation
+history are not counted against it and are not truncated by it.
 
 A small budget truncates the medical context the model actually sees and it answers from less.
 `28672` was the Go default; `57344` measured noticeably better — fewer "I don't have enough
 information" answers, and answers that referenced more of the imported records. Raise it further if
 your model's own context window and the host's memory allow.
 
-Note that on `local` this is a second, independent cap alongside
+This is a second, independent cap alongside
 `yourphr.chat.retrieval.max-records` below: whichever is reached first is what stops the context
 growing.
 
-## The create-once model (`typesense` only)
+## What chat can and cannot see
 
-Typesense freezes the system prompt, the endpoint and `max_bytes` into a __conversation model__ when
-it first creates one, and later edits do nothing to a model that already exists. So on an instance
-that has already run chat, changing any `yourphr.chat.model.*` value also means bumping
-`yourphr.chat.model.id` — otherwise the old settings stay in force and nothing says so.
+A record is answerable the moment it is written. There is no index to fill, no backfill to wait for,
+and nothing that can go stale — retrieval reads the record store directly, through the same door the
+rest of the app uses.
 
-The `local` provider has no such trap: its prompt is source, and an edit applies to the next
-question.
-
-## Indexing (`typesense` only)
-
-The sidecar keeps its own copy of your records, so a record has to be indexed before it can be part
-of an answer.
-
-- __New and re-synced records__ are indexed as they are written.
-- __Records imported before chat was switched on__ are backfilled once, in the background, the first
-  time the chat page is opened. While it runs the page says so; answers improve as it finishes.
-- To force a full re-index of your own records: `POST /api/secure/chat/reindex`.
-
-The `local` provider has no index, nothing to backfill, and cannot go stale — it reads the records
-where they are, so a record is answerable the moment it is written.
-
-Neither provider lets __billing__ into an answer: `Claim`, `ExplanationOfBenefit`, `Coverage` and
-friends are administrative, not clinical. `typesense` keeps them out of its index; `local`, which
-has no index, filters them out of retrieval. In one Synthea bundle they were 10,917 of roughly 20,000 indexed
-characters — more than half — against 193 characters for all three of the patient's diagnoses, and
-they crowded real records out of every answer.
+__Billing is excluded.__ `Claim`, `ExplanationOfBenefit`, `Coverage` and friends are administrative,
+not clinical. In one Synthea bundle they were 10,917 of roughly 20,000 characters — more than half —
+against 193 characters for all three of the patient's diagnoses, and they crowded the real records
+out of every answer.
 
 ## Do not put an example date in the system prompt
 
-Worth knowing if you ever edit the prompt. The Go implementation illustrated its date instruction
+Worth knowing if you ever edit the prompt. An earlier version illustrated its date instruction
 with a literal example — *"convert them into human-readable date formats (e.g.,'March 3, 2019')"*.
 Asked when a medication was prescribed, a 27B model answered *"around March 3, 2019"*. The real date
 was 21 May 2019. It had taken the date out of the __system prompt__ and presented it as a fact about
@@ -161,48 +120,40 @@ tells the model never to supply a date that is not in the context.
 
 This is where the TypeScript implementation deliberately departs from the Go one it replaces.
 
-In the Go stack the __browser__ talked to Typesense directly. `GET /api/settings` was unauthenticated
-and returned `search.api_key` in plaintext, compose had to publish port `8108` so the browser could
+In the Go stack the __browser__ talked to the search engine directly. An unauthenticated endpoint
+returned that engine's API key in plaintext, compose had to publish its port so the browser could
 reach it, and neither the retrieval nor the conversation list carried an owner filter. Anyone who
-could reach that port could read the indexed records, and on an instance with more than one account
+could reach the port could read the indexed records, and on an instance with more than one account
 a member's question could retrieve another member's records.
 
-Here, for both providers:
+Here:
 
 - The browser has no search client and no key. The chat page calls `/api/secure/chat`, and the
-  caller's identity comes from the session.
-- Retrieval is scoped to the asking account, and only that account. `local` passes the caller to the
-  Records door, which is scoped by construction; `typesense` adds `filter_by: user_id:=<caller>`,
-  with the account name quoted so it cannot rewrite the clause.
-- A conversation belongs to one account. Ownership is recorded in the app database
-  (`chat_conversations`) and checked before any transcript is read, continued or deleted.
+  caller's identity comes from the session — no endpoint accepts an account name.
+- Retrieval is scoped to the asking account by passing the caller to the Records door, which is
+  scoped by construction.
+- A conversation belongs to exactly one account. Ownership lives in the app database
+  (`chat_conversations`), and both reading a transcript and writing to one filter on it __in the
+  query__ rather than behind a check a future caller could forget.
+- Transcripts are in the app database, encrypted at rest with everything else. The questions people
+  ask about their own bodies are PHI, and an earlier design that let a sidecar keep them in its own
+  unencrypted volume is exactly what this avoids.
 
-And for `typesense` specifically: the sidecar is __`expose`d, never published__ — only `fasten`
-talks to it, at `http://typesense:8108`.
-
-__Where the transcripts live differs, and it matters.__ Under `local` they are in the app database,
-encrypted at rest with everything else. Under `typesense` the engine writes them itself, into the
-`typesense-data` volume, which is __not__ encrypted. Treat that volume as holding health
-information, because it does — the questions people ask about their own bodies are PHI.
+Verified end to end with two accounts holding different patients' records: each asked about the
+other's distinctive conditions and medications by name and got nothing, including under a
+prompt-injection attempt naming the other patient; reading, continuing and deleting another
+account's conversation are all refused.
 
 ## Outbound access
 
-The SSRF guard refuses connections to internal addresses, which is what a self-hosted model endpoint
-and a sidecar both are. Chat is therefore granted a __named-host exemption__ — but only for the one
-host it actually connects to, which is not the same host under each provider:
-
-- __`local`__ exempts `yourphr.chat.model.url`. It calls the model itself.
-- __`typesense`__ exempts `yourphr.chat.typesense.uri`, and __not__ the model URL: this instance
-  never connects to the model under that provider. The sidecar does, and it is not bound by this
-  guard — which is worth knowing, because it means the model endpoint has to be reachable from the
-  `typesense` container rather than from `fasten`.
-
-Nothing else is exempted: cloud metadata, other internal hosts, and any redirect away from the named
-host all stay refused. See `isAllowedHost` in `src/http/ssrf.ts`.
+The SSRF guard refuses connections to internal addresses, which a self-hosted model endpoint is.
+Chat is therefore granted a __named-host exemption__ for exactly one host: the hostname in
+`yourphr.chat.model.url`. Nothing else — cloud metadata, other internal hosts, and any redirect away
+from that host all stay refused. See `isAllowedHost` in `src/http/ssrf.ts`.
 
 ## Turning it off
 
 Unset `YOURPHR_CHAT_PROVIDER` (or set it to `null`) and restart. The chat page and its nav link
-disappear. On `typesense`, `docker compose up --scale typesense=0` also stops the sidecar; on
-`local` there was never anything to stop. Nothing else is affected: records, sources, the dashboard
-and the dashboard's own full-text search do not use any of this.
+disappear, and nothing reaches a model. There is no service to stop, because there never was one.
+Nothing else is affected: records, sources, the dashboard and the dashboard's own full-text search
+do not use any of this.

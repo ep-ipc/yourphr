@@ -2,33 +2,31 @@
  * Chat with no sidecar (yourphr#594): retrieval through the Records door, the prompt assembled here,
  * one call to the operator's own model, transcripts in the app database.
  *
- * This is the native implementation. `TypesenseChatProvider` beside it is the port of the Go stack's
- * design, where a search engine held a second copy of every record, embedded it, assembled the
- * prompt and called the model on our behalf. Everything that design cost is gone here:
+ * This replaced an earlier design, carried over from the Go stack, in which a search-engine sidecar
+ * held a second copy of every record, embedded it, assembled the prompt and called the model on our
+ * behalf. Each thing that cost is worth naming, because each is a reason this shape was chosen:
  *
  *   - __No second copy of the records.__ Retrieval is the full-text index the dashboard's own search
  *     already maintains (yourphr#599), through the same manager. One resource, one door — and
  *     nothing to backfill, re-index, or leave stale when a record changes.
- *   - __No create-once conversation model.__ The prompt is a string in this file. Editing it takes
- *     effect on the next question, rather than silently doing nothing until someone remembers to
- *     change an id.
- *   - __No schema.__ FHIR is too heterogeneous to type, which is what refused six of one bundle's
- *     records when the engine tried to infer field types from the first document it saw.
- *   - __Transcripts encrypted at rest.__ They live in the app database with everything else, not in
- *     a container volume that is not encrypted.
+ *   - __The prompt is source.__ Editing it takes effect on the next question, rather than being
+ *     frozen into a "conversation model" the engine created once and then ignored edits to.
+ *   - __No schema.__ FHIR is too heterogeneous to type; inferring field types from the first
+ *     document seen refused six records of the very first bundle this was tried against.
+ *   - __Transcripts encrypted at rest.__ They live in the app database with everything else, rather
+ *     than in a container volume that is not encrypted.
  *   - __One less service.__ No container, no published port, no readiness retry at boot.
  *
- * What it gives up is semantic retrieval. The engine embedded every record, so "what am I taking for
- * seizures" could reach a clonazepam prescription that never mentions seizures. A full-text index
- * cannot: it matches words. That is answered by asking the model to turn the question into search
- * terms first — see `termsFor`. It costs one extra, short model call and no new storage.
+ * What that design had and this does not is semantic retrieval: embeddings could reach a clonazepam
+ * prescription from "what am I taking for my seizures", and a full-text index cannot — it matches
+ * words. That is answered by asking the model to turn the question into search terms first; see
+ * `termsFor`. One extra short model call, and no new storage.
  */
 import { OutboundHttp } from '../../http/index.js';
 import {
   BaseChatProvider,
   type ChatAnswer,
   type ChatConversation,
-  type ChatIndexedRecord,
   type ChatMessage,
 } from './BaseChatProvider.js';
 import type { BaseChatConversationsProvider } from './BaseChatConversationsProvider.js';
@@ -137,8 +135,6 @@ export class LocalChatProvider extends BaseChatProvider {
   readonly name = 'local';
   readonly available = true;
   readonly unavailableReason = '';
-  /** Reads the records where they live, so there is nothing to fill and nothing to go stale. */
-  readonly needsIndexing = false;
 
   private readonly http: OutboundHttp;
   private readonly base: string;
@@ -337,16 +333,4 @@ export class LocalChatProvider extends BaseChatProvider {
   override async removeAll(userId: string): Promise<void> {
     await this.conversations_.releaseAll(userId);
   }
-
-  // --- the index that is not there ---
-
-  /**
-   * Nothing to index: retrieval reads the records where they already live. Returning without doing
-   * anything is the honest implementation, and it is why this provider has no backfill, cannot go
-   * stale, and answers about a record the moment it is written.
-   */
-  override async index(_record: ChatIndexedRecord): Promise<void> { /* the records are the index */ }
-
-  /** Never consulted — `needsIndexing` is false, so the manager does not ask. */
-  override async indexedCount(): Promise<number> { return 0; }
 }

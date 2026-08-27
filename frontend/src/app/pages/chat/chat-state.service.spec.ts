@@ -12,7 +12,7 @@ import { ChatStateService } from './chat-state.service';
 import type { ChatAnswer, ChatConversation, ChatMessage, ChatService, ChatStatus } from '../../services/chat.service';
 
 class StubChatService {
-  statusValue: ChatStatus = { available: true, reason: '', indexed: 3, indexing: false };
+  statusValue: ChatStatus = { available: true, reason: '' };
   conversationsValue: ChatConversation[] = [];
   messagesValue: ChatMessage[] = [];
   answer: ChatAnswer = { conversationId: 'conv-1', answer: 'You take Lisinopril.', citations: [] };
@@ -82,9 +82,9 @@ describe('ChatStateService', () => {
   });
 
   it('reports an unreachable instance as unavailable rather than throwing', async () => {
-    stub.status = () => throwError(() => ({ error: { error: 'sidecar is down' } }));
+    stub.status = () => throwError(() => ({ error: { error: 'the model endpoint is unreachable' } }));
     await state.refreshStatus();
-    expect(state.status.value).toEqual({ available: false, reason: 'sidecar is down', indexed: 0, indexing: false });
+    expect(state.status.value).toEqual({ available: false, reason: 'the model endpoint is unreachable' });
   });
 
   it('clears the open transcript when a new conversation starts', async () => {

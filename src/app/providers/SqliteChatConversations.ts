@@ -16,8 +16,8 @@ export class SqliteChatConversations extends BaseChatConversationsProvider {
     db.exec('CREATE INDEX IF NOT EXISTS chat_conversations_user ON chat_conversations (user_id, created_at DESC)');
     // The turns, for a provider that runs the conversation itself. `seq` rather than a timestamp is
     // the ordering: a question and its answer land in the same millisecond often enough that a
-    // clock cannot separate them, which is exactly the bug the Typesense transcript had — it
-    // returned the answer above the question that produced it.
+    // clock cannot separate them. The design this replaced ordered on a whole-second timestamp and
+    // duly returned the answer above the question that produced it.
     db.exec(`CREATE TABLE IF NOT EXISTS chat_messages (
       conversation_id TEXT NOT NULL,
       seq INTEGER NOT NULL,

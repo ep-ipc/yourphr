@@ -126,113 +126,43 @@ describe('ChatManager — one door, and it only ever answers for whoever is aski
   });
 });
 
-describe('ChatManager — the index', () => {
+describe('ChatManager — what a record says', () => {
   it('shapes a record with the title and date the record pages use', () => {
-    const doc = ChatManager.documentFor('alice', {
-      resourceType: 'Observation', id: 'o1', sourceId: 'source-1', lastUpdated: '2024-01-10T00:00:00Z', resource: obs('o1', 'Hemoglobin', '2024-01-10'),
-    });
-    expect(doc.id).toBe('source-1-Observation-o1');
-    expect(doc.userId).toBe('alice');
-    // The Go port indexed an empty title here and search matched nothing; this is that regression's test.
-    expect(doc.sortTitle).not.toBe('');
-    expect(doc.sortDate).toBe(Date.parse('2024-01-10'));
-    // Readable text, not the raw JSON — see `text` on ChatIndexedRecord for what the JSON cost.
-    expect(doc.text).not.toContain('{');
-    // The NAME has to be in there. textFor() alone drops it (it skips the whole `code` subtree),
-    // which is why documentFor prepends the display title — see ChatManager.textOf.
-    expect(doc.text).toContain('Hemoglobin');
-  });
-
-  it('says what KIND of record it is, in a patient\u2019s words', () => {
-    const cond = ChatManager.documentFor('alice', {
-      resourceType: 'Condition', id: 'c9', sourceId: 'source-1', lastUpdated: '2024-07-01T00:00:00Z',
-      resource: { resourceType: 'Condition', id: 'c9', code: { text: 'Hypertension', coding: [{ display: 'Hypertension' }] }, recordedDate: '2024-07-01' } as Resource,
-    });
-    // Without this the model answered "what have I been diagnosed with" with a list of blood tests.
-    expect(cond.text.startsWith('Diagnosis:')).toBe(true);
-    expect(cond.text).toContain('Hypertension');
-
-    const measurement = ChatManager.documentFor('alice', {
-      resourceType: 'Observation', id: 'o8', sourceId: 'source-1', lastUpdated: '2024-01-10T00:00:00Z', resource: obs('o8', 'Hemoglobin', '2024-01-10'),
-    });
-    expect(measurement.text.startsWith('Test result or measurement:')).toBe(true);
+    const text = ChatManager.textOf(
+      { resourceType: 'Observation', id: 'o1', sourceId: 'source-1', lastUpdated: '2024-01-10T00:00:00Z', resource: obs('o1', 'Hemoglobin', '2024-01-10') },
+      { sort_title: 'Hemoglobin' }
+    );
+    expect(text).not.toContain('{');
+    // The NAME has to be in there. textFor() alone drops it — it skips the whole `code` subtree —
+    // which is why the display title is prepended. See ChatManager.textOf.
+    expect(text).toContain('Hemoglobin');
   });
 
   it('carries the measured value and unit into the text the model reads', () => {
-    const doc = ChatManager.documentFor('alice', {
-      resourceType: 'Observation', id: 'o7', sourceId: 'source-1', lastUpdated: '2024-01-10T00:00:00Z',
-      resource: { resourceType: 'Observation', id: 'o7', status: 'final', code: { text: 'Hemoglobin', coding: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }] }, valueQuantity: { value: 13.5, unit: 'g/dL' }, effectiveDateTime: '2024-01-10' } as Resource,
-    });
-    expect(doc.text).toContain('Hemoglobin');
-    expect(doc.text).toContain('13.5');
-    expect(doc.text).toContain('g/dL');
+    const resource = { resourceType: 'Observation', id: 'o7', status: 'final', code: { text: 'Hemoglobin', coding: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }] }, valueQuantity: { value: 13.5, unit: 'g/dL' }, effectiveDateTime: '2024-01-10' } as Resource;
+    const text = ChatManager.textOf({ resourceType: 'Observation', id: 'o7', sourceId: 'source-1', lastUpdated: '2024-01-10T00:00:00Z', resource }, { sort_title: 'Hemoglobin' });
+    expect(text).toContain('13.5');
+    expect(text).toContain('g/dL');
   });
 
-  it('gives a dateless record a sort date of 0 rather than NaN', () => {
-    const doc = ChatManager.documentFor('alice', {
-      resourceType: 'Condition', id: 'c1', sourceId: '', lastUpdated: '2024-01-10T00:00:00Z', resource: { resourceType: 'Condition', id: 'c1', code: { text: 'Typed in' } } as Resource,
-    });
-    expect(doc.sortDate).toBe(0);
+  it("says what KIND of record it is, in a patient's words", () => {
+    const condition = { resourceType: 'Condition', id: 'c9', code: { text: 'Hypertension', coding: [{ display: 'Hypertension' }] }, recordedDate: '2024-07-01' } as Resource;
+    const text = ChatManager.textOf({ resourceType: 'Condition', id: 'c9', sourceId: 'source-1', lastUpdated: '2024-07-01T00:00:00Z', resource: condition }, { sort_title: 'Hypertension' });
+    // Without this the model answered "what have I been diagnosed with" with a list of blood tests.
+    expect(text.startsWith('Diagnosis:')).toBe(true);
+    expect(text).toContain('Hypertension');
+
+    const measurement = ChatManager.textOf({ resourceType: 'Observation', id: 'o8', sourceId: 'source-1', lastUpdated: '2024-01-10T00:00:00Z', resource: obs('o8', 'Hemoglobin', '2024-01-10') }, { sort_title: 'Hemoglobin' });
+    expect(measurement.startsWith('Test result or measurement:')).toBe(true);
   });
 
-  it('indexes every record a write produces, attributed to the writer’s account', async () => {
-    records.onRecordWritten = (userId, record) => { void chat.index(userId, record); };
-    const writer = records.writer(alice, 'source-3');
-    await writer.upsert(obs('o5', 'Potassium', '2024-06-01'));
-    await new Promise((resolve) => setTimeout(resolve, 0)); // the observer is fire-and-forget
-    expect(provider.indexed.map((d) => [d.userId, d.id])).toEqual([['alice', 'source-3-Observation-o5']]);
-  });
-
-  it('does not let an index failure break the write it followed', async () => {
-    records.onRecordWritten = () => { throw new Error('sidecar exploded'); };
-    const writer = records.writer(alice, 'source-3');
-    await expect(writer.upsert(obs('o6', 'Sodium', '2024-06-02'))).resolves.toBe('created');
-    expect(await records.exists(alice, 'Observation', 'o6')).toBe(true);
-  });
-
-  it('keeps billing out of the index — it is not medicine, and it crowds out what is', async () => {
-    const claim = { resourceType: 'Claim', id: 'cl1', status: 'active', total: { value: 1200 } } as unknown as Resource;
-    recordsProvider.seed('alice', 'source-1', claim);
-    const indexed = await chat.index('alice', { resourceType: 'Claim', id: 'cl1', sourceId: 'source-1', lastUpdated: '2024-01-10T00:00:00Z', resource: claim });
-    expect(indexed).toBe(false);
-    expect(provider.indexed).toHaveLength(0);
+  it('keeps billing out of an answer — it is not medicine, and it crowds out what is', () => {
+    // In one Synthea bundle these were 10,917 of ~20,000 indexed characters, against 193 for all
+    // three of the patient's diagnoses.
     expect(ChatManager.isClinical('Claim')).toBe(false);
     expect(ChatManager.isClinical('ExplanationOfBenefit')).toBe(false);
+    expect(ChatManager.isClinical('Coverage')).toBe(false);
     expect(ChatManager.isClinical('Condition')).toBe(true);
-    // And the backfill does not count them against itself.
-    const result = await chat.reindex(alice);
-    expect(result.indexed).toBe(2);
-    expect(provider.indexed.some((d) => d.resourceType === 'Claim')).toBe(false);
-  });
-
-  it('backfills the caller’s existing records, and nobody else’s', async () => {
-    const result = await chat.reindex(alice);
-    expect(result.skipped).toBe(false);
-    expect(result.indexed).toBe(2);
-    expect(provider.indexed.every((d) => d.userId === 'alice')).toBe(true);
-  });
-
-  it('skips a backfill when the account is already indexed, unless forced', async () => {
-    await chat.reindex(alice);
-    expect(await chat.reindex(alice)).toEqual({ indexed: 0, skipped: true });
-    expect((await chat.reindex(alice, { force: true })).indexed).toBe(2);
-  });
-
-  it('clears an account’s index and conversations when the account goes', async () => {
-    await chat.reindex(alice);
-    await chat.ask(alice, 'mine');
-    await chat.ask(bob, 'bob’s');
-    await chat.removeAll(alice);
-    expect(await provider.indexedCount('alice')).toBe(0);
-    expect(await chat.conversations(alice)).toEqual([]);
-    // Bob is untouched — removal is scoped like everything else here.
-    expect(await chat.conversations(bob)).toHaveLength(1);
-  });
-
-  it('reports status, and starts a backfill for an account with nothing indexed', async () => {
-    const status = await chat.status(alice);
-    expect(status).toMatchObject({ available: true, reason: '', indexed: 0 });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(await provider.indexedCount('alice')).toBe(2);
+    expect(ChatManager.isClinical('MedicationRequest')).toBe(true);
   });
 });

@@ -26,7 +26,7 @@ export interface OutboundHttpConfig {
   allowInternal?: boolean;
   /**
    * Hostnames an operator named in configuration, exempted from the internal-address refusal —
-   * a sidecar they deployed and addressed by name (`http://typesense:8108`). Read from
+   * a service they run and addressed by name (`http://ollama.lan:11434`). Read from
    * configuration ONCE, here, for the same reason `allowInternal` is: a per-call list would let
    * any caller widen the guard for one request, and the widening would look like an ordinary
    * option at the call site. `RequestOptions` strips it for exactly that reason.

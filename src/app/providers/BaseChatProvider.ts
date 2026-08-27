@@ -16,32 +16,6 @@
  * records. A provider that cannot scope to an owner cannot implement this interface.
  */
 
-/** One record as the retrieval index holds it. Shaped by `toResourceFhir`, minus what a model has no use for. */
-export interface ChatIndexedRecord {
-  /** Stable across re-indexing: `${sourceId}-${resourceType}-${id}`, as the Go indexer composed it. */
-  id: string;
-  userId: string;
-  sourceId: string;
-  resourceType: string;
-  resourceId: string;
-  /** Milliseconds since the epoch; 0 when the record carries no date. */
-  sortDate: number;
-  sortTitle: string;
-  sourceUri: string;
-  /**
-   * The record's human-readable text — `textFor()`, the same extraction the dashboard's own search
-   * indexes. What the model is allowed to read, and the only thing it may answer from.
-   *
-   * NOT the raw FHIR JSON, for two reasons found the hard way. A retrieval engine infers the types
-   * of a nested object's fields from the first document it sees, and FHIR is far too heterogeneous
-   * for that to hold — one Synthea bundle refused six of its own ExplanationOfBenefit records
-   * because an adjudication amount was an integer in the first and a decimal in the rest. And a
-   * model handed raw JSON narrates the plumbing back at the patient, which the system prompt then
-   * has to spend half its length forbidding.
-   */
-  text: string;
-}
-
 /** One turn of a conversation. `role` is whose turn it was. */
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -77,29 +51,8 @@ export abstract class BaseChatProvider {
   /** Why it cannot answer, for the caller to show. Empty when it can. */
   abstract readonly unavailableReason: string;
 
-  /**
-   * Whether this provider keeps a SEPARATE COPY of the records that has to be filled and kept up to
-   * date. True for an engine holding its own index; false for one that reads the records where they
-   * already live.
-   *
-   * The manager reads this to decide whether a backfill exists at all. It is not a performance hint:
-   * a provider that needs no index cannot go stale, has nothing to re-index, and can answer about a
-   * record the moment it is written — so asking it "how many are indexed" and offering to fix the
-   * answer would be inventing a problem it does not have.
-   */
-  abstract readonly needsIndexing: boolean;
-
-  /**
-   * Bring the retrieval index and the conversation model into being. Idempotent: an index that
-   * already exists is left alone, which is what makes this safe to run at every boot.
-   */
+  /** Whatever the provider needs standing before it can answer. Called once, at boot. */
   abstract initialize(): Promise<void>;
-
-  /** Put one record into the retrieval index, replacing any earlier version of it. */
-  abstract index(record: ChatIndexedRecord): Promise<void>;
-
-  /** How many of this account's records the index holds — what tells a backfill whether to run. */
-  abstract indexedCount(userId: string): Promise<number>;
 
   /** Answer one question from `userId`'s records alone. */
   abstract ask(userId: string, question: string, conversationId?: string): Promise<ChatAnswer>;
@@ -113,21 +66,18 @@ export abstract class BaseChatProvider {
   /** Forget one conversation. `false` when it is not theirs to forget. */
   abstract forget(userId: string, conversationId: string): Promise<boolean>;
 
-  /** Drop everything held for an account: its indexed records and its conversations. */
+  /** Drop everything held for an account — its conversations and their transcripts. */
   abstract removeAll(userId: string): Promise<void>;
 }
 
-/** An instance with no chat. Answers nothing, indexes nothing, and says which. */
+/** An instance with no chat. Answers nothing, and says why. */
 export class NullChatProvider extends BaseChatProvider {
   readonly name = 'null';
   readonly available = false;
-  readonly needsIndexing = false;
   readonly unavailableReason =
     'chat is not configured on this instance — it needs a search sidecar and a language model, which an operator turns on deliberately';
 
   async initialize(): Promise<void> { /* nothing to bring into being */ }
-  async index(): Promise<void> { /* nothing indexes */ }
-  async indexedCount(): Promise<number> { return 0; }
   async ask(): Promise<ChatAnswer> { throw new Error(this.unavailableReason); }
   async conversations(): Promise<ChatConversation[]> { return []; }
   async messages(): Promise<ChatMessage[]> { return []; }

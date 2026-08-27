@@ -33,7 +33,7 @@ export class ChatStateService {
     try {
       this.status.next(await firstValueFrom(this.chat.status()));
     } catch (err) {
-      this.status.next({ available: false, reason: describe(err), indexed: 0, indexing: false });
+      this.status.next({ available: false, reason: describe(err) });
     }
   }
 

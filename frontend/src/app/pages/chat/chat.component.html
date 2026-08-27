@@ -16,15 +16,11 @@
   </div>
   <div class="chat-container">
     <!--
-      Say what is actually going on. A chat that is unreachable, or one whose records have not been
-      indexed yet, otherwise presents as a model that answers "I don't have enough information" —
-      which sends the person looking for the wrong problem.
+      Say what is actually going on. A chat that cannot reach its model otherwise presents as one
+      that answers "I don't have that information", which sends the person after the wrong problem.
     -->
     <div *ngIf="(status | async) as s">
       <div *ngIf="!s.available" class="chat-notice chat-notice-error">{{ s.reason }}</div>
-      <div *ngIf="s.available && s.indexing" class="chat-notice">
-        Preparing your records for the first time — answers will improve as this finishes.
-      </div>
     </div>
 
     <div class="messages-area" [ngClass]="{'empty-chat-messages-area': (messages | async)?.length === 0}">

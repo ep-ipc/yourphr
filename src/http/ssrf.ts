@@ -41,14 +41,14 @@ const EMPTY_HOSTS: ReadonlySet<string> = new Set<string>();
 /**
  * Hosts an OPERATOR named in configuration, exempted from the internal-address refusal.
  *
- * This exists for one shape of dependency the guard would otherwise make impossible: a sidecar the
- * operator deploys and addresses by name on their own network — `http://typesense:8108` beside the
- * app in the same compose file (yourphr#594's chat). Refusing that is not security, it is the guard
- * being wrong about who chose the address.
+ * This exists for one shape of dependency the guard would otherwise make impossible: a service the
+ * operator runs and addresses by name on their own network — the language-model endpoint that
+ * yourphr#594's chat calls, say, at `http://ollama.lan:11434`. Refusing that is not security, it is
+ * the guard being wrong about who chose the address.
  *
  * Three properties keep this from becoming the hole `allowInternal` would be:
  *
- *   - It is a SET OF NAMED HOSTS, not a switch. Exempting `typesense` says nothing about
+ *   - It is a SET OF NAMED HOSTS, not a switch. Exempting one host says nothing about
  *     169.254.169.254, and a provider whose configured URI is attacker-influenced still cannot
  *     reach anything but the host the operator wrote down.
  *   - It is supplied ONCE, when the capability is constructed from configuration, and stripped from

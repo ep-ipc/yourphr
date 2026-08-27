@@ -97,10 +97,6 @@ const answerCall = (): Sent => sent[sent.length - 1]!;
 const termsCall = (): Sent => sent[sent.length - 2]!;
 
 describe('LocalChatProvider — no sidecar, and what actually leaves the process', () => {
-  it('needs no index at all', () => {
-    expect(provider.needsIndexing).toBe(false);
-  });
-
   it('expands the question into keywords, then searches on those', async () => {
     replies.push('seizure clonazepam anticonvulsant', 'You take clonazepam.');
     await provider.ask('alice', 'what am I taking for my fits?');
@@ -158,7 +154,7 @@ describe('LocalChatProvider — no sidecar, and what actually leaves the process
     const { conversationId } = await provider.ask('alice', 'what am I taking?');
     const turns = await provider.messages('alice', conversationId);
     // Both turns share a timestamp; insertion order is what separates them, not the clock. The
-    // Typesense transcript got this wrong and rendered the answer above its own question.
+    // design this replaced got this wrong and rendered the answer above its own question.
     expect(turns.map((t) => [t.role, t.message])).toEqual([
       ['user', 'what am I taking?'],
       ['assistant', 'You take clonazepam.'],

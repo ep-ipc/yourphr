@@ -1,7 +1,8 @@
 /**
- * A live chat instance over real infrastructure (yourphr#594): a Typesense sidecar and an operator's
- * own model. Boots the app, imports one synthetic Synthea bundle for one account, indexes it, and
- * serves the built Angular app so the chat page can be used in a browser.
+ * A live chat instance against a real model (yourphr#594). Boots the app, imports a synthetic
+ * Synthea bundle for one account — and a second, different one for a second account when
+ * CHAT_LIVE_BUNDLE_2 is set, which is what makes the isolation check meaningful — then serves the
+ * built Angular app so the chat page can be used in a browser.
  *
  * Synthetic records only — these are Synthea patients, not people.
  *
@@ -39,9 +40,6 @@ const dir = mkdtempSync(join(tmpdir(), 'chat-live-'));
 const app = await assembleApp(dir, {
   env: {
     YOURPHR_CHAT_PROVIDER: process.env['YOURPHR_CHAT_PROVIDER'] ?? 'local',
-    YOURPHR_CHAT_TYPESENSE_URI: process.env['YOURPHR_CHAT_TYPESENSE_URI'] ?? 'http://127.0.0.1:8108',
-    YOURPHR_CHAT_TYPESENSE_API_KEY: process.env['YOURPHR_CHAT_TYPESENSE_API_KEY'] ?? '',
-    YOURPHR_CHAT_MODEL_ID: process.env['YOURPHR_CHAT_MODEL_ID'] ?? 'yourphr-chat',
     YOURPHR_CHAT_MODEL_NAME: process.env['YOURPHR_CHAT_MODEL_NAME'] ?? 'medgemma:27b-it-q4_K_M',
     YOURPHR_CHAT_MODEL_URL: process.env['YOURPHR_CHAT_MODEL_URL'] ?? '',
     YOURPHR_CHAT_RETRIEVAL_MAX_RECORDS: process.env['YOURPHR_CHAT_RETRIEVAL_MAX_RECORDS'] ?? '25',
@@ -76,18 +74,13 @@ await importBundle(USER, bundlePath);
 const bundle2 = process.env['CHAT_LIVE_BUNDLE_2'];
 if (bundle2 && existsSync(bundle2)) await importBundle(OTHER, bundle2);
 
-// --- index them for chat ---
+// --- chat has to be able to answer before this is worth serving ---
 const chat = app.engine.managers.chat;
 if (!chat.available()) {
   console.error(`[chat-live] chat is NOT available: ${chat.unavailable()}`);
   process.exit(1);
 }
-const result = await chat.reindex(who, { force: true });
-console.log(`[chat-live] indexed ${result.indexed} record(s) for ${USER}`);
-if (bundle2) {
-  const r2 = await chat.reindex(ApiContext.system('chat-live', OTHER, app.engine), { force: true });
-  console.log(`[chat-live] indexed ${r2.indexed} record(s) for ${OTHER}`);
-}
+// Nothing to index: retrieval reads the records where they already are.
 
 await new Promise<void>((resolve) => app.server.listen(port, '127.0.0.1', resolve));
 console.log(`[chat-live] listening on http://127.0.0.1:${port} — sign in as ${USER} / ${PASS}`);

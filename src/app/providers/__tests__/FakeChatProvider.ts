@@ -1,21 +1,11 @@
 /** An in-memory chat provider for the manager's tests (yourphr#594). No sidecar, no model. */
-import {
-  BaseChatProvider,
-  type ChatAnswer,
-  type ChatConversation,
-  type ChatIndexedRecord,
-  type ChatMessage,
-} from '../BaseChatProvider.js';
+import { BaseChatProvider, type ChatAnswer, type ChatConversation, type ChatMessage } from '../BaseChatProvider.js';
 
 export class FakeChatProvider extends BaseChatProvider {
   readonly name = 'fake';
   available = true;
   readonly unavailableReason = '';
-  /** Mirrors the Typesense provider, which is what the manager's index tests exercise. */
-  needsIndexing = true;
 
-  /** Every document handed down, in order — what the index assertions read. */
-  readonly indexed: ChatIndexedRecord[] = [];
   /** Questions asked, with the account they were asked for. */
   readonly asked: { userId: string; question: string; conversationId?: string }[] = [];
   initializeCalled = 0;
@@ -31,14 +21,6 @@ export class FakeChatProvider extends BaseChatProvider {
   override async initialize(): Promise<void> {
     this.initializeCalled++;
     if (this.failInitialize !== '') throw new Error(this.failInitialize);
-  }
-
-  override async index(record: ChatIndexedRecord): Promise<void> {
-    this.indexed.push(record);
-  }
-
-  override async indexedCount(userId: string): Promise<number> {
-    return this.indexed.filter((r) => r.userId === userId).length;
   }
 
   override async ask(userId: string, question: string, conversationId?: string): Promise<ChatAnswer> {
@@ -75,9 +57,6 @@ export class FakeChatProvider extends BaseChatProvider {
   }
 
   override async removeAll(userId: string): Promise<void> {
-    for (let i = this.indexed.length - 1; i >= 0; i--) {
-      if (this.indexed[i]!.userId === userId) this.indexed.splice(i, 1);
-    }
     for (const [id, owner] of [...this.owners.entries()]) {
       if (owner === userId) { this.owners.delete(id); this.transcripts.delete(id); }
     }

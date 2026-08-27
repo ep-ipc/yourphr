@@ -203,20 +203,11 @@ async function glossaryProviderFor(name: string, env: Record<string, string | un
 }
 
 /**
- * Chat (yourphr#594). Three bindings, and the default is inert:
+ * Chat (yourphr#594): 'local' binds it, 'null' leaves it inert and says so. A dynamic import, so an
+ * instance that has not turned it on never loads the path that reaches a model at all.
  *
- *   'local'      the native provider — searches the records where they already live, assembles the
- *                prompt itself, calls the operator's model directly. No extra service.
- *   'typesense'  the ported design — a sidecar holding a second copy of every record. Kept for
- *                anyone already running it.
- *   'null'       inert, and says so.
- *
- * Dynamic imports, so an instance bound to 'null' never loads a path that reaches a model at all.
- *
- * The settings each one needs are checked HERE, before the provider is built, because the
- * alternative is what the Go version did: an empty api-key produced a client that retried a ping
- * thirty times and then killed the process. A missing setting is an operator's typo and deserves a
- * sentence, not a two-minute timeout.
+ * The settings it needs are checked HERE, before the provider is built, because a missing setting is
+ * an operator's typo and deserves a sentence rather than a failure at the first question.
  */
 async function chatProviderFor(
   name: string,
@@ -226,71 +217,43 @@ async function chatProviderFor(
   env: Record<string, string | undefined>
 ): Promise<BaseChatProvider> {
   if (name === 'null') return new NullChatProvider();
-  if (name !== 'local' && name !== 'typesense') {
-    throw new Error(`chat.provider: unknown provider '${name}' (local, typesense or null)`);
+  if (name !== 'local') throw new Error(`chat.provider: unknown provider '${name}' (local or null)`);
+
+  const missing = ['yourphr.chat.model.url', 'yourphr.chat.model.name'].filter((key) => config.getString(key).trim() === '');
+  if (missing.length > 0) {
+    throw new Error(`chat.provider = local, but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} empty — set ${missing.map((k) => envNameFor(k)).join(', ')} or bind chat.provider = null`);
   }
 
-  const need = (keys: string[]): void => {
-    const missing = keys.filter((key) => config.getString(key).trim() === '');
-    if (missing.length > 0) {
-      throw new Error(`chat.provider = ${name}, but ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} empty — set ${missing.map((k) => envNameFor(k)).join(', ')} or bind chat.provider = null`);
-    }
-  };
-  need(['yourphr.chat.model.url', 'yourphr.chat.model.name']);
-  const allowInternal = env['SPIKE_TEST_ALLOW_INTERNAL'] === '1';
-  const maxRecords = config.getInt('yourphr.chat.retrieval.max-records');
-  const maxBytes = config.getInt('yourphr.chat.model.max-bytes');
-
-  if (name === 'local') {
-    const { LocalChatProvider } = await import('./app/providers/LocalChatProvider.js');
-    // Retrieval goes through the Records door, acting for the account that asked — the same named
-    // system principal the worker and the migration tool use. The provider never sees the manager.
-    const retrieve = async (userId: string, terms: string, limit: number) => {
-      const engine = engineRef();
-      const ctx = ApiContext.system('chat', userId, engine);
-      const records = await engine.managers.records.searchStored(ctx, terms, limit);
-      return records
-        .filter((r) => ChatManager.isClinical(r.resourceType))
-        .map((r) => ({
+  const { LocalChatProvider } = await import('./app/providers/LocalChatProvider.js');
+  // Retrieval goes through the Records door, acting for the account that asked — the same named
+  // system principal the worker and the migration tool use. The provider never sees the manager.
+  const retrieve = async (userId: string, terms: string, limit: number) => {
+    const engine = engineRef();
+    const ctx = ApiContext.system('chat', userId, engine);
+    const records = await engine.managers.records.searchStored(ctx, terms, limit);
+    return records
+      .filter((r) => ChatManager.isClinical(r.resourceType))
+      .map((r) => {
+        const shaped = toResourceFhir(r.resource, r.sourceId);
+        return {
           resourceType: r.resourceType,
           resourceId: r.id,
           sourceId: r.sourceId,
-          title: String(toResourceFhir(r.resource, r.sourceId)['sort_title'] ?? ''),
-          text: ChatManager.textOf(r, toResourceFhir(r.resource, r.sourceId)),
-        }));
-    };
-    return new LocalChatProvider(
-      {
-        url: config.getString('yourphr.chat.model.url'),
-        name: config.getString('yourphr.chat.model.name'),
-        maxRecords,
-        maxBytes,
-        allowInternal,
-        log: (line) => appLog.info(line),
-      },
-      retrieve,
-      conversations
-    );
-  }
-
-  need(['yourphr.chat.typesense.uri', 'yourphr.chat.typesense.api-key']);
-  const { TypesenseChatProvider } = await import('./app/providers/TypesenseChatProvider.js');
-  return new TypesenseChatProvider(
+          title: String(shaped['sort_title'] ?? ''),
+          text: ChatManager.textOf(r, shaped),
+        };
+      });
+  };
+  return new LocalChatProvider(
     {
-      uri: config.getString('yourphr.chat.typesense.uri'),
-      apiKey: config.getString('yourphr.chat.typesense.api-key'),
-      collection: config.getString('yourphr.chat.typesense.collection'),
-      conversationCollection: config.getString('yourphr.chat.typesense.conversation-collection'),
-      model: {
-        id: config.getString('yourphr.chat.model.id'),
-        name: config.getString('yourphr.chat.model.name'),
-        vllmUrl: config.getString('yourphr.chat.model.url'),
-        maxBytes,
-      },
-      maxRecords,
-      allowInternal,
+      url: config.getString('yourphr.chat.model.url'),
+      name: config.getString('yourphr.chat.model.name'),
+      maxRecords: config.getInt('yourphr.chat.retrieval.max-records'),
+      maxBytes: config.getInt('yourphr.chat.model.max-bytes'),
+      allowInternal: env['SPIKE_TEST_ALLOW_INTERNAL'] === '1',
       log: (line) => appLog.info(line),
     },
+    retrieve,
     conversations
   );
 }
@@ -407,11 +370,6 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const { records, sources, jobs, catalog, audit, backups } = engine.managers;
   // The Records manager names a source for the records that carry its id — asked of the Sources door.
   records.sourceDisplay = (sourceId) => sources.displayOf(sourceId);
-  // Every record written also reaches chat's retrieval index (yourphr#594). Deliberately not
-  // awaited: the sync pass must not wait on a sidecar, and ChatManager.index() already swallows and
-  // logs its own failures rather than letting one reach the writer.
-  const chat = engine.managers.chat;
-  records.onRecordWritten = (userId, record) => { void chat.index(userId, record); };
 
   return {
     config, db, dbKey, users, sessions, catalog, sources, jobs, events, audit, backups, engine, records, recordsProvider,

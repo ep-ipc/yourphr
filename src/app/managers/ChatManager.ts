@@ -11,20 +11,14 @@
  * and no model binds `null`, everything else is unaffected, and a refusal says why rather than
  * looking like a model that had nothing to say.
  *
- * WHAT THIS MANAGER DOES NOT OWN: the records. It never reads the record store directly — the
- * backfill asks the Records door for them and hands each one down to be indexed. Two doors to the
- * same resource is the trap the architecture doc names, and an index is not an excuse for one.
+ * WHAT THIS MANAGER DOES NOT OWN: the records. It never reads the record store directly; retrieval
+ * goes through the Records door, which is where the owner seam already lives. Two doors to the same
+ * resource is the trap the architecture doc names, and a chat feature is not an excuse for one.
  */
 import { BaseManager, type BackupData } from '../../framework/BaseManager.js';
 import type { Engine } from '../../framework/Engine.js';
 import { ApiError, type ApiContext } from '../../framework/ApiContext.js';
-import type {
-  BaseChatProvider,
-  ChatAnswer,
-  ChatConversation,
-  ChatIndexedRecord,
-  ChatMessage,
-} from '../providers/BaseChatProvider.js';
+import type { BaseChatProvider, ChatAnswer, ChatConversation, ChatMessage } from '../providers/BaseChatProvider.js';
 import type { StoredRecord } from '../providers/BaseRecordsProvider.js';
 import { toResourceFhir } from '../../server.js';
 import { textFor } from '../providers/record-text.js';
@@ -88,11 +82,8 @@ const KIND: Record<string, string> = {
 
 export class ChatManager extends BaseManager {
   readonly name = 'chat';
-  /** Records, because the backfill reads through that door rather than around it. */
+  /** Records, because retrieval reads through that door rather than around it. */
   override readonly dependsOn = ['records'] as const;
-
-  /** Set while a backfill is running, so two cannot overlap and double the work. */
-  private backfilling = new Set<string>();
 
   constructor(
     engine: Engine,
@@ -127,7 +118,7 @@ export class ChatManager extends BaseManager {
     return ctx.username;
   }
 
-  /** Whether this record is the kind chat indexes at all. Billing is not. */
+  /** Whether this record is the kind chat may answer from. Billing is not. */
   static isClinical(resourceType: string): boolean {
     return !NOT_CLINICAL.has(resourceType);
   }
@@ -190,49 +181,7 @@ export class ChatManager extends BaseManager {
     return this.provider.forget(userId, conversationId);
   }
 
-  // --- the index ---
-
-  /**
-   * Index one record. Called on the write path, so it must never throw INTO a sync: a search index
-   * that missed a row is a worse search, while a sync that failed because of one is lost records.
-   * Returns whether it landed, for the backfill's count.
-   */
-  async index(userId: string, record: StoredRecord): Promise<boolean> {
-    if (!this.available() || !this.provider.needsIndexing) return false;
-    if (NOT_CLINICAL.has(record.resourceType)) return false;
-    try {
-      await this.provider.index(ChatManager.documentFor(userId, record));
-      return true;
-    } catch (err) {
-      this.log(`chat: failed to index ${record.resourceType}/${record.id} for ${userId}: ${(err as Error).message}`);
-      return false;
-    }
-  }
-
-  /**
-   * A stored record as the index holds it.
-   *
-   * `toResourceFhir` is what computes `sort_title` and `sort_date`, and reusing it is the point:
-   * the Go port had to copy those three fields back onto a second object by hand after the search
-   * extractor computed them on a different one, and when that copy was missing every document
-   * indexed with an empty title and search matched nothing. Here there is one shaping function and
-   * both the record pages and the index read it.
-   */
-  static documentFor(userId: string, record: StoredRecord): ChatIndexedRecord {
-    const shaped = toResourceFhir(record.resource, record.sourceId);
-    const sortDate = Date.parse(String(shaped['sort_date'] ?? ''));
-    return {
-      id: `${record.sourceId}-${record.resourceType}-${record.id}`,
-      userId,
-      sourceId: record.sourceId,
-      resourceType: record.resourceType,
-      resourceId: record.id,
-      sortDate: Number.isFinite(sortDate) ? sortDate : 0,
-      sortTitle: String(shaped['sort_title'] ?? ''),
-      sourceUri: String(shaped['source_uri'] ?? ''),
-      text: ChatManager.textOf(record, shaped),
-    };
-  }
+  // --- what a record says ---
 
   /**
    * What one record SAYS, as the model will read it: its display title, then the extracted text.
@@ -259,74 +208,27 @@ export class ChatManager extends BaseManager {
   }
 
   /**
-   * Put everything the caller already holds into the index.
+   * GET /api/secure/chat/status — what the page and the nav ask before offering chat at all.
    *
-   * Chat is retrieval-first: without this, turning the feature on answers "I do not have enough
-   * information" about every record imported before it was switched on, and the only way to fix
-   * that is to re-sync every source. The Go stack grew `ListAllResources` for exactly this and
-   * never wired it to anything.
-   *
-   * Reads through the Records door, one page at a time, so a large account does not assemble every
-   * record it owns in memory at once.
+   * There is nothing to report beyond whether a question can be answered. Retrieval reads the
+   * records where they already are, so there is no index to fill, no backfill to wait for, and no
+   * readiness state that can be stale.
    */
-  async reindex(ctx: ApiContext, options: { force?: boolean } = {}): Promise<{ indexed: number; skipped: boolean }> {
-    const userId = this.who(ctx);
-    this.requireAvailable();
-    if (!this.provider.needsIndexing) return { indexed: 0, skipped: true };
-    if (this.backfilling.has(userId)) return { indexed: 0, skipped: true };
-    if (!options.force && (await this.provider.indexedCount(userId)) > 0) return { indexed: 0, skipped: true };
-
-    this.backfilling.add(userId);
-    try {
-      const records = (await this.engine.managers.records.storedFor(ctx)).filter((r) => !NOT_CLINICAL.has(r.resourceType));
-      let indexed = 0;
-      for (const record of records) {
-        if (await this.index(userId, record)) indexed++;
-      }
-      this.log(`chat: backfilled ${indexed}/${records.length} clinical record(s) for ${userId}`);
-      return { indexed, skipped: false };
-    } finally {
-      this.backfilling.delete(userId);
-    }
+  async status(ctx: ApiContext): Promise<{ available: boolean; reason: string }> {
+    this.who(ctx);
+    return this.available() ? { available: true, reason: '' } : { available: false, reason: this.unavailable() };
   }
 
-  /**
-   * GET /api/secure/chat/status — what the page asks before it renders anything, and the trigger
-   * for the one-off backfill.
-   *
-   * The backfill is started here rather than inside `ask()` on purpose: a first question that
-   * silently blocks while several thousand records are indexed looks like a model that hung. This
-   * runs it in the background when the page opens, so by the time somebody has typed a question it
-   * is usually done, and the page can say what is happening in the meantime.
-   */
-  async status(ctx: ApiContext): Promise<{ available: boolean; reason: string; indexed: number; indexing: boolean }> {
-    const userId = this.who(ctx);
-    if (!this.available()) return { available: false, reason: this.unavailable(), indexed: 0, indexing: false };
-    // A provider that reads the records where they live has nothing to count and nothing to fill.
-    if (!this.provider.needsIndexing) return { available: true, reason: '', indexed: 0, indexing: false };
-    let indexed = 0;
-    try {
-      indexed = await this.provider.indexedCount(userId);
-    } catch (err) {
-      return { available: false, reason: `the search sidecar did not answer: ${(err as Error).message}`, indexed: 0, indexing: false };
-    }
-    if (indexed === 0 && !this.backfilling.has(userId)) {
-      // Not awaited: the page gets its answer now and watches `indexing` go false on a later poll.
-      void this.reindex(ctx).catch((err: Error) => this.log(`chat: backfill failed for ${userId}: ${err.message}`));
-    }
-    return { available: true, reason: '', indexed, indexing: this.backfilling.has(userId) };
-  }
-
-  /** The account is going: its indexed records and conversations go with it. */
+  /** The account is going: its conversations and their transcripts go with it. */
   async removeAll(ctx: ApiContext): Promise<void> {
     const userId = this.who(ctx);
     if (!this.available()) return;
     try {
       await this.provider.removeAll(userId);
     } catch (err) {
-      // Reported, not raised: the account deletion that called this must still finish. A stranded
-      // index entry is a bug to fix, not a reason to leave an account half-deleted.
-      this.log(`chat: failed to clear the index for ${userId}: ${(err as Error).message}`);
+      // Reported, not raised: the account deletion that called this must still finish. Stranded
+      // chat data is a bug to fix, not a reason to leave an account half-deleted.
+      this.log(`chat: failed to clear chat data for ${userId}: ${(err as Error).message}`);
     }
   }
 
