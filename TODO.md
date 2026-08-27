@@ -1,33 +1,17 @@
 # TODO
 
-<!-- RESUME:START -->
-## ▶ Resume here — 2026-08-26
-
-- Last worked on: the whole demo chain landed in TypeScript and demo.yourphr.org left Go — #645 reset, #648 role names, #644 read-only admin tour, #646 the swap itself; the stack folded into this repo (#650, #651, #652) and shipped as v3.0.1 -> v3.1.0.
-- Branch / state: main, clean, pushed. mj-infra-flux and yourphr-ts-spike both clean and pushed.
-- Running / in-flight: none. No CI in progress, no PRs open, no background agents. Cluster: yourphr-ts on 3.1.0, demo-yourphr-ts on 3.1.0 serving demo.yourphr.org, both Go pods still running and pinned to yourphr-go:2.10.3 as the rollback.
-- Parked / half-done: none uncommitted.
-- Next steps:
-  - #654 — ship `migrate` in the image. The biggest real gap: the upgrade guide tells self-hosters to run a command the image does not have, so nobody can follow it without a source checkout.
-  - #653 — fold the 0.x history into CHANGELOG.md (it is preserved at docs/typescript-0.x-changelog.md).
-  - #655 — renumber the upgrade doc v2 -> v3 and drop its "not yet true" banner once #654 lands.
-  - Then the Go removal, after the demo has held a release cycle: delete backend/, the Go E2E job, and PRUNE `Test Backend` + `Compile Storybook` from branch protection IN THE SAME COMMIT — a required check that stops reporting blocks every PR forever.
-- Blockers / significant notes:
-  - #658 is P0 and OPEN, cause unknown: pushing v3.1.0 created no workflow run at all. Mitigated (publishing a Release now also builds, and the contract says to verify the run exists) but not diagnosed — the same silence would swallow a security release.
-  - The spike repo jwilleke/yourphr-ts-spike is STALE and still publishes images; its main predates #644/#645/#648. #656 archives it.
-  - demo.yourphr.org rollback is one Service selector in mj-infra-flux apps/production/demo-yourphr/service.yaml (app: demo-yourphr-ts -> app: demo-yourphr). Note that cloudflared holds keep-alive connections: after flipping it, delete the pod being switched away from or the tunnel keeps serving the old one.
-<!-- RESUME:END -->
-
 > Generated from live GitHub state — ranked by priority label.
 > __Open PRs share these bands with issues__ — a PR takes its own placement label, else the highest priority among the issues it links, else Needs triage.
+
+## 🔴 P0
+
+- [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably firing
 
 ## 🟠 P1
 
 - [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
 - [#653](https://github.com/jwilleke/yourphr/issues/653) — [CHORE] CHANGELOG continuity — the v0.x history folded in, 3.0.0 cut here
-- [#654](https://github.com/jwilleke/yourphr/issues/654) — [FEATURE] Ship migrate in the image — the upgrade guide already assumes it
 - [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
-- [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
 - [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
@@ -120,6 +104,9 @@
 
 ## 🔵 In review
 
+- [#659](https://github.com/jwilleke/yourphr/issues/659) — [BUG] The Releases page says the latest YourPHR is v2.10.3 — the v3 releases have no notes
+- [#654](https://github.com/jwilleke/yourphr/issues/654) — [FEATURE] Ship migrate in the image — the upgrade guide already assumes it
+- [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
 - [#650](https://github.com/jwilleke/yourphr/issues/650) — [CHORE] Import the TypeScript stack under server/, with its history
 - [#651](https://github.com/jwilleke/yourphr/issues/651) — [CHORE] The TypeScript stack's CI becomes this repository's CI
 - [#652](https://github.com/jwilleke/yourphr/issues/652) — [CHORE] One image from this repository, on the 3.x line, and Flux follows it
@@ -142,4 +129,18 @@
 
 ## ❓ Needs triage
 
+- [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects
+- [#672](https://github.com/jwilleke/yourphr/pull/672) — chore(deps): bump dwv from 0.31.0 to 0.36.4 in /frontend
+- [#671](https://github.com/jwilleke/yourphr/pull/671) — chore(deps): bump lforms from 43.0.0 to 43.1.0 in /frontend
+- [#670](https://github.com/jwilleke/yourphr/pull/670) — chore(deps): bump typescript-eslint from 8.46.4 to 8.67.0 in /frontend
+- [#669](https://github.com/jwilleke/yourphr/pull/669) — chore(deps): bump webcrypto-liner from 1.4.0 to 1.4.3 in /frontend
+- [#668](https://github.com/jwilleke/yourphr/pull/668) — chore(deps): bump idb from 7.1.1 to 8.0.3 in /frontend
+- [#667](https://github.com/jwilleke/yourphr/pull/667) — chore(ci): bump docker/build-push-action from 6 to 7
+- [#666](https://github.com/jwilleke/yourphr/pull/666) — chore(deps): bump github.com/sirupsen/logrus from 1.10.0 to 1.10.1
+- [#665](https://github.com/jwilleke/yourphr/pull/665) — chore(ci): bump actions/checkout from 4 to 7
+- [#664](https://github.com/jwilleke/yourphr/pull/664) — chore(ci): bump docker/setup-buildx-action from 3 to 4
+- [#663](https://github.com/jwilleke/yourphr/pull/663) — chore(deps): bump github.com/stretchr/testify from 1.11.1 to 1.12.1
+- [#662](https://github.com/jwilleke/yourphr/pull/662) — chore(deps): bump github.com/johnfercher/maroto/v2 from 2.4.0 to 2.4.1
+- [#661](https://github.com/jwilleke/yourphr/pull/661) — chore(ci): bump actions/setup-node from 4 to 7
+- [#660](https://github.com/jwilleke/yourphr/pull/660) — chore(ci): bump docker/login-action from 3 to 4
 - [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
