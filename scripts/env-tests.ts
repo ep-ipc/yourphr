@@ -15,8 +15,25 @@ import { execFileSync } from 'node:child_process';
  * the one place that had the name hardcoded, and the name has moved twice: to dist-server/ while
  * the Go Makefile still owned dist/ (yourphr#650), and back to dist/server once Go was deleted
  * (yourphr#677). Reading tsconfig.build.json is what made both moves free.
+ *
+ * A tsconfig is JSONC, not JSON — `tsc` accepts comments and `JSON.parse` does not. This read used
+ * the strict parser, so the first comment anyone added to that file failed this harness with
+ * `Expected double-quoted property name in JSON`, naming neither the file nor the reason. Strip
+ * comments first: the brittleness was here, not in the file.
  */
-const BUILD_DIR = (JSON.parse(readFileSync(join(process.cwd(), 'tsconfig.build.json'), 'utf8')) as {
+function readJsonc(path: string): unknown {
+  const text = readFileSync(path, 'utf8')
+    // Whole-line comments only. A `//` inside a string value (a URL, a path) is left alone, which
+    // a general-purpose stripper would have to parse the string grammar to get right.
+    .split('\n')
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join('\n')
+    // Trailing commas, the other thing JSONC allows and JSON.parse rejects.
+    .replace(/,(\s*[}\]])/g, '$1');
+  return JSON.parse(text);
+}
+
+const BUILD_DIR = (readJsonc(join(process.cwd(), 'tsconfig.build.json')) as {
   compilerOptions: { outDir: string };
 }).compilerOptions.outDir;
 
