@@ -5,6 +5,7 @@
 
 ## 🔴 P0
 
+- [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects
 - [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably firing
 
 ## 🟠 P1
@@ -129,7 +130,6 @@
 
 ## ❓ Needs triage
 
-- [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects
 - [#672](https://github.com/jwilleke/yourphr/pull/672) — chore(deps): bump dwv from 0.31.0 to 0.36.4 in /frontend
 - [#671](https://github.com/jwilleke/yourphr/pull/671) — chore(deps): bump lforms from 43.0.0 to 43.1.0 in /frontend
 - [#670](https://github.com/jwilleke/yourphr/pull/670) — chore(deps): bump typescript-eslint from 8.46.4 to 8.67.0 in /frontend
