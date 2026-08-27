@@ -299,3 +299,94 @@ textarea {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+// --- dark theme (yourphr#594) ---
+//
+// The styles above came across from the Go-era branch, which predates this app having a dark theme,
+// so every surface here was hardcoded light. On a dark instance the whole panel stayed white and the
+// assistant's replies rendered at roughly 3.9:1 contrast — legible in a screenshot, tiring to read,
+// and below the 4.5:1 that WCAG AA asks of body text.
+//
+// Applied the way the rest of the app applies it (see assets/scss/dark/_dark-theme.scss): one mixin,
+// used by both the explicit `body.dark-theme` class and the system-preference query. The tokens are
+// the app's own, so this panel follows the theme rather than keeping a second palette in step by
+// hand. The user's own bubble is deliberately unchanged — white on the primary purple already
+// exceeds the ratio in both themes.
+@mixin chat-dark-theme {
+  .conversations-sidebar {
+    background-color: var(--header);
+    border-right-color: var(--border);
+  }
+
+  .conversation-item {
+    color: var(--card-foreground);
+
+    &:hover {
+      background-color: var(--card);
+    }
+
+    &.active {
+      background-color: transparent;
+      color: var(--primary);
+      border-left-color: var(--primary);
+    }
+  }
+
+  .chat-container,
+  .messages-area {
+    background-color: var(--card);
+    border-color: var(--border);
+  }
+
+  .welcome-message {
+    color: var(--dark-secondary-text-color);
+  }
+
+  // The reply itself: the one that was failing contrast.
+  .message-bubble.bot-message {
+    background-color: var(--background);
+    color: var(--card-foreground);
+  }
+
+  .message-bubble.failed-message {
+    border-color: var(--dark-alert-text-color, #f1959b);
+  }
+
+  .chat-notice {
+    background-color: var(--background);
+    border-color: var(--border);
+    color: var(--card-foreground);
+  }
+
+  .textarea-wrapper textarea {
+    background-color: var(--background);
+    border-color: var(--border);
+    color: var(--card-foreground);
+
+    &::placeholder {
+      color: var(--dark-secondary-text-color);
+    }
+  }
+
+  // Both icons ship as solid black — see assets/icons. Inverting is the whole fix; recolouring them
+  // properly would mean inlining them as components, which is not worth it for two glyphs.
+  .delete-conversation-item-button img,
+  .send-button img {
+    filter: invert(1);
+  }
+}
+
+// `:host-context()`, not a bare `body.dark-theme` descendant selector. Under Angular's emulated
+// encapsulation the latter compiles to `body.dark-theme[_ngcontent-%COMP%] .conversations-sidebar…`
+// — the attribute is stamped onto the ANCESTOR, and <body> is outside the component, so it never
+// carries one and the rule silently never matches. It builds, it ships, and nothing is themed.
+// `:host-context()` is the construct that reaches an ancestor without stamping it.
+@media (prefers-color-scheme: dark) {
+  :host-context(body:not(.light-theme)) {
+    @include chat-dark-theme;
+  }
+}
+
+:host-context(body.dark-theme) {
+  @include chat-dark-theme;
+}
