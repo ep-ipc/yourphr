@@ -6,5 +6,11 @@
     "rootDir": "src",
     "sourceMap": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  // Tests are not part of the product. Excluding them keeps 38 compiled spec files out of the
+  // image, and keeps `rootDir: src` honest: a test may reach into scripts/ for harness tooling
+  // (scripts/lib/scrub.ts, yourphr#682), which is legal for `npm test` and `tsc --noEmit` — both
+  // read tsconfig.json, whose include spans src, scripts and e2e — and an error under the BUILD
+  // config, which does not. That difference turned a green laptop into a red CI run.
+  "exclude": ["src/**/__tests__/**"]
 }
