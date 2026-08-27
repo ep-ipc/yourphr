@@ -623,6 +623,6 @@ export function formatReport(r: MigrationReport): string {
     }
   }
 
-  lines.push('', r.ok ? 'MIGRATION VERIFIED — the spike answers what the Go stack holds' : 'MIGRATION NOT VERIFIED — see above; the command is safe to re-run');
+  lines.push('', r.ok ? 'MIGRATION VERIFIED — this instance answers what the Go stack holds' : 'MIGRATION NOT VERIFIED — see above; the command is safe to re-run');
   return lines.join('\n');
 }

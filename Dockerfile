@@ -76,4 +76,14 @@ ENV YOURPHR_FAST_STORAGE=/opt/yourphr/data \
     YOURPHR_WEB_LISTEN_PORT=8080
 EXPOSE 8080
 VOLUME ["/opt/yourphr/data"]
-CMD ["node", "dist/server/main.js"]
+# ENTRYPOINT plus a default CMD, not CMD alone (yourphr#654). Words after the image name REPLACE
+# CMD and leave ENTRYPOINT in place, so `docker run … <image> migrate --go …` — what the upgrade
+# guide has always told self-hosters to run — becomes `node dist/server/main.js migrate --go …`.
+# With CMD alone those words replaced the whole command and docker looked for a binary called
+# `migrate`, which is why the documented upgrade could not be performed from the image.
+#
+# `start` is the default, so an argument-less `docker run` and every existing Deployment (neither
+# yourphr nor demo-yourphr sets command: or args:) behave exactly as before. A shell for debugging
+# now needs --entrypoint, which is the ordinary cost of a container that has more than one job.
+ENTRYPOINT ["node", "dist/server/main.js"]
+CMD ["start"]

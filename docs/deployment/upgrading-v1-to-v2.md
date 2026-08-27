@@ -2,7 +2,7 @@
 
 For anyone self-hosting YourPHR who is not running Kubernetes. If you are, the operator runbook is [`cutover-runbook.md`](cutover-runbook.md) — this page is the general path.
 
-> __Status: written 2026-08-24, ahead of the v2 release.__ The migration itself is proven — it has been rehearsed against a real 20,068-record instance and verified record for record. What is __not__ yet true is the packaging: the migration tool does not ship in the image, and there is no compose file for v2. Both are named at the bottom. Do not follow this page until v2.0.0 is released.
+> __Status: written 2026-08-24, ahead of the v2 release.__ The migration itself is proven — it has been rehearsed against a real 20,068-record instance and verified record for record — and since [#654](https://github.com/jwilleke/yourphr/issues/654) step 2 below is a command the image actually has. What is __not__ yet true is the rest of the packaging: there is no compose file for v2. It is named at the bottom. Do not follow this page until v2.0.0 is released.
 
 ## What is changing, and what is not
 
@@ -78,7 +78,8 @@ A rehearsal against a real instance — 20,068 records, a 111 MB database — to
 
 ## Not yet true
 
-Both are prerequisites for this page being followable, and are tracked:
+One prerequisite for this page being followable is still open, and is tracked:
 
-- __The migration tool does not ship in the image.__ Step 2 above assumes `migrate` is a command the image accepts. Until it is, this path does not work for anyone who cannot check out the source and run it with Node.
 - __There is no v2 compose file.__ [#641](https://github.com/jwilleke/yourphr/issues/641) covers shipping one, along with example Kubernetes manifests and a bare-metal path.
+
+Settled since this page was written: the migration __does__ ship in the image ([#654](https://github.com/jwilleke/yourphr/issues/654)). Step 2 is one of several commands the entrypoint accepts — `migrate`, `reset-password`, `version`, `help`, and `start`, which is what an argument-less `docker run` does. Run `docker run --rm ghcr.io/jwilleke/yourphr:<version> help` to see them.

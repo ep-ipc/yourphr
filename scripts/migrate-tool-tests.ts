@@ -11,7 +11,7 @@
  *
  *   npm run migrate:tool
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -229,6 +229,27 @@ async function main(): Promise<void> {
   check('CLI exits 1 when the gate fails and names the disagreement', badCli.status === 1 && badCli.stdout.includes('DISAGREEMENT') && badCli.stdout.includes('MIGRATION NOT VERIFIED'), `status ${badCli.status}`);
   const usage = cli(['--go', goPath]);
   check('CLI refuses to guess the data dir', usage.status === 2);
+
+  // --- the IMAGE's command, end to end (yourphr#654) ---
+  //
+  // Everything above runs the migration through tsx and the source tree. The upgrade guide tells a
+  // self-hoster to run `docker run … <image> migrate --go … --data …`, and the only thing that
+  // reaches is dist/server/main.js — so that is what these boot. A harness that only ever imports
+  // the module cannot see the gap this issue was filed for: the migration was proven, verified
+  // against a real 20,068-record instance, and the image had no way to reach it.
+  const built = join(process.cwd(), 'dist', 'server', 'main.js');
+  if (!existsSync(built)) spawnSync('npm', ['run', 'build'], { encoding: 'utf8', timeout: 180_000 });
+  const entry = (args: string[]) => spawnSync(process.execPath, [built, ...args], { encoding: 'utf8', timeout: 180_000 });
+
+  const viaImage = entry(['migrate', '--go', goPath, '--data', join(dir, 'image-cli'), '--go-data', goRoot, '--allow-internal']);
+  check("the BUILT entrypoint performs the migration and prints the verification report — the upgrade guide's step 2, as written",
+    viaImage.status === 0 && viaImage.stdout.includes('MIGRATION VERIFIED'), `status ${viaImage.status}: ${(viaImage.stderr || viaImage.stdout).slice(0, 300)}`);
+  const viaImageBad = entry(['migrate', '--go', badPath, '--data', join(dir, 'image-cli-bad'), '--go-data', badRoot, '--allow-internal']);
+  check('the BUILT entrypoint exits 1 when the gate fails — the exit code the runbook keys off',
+    viaImageBad.status === 1 && viaImageBad.stdout.includes('MIGRATION NOT VERIFIED'), `status ${viaImageBad.status}`);
+  const viaImageTypo = entry(['migrate', '--go', goPath, '--data', join(dir, 'image-cli-typo'), '--go-dir', goRoot]);
+  check('TOOTH: a misspelled flag is refused and nothing is written — a data root silently defaulted is the worst outcome available here',
+    viaImageTypo.status === 2 && viaImageTypo.stderr.includes('--go-dir') && !existsSync(join(dir, 'image-cli-typo')), `status ${viaImageTypo.status}`);
 
   rmSync(dir, { recursive: true, force: true });
 

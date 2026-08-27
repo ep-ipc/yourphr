@@ -14,7 +14,7 @@ Both stacks already run side by side: `yourphr` (Go, `ghcr.io/jwilleke/yourphr`,
 - [ ] The spike release that will serve is a __tagged__ image (`vX.Y.Z` on `main` in `jwilleke/yourphr-ts-spike`) and `yourphr-ts` is already running it (Flux's `ImagePolicy` `flux-system:yourphr-ts` follows semver tags only). Confirm: `kubectl -n yourphr get deploy yourphr-ts -o jsonpath='{.spec.template.spec.containers[0].image}'`.
 - [ ] `yourphr-ts-keys` holds `SPIKE_DATABASE_ENCRYPTION_KEY` and `SPIKE_BACKUP_ENCRYPTION_KEY`, and __both values are also in the password manager__. An encrypted instance nobody can reopen is worse than none ([architecture principles, backup section](../planning/architecture-principles-typescript.md)).
 - [ ] A Go backup from the last 24 h exists on the NAS archive (`/nas-backup`, the same share the backup CronJob writes) — this is the independent fallback if both the migration and the rollback go wrong.
-- [ ] `deby` (192.168.68.71) has: `sudo kubectl` (k3s), Node 24, a checkout of `jwilleke/yourphr-ts-spike` with `npm ci` done (the migration tool is `scripts/migrate-from-go.ts`, run with `tsx`; it is __not in the image__ — see "Follow-ups"). A checkout of `jwilleke/yourphr` with Go, for `TestShadowExport`.
+- [ ] `deby` (192.168.68.71) has: `sudo kubectl` (k3s), Node 24, and a checkout of `jwilleke/yourphr` with Go, for `TestShadowExport`. The migration tool __ships in the image__ since [#654](https://github.com/jwilleke/yourphr/issues/654) — `<image> migrate --go … --data …`, the same flags the steps below pass to `npm run migrate:go`, so the node no longer needs a TypeScript checkout to run step 3.
 - [ ] A maintenance window agreed with the household: from the freeze to the swap nobody can sign in to either stack. Budget 60 minutes; the rehearsal below tells you the real number.
 - [ ] This runbook has been rehearsed against a __copy__ first (section "Rehearsal"), including the rollback.
 
@@ -176,11 +176,11 @@ __Two things to expect, neither a failure:__
 - __Six sources have no refresh token__ and will ask to be reconnected at first expiry — `jwilleke:`, `mwilleke:`, `jdoe:` ×3, `jwilleke:Epic (Sandbox)`. This is the household's to-do after the swap ([#584](https://github.com/jwilleke/yourphr/issues/584)); tell them before, not after.
 - __Three settings do not carry__ — `backup.auto-backup`, `backup.auto-backup-days`, `backup.auto-backup-time` — because the TypeScript stack schedules differently. Set them again in Admin → Configuration. The tool names them rather than dropping them silently.
 
-__One surprise, and it cost ten minutes:__ the migration tool is __not in the image__ and the spike was not checked out on the node, so the rehearsal needed `git clone` + `npm ci` first. Node 24, npm and git were already present. Shipping the tool in the image is the follow-up named below, and until it lands the real run needs the same preparation — do it __before__ the freeze, not during it.
+__One surprise, and it cost ten minutes:__ the migration tool is __not in the image__ and the spike was not checked out on the node, so the rehearsal needed `git clone` + `npm ci` first. Node 24, npm and git were already present. That was the follow-up named below, and it has since landed ([#654](https://github.com/jwilleke/yourphr/issues/654)): the image has a `migrate` command, so a real run needs no checkout for step 3 at all.
 
 __Still unrehearsed: step 3, the Ingress swap and swap-back.__ That is the half that touches production and the one the real run must not meet for the first time.
 
 ## Follow-ups this runbook depends on
 
-- The migration tool should ship in the image so step 3 does not need a Node checkout on the node ([#587](https://github.com/jwilleke/yourphr/issues/587) follow-up: `dist/scripts/migrate-from-go.js`, run via `kubectl exec` with the Go copy mounted read-only).
+- ~~The migration tool should ship in the image so step 3 does not need a Node checkout on the node.~~ __Done__ ([#654](https://github.com/jwilleke/yourphr/issues/654)): the image's entrypoint takes a subcommand, so step 3 is `migrate --go … --data …` passed to the image — via `kubectl exec` on the running pod, or a one-shot `docker run` with the Go copy mounted read-only.
 - A Go read-only switch would make step 6 safer than "unreachable but still syncing"; absent that, the reconnect caveat stands.

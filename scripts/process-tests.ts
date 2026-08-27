@@ -6,7 +6,7 @@
  *   npm run process
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
@@ -22,9 +22,9 @@ function check(name: string, ok: boolean, detail = ''): void {
 // (exit null) while the real process is orphaned — the CI runner showed exactly that on Linux.
 const ENTRY = ['--import', 'tsx', 'src/main.ts'];
 
-function runOnce(env: Record<string, string>): { status: number | null; stderr: string } {
-  const r = spawnSync(process.execPath, ENTRY, { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 30_000 });
-  return { status: r.status, stderr: r.stderr };
+function runOnce(env: Record<string, string>, args: string[] = []): { status: number | null; stdout: string; stderr: string } {
+  const r = spawnSync(process.execPath, [...ENTRY, ...args], { env: { ...process.env, ...env }, encoding: 'utf8', timeout: 30_000 });
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
 function get(port: number, path: string): Promise<{ status: number; body: string; headers: Record<string, string | string[] | undefined> }> {
@@ -78,6 +78,30 @@ async function main(): Promise<void> {
   const noIndex = runOnce({ [DATA]: dataDir, [WEB]: join(dir, 'nowhere'), [PORT]: '0' });
   check('refuses a static dir with no index.html, naming it', noIndex.status === 78 && noIndex.stderr.includes('index.html'));
 
+  // --- the subcommand layer (yourphr#654) ---
+  //
+  // The rule with teeth is the LAST one: an unrecognised word must not fall through to starting a
+  // server. These run with a perfectly good environment, so a status of 2 can only be the command
+  // being refused — and a process that started instead would hold the port until spawnSync's
+  // timeout and report null, which is the failure this check is shaped to catch.
+  const good = { [DATA]: join(dir, 'subcommand-data'), [PORT]: '0' };
+  const nonsense = runOnce(good, ['migreat', '--go', '/dev/null']);
+  check('an unknown subcommand exits 2 with the usage and never starts the server',
+    nonsense.status === 2 && nonsense.stderr.includes('unknown command: migreat') && nonsense.stderr.includes('reset-password'), `status ${nonsense.status}`);
+  const strayFlag = runOnce(good, ['start', '--port', '9999']);
+  check('start refuses a flag rather than ignoring it — settings are not command-line arguments',
+    strayFlag.status === 2 && strayFlag.stderr.includes('--port'), `status ${strayFlag.status}`);
+  const help = runOnce(good, ['help']);
+  check('help exits 0 and names every command the image accepts',
+    help.status === 0 && ['start', 'migrate', 'reset-password', 'version'].every((c) => help.stdout.includes(c)), `status ${help.status}`);
+  const pkgVersion = (JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version: string }).version;
+  const versionOut = runOnce(good, ['version']);
+  check('version prints package.json\'s version and exits 0',
+    versionOut.status === 0 && versionOut.stdout.trim() === pkgVersion, `${versionOut.status}: ${versionOut.stdout.trim()}`);
+  const recovery = runOnce(good, ['reset-password', '--user', 'admin', '--data', join(dir, 'nowhere')]);
+  check('reset-password refuses a data directory that does not exist rather than creating an empty instance',
+    recovery.status === 2 && recovery.stderr.includes('does not exist'), `status ${recovery.status}`);
+
   // --- the process ---
   const port = 18000 + Math.floor(Math.random() * 1000);
   const child = spawn(process.execPath, ENTRY, {
@@ -109,6 +133,22 @@ async function main(): Promise<void> {
   child.kill('SIGTERM');
   const code = await Promise.race([exited, new Promise<number | null>((r) => setTimeout(() => r(-1), 10_000))]);
   check('SIGTERM closes cleanly with exit 0', code === 0, `exit ${code}`);
+
+  // --- reset-password, against the instance that just shut down (yourphr#654, #510) ---
+  //
+  // The behaviour is covered in the auth harness; what was unproven until here is that a COMMAND
+  // reaches it. That is the whole shape of yourphr#654: recoverAccess was implemented, tested and
+  // unreachable, which is not the same thing as shipped.
+  const bootstrapPassword = readFileSync(join(dataDir, '.admin_bootstrap_password'), 'utf8').trim();
+  const recoveryFile = join(dataDir, '.recovery_password');
+  const reset = runOnce({}, ['reset-password', '--user', 'admin', '--data', dataDir]);
+  const recovered = existsSync(recoveryFile) ? readFileSync(recoveryFile, 'utf8').trim() : '';
+  check('reset-password sets a fresh password, writes it 0600, names the path and never prints it',
+    reset.status === 0 && recovered !== '' && recovered !== bootstrapPassword && (statSync(recoveryFile).mode & 0o777) === 0o600
+      && reset.stdout.includes('.recovery_password') && !reset.stdout.includes(recovered), `status ${reset.status} ${reset.stderr.slice(0, 200)}`);
+  const missing = runOnce({}, ['reset-password', '--user', 'nobody', '--data', dataDir]);
+  check('reset-password on an account that does not exist exits non-zero and says which name',
+    missing.status !== 0 && missing.stderr.includes('nobody'), `status ${missing.status}`);
 
   rmSync(dir, { recursive: true, force: true });
   // The version the UI shows comes from package.json (main.ts reads it), and the image is built
@@ -163,6 +203,16 @@ async function main(): Promise<void> {
     }
     child2.kill('SIGTERM');
     rmSync(dir2, { recursive: true, force: true });
+
+    // The subcommand layer on the layout the image runs. `docker run <image> migreat` reaches
+    // ENTRYPOINT plus that word, and the answer must be a refusal — not a server started against
+    // whatever data directory the environment happened to name (yourphr#654).
+    const builtNonsense = spawnSync(process.execPath, [built, 'migreat'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, YOURPHR_FAST_STORAGE: join(tmpdir(), 'yourphr-never-created') } });
+    check('the BUILT entrypoint refuses an unknown subcommand with exit 2 and starts nothing',
+      builtNonsense.status === 2 && builtNonsense.stderr.includes('unknown command'), `status ${builtNonsense.status}`);
+    const builtVersion = spawnSync(process.execPath, [built, 'version'], { encoding: 'utf8', timeout: 30_000 });
+    check('the BUILT entrypoint answers `version` — how an operator confirms which image they pulled',
+      builtVersion.status === 0 && builtVersion.stdout.trim() === pkg.version, `${builtVersion.status}: ${builtVersion.stdout.trim()}`);
   }
 
   const failed = results.filter((r) => !r.ok);
