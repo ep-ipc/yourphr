@@ -244,9 +244,10 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const engine = new Engine();
   const config = new ConfigurationManager(engine, new FileConfigProvider(dataDir), { env, log: (line) => appLog.info(line) });
   engine.register('configuration', config);
-  const unknown = config.unknownKeys();
+  // yourphr#473 — reported, not dropped; yourphr#625 — and with a did-you-mean where one fits.
+  const unknown = config.unknownKeyReport();
   if (unknown.length > 0) {
-    appLog.warn(`config: keys with no effect: ${unknown.join(', ')}`); // yourphr#473 — reported, not dropped
+    appLog.warn(`config: keys with no effect: ${unknown.join(', ')}`);
   }
 
   // Now that configuration resolves, teach the logger which values must never appear in a line

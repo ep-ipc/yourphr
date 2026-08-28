@@ -41,6 +41,29 @@ export interface ConfigurationOptions {
   log?: (line: string) => void;
 }
 
+/**
+ * Levenshtein edit distance — the substitutions, insertions and deletions between two strings.
+ *
+ * Used only for did-you-mean suggestions (yourphr#625), never for a decision: a wrong answer here
+ * costs a slightly odd hint, so the straightforward full-matrix implementation is the right one.
+ */
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  // One row at a time: the matrix is only ever read one row back.
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const substitution = (previous[j - 1] as number) + (a[i - 1] === b[j - 1] ? 0 : 1);
+      current[j] = Math.min((previous[j] as number) + 1, (current[j - 1] as number) + 1, substitution);
+    }
+    previous = current;
+  }
+  return previous[b.length] as number;
+}
+
 export class ConfigurationManager extends BaseManager {
   readonly name = 'configuration' as const;
 
@@ -291,6 +314,41 @@ export class ConfigurationManager extends BaseManager {
   unknownKeys(): string[] {
     if (this.customUnreadable) return [`<unreadable: ${this.provider.customLocation()}>`];
     return Object.keys(this.custom).filter((k) => !this.known(k));
+  }
+
+  /**
+   * The unknown keys, each with a did-you-mean when one is close enough (yourphr#625).
+   *
+   * `unknownKeys()` answers WHICH keys have no effect; this answers what the operator should do
+   * about it, which is the whole value of yourphr#473's report. "keys with no effect:
+   * yourphr.sync.max-pgaes" and "... did you mean yourphr.sync.max-pages?" are the difference
+   * between finding it in seconds and filing a bug that the setting does not work.
+   *
+   * Ported from ngdpbase's `findClosestAddonName` (its #672), including its threshold and its
+   * reason for having one: a suggestion is offered only within edit distance 2, so a genuinely
+   * unknown key gets no neighbour rather than a misleading one. On long dotted keys that is a
+   * tight bound by construction — a typo matches, a key naming a different thing does not.
+   */
+  unknownKeyReport(): string[] {
+    return this.unknownKeys().map((key) => {
+      const guess = this.closestKnownKey(key);
+      return guess ? `${key} (did you mean ${guess}?)` : key;
+    });
+  }
+
+  /** The nearest key this build defines, within edit distance 2, or undefined. */
+  private closestKnownKey(input: string): string | undefined {
+    let best: string | undefined;
+    // Exclusive bound: 3 means "accept 2 or better", matching ngdpbase.
+    let bestDistance = 3;
+    for (const candidate of this.keys()) {
+      const d = editDistance(input, candidate);
+      if (d < bestDistance) {
+        best = candidate;
+        bestDistance = d;
+      }
+    }
+    return best;
   }
 
   /** Every key this build defines, for the admin screen and the drift checks. */

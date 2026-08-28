@@ -81,6 +81,37 @@ describe('ConfigurationManager — the door; the provider only stores (yourphr#6
     expect(cfg.unknownKeys()).toEqual(['typo.key']);
   });
 
+  it('a typo\'d key is reported WITH the key it was probably meant to be (yourphr#625)', () => {
+    // The difference between an operator finding it in seconds and filing a bug saying the
+    // setting does not work.
+    const { cfg } = boot({}, { 'yourphr.operator.nme': 'Ops' });
+    expect(cfg.unknownKeyReport()).toEqual(['yourphr.operator.nme (did you mean yourphr.operator.name?)']);
+  });
+
+  it('TOOTH: a genuinely unknown key gets NO neighbour rather than a misleading one', () => {
+    // The threshold is the whole point of the feature. Suggesting the nearest key for something
+    // that is not a typo sends an operator to change a setting that was never the one they wanted.
+    const { cfg } = boot({}, { 'totally.made.up.setting': 'x' });
+    expect(cfg.unknownKeyReport()).toEqual(['totally.made.up.setting']);
+  });
+
+  it('a key that differs by a whole word is too far to guess', () => {
+    const { cfg } = boot({}, { 'yourphr.operator.telephone': 'x' });
+    expect(cfg.unknownKeyReport()).toEqual(['yourphr.operator.telephone']);
+  });
+
+  it('the report is empty when every override is known — no noise at boot', () => {
+    const { cfg } = boot({}, { 'yourphr.operator.name': 'Ops' });
+    expect(cfg.unknownKeyReport()).toEqual([]);
+  });
+
+  it('an unreadable custom file reports as unreadable rather than being guessed at', () => {
+    const provider = new FakeConfigProvider({}, undefined, '/data/config/app-custom-config.json: bad JSON');
+    const cfg = new ConfigurationManager(new Engine(), provider, { env: {} });
+    expect(cfg.unknownKeyReport()[0]).toContain('unreadable');
+    expect(cfg.unknownKeyReport()[0]).not.toContain('did you mean');
+  });
+
   it('unreadable overrides are reported and never overwritten', () => {
     const provider = new FakeConfigProvider({}, undefined, '/data/config/app-custom-config.json: bad JSON');
     const cfg = new ConfigurationManager(new Engine(), provider, { env: {} });
