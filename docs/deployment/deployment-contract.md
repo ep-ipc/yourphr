@@ -95,6 +95,47 @@ policy:
 An `ImageUpdateAutomation` then writes the selected tag into the Deployment's `image:` line (marked
 with `# {"$imagepolicy": "flux-system:yourphr"}`) and commits it back to the GitOps repo.
 
+### Every automated instance needs BOTH halves
+
+There are two instances on this contract, not one:
+
+| Instance | Deployment | Automation |
+|---|---|---|
+| `yourphr.nerdsbythehour.com` | `apps/production/yourphr-ts` | `yourphr-policy.yaml` |
+| `demo.yourphr.org` | `apps/production/demo-yourphr-ts` | `demo-yourphr-policy.yaml` |
+
+Both share the __same__ `ImageRepository` and `ImagePolicy` (`flux-system:yourphr`) — one GHCR
+scan, one release-gated semver rule. Each keeps its own `ImageUpdateAutomation` so its image bump
+commits independently rather than both instances moving in a single commit.
+
+Automation needs __two__ things, and either one missing is silent:
+
+1. the `ImageUpdateAutomation`'s `path` points at the directory holding that instance's Deployment
+2. that Deployment's `image:` line carries the `# {"$imagepolicy": "flux-system:yourphr"}` marker
+
+The setter rewrites a marked line inside the watched path. A watched path with no marker updates
+nothing; a marked line nobody watches updates nothing. Neither raises an error — Flux simply has no
+work to do, and the instance stays on whatever tag it was last given while every other instance
+moves on. That is exactly what happened to the demo ([#675](https://github.com/jwilleke/yourphr/issues/675)):
+its automation still pointed at the old Go directory after the TypeScript swap, so it sat on 3.1.0
+through the 3.2.0 release with nothing reporting a problem.
+
+__A deliberately pinned Deployment has neither__, and that is how you tell the two apart. The
+frozen Go deployments (`apps/production/demo-yourphr`, and prod's `yourphr`) pin
+`ghcr.io/jwilleke/yourphr-go:2.10.3` with no marker on purpose: they are the rollback and must not
+float. Absence of a marker is a statement, so it is worth being sure which statement it is making.
+
+__Verifying it, rather than assuming:__ after a release, every instance that should have moved
+reports the new version.
+
+```bash
+kubectl -n yourphr      get deploy yourphr-ts      -o jsonpath='{.spec.template.spec.containers[0].image}'
+kubectl -n demo-yourphr get deploy demo-yourphr-ts -o jsonpath='{.spec.template.spec.containers[0].image}'
+```
+
+Nothing checks this automatically yet. Until something does, it belongs beside the two post-release
+checks below — the failure mode is the same one: silence that looks like success.
+
 ## Integrating other deployment tools
 
 Apply the same "highest `:X.Y.Z`" rule:
