@@ -20,7 +20,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#679](https://github.com/jwilleke/yourphr/issues/679) — [CHORE] Close or rewrite every Go-era issue — no open work against a deleted codebase
 - [#678](https://github.com/jwilleke/yourphr/issues/678) — [BUG] E2E coverage gap: the record-display specs went with the Go stack
 - [#676](https://github.com/jwilleke/yourphr/issues/676) — [EPIC] The word "fasten" stops appearing in anything we ship
-- [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
 - [#641](https://github.com/jwilleke/yourphr/issues/641) — [SPIKE] Ship a minimal working deployment for each of the three targets — bare metal, Docker, k8s
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
 - [#632](https://github.com/jwilleke/yourphr/issues/632) — [FEATURE] In-app help pages — markdown shipped with the code, rendered as HTML
@@ -49,7 +48,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#687](https://github.com/jwilleke/yourphr/issues/687) — [BUG] "Email this summary" calls an endpoint that does not exist
 - [#686](https://github.com/jwilleke/yourphr/issues/686) — [BUG] The sources page cannot tell you whether C-CDA import will work
 - [#674](https://github.com/jwilleke/yourphr/issues/674) — [BUG] A display label is used as a feature flag — "sandbox mode" keys off the instance's name
-- [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
 - [#639](https://github.com/jwilleke/yourphr/issues/639) — [SPIKE] Remove the SOPS Secret — .env on the volume supersedes it
 - [#552](https://github.com/jwilleke/yourphr/issues/552) — [CHORE] Port the DICOM viewer to dwv 0.36 — removed APIs and a build path that no longer exists
 - [#551](https://github.com/jwilleke/yourphr/issues/551) — [CHORE] Migrate 647 *ngIf uses to Angular built-in control flow (@if/@for)
@@ -122,11 +120,13 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#675](https://github.com/jwilleke/yourphr/issues/675) — [BUG] demo.yourphr.org is orphaned from image automation — pinned at 3.1.0 forever
 - [#673](https://github.com/jwilleke/yourphr/issues/673) — [BUG] The image ships the sandbox Angular build — prod says "sandbox-3.1.0" and shows a false PHI-safety notice
 - [#659](https://github.com/jwilleke/yourphr/issues/659) — [BUG] The Releases page says the latest YourPHR is v2.10.3 — the v3 releases have no GitHub Release
+- [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
 - [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
 - [#654](https://github.com/jwilleke/yourphr/issues/654) — [FEATURE] Ship migrate in the image — the upgrade guide already assumes it
 - [#652](https://github.com/jwilleke/yourphr/issues/652) — [CHORE] One image from this repository, on the 3.x line, and Flux follows it
 - [#651](https://github.com/jwilleke/yourphr/issues/651) — [CHORE] The TypeScript stack's CI becomes this repository's CI
 - [#650](https://github.com/jwilleke/yourphr/issues/650) — [CHORE] Import the TypeScript stack at src/, with its history — one build path
+- [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
 - [#648](https://github.com/jwilleke/yourphr/issues/648) — [SPIKE] The role column must carry a configured role NAME, not one of two literals
 - [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
 - [#642](https://github.com/jwilleke/yourphr/issues/642) — [BUG] Version banner reports the wrong build and a blank environment name
