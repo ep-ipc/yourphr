@@ -69,7 +69,7 @@ __Register at:__ <https://fhir.epic.com> — self-register a patient-facing app 
   `https://relay.nerdsbythehour.com`; override with `YOURPHR_RELAY_PUBLIC_URL`
   (the origin the provider redirects to) plus `YOURPHR_RELAY_URL` /
   `YOURPHR_RELAY_SECRET` (where the backend polls). No frontend rebuild is
-  needed — see [`../../backend/cmd/relay/README.md`](../../backend/cmd/relay/README.md).
+  needed — see [`../../relay/README.md`](../../relay/README.md).
 - The redirect URI registered with Epic must __exactly__ match the relay
   callback: `https://relay.nerdsbythehour.com/callback` (or your own relay's
   `/callback`).

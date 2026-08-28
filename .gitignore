@@ -168,3 +168,8 @@ dist-seed/
 /playwright-report/
 /coverage/
 /data/
+
+# Stray tsc output beside a harness. scripts/ is TypeScript run through tsx; a compiled .js
+# here is an accident, and committing one means two copies of the same logic (yourphr#682).
+scripts/**/*.js
+scripts/**/*.js.map

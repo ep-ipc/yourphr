@@ -16,7 +16,7 @@ This is real-world health-data engineering, not CRUD. A few of the juicy ones:
 
 - __Turn messy, vendor-specific FHIR into something a human can read.__ Patient portals export non-conformant FHIR R4 (FollowMyHealth/Veradigm collapse social/lifestyle items into clinical `Condition`s, omit `Condition.category`, use proprietary code systems). We normalize it at read time and route it to legible patient sections — the __two-layer source-adapter / display-mapper__ design in [classification-and-display-architecture.md](docs/your-phr-dashboard/classification-and-display-architecture.md).
 - __Reconcile "Current Medications" across resource types__ — one drug scattered across `MedicationRequest` / `MedicationStatement` / `MedicationDispense`, no clean "is current" flag. A derived, de-duplicated, provenance-aware view ([#264](https://github.com/jwilleke/yourphr/issues/264)).
-- __Self-hosted SMART-on-FHIR without a commercial relay__ — a tiny public store-and-poll OAuth `code` bouncer that never sees tokens, so a LAN instance can still sync ([relay README](backend/cmd/relay/README.md), [EPIC #20](https://github.com/jwilleke/yourphr/issues/20)).
+- __Self-hosted SMART-on-FHIR without a commercial relay__ — a tiny public store-and-poll OAuth `code` bouncer that never sees tokens, so a LAN instance can still sync ([relay README](relay/README.md), [EPIC #20](https://github.com/jwilleke/yourphr/issues/20)).
 - __US Core 9.0.0 Must-Support display conformance__ — a CI gate checks our display against the IG's own example resources ([docs/us-core/](docs/us-core/README.md)).
 - __Importing the formats portals actually give patients__ — C-CDA/CCD XML ([#254](https://github.com/jwilleke/yourphr/issues/254)), PDFs ([#255](https://github.com/jwilleke/yourphr/issues/255)).
 
@@ -75,7 +75,7 @@ YourPHR handles __Personal Health Information__. __Never__ attach real patient d
 
 ## Versioning
 
-YourPHR follows [SemVer](https://semver.org/): releases are cut on demand by a maintainer running the __release-please__ workflow (not per commit), and each release is a __patch__ bump by default (e.g. `1.1.3` → `1.1.4`). Write commits as [Conventional Commits](https://www.conventionalcommits.org/) (they drive the auto-generated `CHANGELOG.md`); for a __minor__ or __major__ release, add a `Release-As: 1.2.0` (or `2.0.0`) footer. Never hand-edit `backend/pkg/version/version.go` or `CHANGELOG.md`.
+YourPHR follows [SemVer](https://semver.org/). Releases are cut by a maintainer pushing an annotated `vX.Y.Z` tag — no release bot, no release PR ([#241](https://github.com/jwilleke/yourphr/issues/241) removed release-please, whose bot PR could not pass `main`'s required checks without a privileged token). Write commits as [Conventional Commits](https://www.conventionalcommits.org/); `CHANGELOG.md` is written by hand at release time in that format. The steps are in [`docs/releasing.md`](docs/releasing.md). The version lives in `package.json` and nowhere else — a v3 instance reads it there and serves it on `/api/version`.
 
 ## Setup
 
@@ -110,28 +110,31 @@ Before changing anything, confirm your environment is set up:
 ```bash
 make test            # both suites
 make test-frontend   # Angular only (ChromeHeadless)
-make test-backend    # Go only
+npm test             # the server's unit tests (vitest)
 ```
 
-__Note:__ the first backend run takes a while (it vendors deps and generates code).
+The server also has integration harnesses under `scripts/`, run one at a time — `npm run app`,
+`npm run auth`, `npm run records`, and so on. CI runs each as its own job; the authoritative list
+is `.github/workflows/server-ci.yaml`. Before pushing, run that whole list rather than a subset:
+`npm run typecheck` and `npm run build` read *different* TypeScript configs and can disagree.
 
 ## Start the dev environment
 
-Running from source needs two processes: the Angular frontend and the Go backend. First create a dev config:
+Running from source needs two processes: the Angular frontend and the TypeScript server.
 
 ```bash
 cp .env.dev.example .env
 ```
 
 ```bash
-# .env — bootstrap only; everything else is changed at Admin -> Configuration
+# .env — bootstrap and secrets only; every other setting is Admin -> Configuration
 YOURPHR_WEB_LISTEN_PORT=9090          # frontend/proxy.conf.json proxies /api here
-YOURPHR_STORAGE_DATA_DIR=./db
-YOURPHR_DATABASE_LOCATION=./db/fasten.db
-YOURPHR_DATABASE_ENCRYPTION_ENABLED=false
-YOURPHR_CDA_CONVERTER_ENABLED=false
-YOURPHR_BACKUP_LABEL=dev
+YOURPHR_FAST_STORAGE=./data           # the databases, the config store, the signing key
 ```
+
+Leave the encryption key unset for dev and the databases are written in the clear — the server says
+so on every start. (The `.env.*.example` templates still describe the Go stack's keys and are being
+rewritten, [#676](https://github.com/jwilleke/yourphr/issues/676).)
 
 Then, in two terminals:
 
@@ -140,7 +143,7 @@ Then, in two terminals:
 make serve-frontend
 
 # Terminal 2
-make serve-backend
+make serve-server
 ```
 
 Open `http://localhost:4200`. The frontend dev server proxies API requests to the backend.

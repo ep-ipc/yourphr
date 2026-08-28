@@ -22,7 +22,7 @@ This page covers running and configuring an instance. The rest of the deployment
 
 | Doc | What it covers |
 |---|---|
-| [Deployment options](#deployment-options) (this page) | docker-compose, `docker run`, bare metal, Kubernetes/GitOps — all from the same `YOURPHR_*` config interface. |
+| [Deployment options](#deployment-options) (this page) | `docker run`, bare metal, Kubernetes/GitOps — all from the same `YOURPHR_*` config interface. A worked compose file is [#641](https://github.com/jwilleke/yourphr/issues/641). |
 | [Configuration model](#configuration-model) (this page) | Precedence (shipped defaults < `.env` < `.env_custom` < Admin → Configuration < `YOURPHR_*`), the env mapping, and the full key reference. |
 | [Sandbox provider credentials](#sandbox-provider-credentials) (this page) | The optional `YOURPHR_SANDBOX_*` one-click sandbox catalog ([#291](https://github.com/jwilleke/yourphr/issues/291)) — env-only, works on any deployment. |
 | [OAuth relay (self-hosting)](#oauth-relay-self-hosting) (this page) | Self-host the public SMART redirect relay ([#20](https://github.com/jwilleke/yourphr/issues/20)) — Docker or k8s; only needed for live provider sync. |
@@ -41,7 +41,7 @@ This page covers running and configuring an instance. The rest of the deployment
 ## Quick start (minimal, no external services)
 
 ```bash
-docker run -p 8080:8080 -v "$(pwd)/db:/opt/fasten/db" ghcr.io/jwilleke/yourphr:main
+docker run -p 8080:8080 -v "$(pwd)/data:/opt/yourphr/data" ghcr.io/jwilleke/yourphr:3.2.0
 ```
 
 Open `http://localhost:8080` and complete the first-run setup. On first run YourPHR is __secure by default__:
@@ -75,19 +75,20 @@ __`admin` is allowed here__ ([#519](https://github.com/jwilleke/yourphr/issues/5
 
 There is no password-reset flow in the app — no reset route, no email, and "Forgot password?" on the sign-in page is not wired to anything. If the only admin is locked out, use the CLI ([#510](https://github.com/jwilleke/yourphr/issues/510)):
 
+`reset-password` is a command of the image itself ([#654](https://github.com/jwilleke/yourphr/issues/654)) — the entrypoint takes a subcommand, so this needs no shell in the container and no source checkout:
+
 ```bash
-# docker compose
-docker compose exec yourphr /opt/fasten/fasten reset-password --username owner
-# kubernetes
-kubectl exec deploy/<name> -n <namespace> -- /opt/fasten/fasten reset-password --username owner
-# bare metal
-./fasten reset-password --username owner
+# docker — against a STOPPED instance, on its volume
+docker run --rm -v "$(pwd)/data:/opt/yourphr/data" \
+  ghcr.io/jwilleke/yourphr:3.2.0 reset-password --user owner --data /opt/yourphr/data
+# kubernetes — against the running pod
+kubectl exec deploy/<name> -n <namespace> -- node dist/server/main.js reset-password --user owner
 ```
 
-It generates a password, applies it, and writes the value to `<data root>/.admin_bootstrap_password` (`0600`) — the same file and lifecycle as the provisioned admin above, so it __deletes itself the first time that account signs in__. The command prints the path, never the value, so the password stays out of shell history, CI logs and screen recordings. Read it the same way:
+It generates a password, applies it, and writes the value to `<data root>/.recovery_password` (`0600`) — the same file and lifecycle as the provisioned admin above, so it __deletes itself the first time that account signs in__. The command prints the path, never the value, so the password stays out of shell history, CI logs and screen recordings. Read it the same way:
 
 ```bash
-kubectl exec deploy/<name> -n <namespace> -- cat /opt/fasten/db/.admin_bootstrap_password
+kubectl exec deploy/<name> -n <namespace> -- cat /opt/yourphr/data/.recovery_password
 ```
 
 Two things it does deliberately:
@@ -100,10 +101,10 @@ It works against a stopped instance or a running one, and refuses a username tha
 __You do not supply a password.__ At first start with an empty user table, the app generates one, creates the admin, and writes the value to `<data root>/.admin_bootstrap_password` (mode `0600`). Startup logs the path, never the value. Read it once:
 
 ```bash
-# docker compose
-docker compose exec yourphr cat /opt/fasten/db/.admin_bootstrap_password
+# docker
+docker exec yourphr cat /opt/yourphr/data/.admin_bootstrap_password
 # kubernetes
-kubectl exec deploy/<name> -n <namespace> -- cat /opt/fasten/db/.admin_bootstrap_password
+kubectl exec deploy/<name> -n <namespace> -- cat /opt/yourphr/data/.admin_bootstrap_password
 ```
 
 Generated rather than supplied on purpose: a password you set ends up in a secret store, a `.env`, or a CI log, and tends to be reused across instances. A generated one is unique per instance, rotates whenever the database is rebuilt, and lives in exactly one place.
@@ -126,14 +127,18 @@ Mount what you want to persist and pass config as env (or mount a file):
 
 ```bash
 docker run -d --name yourphr -p 9090:8080 \
-  -v "$(pwd)/db:/opt/fasten/db" \
-  -v "$(pwd)/certs:/opt/fasten/certs/shared" \
-  -e YOURPHR_DATABASE_ENCRYPTION_KEY="$(openssl rand -hex 16)" \
-  -e YOURPHR_LOG_LEVEL=INFO \
-  ghcr.io/jwilleke/yourphr:main
+  -v "$(pwd)/data:/opt/yourphr/data" \
+  -e YOURPHR_DATABASE_ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  ghcr.io/jwilleke/yourphr:3.2.0
 ```
 
-To override many keys at once, drop a `.env_custom` at `/opt/fasten/.env_custom` (see [Configuration model](#configuration-model)), or change them from __Admin → Configuration__ on the running instance — no restart and no redeploy.
+One volume: the database, the config store and the generated signing key all live under it. The
+app serves plain HTTP — TLS belongs to a reverse proxy in front of it, so there is no certificate
+volume to mount.
+
+To set many keys at once, put a `.env` on that volume at `/opt/yourphr/data/.env` (see
+[Configuration model](#configuration-model)), or change them from __Admin → Configuration__ on the
+running instance — no restart and no redeploy.
 
 ### C. Bare metal
 
@@ -155,7 +160,7 @@ Bare metal in particular __must__ set `YOURPHR_WEB_SRC_FRONTEND_PATH` to whereve
 
 ### D. Kubernetes / GitOps
 
-Provide config via a `ConfigMap` (non-secret) + `Secret` (the DB encryption key, an optional pinned JWT key) injected as `YOURPHR_*` environment variables. Mount a `PersistentVolume` at `/opt/fasten/db`. Any GitOps tool works; nothing in the app is Kubernetes- or Flux-specific.
+Provide config via a `ConfigMap` (non-secret) + `Secret` (the DB encryption key, an optional pinned JWT key) injected as `YOURPHR_*` environment variables. Mount a `PersistentVolume` at `/opt/yourphr/data`. Any GitOps tool works; nothing in the app is Kubernetes- or Flux-specific.
 
 ## Configuration model
 
@@ -166,7 +171,7 @@ shipped defaults  <  .env  <  .env_custom  <  instance overrides  <  YOURPHR_* e
 ```
 
 - __Shipped defaults__ — `backend/pkg/config/app-default-config.json`, embedded in the binary. This file is the catalogue of every setting that exists: if a key is not in it, it is not a setting, and the app warns at startup about any `YOURPHR_*` variable that maps to nothing.
-- __`.env` / `.env_custom`__ — *optional* dotenv files loaded from the process __working directory__ at startup (repo root for `make serve-backend`; `/opt/fasten/` inside the container — mount `.env_custom` there). `.env` is a per-deployment base; `.env_custom` (gitignored) holds instance overrides. Both are optional — config works on defaults + `YOURPHR_*` env alone. Start from the template for your deployment: `.env.docker.example`, `.env.baremetal.example`, `.env.k8s.example`, or `.env.dev.example`.
+- __`.env`__ — an *optional* dotenv file, loaded before anything else evaluates ([#630](https://github.com/jwilleke/yourphr/issues/630)). Precedence, highest first: the ambient environment, then `<YOURPHR_FAST_STORAGE>/.env` (the data volume — `/opt/yourphr/data/.env` in a container), then `<cwd>/.env` (the repo root, for a direct install). The ambient environment wins so a variable set in a manifest is never silently overridden by a file. Optional throughout — configuration works on defaults plus `YOURPHR_*` alone. The `.env.*.example` templates still describe the Go stack's keys and are being rewritten ([#676](https://github.com/jwilleke/yourphr/issues/676)).
 - __Instance overrides__ — `<data>/config/app-custom-config.json`, written by __Admin → Configuration__. This is where ordinary settings are changed on a running instance; no restart, no file editing, no redeploy.
 - __`YOURPHR_*` environment__ — the universal override, highest precedence (ideal for secrets and k8s). A value set here __cannot be changed from the Admin screen__: that screen shows it as governed by the environment and refuses the edit, rather than accepting a change that would silently revert on the next restart.
 
@@ -198,7 +203,7 @@ Any config key can be set as an env var: prefix __`YOURPHR_`__, uppercase the ke
 | `web.allow_unsafe_endpoints` | `false` | __Never enable in production__ — exposes unauthenticated API access. |
 | `web.smart_connect.login_wait_seconds` | `240` | How long the SMART-on-FHIR connect flow waits for the user to finish logging in at the provider before timing out. Served to the frontend, so changing it needs __no frontend rebuild__ — raise it for slow provider logins (e.g. CMS Blue Button). |
 | `database.type` | `sqlite` | Only SQLite is supported; Postgres is present but __broken__. |
-| `database.location` | `/opt/fasten/db/fasten.db` | SQLite file — mount this path to persist data. |
+| `yourphr.database.location` | `${YOURPHR_FAST_STORAGE}/spike.db` | The app database. `yourphr.records.location` holds the records; both compose from the storage root, so mounting that one volume persists everything. |
 | `database.encryption.enabled` | `true` | DB-at-rest encryption (encrypted SQLite build). |
 | `database.encryption.key` | *(unset — required)* | Set on first-run setup or via `YOURPHR_DATABASE_ENCRYPTION_KEY` (≥10 chars). |
 | `jwt.issuer.key` | *(public placeholder — auto-gen)* | Auto-generates a strong key if unset; override with `YOURPHR_JWT_ISSUER_KEY` (`openssl rand -hex 32`). Never use the committed default in production. |
@@ -366,7 +371,7 @@ Put it behind your own TLS-terminating reverse proxy / tunnel at a public hostna
 
 ### Run it (Kubernetes / GitOps)
 
-A ready-to-adapt manifest (Secret + Deployment + Service + Ingress, with the forward-auth exclusion called out) lives at [`../../backend/cmd/relay/deploy/yourphr-relay.example.yaml`](../../backend/cmd/relay/deploy/yourphr-relay.example.yaml). Copy it into your GitOps repo and adjust the host + secret. The maintainer's instance does exactly this via `mj-infra-flux`; the manifest is a template, not applied from this repo.
+A ready-to-adapt manifest (Secret + Deployment + Service + Ingress, with the forward-auth exclusion called out) lives at [`../../relay/deploy/yourphr-relay.example.yaml`](../../relay/deploy/yourphr-relay.example.yaml). Copy it into your GitOps repo and adjust the host + secret. The maintainer's instance does exactly this via `mj-infra-flux`; the manifest is a template, not applied from this repo.
 
 ### Point the app at it
 
@@ -394,6 +399,6 @@ If `YOURPHR_RELAY_SECRET` is unset, the app simply doesn't use a relay (it falls
 - [`../vendors/README.md`](../vendors/README.md) — per-vendor connection notes and onboarding gates
 - [`../provider-catalog/`](../provider-catalog/) — admin-configured production provider catalog
 - [`../medicare-bluebutton.md`](../medicare-bluebutton.md) — a full worked SMART-on-FHIR connect example
-- [`../../backend/cmd/relay/deploy/yourphr-relay.example.yaml`](../../backend/cmd/relay/deploy/yourphr-relay.example.yaml) — example k8s manifest for the OAuth relay
+- [`../../relay/deploy/yourphr-relay.example.yaml`](../../relay/deploy/yourphr-relay.example.yaml) — example k8s manifest for the OAuth relay
 - [`FHIR/fhir-converter-local.md`](../FHIR/fhir-converter-local.md) — running the C-CDA converter sidecar
 - [`architecture.md`](../architecture.md) — system overview

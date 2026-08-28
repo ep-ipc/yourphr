@@ -6,7 +6,9 @@ The single, leading map of how YourPHR fits together. Start here, then follow th
 
 ## What YourPHR is
 
-A __self-hosted personal/family Personal Health Record (PHR) viewer__ — a standalone, community-maintained continuation of [Fasten OnPrem](https://github.com/fastenhealth/fasten-onprem) (GPL v3, attribution retained; see [`../README.md`](../README.md)). A __Go backend__ (Gin + GORM, encrypted SQLite) serves a JSON API and the compiled __Angular 20__ single-page app. It imports __FHIR R4__ bundles — today by manual upload; live provider sync is a roadmap item (see [Roadmap](./Roadmap.md)).
+A __self-hosted personal/family Personal Health Record (PHR) viewer__ — a standalone, community-maintained continuation of [Fasten OnPrem](https://github.com/fastenhealth/fasten-onprem) (GPL v3, attribution retained; see [`../README.md`](../README.md)). A __TypeScript backend__ (`src/`, Node 24, SQLite) serves a JSON API and the compiled __Angular 20__ single-page app, both built from this repository into one image. It imports __FHIR R4__ bundles — today by manual upload; live provider sync through the relay is a roadmap item (see [Roadmap](./Roadmap.md)).
+
+> __The Go backend is gone.__ It served the product to v2.10.3 and was deleted on 2026-08-27 ([#677](https://github.com/jwilleke/yourphr/issues/677)); its history lives in the `v1.0.0`…`v2.10.3` tags. The only Go left is the OAuth relay. The rules the current stack is built on are in [`planning/architecture-principles-typescript.md`](./planning/architecture-principles-typescript.md) — read that before changing any of it.
 
 It is a __display-only client__, not an EHR and not a FHIR server: it requests/imports records and presents them legibly. That framing drives the conformance posture (see [US Core support](./us-core/README.md)).
 
@@ -21,8 +23,8 @@ flowchart TB
 
     subgraph self["Self-hosted (LAN / home server, behind Authentik forward-auth)"]
         spa["Angular 20 SPA<br/>(static assets)"]
-        api["Go backend — Gin API<br/>(serves SPA + JSON API)"]
-        db[("Encrypted SQLite<br/>(per-user FHIR records)")]
+        api["TypeScript server<br/>(serves SPA + JSON API)"]
+        db[("SQLite — records.db + spike.db<br/>(per-user FHIR records)")]
     end
 
     relay["YourPHR relay<br/>(public OAuth code bouncer)"]
@@ -33,29 +35,31 @@ flowchart TB
     portal -.->|"FHIR R4 bundle export (manual upload, today)"| patient
     patient -.->|upload bundle| spa
 
-    api -.->|"poll for auth code (future sync)"| relay
-    portal -.->|"OAuth redirect (future sync)"| relay
-    api -.->|"token exchange + FHIR pull (future sync)"| portal
+    api -.->|"poll for auth code (not wired in v3)"| relay
+    portal -.->|"OAuth redirect (not wired in v3)"| relay
+    api -.->|"token exchange + FHIR pull (not wired in v3)"| portal
 
     classDef future stroke-dasharray: 5 5;
     class relay,portal future;
 ```
 
-Dashed paths are __roadmap / not yet functional__ in this fork: `fasten-sources` is a local stub, so live provider sync does not work yet — manual bundle upload is the supported import path. See [SMART on FHIR plan](./planning/smart-on-fhir/smart-on-fhir.md).
+Dashed paths are __not functional in v3__: the relay is deployed but the server does not use it, and `GET /api/secure/source/relay-config` reports that none is configured rather than pretending otherwise. Manual bundle upload is the supported import path. Proving one production provider end to end is [#408](https://github.com/jwilleke/yourphr/issues/408). See the [SMART on FHIR plan](./planning/smart-on-fhir/smart-on-fhir.md).
 
 ## Component map
 
 | Layer | Tech / location | Notes |
 |---|---|---|
-| __Frontend__ | Angular 20 SPA — `frontend/src/app/` | Upgraded 14→20 (epic [#12](https://github.com/jwilleke/yourphr/issues/12)). Served as static assets by the backend. `fasten-api.service.ts` is the API client; JWT in an HttpOnly cookie ([#103](https://github.com/jwilleke/yourphr/issues/103)). |
-| __Web / API__ | Gin router — [`../backend/pkg/web/server.go`](../backend/pkg/web/server.go), handlers in `backend/pkg/web/handler/` | Route groups: `/api` (public — auth, glossary, CORS proxy), `/api/secure` (behind `RequireAuth()` JWT), `/api/unsafe` (dev-only, off by default). SSE at `/api/secure/events/stream`. |
-| __Auth__ | `backend/pkg/auth/` + bcrypt | HS256 JWT (algorithm-pinned), bcrypt cost 14. 1h session token + DB-backed long-lived "access" tokens. Admin gate re-reads role from DB, not the JWT claim. |
-| __Data access__ | `DatabaseRepository` interface — [`../backend/pkg/database/interface.go`](../backend/pkg/database/interface.go) | The single data-access contract. GORM impl over __encrypted SQLite__ (the only working store). Construct via `factory.go`. Per-user scoping centralized via `GetCurrentUser(ctx)`. Postgres exists but is __broken/unsupported__. |
-| __FHIR models__ | ~70 generated `backend/pkg/models/database/fhir_*.go` | __Generated — never hand-edit.__ Each runs FHIRPath via the __goja__ JS engine (`searchParameterExtractor.js`) to flatten searchable fields into indexed SQLite columns. |
-| __Display models__ | `FastenDisplayModel` + frontend view-models | Turn stored FHIR into patient-legible sections. See [the display architecture](#the-display-architecture). |
-| __Relay__ | [`../backend/cmd/relay/`](../backend/cmd/relay/) | Tiny stateless public __store-and-poll__ OAuth `code` bouncer. Never sees tokens, holds no provider registration. EPIC [#20](https://github.com/jwilleke/yourphr/issues/20). |
-| __Sources__ | `fasten-sources` replaced by a local __stub__ (`./fasten-sources-stub`, `replace` in `go.mod`) | Catalog/client interfaces only; no real OAuth clients → live sync non-functional. |
-| __Entry point__ | [`../backend/cmd/fasten/fasten.go`](../backend/cmd/fasten/fasten.go) | urfave/cli app: `start`, `migrate`, `version`. |
+| __Frontend__ | Angular 20 SPA — `frontend/src/app/` | Upgraded 14→20 (epic [#12](https://github.com/jwilleke/yourphr/issues/12)). Served as static assets by the server, from the same image and the same commit ([#652](https://github.com/jwilleke/yourphr/issues/652)). JWT in an HttpOnly cookie ([#103](https://github.com/jwilleke/yourphr/issues/103)). |
+| __Entry point__ | [`../src/main.ts`](../src/main.ts) → `src/cli/` | A subcommand layer ([#654](https://github.com/jwilleke/yourphr/issues/654)): `start` (the default), `migrate`, `reset-password`, `version`, `help`. An unrecognised command exits non-zero and never starts a server. |
+| __Composition root__ | [`../src/app.ts`](../src/app.ts) | `openStores()` / `assembleApp()` build the engine, its managers in dependency order, and the providers configuration selects. |
+| __Web / API__ | [`../src/server.ts`](../src/server.ts) | Plain `node:http` — __no TLS__; a reverse proxy terminates it. `/api` public, `/api/secure` behind the session cookie, `/api/secure/admin` behind `admin-read`. SSE at `/api/secure/events/stream`. |
+| __Managers__ | `src/framework/managers/`, `src/app/managers/` | __A resource has exactly one door.__ Configuration, users, sessions, audit, backups, jobs, settings, database; records, sources, catalog, glossary, demo. |
+| __Providers__ | `src/framework/providers/`, `src/app/providers/` | The only code that touches a store or the network, chosen by configuration with an inert `null` alternative. `npm run check:store` and `npm run check:boundary` fail CI if either boundary is crossed. |
+| __Request context__ | [`../src/framework/ApiContext.ts`](../src/framework/ApiContext.ts) | Who is asking, on every manager call. Permissions are `{target}-{action}`; roles are data. |
+| __Data access__ | `SqliteRecordsProvider` over `records.db`; the app database is `spike.db` | Both compose their paths from the storage root in configuration ([#626](https://github.com/jwilleke/yourphr/issues/626)). At-rest encryption is off unless a key is set, and the server says so on every start. |
+| __FHIR handling__ | `@medplum/fhirtypes`, `fhirpath` | No code generation. The Go generators (`go generate`, `tygo`) went with the Go stack. |
+| __Migration from Go__ | [`../src/migrate/`](../src/migrate/) | One-way and idempotent; its exit criterion is a record-for-record verification, not a successful import. |
+| __Relay__ | [`../relay/`](../relay/) | The only Go left: a pure-stdlib, dependency-free store-and-poll OAuth `code` bouncer. Never sees tokens. EPIC [#20](https://github.com/jwilleke/yourphr/issues/20). |
 
 ## Key flows
 
@@ -65,11 +69,11 @@ Dashed paths are __roadmap / not yet functional__ in this fork: `fasten-sources`
 sequenceDiagram
     actor P as Patient
     participant SPA as Angular SPA
-    participant API as Gin API
-    participant DB as Encrypted SQLite
+    participant API as TypeScript server
+    participant DB as SQLite
     P->>SPA: Upload FHIR R4 bundle
     SPA->>API: POST bundle (/api/secure)
-    API->>API: Parse resources; goja FHIRPath extraction → indexed columns
+    API->>API: Parse resources; FHIRPath extraction → indexed columns + FTS5 text
     API->>DB: Store raw FHIR + search params (scoped to UserID)
     Note over API,DB: Raw FHIR is stored verbatim — never mutated
     P->>SPA: Open dashboard / record
@@ -123,21 +127,20 @@ __Deep dives:__
 
 - [Classification & display architecture](./your-phr-dashboard/classification-and-display-architecture.md) — the two-layer model in full, condition-classifier decision table, provenance resolver, FollowMyHealth reference quirks.
 - [Patient-legible display principle](./your-phr-dashboard/patient-legible-display.md) — the north star (#262).
-- [The dashboard](./your-phr-dashboard/README.md) — config-driven home view; `backend/pkg/web/handler/dashboard/default.json` *is* a dashboard.
+- [The dashboard](./your-phr-dashboard/README.md) — the config-driven home view. Note the Go handler it describes is gone; the v3 dashboard endpoint is one of the gaps in [#680](https://github.com/jwilleke/yourphr/issues/680).
 - [Phase 1 condition-classifier spec](./your-phr-dashboard/phase-1-condition-classifier-spec.md) · [Per-profile dashboards](./your-phr-dashboard/per-profile-dashboards-brainstorm.md)
 
 ## Code generation (don't hand-edit generated files)
 
-Two generators produce committed files; re-run them when inputs change.
+__There is no code generation.__ Both generators went with the Go stack ([#677](https://github.com/jwilleke/yourphr/issues/677)):
 
-```mermaid
-flowchart LR
-    sp["search-parameters.json"] -->|"go generate (dave/jennifer)"| fhirgo["backend/pkg/models/database/fhir_*.go"]
-    gostructs["Go structs (tygo-tagged)"] -->|"tygo generate"| ts["frontend/.../models/patient-access-brands/*.ts"]
-```
+- `go generate` produced ~70 `fhir_*.go` models from `search-parameters.json`. The TypeScript stack
+  uses `@medplum/fhirtypes` and evaluates FHIRPath directly, so nothing is generated.
+- `tygo` produced `frontend/src/app/models/patient-access-brands/*.ts` from Go structs. Those files
+  are committed and still imported; they are now ordinary hand-maintained TypeScript with no
+  upstream.
 
-- `make generate-backend` runs both. Re-run after changing `search-parameters.json` or a tygo-exported Go struct, and __commit the regenerated files__.
-- Details and conventions: [`../AGENTS.md`](../AGENTS.md) → "Code generation".
+Nothing in the tree needs regenerating before a commit.
 
 ## Deployment & delivery
 
@@ -158,7 +161,7 @@ flowchart LR
 
 Solid foundation for a self-hosted/family threat model behind forward-auth; __not yet hardened for direct public exposure.__ The dominant residual risk is the __default HS256 JWT signing key with no forced rotation__ ([#102](https://github.com/jwilleke/yourphr/issues/102)) — all per-user isolation trusts that signature.
 
-Strengths worth knowing: centralized per-user scoping, DB-backed admin gate (JWT claim not trusted), a dedicated [SSRF guard](../backend/pkg/ssrf/ssrf.go), encrypted-DB standby mode, and a relay that never sees tokens.
+Strengths worth knowing: per-user scoping enforced from the request context, an admin gate that reads the role rather than trusting a claim, a dedicated [SSRF guard](../src/http/ssrf.ts) that CI proves cannot be walked around, an access log where an unloggable read fails rather than completing silently ([#614](https://github.com/jwilleke/yourphr/issues/614)), and a relay that never sees tokens.
 
 __Full assessment + prioritized backlog:__ [Architecture & security review](./planning/architecture-security-review.md). Standards mapping: [Standards conformance](./planning/Standards-Conformance.md).
 
@@ -180,7 +183,7 @@ __Full assessment + prioritized backlog:__ [Architecture & security review](./pl
 | __Security & architecture review__ | [`planning/architecture-security-review.md`](./planning/architecture-security-review.md) |
 | __Standards conformance__ | [`planning/Standards-Conformance.md`](./planning/Standards-Conformance.md) · [CSP](./planning/enforcing-CSP-issue.md) |
 | __US Core support & coverage__ | [`us-core/README.md`](./us-core/README.md) · [`us-core/conformance-coverage.md`](./us-core/conformance-coverage.md) |
-| __SMART on FHIR / live sync__ | [`planning/smart-on-fhir/smart-on-fhir.md`](./planning/smart-on-fhir/smart-on-fhir.md) · [`planning/smart-on-fhir/oauth-gateway.md`](./planning/smart-on-fhir/oauth-gateway.md) · [relay README](../backend/cmd/relay/README.md) |
+| __SMART on FHIR / live sync__ | [`planning/smart-on-fhir/smart-on-fhir.md`](./planning/smart-on-fhir/smart-on-fhir.md) · [`planning/smart-on-fhir/oauth-gateway.md`](./planning/smart-on-fhir/oauth-gateway.md) · [relay README](../relay/README.md) |
 | __Vendor specifics (FollowMyHealth/Veradigm/Epic)__ | [`vendors/README.md`](./vendors/README.md) |
 | __FHIR handling notes__ | [`FHIR/fhir-testing.md`](./FHIR/fhir-testing.md) · [`FHIR/fhir-converter-local.md`](./FHIR/fhir-converter-local.md) · [`FHIR/fractional-quantity-values.md`](./FHIR/fractional-quantity-values.md) · [`FHIR/uncoded-questionnaires.md`](./FHIR/uncoded-questionnaires.md) |
 | __Health-record ecosystem background__ | [`planning/personal-health/health-record-aggregation.md`](./planning/personal-health/health-record-aggregation.md) · [`planning/personal-health/fastenhealth-ecosystem.md`](./planning/personal-health/fastenhealth-ecosystem.md) |

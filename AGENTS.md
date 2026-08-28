@@ -77,11 +77,19 @@ Repo-specific brief for agents. The kit-managed protocol is __above__ `KIT:END`;
 
 __Mission: Your medical records, immediately and in your hands — for free.__ (Fulfilling the 21st Century Cures Act, 2016. See [issue #15](https://github.com/jwilleke/yourphr/issues/15) / `private/goals.md`.) Prioritize work that advances immediate, complete patient access to records.
 
-__YourPHR__ is a self-hosted personal/family electronic medical record viewer — a community continuation of Fasten OnPrem. It imports FHIR R4 bundles (manual upload or provider SMART sync) and displays them. A __Go backend__ (Gin + GORM, SQLite) serves a JSON API and the compiled __Angular 20 frontend__.
+__YourPHR__ is a self-hosted personal/family electronic medical record viewer — a community continuation of Fasten OnPrem. It imports FHIR R4 bundles (manual upload or provider SMART sync) and displays them. A __TypeScript backend__ (`src/`, Node 24, SQLite via better-sqlite3-multiple-ciphers) serves a JSON API and the compiled __Angular 20 frontend__, both built from this repository into one image.
+
+__The Go stack is gone.__ It served the product to v2.10.3 and was deleted on 2026-08-27 ([#677](https://github.com/jwilleke/yourphr/issues/677)) once both instances ran TypeScript. Its history is preserved by the `v1.0.0`…`v2.10.3` tags and the frozen image `ghcr.io/jwilleke/yourphr-go:2.10.3`. The ONLY Go left in the tree is `relay/` — a pure-stdlib SMART store-and-poll OAuth relay with no dependencies, kept because it is deployed and has no TypeScript replacement. Documents under `docs/planning/` and `docs/vendors/` that describe Go internals are history; read them as such.
 
 __YourPHR is a standalone, community-maintained continuation__ of `fastenhealth/fasten-onprem` (original by Jason Kulatunga / @AnalogJ and Alex Szilagyi, GPL v3 — attribution retained). It carries the project forward as a fully open-source build after upstream's hosted sync relay (Lighthouse) moved into the commercial Fasten Connect product (breaking OSS provider sync), and is going standalone (see [EPIC #2](https://github.com/jwilleke/yourphr/issues/2)). Near-term focus: improve display compatibility with __non-US-Core FHIR R4 exports__, specifically Veradigm/FollowMyHealth patient portal data. See [`docs/Roadmap.md`](docs/Roadmap.md) and [`README.md`](README.md). When fixing display issues, prefer fallbacks for missing US-Core fields (e.g. `class.code` when `type[]` is absent) rather than assuming strict US-Core conformance.
 
-__Note on identifiers:__ The product is being rebranded to __YourPHR__, but the Go __module path stays `github.com/fastenhealth/fasten-onprem`__ (internal identifier; renaming it is pure churn — see [EPIC #2](https://github.com/jwilleke/yourphr/issues/2)). Likewise, do not rename technical identifiers tied to upstream (`fasten-sources`, `FastenLighthouseEnvSandbox`, `FastenDisplayModel`). Only user-facing product strings become "YourPHR".
+__Note on identifiers:__ The word __fasten__ is being removed from everything the project ships ([EPIC #676](https://github.com/jwilleke/yourphr/issues/676)); the Go module path that made renaming "pure churn" went with the Go stack, and `relay/` now has a module path of its own. Three occurrences stay on purpose and should not be re-litigated:
+
+- the __GPL attribution__ to Fasten OnPrem in `README.md` — a licence obligation
+- __`platform_type = 'fasten'`__, a value stored in Go databases the migration reads; `src/migrate/` must keep naming it to read people's data correctly
+- upstream identifiers still inside the __Angular frontend__ (`FastenApiService`, `FastenDisplayModel`), which are the remaining bulk and are [#676](https://github.com/jwilleke/yourphr/issues/676)'s next lever
+
+Everything else — the session cookie, paths, filenames, templates — is fair game.
 
 | | |
 |---|---|
@@ -96,67 +104,95 @@ This is a __Personal Health Record__ application. Patient data (PHI) and secrets
 __Never commit:__
 
 - __The runtime database.__ SQLite files contain all imported PHR. `docker-compose` writes the DB to `./db/`, and the dev config may put `fasten.db` elsewhere. All of `*.db`, `*.db-shm`, `*.db-wal`, `*.sqlite*`, and `/db/` are gitignored — keep it that way.
-- __Real FHIR bundles.__ Only ever commit *synthetic* fixtures (Synthea-generated) under `frontend/src/lib/fixtures/` and `backend/pkg/database/testdata/`. Never add a real patient export. Drop ad-hoc real bundles in a gitignored dir (`/sample-data/`, `/phi/`, `/patient-data/`).
+- __Real FHIR bundles.__ Only ever commit *synthetic* fixtures (Synthea-generated) under `frontend/src/lib/fixtures/` and the harnesses' own `scripts/` fixtures. Never add a real patient export. Drop ad-hoc real bundles in a gitignored dir (`/sample-data/`, `/phi/`, `/patient-data/`).
 - __Secrets / keys.__ No real `jwt.issuer.key`, encryption keys, OAuth client secrets, access/refresh tokens, `.env`, `*.pem` / `*.key` / `*.p12` / `*.pfx`. Real config goes in `.env` (gitignored) or environment variables — never in a committed file. The `.env.*.example` templates are committed: placeholders only.
 - __Certs.__ `certs/` is gitignored (the app generates its own CA at runtime).
 
-__Note on YAML configuration:__ removed in [#470](https://github.com/jwilleke/yourphr/issues/470) and [#474](https://github.com/jwilleke/yourphr/issues/474) — there is no `config.yaml` and no `--config` flag. Defaults live in `backend/pkg/config/app-default-config.json`, bootstrap comes from `.env` plus `YOURPHR_*` env, and everything else is changed at Admin → Configuration (`<data>/config/app-custom-config.json`). For local development `cp .env.dev.example .env`. See [`docs/configuration-system.md`](docs/configuration-system.md).
+__Note on YAML configuration:__ there is no `config.yaml` and no `--config` flag ([#470](https://github.com/jwilleke/yourphr/issues/470), [#474](https://github.com/jwilleke/yourphr/issues/474)). For local development `cp .env.dev.example .env`. The layering is described under __Configuration__ below.
 
 __Before any commit or push:__ run `git status` / `git diff --staged` and confirm no DB, `.env`, key, or real-patient file is staged. Never use `git add -A` / `git add .` blindly — add specific files. If something sensitive was already committed, treat it as compromised: rotate the secret and scrub history (`git filter-repo` / BFG), don't just delete it in a new commit.
 
 ### Commands
 
-All commands are driven through the `Makefile`. There is also a Nix flake (`direnv allow`) that provisions Go, Node, Angular CLI, yarn, and tygo. (The flake still pins the old Angular CLI 14.1.3 + Node 18 — stale vs the project's Angular 20 / Node 24; tracked in [#138](https://github.com/jwilleke/yourphr/issues/138). Day-to-day `make` / `npx ng` use the correct local toolchain from `node_modules` + `.nvmrc`.)
+`Makefile` targets wrap the common ones; the TypeScript suites are npm scripts and are run directly.
 
 ```bash
-make test              # run both backend and frontend test suites
-make test-backend      # go vet ./... && go test -v ./...  (slow on first run; vendors deps + generates)
+make test              # server (vitest) + frontend (Angular)
 make test-frontend     # cd frontend && npx ng test --watch=false  (ChromeHeadless)
-
-make serve-backend     # go run backend/cmd/fasten/fasten.go start --debug   (reads ./.env)
-make serve-frontend    # cd frontend && ng serve --hmr --live-reload -c dev  (proxies API to backend)
-make migrate           # run DB migrations without starting the server
-
+make test-e2e          # builds the Angular app, boots the server over it, drives a browser
+make serve-server      # npx tsx src/main.ts        (reads <YOURPHR_FAST_STORAGE>/.env, then ./.env)
+make serve-frontend    # cd frontend && ng serve --hmr --live-reload -c dev  (proxies to the server)
+make migrate           # import a Go v2 instance:  make migrate ARGS="--go … --data …"
+make test-relay        # the one Go thing left
 make serve-storybook   # component dev/test in isolation
-make build-storybook   # verify all stories build (checked in CI)
 ```
+
+__The server's own suites are npm scripts__, and CI runs them one job per script — see
+`.github/workflows/server-ci.yaml` for the authoritative list.
+
+```bash
+npm test               # vitest: unit tests, src/**/__tests__/**
+npm run <harness>      # integration harnesses in scripts/: app, auth, config, records, sync,
+                       # migrate:tool, process, ssrf, backup, worker, web, demo-reset, …
+npm run typecheck      # tsconfig.json  — spans src, scripts, e2e
+npm run build          # tsconfig.build.json — src only, tests excluded. NOT the same check.
+npm run check:boundary # nothing outside src/http reaches the network
+npm run check:store    # no database handle escapes a provider
+```
+
+__`typecheck` and `build` read different configs and disagree__ — that difference has turned a green
+laptop into a red CI run. Before pushing, run the whole `server-ci` list, not a subset.
 
 Run a single test:
 
 ```bash
-# Backend (Go) — from repo root
-go test -v ./backend/pkg/models/database/ -run TestFhirAllergyIntolerance_ExtractSearchParameters
-
-# Frontend (Angular) — from the frontend/ directory
-ng test --include='**/badge.component.spec.ts'
+npx vitest run src/app/providers/__tests__/record-text.test.ts
+cd frontend && ng test --include='**/badge.component.spec.ts'
 ```
 
-`make serve-backend` expects a `.env` at the repo root (not committed; `cp .env.dev.example .env`). The frontend dev server runs in __sandbox mode__ by default (talks only to synthetic-data test servers); `prod` mode talks to real servers. Build configs are selected with `-c` (e.g. `make build-frontend-prod`, `build-frontend-desktop-prod`, `build-frontend-offline-sandbox`).
+### Server architecture (`src/`)
 
-### Backend architecture (`backend/`)
+Built on the ngdpbase model ([#608](https://github.com/jwilleke/yourphr/issues/608)) — read
+[`docs/planning/architecture-principles-typescript.md`](docs/planning/architecture-principles-typescript.md)
+before changing any of it.
 
-- __Entry point__: `backend/cmd/fasten/fasten.go` — urfave/cli app with `start`, `migrate`, `version` subcommands.
-- __Web layer__: `backend/pkg/web/server.go` defines all routes (Gin). Route groups: `/api` (public — auth, glossary, support, CORS proxy), `/api/secure` (behind `middleware.RequireAuth()` JWT), and `/api/unsafe`. Handlers live in `backend/pkg/web/handler/`.
-- __Database layer__: `backend/pkg/database/interface.go` declares the `DatabaseRepository` interface — the central contract for all data access. Implemented by GORM (`gorm_*.go`, `sqlite_repository.go`). Postgres exists (`postgres_repository.go`) but is __broken/unsupported__ — SQLite is the only working backend. Construct via `factory.go`. SQLite uses an encrypted build (`sqlite-jdbc-crypt`); DB encryption is __off__ by default (`database.encryption.enabled`), and enabling it currently disables backup and restore ([#367](https://github.com/jwilleke/yourphr/issues/367)).
-- __FHIR resource models__: `backend/pkg/models/database/fhir_*.go` — one struct per FHIR resource type (~70 types). __These are generated, do not edit by hand.__ Each has a `PopulateAndExtractSearchParameters` method that runs `searchParameterExtractor.js` via the __goja__ JS engine to evaluate FHIRPath expressions and flatten searchable fields into indexed SQLite columns.
-- __Migrations__: `backend/pkg/database/migrations/<timestamp>/` — applied by `make migrate` / on startup.
+- __Entry point__: `src/main.ts` — a subcommand layer ([#654](https://github.com/jwilleke/yourphr/issues/654)) over `src/cli/`: `start` (the default), `migrate`, `reset-password`, `version`, `help`. An unknown command exits non-zero and never starts a server.
+- __Composition root__: `src/app.ts` — `openStores()` and `assembleApp()` build the engine, its managers in dependency order, and the providers configuration selects.
+- __Web layer__: `src/server.ts` — routes, the session cookie, the access-log hook, and the demo read-only guard.
+- __The manager rule__: a resource has exactly one door. Managers live in `src/framework/managers/` (configuration, users, sessions, audit, backups, jobs, settings, database) and `src/app/managers/` (records, sources, catalog, glossary, demo). Providers behind them are chosen by configuration and are the only code that touches a store. `npm run check:store` fails CI if that is breached.
+- __Request context__: `src/framework/ApiContext.ts` — who is asking, on every manager call.
+- __Records__: `src/app/providers/SqliteRecordsProvider.ts` over `records.db`; the app database is `spike.db` (a name [#676](https://github.com/jwilleke/yourphr/issues/676) still owes you).
+- __Migration from Go__: `src/migrate/` — one-way, idempotent, and its exit criterion is a record-for-record verification rather than a successful import.
+- __Logging__: `src/log/` — one logger, a ring buffer the Logs page reads, and secret redaction driven by `yourphr.config.secret-keys` ([#638](https://github.com/jwilleke/yourphr/issues/638)).
 
-#### Code generation (important)
+There is __no code generation__. The Go generators (`go generate`, `tygo`) went with the Go stack;
+`frontend/src/app/models/patient-access-brands/` was tygo output and is now ordinary source.
 
-Two generators must be re-run when their inputs change; generated files are committed.
+#### Configuration
 
-- `make generate-backend` runs:
-  - `go generate ./...` → regenerates `backend/pkg/models/database/fhir_*.go` from `search-parameters.json` using the __dave/jennifer__ code generator in `backend/pkg/models/database/generate.go` (build-tagged `exclude`; entry is `//go:generate go run generate.go`).
-  - `tygo generate` → generates frontend TypeScript types into `frontend/src/app/models/patient-access-brands/` from Go structs (config in `tygo.yaml`).
-- `make dep-backend` also runs `cd scripts && go generate ./...` (related-versions generation).
+Three layers, one vocabulary: environment > `<data>/config/app-custom-config.json` > shipped
+defaults in `config/app-default-config.json`. `ConfigurationManager` is the only reader. There is no
+`config.yaml` and no `--config` flag ([#470](https://github.com/jwilleke/yourphr/issues/470),
+[#474](https://github.com/jwilleke/yourphr/issues/474)). Bootstrap and secrets come from
+`<YOURPHR_FAST_STORAGE>/.env` or the ambient environment; everything else is Admin → Configuration.
+See [`docs/configuration-system.md`](docs/configuration-system.md).
 
-#### fasten-sources stub
+`yourphr.config.env-keys` names the handful of keys the environment OWNS — read-only on the settings
+screen whether or not the variable is set. Every other key still honours its `YOURPHR_*` variable
+when one is present; declaring a key in that list does not add the variable, it removes the screen.
 
-The upstream `github.com/fastenhealth/fasten-sources` package was made private. This repo replaces it with a __local stub__ (`./fasten-sources-stub`, wired via a `replace` directive in `go.mod`). What the stub drops is the upstream __provider catalog__ — the big pre-registered provider list and the hosted __Lighthouse__ OAuth relay, which moved into the commercial Fasten Connect.
+#### SMART on FHIR
 
-What it does __not__ drop: this fork has its own __working SMART-on-FHIR OAuth client__ — `fasten-sources-stub/clients/smart` (`.well-known/smart-configuration` discovery, PKCE, token exchange/refresh), a self-hosted OAuth __relay__ (`backend/pkg/relay`, default `relay.nerdsbythehour.com` — store-and-poll for the auth code; the backend does the token exchange, the relay never sees tokens), and the backend + connect-UI wiring (EPIC [#20](https://github.com/jwilleke/yourphr/issues/20): generic client [#49](https://github.com/jwilleke/yourphr/issues/49), relay [#50](https://github.com/jwilleke/yourphr/issues/50), backend OAuth [#51](https://github.com/jwilleke/yourphr/issues/51), connect UI [#52](https://github.com/jwilleke/yourphr/issues/52)). Live connect today is primarily the __provider catalog__ path; as-built map: [`docs/SMART-flow-map.md`](docs/SMART-flow-map.md). Manual FHIR bundle upload and C-CDA remain the zero-setup import path.
+The SMART client is a provider behind `SourcesManager`, selected by `yourphr.sources.client.provider`
+with an inert `null` alternative. The OAuth relay (`relay/`, deployed as
+`ghcr.io/jwilleke/yourphr-relay`) is store-and-poll for the auth code — the server does the token
+exchange and the relay never sees tokens.
 
-The real gap is a __proven first end-to-end production provider__: Veradigm/FollowMyHealth ([#53](https://github.com/jwilleke/yourphr/issues/53)) is blocked on vendor app approval (`unauthorized_client`); CMS Blue Button 2.0 and catalog production proof ([#408](https://github.com/jwilleke/yourphr/issues/408)) are the self-serve paths. (When citing the older "live sync is non-functional" framing, note it predates EPIC #20 and is stale.)
+__Live relay-based sync is not a v3 capability yet__, and the stack says so rather than pretending:
+`GET /api/secure/source/relay-config` reports that none is configured. The gap to a proven
+production provider is [#408](https://github.com/jwilleke/yourphr/issues/408); Veradigm/FollowMyHealth
+([#53](https://github.com/jwilleke/yourphr/issues/53)) is blocked on vendor approval. Manual FHIR
+bundle upload and C-CDA remain the zero-setup import path.
 
 ### Frontend architecture (`frontend/src/app/`)
 

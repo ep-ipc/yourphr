@@ -70,32 +70,38 @@ Next, run the following commands from the Windows command line or Mac/Linux term
 
 ### 🚀 Launch
 
-Launch the application. Please choose a location where `docker-compose.yml` and `set_env.sh` will be downloaded.
+One command. One image holding the server and the app, and one volume holding everything the
+instance owns.
 
-To make your YourPHR instance discoverable by companion mobile apps and other devices on your local network, you need to run the `set_env.sh` script before starting Docker Compose. This script sets the necessary `HOSTNAME` and `IP` values in a `.env` file, which is required for syncing.
+```bash
+docker run -d --name yourphr --restart unless-stopped \
+  -p 9090:8080 \
+  -v ./data:/opt/yourphr/data \
+  ghcr.io/jwilleke/yourphr:3.2.0
+```
 
-Here are the step-by-step instructions:
+`./data` is the directory to back up: the database, the config store and the generated signing key
+all live there. Pin a version rather than a floating tag — `:latest` moves only when a release is
+cut, but it does move.
 
-1. __Download necessary files:__
+__Optional, before first start — database encryption.__ The key is read from a `.env` on that same
+volume, and a database written unencrypted cannot be encrypted later by restarting with a key set.
+So if you want it, decide now:
 
-    ```bash
-    curl https://raw.githubusercontent.com/jwilleke/yourphr/refs/heads/main/docker-compose-prod.yml -o docker-compose.yml
-    curl https://raw.githubusercontent.com/jwilleke/yourphr/refs/heads/main/set_env.sh -o set_env.sh
-    ```
+```bash
+mkdir -p ./data
+printf 'YOURPHR_DATABASE_ENCRYPTION_KEY=%s\nYOURPHR_BACKUP_ENCRYPTION_KEY=%s\n' \
+  "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > ./data/.env
+chmod 600 ./data/.env
+```
 
-2. __Prepare and run the environment setup script:__
-    Make the script executable and run it to generate your `.env` file. This will configure network variables required for Docker Compose.
+__Record those keys somewhere that is not this machine.__ If the volume is lost and the keys with
+it, the database and every backup are permanently unreadable. The app warns about this on every
+start, and it means it.
 
-    ```bash
-    chmod +x ./set_env.sh
-    ./set_env.sh
-    ```
-
-3. __Start the application:__
-
-    ```bash
-    docker compose up -d
-    ```
+> __A compose file is not shipped yet__ ([#641](https://github.com/jwilleke/yourphr/issues/641)),
+> along with example Kubernetes manifests and a bare-metal path. The `docker run` above is the
+> equivalent in the meantime.
 
 ### Manual Configuration (Optional)
 
@@ -121,7 +127,7 @@ If you prefer not to run the `set_env.sh` script, you can configure the `.env` f
     PORT=9090
     ```
 
-Next, open a browser to `https://localhost:9090`
+Next, open a browser to `http://localhost:9090`
 
 ### Other deployment options & configuration
 
@@ -129,102 +135,60 @@ The docker-compose flow above is the easy path, but __YourPHR is deployment-agno
 
 ➡️ See __[`docs/deployment/README.md`](docs/deployment/README.md)__ for every deployment option (docker-compose / `docker run` / bare metal / Kubernetes), the configuration model + precedence, the full config-key reference, and how secrets are handled (the DB encryption key, the auto-generated JWT key, and per-source OAuth `client_secret`s stored in the DB).
 
-### 🔒 Using HTTPS and Trusting the Self-Signed Certificate
+### 🔒 HTTPS
 
-By default, YourPHR runs with HTTPS enabled to ensure your data is secure. It uses a self-signed __TLS__ certificate, which offers the same level of encryption as a commercially issued certificate. The first time you connect, your browser will display a security warning because it doesn't yet trust the certificate's issuer. The steps below will guide you through the simple, one-time process of telling your browser to trust the certificate, ensuring a secure connection without future warnings. Please note that the generated certificates can be replaced at any time with your own valid TLS certificates.
+__The application speaks plain HTTP.__ It does not terminate TLS and does not generate a
+certificate authority — put a reverse proxy in front of it and let that hold the certificate. That
+is how the maintainer's own instance runs (Traefik, with the app behind it on `:8080`).
 
-#### How it Works: The Chain of Trust
+Earlier versions of YourPHR — the Go stack, through v2.10.3 — generated their own `"YourPHR CA"` at
+startup and wrote `certs/rootCA.pem`, which you then imported into your browser's trust store. v3
+does none of that. If you are following older notes: there is no `certs/` directory to find, and
+`https://localhost:9090` will not answer.
 
-To establish a secure connection, your browser needs to trust the server's TLS certificate. Here’s how the process works in YourPHR:
-
-1. __Root Certificate Authority (CA):__ When the application first starts, it generates its own self-contained Certificate Authority, called `"YourPHR CA"`. Think of this as the highest level of trust. The public part of this CA is the `rootCA.pem` file.
-2. __Server Certificate:__ The application then uses the `"YourPHR CA"` to issue and sign a specific certificate for the web server (e.g., for `localhost`).
-3. __Browser Verification:__ When you connect to the server, it presents the server certificate to your browser. Your browser checks who signed it and sees it was `"YourPHR CA"`. The browser then asks, "Do I trust the 'YourPHR CA'?"
-
-Initially, the answer is no, which is why you see a security warning. By following the steps below to import the `rootCA.pem` file, you are telling your browser or operating system to trust our self-generated CA. Once the CA is trusted, any certificates it signs—including the server certificate—will also be trusted, and the connection will be secure without any warnings.
-
-#### 1. Locate the Root CA Certificate
-
-When you run the application using the production Docker Compose file (`docker-compose-prod.yml`), it automatically generates a `rootCA.pem` file. This file is located in the `certs` directory on your host machine.
-
-- __Certificate Path:__ `certs/rootCA.pem`
-
-#### 2. Import the Certificate
-
-You will need to import this certificate into your operating system's or browser's trust store. Here are general instructions for different platforms:
-
-##### macOS
-
-1. Open the __Keychain Access__ application.
-2. Select the __System__ keychain.
-3. Go to __File > Import Items__ and select the `certs/rootCA.pem` file.
-4. Find the "YourPHR CA" certificate in the list, double-click it, and under the __Trust__ section, set "When using this certificate" to __Always Trust__.
-
-##### Windows
-
-1. Double-click the `certs/rootCA.pem` file.
-2. Click __Install Certificate...__ and choose __Local Machine__.
-3. Select __Place all certificates in the following store__, click __Browse__, and choose __Trusted Root Certification Authorities__.
-4. Complete the wizard to finish the import process.
-
-##### Linux (Ubuntu/Debian)
-
-1. Copy the certificate to the trusted certificates directory:
-
-    ```bash
-    sudo cp certs/rootCA.pem /usr/local/share/ca-certificates/yourphr-ca.crt
-    ```
-
-2. Update the system's certificate store:
-
-    ```bash
-    sudo update-ca-certificates
-    ```
-
-##### Firefox
-
-Firefox has its own trust store. To import the certificate:
-
-1. Go to __Settings > Privacy & Security__.
-2. Scroll down to __Certificates__ and click __View Certificates...__.
-3. In the __Authorities__ tab, click __Import...__ and select the `certs/rootCA.pem` file.
-4. Check the box for __Trust this CA to identify websites__ and click __OK__.
+For a LAN-only instance, the simplest options are Caddy (which obtains and renews certificates on
+its own), or any reverse proxy you already run. Example manifests and a worked compose file are
+[#641](https://github.com/jwilleke/yourphr/issues/641).
 
 ### 🧪 Develop
 
-Use local development settings for testing and iteration.
+Requires a local clone, Node 24 and the frontend's toolchain.
 
 ```bash
-docker compose up -d
+cp .env.dev.example .env
+make serve-server      # the API on :8080
+make serve-frontend    # the Angular dev server, proxying to it
 ```
 
-*Optional:*
+`make test` runs both suites; `make test-e2e` builds the app and drives a real browser over it.
+
+### Run the released image
+
+One image holds the TypeScript server and the Angular app, built from the same commit.
 
 ```bash
-make serve-docker
+docker run -d --name yourphr --restart unless-stopped \
+  -p 9090:8080 \
+  -v ./data:/opt/yourphr/data \
+  ghcr.io/jwilleke/yourphr:3.2.0
 ```
 
-ℹ️ Requires a local clone of the repository.
+Everything the instance owns lives in that one volume — the database, the config store, the
+generated signing key. It is the directory to back up. Use a version tag rather than a floating
+one; `:latest` moves only when a release is cut.
 
-> ⚠️ __Warning:__ Do not run both `docker compose up -d` / `(make serve-docker)` simultaneously. Choose one based on your deployment scenario.
+The image takes a command, so it can also do the jobs that are not "serve":
 
-### Optional
-
-```
-docker pull ghcr.io/jwilleke/yourphr:main
-
-docker run --rm \
--p 9090:8080 \
--v ./db:/opt/fasten/db \
--v ./cache:/opt/fasten/cache \
-ghcr.io/jwilleke/yourphr:main
+```bash
+docker run --rm ghcr.io/jwilleke/yourphr:3.2.0 help      # every command and its flags
+docker run --rm ghcr.io/jwilleke/yourphr:3.2.0 version   # which build this actually is
 ```
 
 At this point you'll be redirected to the login page.
 
 ### Logging In
 
-Before you can use the YourPHR BETA, you'll need to [Create an Account](https://localhost:9090/web/auth/signup).
+Before you can use the YourPHR BETA, you'll need to [Create an Account](http://localhost:9090/auth/signup).
 
 It can be as simple as
 

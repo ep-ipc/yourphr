@@ -2,7 +2,7 @@
 
 For anyone self-hosting YourPHR who is not running Kubernetes. If you are, the operator runbook is [`cutover-runbook.md`](cutover-runbook.md) — this page is the general path.
 
-> __Requires 3.2.0 or newer.__ The migration has been rehearsed against a real 20,068-record instance and verified record for record, and since [#654](https://github.com/jwilleke/yourphr/issues/654) it ships inside the image — so nothing on this page needs a source checkout. It is `3.2.0` that carries it: `3.0.x` and `3.1.0` have no `migrate` command, and asking one of them for it will fail rather than do something surprising. Check with `docker run --rm ghcr.io/jwilleke/yourphr:<tag> version`. The one thing still missing is a ready-made compose file ([#641](https://github.com/jwilleke/yourphr/issues/641)); until it lands, step 4 below is the `docker run` that replaces it.
+> __Requires 3.2.0 or newer__, which is released. The migration has been rehearsed against a real 20,068-record instance and verified record for record, and since [#654](https://github.com/jwilleke/yourphr/issues/654) it ships inside the image — so nothing on this page needs a source checkout. It is `3.2.0` that carries it: `3.0.x` and `3.1.0` have no `migrate` command, and asking one of them for it fails rather than doing something surprising. Check with `docker run --rm ghcr.io/jwilleke/yourphr:<tag> version`. The one thing still missing is a ready-made compose file ([#641](https://github.com/jwilleke/yourphr/issues/641)); until it lands, step 4 below is the `docker run` that replaces it.
 
 ## What is changing, and what is not
 
@@ -103,7 +103,18 @@ It writes a generated password to `./data/.recovery_password` (readable only by 
 
 ## If it goes wrong
 
-Start v2 again. Your v2 data directory was never written to.
+Start v2 again. Your v2 data directory was never written to — that is the whole reason the
+migration reads a copy and writes beside it.
+
+Two things worth knowing before you rely on that:
+
+- __The v2 image is still published.__ `ghcr.io/jwilleke/yourphr-go:2.10.3` is the Go stack,
+  preserved by digest and unchanged. `ghcr.io/jwilleke/yourphr:2.10.3` also still pulls; nothing
+  new will ever appear under 2.x.
+- __Rolling back gets more expensive every day.__ Your v2 database is frozen at the moment you
+  copied it, so going back loses every record imported or created on v3 since. That is a revert
+  with a cost, not a return to a good state — which is an argument for deciding quickly, in either
+  direction, rather than running both.
 
 ```bash
 docker rm -f yourphr
