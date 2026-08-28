@@ -40,6 +40,25 @@ export interface Principal {
   role: Role;
   /** The account's token generation at verification time — the #528 revocation fact. */
   tokenGeneration?: number;
+  /**
+   * Set when the caller is an AGENT holding a token the owner minted (yourphr#695), absent for an
+   * ordinary session. ngdpbase carries the same fact under the same name.
+   */
+  viaToken?: ViaToken;
+}
+
+/**
+ * The agent standing behind a request, and the ceiling on what it may read.
+ *
+ * `scopes` are ACCESS CATEGORIES — the access log's vocabulary — because this stack has no
+ * record-level permissions for a scope to narrow; see `ACCESS_CATEGORIES`. An empty list is
+ * "nothing", never "everything": the difference is the whole safety of the feature.
+ */
+export interface ViaToken {
+  id: string;
+  /** What the patient named it — and what the access log calls the actor. */
+  name: string;
+  scopes: readonly string[];
 }
 
 export class ApiContext {
@@ -52,6 +71,8 @@ export class ApiContext {
   readonly tokenGeneration: number | undefined;
   /** A named non-human caller (the migration tool, the worker); '' for a person. */
   readonly system: string;
+  /** Present only when an agent token authenticated this request (yourphr#695). */
+  readonly viaToken: ViaToken | undefined;
 
   private constructor(engine: Engine, principal: Principal | null, system = '') {
     this.engine = engine;
@@ -65,12 +86,29 @@ export class ApiContext {
     this.permissions = Object.freeze(engine.has('policy') ? [...engine.managers.policy.permissionsFor(this.role)] : []);
     this.tokenGeneration = principal?.tokenGeneration;
     this.system = system;
+    // Copied, and the scope array with it: this list is the read ceiling, so sharing the caller's
+    // array would let anything downstream widen a token in place — the defect ngdpbase#1108 found
+    // in exactly this seam, where the stored record's scopes reached the ACL layer by reference.
+    this.viaToken = principal?.viaToken
+      ? Object.freeze({ ...principal.viaToken, scopes: Object.freeze([...principal.viaToken.scopes]) })
+      : undefined;
     Object.freeze(this);
   }
 
   /** A signed-in person, from the session the transport already verified. */
   static from(principal: Principal, engine: Engine): ApiContext {
     return new ApiContext(engine, principal);
+  }
+
+  /**
+   * An agent acting for `owner` under a token the owner minted (yourphr#695).
+   *
+   * The role is deliberately NOT the owner's. An agent token can never carry an admin power —
+   * ngdpbase refuses `admin-*` scopes outright for the same reason — so the context is built at
+   * the ordinary member role whoever owns it, and the scope list narrows from there.
+   */
+  static agent(owner: string, via: ViaToken, engine: Engine): ApiContext {
+    return new ApiContext(engine, { username: owner, role: 'user', viaToken: via });
   }
 
   /** Nobody: the public routes. */
@@ -83,9 +121,29 @@ export class ApiContext {
     return new ApiContext(engine, { username: onBehalfOf, role: 'user' }, name);
   }
 
-  /** The actor as the access log names it. */
+  /**
+   * The actor as the access log names it.
+   *
+   * An agent is named by ITS OWN token name, so the log reads "Claude Desktop read your
+   * medications" rather than attributing the read to the patient who was not at the keyboard.
+   * That attribution is the point of yourphr#657 and the thing it wrongly assumed already worked.
+   */
   get actor(): string {
+    if (this.viaToken) return this.viaToken.name;
     return this.system !== '' ? this.system : this.username;
+  }
+
+  /**
+   * May this caller read the given access category (yourphr#695)?
+   *
+   * An ordinary session may read anything its compartment holds — categories are not a permission
+   * gate for people. An agent may read only what its token names, and an empty scope list reads
+   * nothing.
+   */
+  canRead(category: string): boolean {
+    if (!this.isAuthenticated) return false;
+    if (!this.viaToken) return true;
+    return this.viaToken.scopes.includes(category);
   }
 
   requireAuthenticated(): void {

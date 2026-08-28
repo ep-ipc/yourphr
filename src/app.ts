@@ -23,6 +23,8 @@ import { basename, join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { FileConfigProvider } from './framework/providers/FileConfigProvider.js';
 import { addColumnWithDefault, type Migration } from './framework/providers/sqlite-migrations.js';
+import { AgentTokensManager } from './framework/managers/AgentTokensManager.js';
+import { SqliteAgentTokensProvider } from './framework/providers/SqliteAgentTokensProvider.js';
 import { DatabaseManager } from './framework/managers/DatabaseManager.js';
 import { SqliteDatabaseProvider } from './framework/providers/SqliteDatabaseProvider.js';
 import { UsersManager, BOOTSTRAP_ADMIN_USERNAME } from './framework/managers/UsersManager.js';
@@ -138,6 +140,31 @@ const APP_MIGRATIONS: Migration[] = [
       for (const column of ['platform_type', 'brand_logo_url', 'consent_policy', 'pre_connect_profile']) {
         if (!columns.includes(column)) addColumnWithDefault(db, 'provider_catalog', column, 'TEXT', '');
       }
+    },
+  },
+  {
+    id: '20260828140000',
+    description: 'agent_tokens (yourphr#695) — the credentials a patient mints for an agent to read their records with',
+    up: (db) => {
+      // Frozen shape, as the convention requires: the provider's constructor creates the current
+      // table a step later, and this copy must keep describing what it did the day it ran.
+      db.exec(`CREATE TABLE IF NOT EXISTS agent_tokens (
+        id TEXT PRIMARY KEY,
+        owner TEXT NOT NULL,
+        name TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
+        prefix TEXT NOT NULL,
+        scopes TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_used_at TEXT NOT NULL DEFAULT '',
+        revoked_at TEXT NOT NULL DEFAULT '',
+        revoked_by TEXT NOT NULL DEFAULT '',
+        renewals INTEGER NOT NULL DEFAULT 0,
+        renewed_from TEXT NOT NULL DEFAULT ''
+      )`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_tokens_hash ON agent_tokens(hash)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_tokens_owner ON agent_tokens(owner, created_at DESC)`);
     },
   },
 ];
@@ -294,6 +321,9 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('yourphr.audit.provider'), db)));
   engine.register('users', users);
   engine.register('sessions', sessions);
+  // yourphr#695: after sessions, because an agent token is an alternative to one rather than a
+  // replacement for it — the bearer path tries a session first and falls through to here.
+  engine.register('agentTokens', new AgentTokensManager(engine, new SqliteAgentTokensProvider(db)));
   const recordsManager = new RecordsManager(engine, recordsProvider, new SqliteFavoritesProvider(db));
   engine.register('records', recordsManager);
   // Backups (yourphr#615): the coordinator over OPTIONAL storage; the records door is the exporter.

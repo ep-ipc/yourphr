@@ -450,6 +450,8 @@ export function createYourPhrServer(options: ServerOptions) {
       // token whose generation the account has moved past (a password change ends it mid-flight).
       let sessionUser = legacyUser;
       let ctx = ApiContext.from({username: legacyUser, role: 'user'}, engine);
+      /** yourphr#695: this request was authenticated by an agent token rather than a session. */
+      let agentRequest = false;
       if (auth && url.pathname.startsWith('/api/secure/')) {
         // Bearer first (API clients, the harnesses), else the HttpOnly cookie (the browser).
         const header = req.headers['authorization'] ?? '';
@@ -457,9 +459,21 @@ export function createYourPhrServer(options: ServerOptions) {
         const token = bearer !== '' ? bearer : readCookie(req.headers['cookie'], SESSION_COOKIE);
         const session = token ? await engine.managers.sessions.verify(token) : ({ok: false} as const);
         if (!session.ok) {
-          send(res, 401, {success: false, error: 'unauthorized'});
-          return;
-        }
+          // Not a session — it may be an AGENT TOKEN (yourphr#695), which is an alternative to a
+          // session rather than a replacement for one. Tried second and never for a cookie: an
+          // agent presents a Bearer header, and accepting one from a cookie would make it usable
+          // by a browser page, which is exactly what a delegated read credential must not be.
+          const agent = bearer !== '' && engine.has('agentTokens')
+            ? await engine.managers.agentTokens.verify(bearer)
+            : undefined;
+          if (!agent) {
+            send(res, 401, {success: false, error: 'unauthorized'});
+            return;
+          }
+          sessionUser = agent.owner;
+          ctx = ApiContext.agent(agent.owner, {id: agent.id, name: agent.name, scopes: agent.scopes}, engine);
+          agentRequest = true;
+        } else {
         if (session.renewed) {
           res.setHeader('X-Renewed-Token', session.renewed);
           res.setHeader('Set-Cookie', sessionCookie(session.renewed, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
@@ -467,6 +481,7 @@ export function createYourPhrServer(options: ServerOptions) {
         sessionUser = session.principal.username;
         // Who is asking, for every manager call this request makes (yourphr#608).
         ctx = ApiContext.from(session.principal, engine);
+        }
         // The read-only demo admin (yourphr#644), enforced here rather than route by route:
         // DEFAULT-DENY by method, so a route added next year is refused by inheritance instead of
         // by somebody remembering to guard it. Inert for every other caller and every other
@@ -474,8 +489,39 @@ export function createYourPhrServer(options: ServerOptions) {
         if (engine.has('demo')) engine.managers.demo.refuseUnlessRead(ctx, req.method ?? 'GET', url.pathname);
       }
 
+      // The agent-token gate (yourphr#695) — DEFAULT DENY, and the reason the first cut is
+      // read-only without needing a flag to enforce it.
+      //
+      // An agent may reach exactly one kind of request: a GET whose path has an ACCESS CATEGORY,
+      // and only a category its token names. Everything else is refused here, at the edge, before
+      // any manager sees the request:
+      //
+      //   - every POST/PUT/DELETE, because no write path has a category — so a route added next
+      //     year is refused by inheritance rather than by somebody remembering to guard it;
+      //   - every unlisted GET, including the token-management routes themselves, so a token can
+      //     never mint, renew or revoke anything (the manager refuses that too — this is the
+      //     outer of the two locks);
+      //   - a listed GET outside the token's scopes.
+      //
+      // Refusing the UNLISTED read is the deliberate half. A read with no category is one the
+      // access log cannot record, and an agent's unrecordable read is precisely what yourphr#614
+      // says must not happen: "an unaudited disclosure did not happen".
+      if (auth && agentRequest && url.pathname.startsWith('/api/secure/')) {
+        const category = req.method === 'GET' ? accessCategoryFor(url.pathname) : undefined;
+        if (!category) {
+          send(res, 403, {success: false, error: 'an agent token may only read your records, and only what it was given'});
+          return;
+        }
+        if (!ctx.canRead(category)) {
+          send(res, 403, {success: false, error: `this token was not given access to ${category}`});
+          return;
+        }
+      }
+
       // The access log (yourphr#596, #614): a listed GET by a signed-in user is an access of their
       // record, kept by the Audit manager BEFORE the read is served — one that cannot be kept fails here.
+      // An agent's read is recorded under the TOKEN's name (ApiContext.actor), so the log says
+      // "Claude Desktop" rather than attributing it to a patient who was not at the keyboard.
       if (auth && engine.has('audit') && req.method === 'GET') {
         const category = accessCategoryFor(url.pathname);
         if (category) await engine.managers.audit.record(ctx, category);
@@ -489,6 +535,57 @@ export function createYourPhrServer(options: ServerOptions) {
         const users = engine.managers.users;
         if (engine.has('audit') && url.pathname === '/api/secure/account/access-log' && req.method === 'GET') {
           send(res, 200, {success: true, data: await engine.managers.audit.list(ctx)});
+          return;
+        }
+        // --- agent tokens (yourphr#695) ---
+        // On the account page because that is where revocation already lives: the list a patient
+        // reads to answer "what is out there, and when does it stop" is the same list they revoke
+        // from. Every one of these needs a human session — AgentTokensManager.requireHuman refuses
+        // an agent token, and the edge gate above has already refused it for being an unlisted path.
+        if (engine.has('agentTokens') && url.pathname === '/api/secure/account/agent-tokens') {
+          const tokens = engine.managers.agentTokens;
+          if (req.method === 'GET') {
+            const policy = tokens.settings;
+            send(res, 200, {success: true, data: {
+              tokens: await tokens.listForOwner(ctx),
+              // The minting screen's vocabulary, so the patient is told plainly what a token lets
+              // an agent read — yourphr#657's argument only holds if that is stated.
+              available_scopes: tokens.availableScopes,
+              max_ttl_hours: policy.maxTtlHours,
+              default_ttl_hours: policy.defaultTtlHours,
+              max_per_user: policy.maxPerUser,
+              renewable: policy.renewable,
+              renew_window_hours: policy.renewWindowHours,
+              read_only: policy.readOnly,
+            }});
+            return;
+          }
+          if (req.method === 'POST') {
+            if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'minting an agent token');
+            const body = (await readJsonBody(req)) ?? {};
+            const minted = await tokens.mint(
+              ctx,
+              String(body['name'] ?? ''),
+              Array.isArray(body['scopes']) ? (body['scopes'] as string[]) : [],
+              body['ttl_hours'] === undefined ? undefined : Number(body['ttl_hours']),
+            );
+            // The cleartext rides back ONCE and is never stored; the screen must say so, because
+            // there is no second chance to copy it.
+            send(res, 200, {success: true, data: {token: minted.token, record: minted.record}});
+            return;
+          }
+        }
+        const agentTokenAction = /^\/api\/secure\/account\/agent-tokens\/([^/]+)\/(renew|revoke)$/.exec(url.pathname);
+        if (engine.has('agentTokens') && agentTokenAction && req.method === 'POST') {
+          if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'changing an agent token');
+          const tokens = engine.managers.agentTokens;
+          const id = decodeURIComponent(agentTokenAction[1] as string);
+          if (agentTokenAction[2] === 'renew') {
+            const renewed = await tokens.renew(ctx, id);
+            send(res, 200, {success: true, data: {token: renewed.token, record: renewed.record}});
+            return;
+          }
+          send(res, 200, {success: true, data: {revoked: await tokens.revoke(ctx, id)}});
           return;
         }
         if (url.pathname === '/api/secure/account/legal-consent' && req.method === 'GET') {

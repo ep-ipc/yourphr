@@ -11,6 +11,40 @@ export function providerRequiresLegalConsent(display: string, fhirBaseUrl: strin
   return ['medicare', 'blue button', 'bluebutton', 'blue-button', 'cms.gov', 'cms.hhs.gov'].some((m) => blob.includes(m));
 }
 
+/**
+ * Every read surface an access can belong to — the access log's vocabulary, and therefore the
+ * agent-token SCOPE vocabulary (yourphr#695).
+ *
+ * One list serving both is deliberate. ngdpbase's scopes are permission ACTION names because
+ * ngdpbase has actions like `page-read` to name; this stack does not — the `user` role holds NO
+ * permissions at all, and a person's access to their own records is compartmentalised by
+ * `user_id` rather than gated by a permission. So there was no existing vocabulary for a scope to
+ * narrow, and inventing a second one would have meant three lists to keep in step: what an agent
+ * may read, what the log calls it, and what the minting screen shows the patient.
+ *
+ * Binding scope to the log category collapses those into one, and buys the property that matters:
+ * a surface that cannot be logged cannot be scoped, so an agent can never reach a read the patient
+ * would not see recorded.
+ */
+export const ACCESS_CATEGORIES = [
+  'Summary',
+  'Summary (IPS)',
+  'Medications',
+  'Conditions',
+  'Allergies',
+  'Immunizations',
+  'Record search',
+  'Records (FHIR)',
+  'Full export',
+] as const;
+
+export type AccessCategory = (typeof ACCESS_CATEGORIES)[number];
+
+/** Is this a category this build knows? A scope that is not one can never match a request. */
+export function isAccessCategory(value: string): value is AccessCategory {
+  return (ACCESS_CATEGORIES as readonly string[]).includes(value);
+}
+
 /** Go's accessLogCategories, for the routes this stack serves. A path not listed is not an access. */
 export function accessCategoryFor(pathname: string): string | undefined {
   const exact: Record<string, string> = {
