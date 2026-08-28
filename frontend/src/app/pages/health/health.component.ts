@@ -15,6 +15,7 @@ import {
   formatStoneFromDecimal,
   formatWeight,
   groupSummaries,
+  isAsleepStageLabel,
   kgToWeightUnit,
   MetricDef,
   parseStoredWeightUnit,
@@ -550,6 +551,32 @@ function formatTooltipTime(ms: number, kind: 'line' | 'bar'): string {
   return d.toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
 }
 
+export interface SleepTooltipItem {
+  parsed: {x?: number, y?: number | null}
+  dataset: {label?: string, data?: unknown}
+  chart?: {data?: {datasets?: {label?: string, data?: unknown}[]}}
+}
+
+export function sleepAsleepTotal(items: SleepTooltipItem[]): number {
+  if (!items.length) return 0;
+  const x = items[0].parsed.x;
+  const datasets = items[0].chart?.data?.datasets;
+  if (datasets?.length && x != null) {
+    let total = 0;
+    for (const dataset of datasets) {
+      if (!isAsleepStageLabel(dataset.label)) continue;
+      const points = (dataset.data || []) as {x?: number, y?: number}[];
+      const match = points.find((point) => point && point.x === x);
+      if (match?.y != null) total += match.y;
+    }
+    return total;
+  }
+  return items.reduce((sum, item) => {
+    if (!isAsleepStageLabel(item.dataset.label) || item.parsed.y == null) return sum;
+    return sum + item.parsed.y;
+  }, 0);
+}
+
 function defaultChartOptions(
   kind: 'line' | 'bar',
   unit: string,
@@ -560,7 +587,9 @@ function defaultChartOptions(
   return {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: {mode: 'nearest', axis: 'x', intersect: false},
+    interaction: stacked
+      ? {mode: 'index', intersect: false}
+      : {mode: 'nearest', axis: 'x', intersect: false},
     plugins: {
       legend: {display: kind === 'bar' ? stacked : true, position: 'bottom'},
       tooltip: {
@@ -581,6 +610,12 @@ function defaultChartOptions(
               ? value.toFixed(1)
               : String(value);
             return `${ctx.dataset.label}: ${formatted}${suffix}`;
+          },
+          footer: (items) => {
+            if (!stacked || unit !== 'hours' || !items.length) return '';
+            const total = sleepAsleepTotal(items);
+            if (total <= 0) return '';
+            return `Total asleep: ${total.toFixed(1)} hours`;
           },
         },
       },

@@ -42,6 +42,17 @@ export const SLEEP_STAGE_LABELS: Record<string, string> = {
   inBed: 'In bed',
 };
 
+export const SLEEP_ASLEEP_STAGES = ['asleepCore', 'asleepDeep', 'asleepREM', 'asleepUnspecified'] as const;
+
+export function asleepHours(stages: Record<string, number> | undefined): number {
+  if (!stages) return 0;
+  return SLEEP_ASLEEP_STAGES.reduce((sum, stage) => sum + (stages[stage] || 0), 0);
+}
+
+export function isAsleepStageLabel(label: string | undefined): boolean {
+  return !!label && SLEEP_ASLEEP_STAGES.some((stage) => SLEEP_STAGE_LABELS[stage] === label);
+}
+
 export type WeightUnit = 'kg' | 'lbs' | 'st';
 
 export const WEIGHT_UNITS: {id: WeightUnit, label: string}[] = [

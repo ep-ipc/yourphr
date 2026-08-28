@@ -1,6 +1,7 @@
 import {HealthMetricSummary} from '../../models/fasten/health-sample';
 import {
   asPercent,
+  asleepHours,
   CatalogEntry,
   formatLatest,
   formatWeight,
@@ -178,5 +179,19 @@ describe('asPercent', () => {
     expect(asPercent(1)).toBe(100);
     expect(asPercent(97)).toBe(97);
     expect(asPercent(98.5)).toBe(98.5);
+  });
+});
+
+describe('asleepHours', () => {
+  it('sums core, deep, REM, and unspecified, and ignores awake and in-bed', () => {
+    expect(asleepHours({
+      asleepCore: 4.2,
+      asleepDeep: 1.5,
+      asleepREM: 1.8,
+      asleepUnspecified: 0.3,
+      awake: 0.4,
+      inBed: 8.5,
+    })).toBeCloseTo(7.8, 5);
+    expect(asleepHours({})).toBe(0);
   });
 });

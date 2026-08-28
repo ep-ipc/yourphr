@@ -1,6 +1,6 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {of, throwError} from 'rxjs';
-import {buildTimeTicks, HealthComponent, RANGE_MS, timeAxisBounds, toDayPoints, toTimePoints, utcDayMs} from './health.component';
+import {buildTimeTicks, HealthComponent, RANGE_MS, sleepAsleepTotal, timeAxisBounds, toDayPoints, toTimePoints, utcDayMs} from './health.component';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {HealthMetricSummary} from '../../models/fasten/health-sample';
 
@@ -353,5 +353,21 @@ describe('health chart time helpers', () => {
     expect(toDayPoints([{date: '2026-08-21', value: 1000}])).toEqual([
       {x: new Date(2026, 7, 21, 12, 0, 0, 0).getTime(), y: 1000},
     ]);
+  });
+
+  it('totals only asleep stages in the sleep tooltip, excluding awake and in-bed', () => {
+    const x = utcDayMs('2026-08-21');
+    const datasets = [
+      {label: 'Awake', data: [{x, y: 0.4}]},
+      {label: 'Core', data: [{x, y: 4.2}]},
+      {label: 'Deep', data: [{x, y: 1.5}]},
+      {label: 'REM', data: [{x, y: 1.8}]},
+      {label: 'In bed', data: [{x, y: 8.5}]},
+    ];
+    expect(sleepAsleepTotal([{
+      parsed: {x, y: 4.2},
+      dataset: datasets[1],
+      chart: {data: {datasets}},
+    }])).toBeCloseTo(7.5, 5);
   });
 });
