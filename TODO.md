@@ -11,9 +11,17 @@
 ## 🟠 P1
 
 - [#664](https://github.com/jwilleke/yourphr/pull/664) — chore(ci): bump docker/setup-buildx-action from 3 to 4 *(PR · ready)* — refs [#475](https://github.com/jwilleke/yourphr/issues/475), refs [#482](https://github.com/jwilleke/yourphr/issues/482), refs [#485](https://github.com/jwilleke/yourphr/issues/485), refs [#472](https://github.com/jwilleke/yourphr/issues/472), refs [#436](https://github.com/jwilleke/yourphr/issues/436), refs [#408](https://github.com/jwilleke/yourphr/issues/408), refs [#370](https://github.com/jwilleke/yourphr/issues/370), refs [#389](https://github.com/jwilleke/yourphr/issues/389), refs [#590](https://github.com/jwilleke/yourphr/issues/590)
-- [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
+- [#696](https://github.com/jwilleke/yourphr/issues/696) — [BUG] "Add record" opens a form that cannot save — manual entry 404s
+- [#695](https://github.com/jwilleke/yourphr/issues/695) — [BUG] Settings offers device tokens and server discovery — neither endpoint exists
+- [#692](https://github.com/jwilleke/yourphr/issues/692) — [BUG] Glossary lookups 404 — the client calls /api/glossary/code, the server routes /api/secure/glossary/code
+- [#691](https://github.com/jwilleke/yourphr/issues/691) — [BUG] Account signup 404s — the form renders and cannot submit
+- [#690](https://github.com/jwilleke/yourphr/issues/690) — [BUG] No E2E coverage of any interaction path — only sign-in-and-look
+- [#689](https://github.com/jwilleke/yourphr/issues/689) — [BUG] Nothing fails when the frontend calls a path the server does not route
+- [#685](https://github.com/jwilleke/yourphr/issues/685) — [BUG] Provider connection errors are never recorded — POST /secure/jobs/error 404s
+- [#684](https://github.com/jwilleke/yourphr/issues/684) — [BUG] The record wizard cannot link or unlink related records
+- [#683](https://github.com/jwilleke/yourphr/issues/683) — [BUG] Practitioners: add, edit and history all 404 — only the list works
 - [#680](https://github.com/jwilleke/yourphr/issues/680) — [BUG] The Angular app calls 12 endpoints the TypeScript server does not serve
 - [#679](https://github.com/jwilleke/yourphr/issues/679) — [CHORE] Close or rewrite every Go-era issue — no open work against a deleted codebase
 - [#678](https://github.com/jwilleke/yourphr/issues/678) — [BUG] E2E coverage gap: the record-display specs went with the Go stack
@@ -38,10 +46,14 @@
 
 ## 🟡 P2
 
-- [#682](https://github.com/jwilleke/yourphr/issues/682) — [security] Test harness logs a demo session value in clear text
 - [#669](https://github.com/jwilleke/yourphr/pull/669) — chore(deps): bump webcrypto-liner from 1.4.0 to 1.4.3 in /frontend *(PR · ready)* — likely [#532](https://github.com/jwilleke/yourphr/issues/532)
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
+- [#697](https://github.com/jwilleke/yourphr/issues/697) — [ARCH] ngdpbase is already the framework — decide what YourPHR is relative to it
+- [#694](https://github.com/jwilleke/yourphr/issues/694) — [BUG] The route check had a blind spot — it only scanned the services layer
+- [#693](https://github.com/jwilleke/yourphr/issues/693) — [BUG] IdP callback posts to a route that does not exist
+- [#687](https://github.com/jwilleke/yourphr/issues/687) — [BUG] "Email this summary" calls an endpoint that does not exist
+- [#686](https://github.com/jwilleke/yourphr/issues/686) — [BUG] The sources page cannot tell you whether C-CDA import will work
 - [#674](https://github.com/jwilleke/yourphr/issues/674) — [BUG] A display label is used as a feature flag — "sandbox mode" keys off the instance's name
 - [#668](https://github.com/jwilleke/yourphr/pull/668) — chore(deps): bump idb from 7.1.1 to 8.0.3 in /frontend *(PR · ready)* — refs [#343](https://github.com/jwilleke/yourphr/issues/343), refs [#336](https://github.com/jwilleke/yourphr/issues/336)
 - [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
@@ -94,11 +106,14 @@
 
 ## 🔵 In review
 
+- [#682](https://github.com/jwilleke/yourphr/issues/682) — [security] Test harness logs a demo session value in clear text
 - [#681](https://github.com/jwilleke/yourphr/issues/681) — [security] Double-unescaping in record-text stripTags — escaped markup becomes live markup
 - [#647](https://github.com/jwilleke/yourphr/issues/647) — [SPIKE] Rate-limit the unauthenticated auth endpoints — every sign-in, not just the demo one
 - [#645](https://github.com/jwilleke/yourphr/issues/645) — [FEATURE] Demo mode: reset to a baked-in baseline, proven safe before it destroys anything
 - [#644](https://github.com/jwilleke/yourphr/issues/644) — [FEATURE] Demo mode: a read-only demo admin who sees everything and changes nothing
 - [#643](https://github.com/jwilleke/yourphr/issues/643) — [FEATURE] Demo mode: the shared demo account and its one-click sign-in
+- [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
+- [#688](https://github.com/jwilleke/yourphr/issues/688) — [BUG] Four API-client methods call endpoints that do not exist and nothing calls them
 - [#673](https://github.com/jwilleke/yourphr/issues/673) — [BUG] The image ships the sandbox Angular build — prod says "sandbox-3.1.0" and shows a false PHI-safety notice
 - [#659](https://github.com/jwilleke/yourphr/issues/659) — [BUG] The Releases page says the latest YourPHR is v2.10.3 — the v3 releases have no GitHub Release
 - [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
@@ -120,7 +135,6 @@
 
 ## ❓ Needs triage
 
-- [#672](https://github.com/jwilleke/yourphr/pull/672) — chore(deps): bump dwv from 0.31.0 to 0.36.4 in /frontend *(PR · ready)* — no linked issue
 - [#671](https://github.com/jwilleke/yourphr/pull/671) — chore(deps): bump lforms from 43.0.0 to 43.1.0 in /frontend *(PR · ready)* — no linked issue
 - [#670](https://github.com/jwilleke/yourphr/pull/670) — chore(deps): bump typescript-eslint from 8.46.4 to 8.67.0 in /frontend *(PR · ready)* — no linked issue
 - [#667](https://github.com/jwilleke/yourphr/pull/667) — chore(ci): bump docker/build-push-action from 6 to 7 *(PR · ready)* — no linked issue
