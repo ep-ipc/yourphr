@@ -30,8 +30,12 @@ services:
       - HOST_PORT=${PORT}
     ports:
       - "${PORT:-9090}:8080"
+    # ./data is where the image actually writes (YOURPHR_FAST_STORAGE=/opt/yourphr/data, and a
+    # VOLUME in the Dockerfile). This mounted ./db:/opt/fasten/db for the Go layout, which nothing
+    # writes to any more — so both databases, the accounts and the imported records were landing in
+    # an anonymous volume that `docker compose down -v` or a prune silently takes away.
     volumes:
-      - ./db:/opt/fasten/db
+      - ./data:/opt/yourphr/data
       - ./certs:/opt/fasten/certs/shared
 
   # C-CDA/CCD converter sidecar (#254). Started by DEFAULT (#404): C-CDA XML is what patient portals

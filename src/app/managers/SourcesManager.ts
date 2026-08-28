@@ -22,6 +22,9 @@ import type { BaseSourceClientProvider } from '../providers/BaseSourceClientProv
 import type { EventBus } from '../../events/index.js';
 import { providerRequiresLegalConsent } from '../../account/index.js';
 
+/** What marks the one source every manual upload for an account writes through. */
+const MANUAL_PLATFORM = 'manual';
+
 declare module '../../framework/Engine.js' {
   interface ManagerRegistry {
     sources: SourcesManager;
@@ -178,6 +181,98 @@ export class SourcesManager extends BaseManager {
     if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
     if (source.userId !== ctx.username) throw new ApiError(403, 'a source can only be connected for the signed-in account');
     return this.provider.add(source);
+  }
+
+  /**
+   * Import a bundle a person uploaded (yourphr#654) — the manual half of "get my records in".
+   *
+   * Go had this at `POST /secure/source/manual`; this stack served the page that offers it but never
+   * the route behind it, so Manual Upload answered 404 and, with no provider sync wired up either,
+   * there was no way to get records into a fresh instance at all.
+   *
+   * It goes through the SAME doors a sync does: a connected source is created here, and the records
+   * are written through `records.writer`, which is what makes them indistinguishable afterwards —
+   * the same provenance, the same per-source counts, the same "remove data" button. An importer that
+   * wrote records another way would produce rows the rest of the app half-understands.
+   *
+   * ONE MANUAL SOURCE PER ACCOUNT, reused by every upload — not one per file, which is what this
+   * tried first and what testing rejected. The record store refuses to let a second source overwrite
+   * a record a first one already holds (the cross-source collision rule that stops two providers
+   * fighting over the same id), so a source per upload meant re-uploading a corrected export
+   * skipped every record it already had and reported nothing useful. Reusing one source makes a
+   * re-upload an ordinary update, which is what a person re-importing their export expects.
+   */
+  async importBundle(ctx: ApiContext, upload: { filename: string; bytes: Buffer }, now = Math.floor(Date.now() / 1000)): Promise<{ source: ConnectedSource; received: number; created: number; updated: number; skipped: number }> {
+    ctx.requireAuthenticated();
+    // The shared public-demo account may not bring outside data in (yourphr#496) — the same refusal
+    // `add()` makes, asked here too because this is a second way in.
+    if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(upload.bytes.toString('utf8'));
+    } catch (err) {
+      throw new ApiError(400, `that file is not JSON: ${(err as Error).message}`);
+    }
+    const bundle = parsed as { resourceType?: string; entry?: { resource?: Record<string, unknown> }[] };
+    if (bundle?.resourceType !== 'Bundle') {
+      throw new ApiError(400, `expected a FHIR Bundle, got ${typeof bundle?.resourceType === 'string' ? bundle.resourceType : 'no resourceType'}`);
+    }
+    const entries = Array.isArray(bundle.entry) ? bundle.entry : [];
+    if (entries.length === 0) throw new ApiError(400, 'that bundle carries no entries');
+
+    // The filename is client-supplied text. It is logged so an operator can see what was imported,
+    // and never used as a path or as an identifier.
+    const filename = (upload.filename.split(/[\\/]/).pop() ?? '').trim() || 'upload';
+    const source =
+      (await this.provider.list()).find((s) => s.userId === ctx.username && s.platformType === MANUAL_PLATFORM) ??
+      (await this.provider.add({
+        userId: ctx.username,
+        display: 'Manual upload',
+        fhirBaseUrl: '',
+        tokenUrl: '',
+        clientId: '',
+        patient: '',
+        resourceTypes: [],
+        accessToken: '',
+        refreshToken: '',
+        expiresAt: 0,
+        platformType: MANUAL_PLATFORM,
+        environment: '',
+      }));
+    const publicId = `source-${source.id}`;
+
+    const writer = this.engine.managers.records.writer(ctx, publicId);
+    let received = 0;
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    for (const entry of entries) {
+      const resource = entry?.resource;
+      // A bundle carries entries that are not resources — a search bundle's `search` blocks, a
+      // transaction's `request` blocks. Counted as skipped rather than failing the whole import.
+      if (!resource || typeof resource['resourceType'] !== 'string' || typeof resource['id'] !== 'string') {
+        skipped++;
+        continue;
+      }
+      received++;
+      try {
+        const outcome = await writer.upsert(resource as never);
+        if (outcome === 'created') created++;
+        else updated++;
+      } catch (err) {
+        // One bad row does not lose the other nine hundred. The count is what the caller is told.
+        skipped++;
+        this.log(`import: ${String(resource['resourceType'])}/${String(resource['id'])}: ${(err as Error).message}`);
+      }
+    }
+
+    await this.provider.markSynced(source.id, now);
+    await this.engine.managers.jobs.record(ctx, { sourceId: source.id, outcome: 'success', received, created, updated, error: '', startedAt: now, finishedAt: Math.floor(Date.now() / 1000) });
+    this.options.events?.publish(ctx.username, { event_type: 'source_complete', source_id: publicId });
+    this.log(`import: ${filename} — ${created} created, ${updated} updated, ${skipped} skipped`);
+
+    return { source: { ...source, lastSyncAt: now }, received, created, updated, skipped };
   }
 
   /** Disconnect (Go's #437): the tokens go, the records stay; the worker skips it. */

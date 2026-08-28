@@ -18,6 +18,8 @@
  * rewriting 76.8k lines of Angular.
  */
 import { accessCategoryFor, consentNow, consentStatus } from './account/index.js';
+import { readMultipart, UploadError } from './multipart/index.js';
+import { sourceShape } from './app/managers/SourcesManager.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
 import {createServer, IncomingMessage, ServerResponse} from 'node:http';
 import {createReadStream, existsSync, statSync} from 'node:fs';
@@ -682,6 +684,27 @@ export function createYourPhrServer(options: ServerOptions) {
         const src = engine.managers.sources;
         if (url.pathname === '/api/secure/source' && req.method === 'GET') {
           send(res, 200, {success: true, data: await src.listShaped(ctx)});
+          return;
+        }
+        // Manual upload (yourphr#654): the one way records get in without a provider sync. Go had
+        // this route; this stack shipped the page that posts to it and not the route, so the button
+        // answered 404. The body is multipart because that is what the Angular form sends.
+        if (url.pathname === '/api/secure/source/manual' && req.method === 'POST') {
+          try {
+            const parts = await readMultipart(req);
+            const file = parts.find((p) => p.name === 'file') ?? parts[0];
+            if (!file || file.data.length === 0) {
+              send(res, 400, {success: false, error: 'no file was uploaded'});
+              return;
+            }
+            const result = await src.importBundle(ctx, {filename: file.filename, bytes: file.data});
+            // `data` is the source, which is what the Angular client reads back; the counts ride
+            // alongside so the page can say what actually landed.
+            send(res, 200, {success: true, data: sourceShape(result.source, undefined), summary: {received: result.received, created: result.created, updated: result.updated, skipped: result.skipped}});
+          } catch (err) {
+            if (err instanceof UploadError) { send(res, 400, {success: false, error: err.message}); return; }
+            throw err;
+          }
           return;
         }
         if (src.events && url.pathname === '/api/secure/events/stream' && req.method === 'GET') {
