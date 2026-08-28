@@ -103,36 +103,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#682](https://github.com/jwilleke/yourphr/issues/682) — [security] Test harness logs a demo session value in clear text
-- [#681](https://github.com/jwilleke/yourphr/issues/681) — [security] Double-unescaping in record-text stripTags — escaped markup becomes live markup
-- [#647](https://github.com/jwilleke/yourphr/issues/647) — [SPIKE] Rate-limit the unauthenticated auth endpoints — every sign-in, not just the demo one
-- [#645](https://github.com/jwilleke/yourphr/issues/645) — [FEATURE] Demo mode: reset to a baked-in baseline, proven safe before it destroys anything
-- [#644](https://github.com/jwilleke/yourphr/issues/644) — [FEATURE] Demo mode: a read-only demo admin who sees everything and changes nothing
-- [#643](https://github.com/jwilleke/yourphr/issues/643) — [FEATURE] Demo mode: the shared demo account and its one-click sign-in
-- [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
-- [#694](https://github.com/jwilleke/yourphr/issues/694) — [BUG] The route check had a blind spot — it only scanned the services layer
-- [#692](https://github.com/jwilleke/yourphr/issues/692) — [BUG] Glossary lookups 404 — the client calls /api/glossary/code, the server routes /api/secure/glossary/code
-- [#691](https://github.com/jwilleke/yourphr/issues/691) — [BUG] Account signup 404s — the form renders and cannot submit
-- [#689](https://github.com/jwilleke/yourphr/issues/689) — [BUG] Nothing fails when the frontend calls a path the server does not route
-- [#688](https://github.com/jwilleke/yourphr/issues/688) — [BUG] Four API-client methods call endpoints that do not exist and nothing calls them
-- [#683](https://github.com/jwilleke/yourphr/issues/683) — [BUG] Practitioners: add, edit and history all 404 — only the list works
-- [#677](https://github.com/jwilleke/yourphr/issues/677) — [CHORE] Delete the Go application; keep the relay
-- [#675](https://github.com/jwilleke/yourphr/issues/675) — [BUG] demo.yourphr.org is orphaned from image automation — pinned at 3.1.0 forever
-- [#673](https://github.com/jwilleke/yourphr/issues/673) — [BUG] The image ships the sandbox Angular build — prod says "sandbox-3.1.0" and shows a false PHI-safety notice
-- [#659](https://github.com/jwilleke/yourphr/issues/659) — [BUG] The Releases page says the latest YourPHR is v2.10.3 — the v3 releases have no GitHub Release
-- [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
-- [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
-- [#654](https://github.com/jwilleke/yourphr/issues/654) — [FEATURE] Ship migrate in the image — the upgrade guide already assumes it
-- [#652](https://github.com/jwilleke/yourphr/issues/652) — [CHORE] One image from this repository, on the 3.x line, and Flux follows it
-- [#651](https://github.com/jwilleke/yourphr/issues/651) — [CHORE] The TypeScript stack's CI becomes this repository's CI
-- [#650](https://github.com/jwilleke/yourphr/issues/650) — [CHORE] Import the TypeScript stack at src/, with its history — one build path
-- [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
-- [#648](https://github.com/jwilleke/yourphr/issues/648) — [SPIKE] The role column must carry a configured role NAME, not one of two literals
-- [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
-- [#642](https://github.com/jwilleke/yourphr/issues/642) — [BUG] Version banner reports the wrong build and a blank environment name
-- [#625](https://github.com/jwilleke/yourphr/issues/625) — [ENHANCEMENT] Configuration: did-you-mean suggestions in the unknown-key report
-- [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
-- [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
+*None.*
 
 ## ⏸ Deferred
 
