@@ -10,7 +10,6 @@
 
 ## 🟠 P1
 
-- [#664](https://github.com/jwilleke/yourphr/pull/664) — chore(ci): bump docker/setup-buildx-action from 3 to 4 *(PR · ready)* — refs [#475](https://github.com/jwilleke/yourphr/issues/475), refs [#482](https://github.com/jwilleke/yourphr/issues/482), refs [#485](https://github.com/jwilleke/yourphr/issues/485), refs [#472](https://github.com/jwilleke/yourphr/issues/472), refs [#436](https://github.com/jwilleke/yourphr/issues/436), refs [#408](https://github.com/jwilleke/yourphr/issues/408), refs [#370](https://github.com/jwilleke/yourphr/issues/370), refs [#389](https://github.com/jwilleke/yourphr/issues/389), refs [#590](https://github.com/jwilleke/yourphr/issues/590)
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] yarn build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#696](https://github.com/jwilleke/yourphr/issues/696) — [BUG] "Add record" opens a form that cannot save — manual entry 404s
@@ -41,12 +40,16 @@
 - [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
+- [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
+- [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
+- [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
 - [#355](https://github.com/jwilleke/yourphr/issues/355) — [FEATURE] Dynamic Client Registration (DCR)
 - [#313](https://github.com/jwilleke/yourphr/issues/313) — [FEATURE] patients able to add records to their own PHR
 
 ## 🟡 P2
 
 - [#669](https://github.com/jwilleke/yourphr/pull/669) — chore(deps): bump webcrypto-liner from 1.4.0 to 1.4.3 in /frontend *(PR · ready)* — likely [#532](https://github.com/jwilleke/yourphr/issues/532)
+- [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] yarn build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#697](https://github.com/jwilleke/yourphr/issues/697) — [ARCH] ngdpbase is already the framework — decide what YourPHR is relative to it
@@ -55,7 +58,6 @@
 - [#687](https://github.com/jwilleke/yourphr/issues/687) — [BUG] "Email this summary" calls an endpoint that does not exist
 - [#686](https://github.com/jwilleke/yourphr/issues/686) — [BUG] The sources page cannot tell you whether C-CDA import will work
 - [#674](https://github.com/jwilleke/yourphr/issues/674) — [BUG] A display label is used as a feature flag — "sandbox mode" keys off the instance's name
-- [#668](https://github.com/jwilleke/yourphr/pull/668) — chore(deps): bump idb from 7.1.1 to 8.0.3 in /frontend *(PR · ready)* — refs [#343](https://github.com/jwilleke/yourphr/issues/343), refs [#336](https://github.com/jwilleke/yourphr/issues/336)
 - [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
 - [#639](https://github.com/jwilleke/yourphr/issues/639) — [SPIKE] Remove the SOPS Secret — .env on the volume supersedes it
 - [#625](https://github.com/jwilleke/yourphr/issues/625) — [ENHANCEMENT] Configuration: did-you-mean suggestions in the unknown-key report
@@ -66,6 +68,10 @@
 - [#500](https://github.com/jwilleke/yourphr/issues/500) — [FEATURE] ui.theme-name: theme.name is published but wired to nothing — wire it up or remove it
 - [#499](https://github.com/jwilleke/yourphr/issues/499) — [FEATURE] ui.color-mode: instance default for light/dark (user's own choice still wins)
 - [#487](https://github.com/jwilleke/yourphr/issues/487) — [CHORE] Migrating off Karma must not silently defang the contrast test (jsdom has no real cascade)
+- [#485](https://github.com/jwilleke/yourphr/issues/485) — [FEATURE] Reject obfuscated numeric hosts when a source is added, not when it syncs
+- [#482](https://github.com/jwilleke/yourphr/issues/482) — [FEATURE] Upgrade angular Angular to 22.x
+- [#475](https://github.com/jwilleke/yourphr/issues/475) — [FEATURE] display the bootstrap values
+- [#472](https://github.com/jwilleke/yourphr/issues/472) — [CHORE] Reference deployment: env carries bootstrap and secrets, not settings
 - [#471](https://github.com/jwilleke/yourphr/issues/471) — [FEATURE] Show which provider entries were provisioned from environment variables
 - [#469](https://github.com/jwilleke/yourphr/issues/469) — [CHORE] Remove AllowedBackupRoots, keep path hygiene
 - [#465](https://github.com/jwilleke/yourphr/issues/465) — [FEATURE] Record the document digest on the consent record
@@ -77,6 +83,7 @@
 - [#393](https://github.com/jwilleke/yourphr/issues/393) — [FEATURE] Live API Sync CARIN framework
 - [#392](https://github.com/jwilleke/yourphr/issues/392) — [FEATURE] Display C4BB files patient-legible layout
 - [#385](https://github.com/jwilleke/yourphr/issues/385) — [EPIC] Realistic test-data corpus + golden-test harness
+- [#370](https://github.com/jwilleke/yourphr/issues/370) — [FEATURE] Add VA Clinical Health (FHIR) as a SMART provider
 - [#369](https://github.com/jwilleke/yourphr/issues/369) — [FEATURE] /medical-history — server-side grouping endpoint (counts + paged detail) for scale
 - [#364](https://github.com/jwilleke/yourphr/issues/364) — [FEATURE] Admin Database card — polish (free space, schema version, totals, vacuum)
 - [#360](https://github.com/jwilleke/yourphr/issues/360) — [FEATURE] Attach `classified` on resource-graph / list rows (per-row synthesized badges)
@@ -84,8 +91,10 @@
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
+- [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
 - [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
+- [#336](https://github.com/jwilleke/yourphr/issues/336) — [FEATURE] Explore — Send to Email
 - [#335](https://github.com/jwilleke/yourphr/issues/335) — [FEATURE] Explore — Export to PDF
 - [#334](https://github.com/jwilleke/yourphr/issues/334) — [FEATURE] Explore — Save Report
 - [#333](https://github.com/jwilleke/yourphr/issues/333) — [EPIC] Explore — record export options (Save Report, PDF, Email)
@@ -137,8 +146,10 @@
 
 - [#671](https://github.com/jwilleke/yourphr/pull/671) — chore(deps): bump lforms from 43.0.0 to 43.1.0 in /frontend *(PR · ready)* — no linked issue
 - [#670](https://github.com/jwilleke/yourphr/pull/670) — chore(deps): bump typescript-eslint from 8.46.4 to 8.67.0 in /frontend *(PR · ready)* — no linked issue
+- [#668](https://github.com/jwilleke/yourphr/pull/668) — chore(deps): bump idb from 7.1.1 to 8.0.3 in /frontend *(PR · ready)* — no linked issue
 - [#667](https://github.com/jwilleke/yourphr/pull/667) — chore(ci): bump docker/build-push-action from 6 to 7 *(PR · ready)* — no linked issue
 - [#665](https://github.com/jwilleke/yourphr/pull/665) — chore(ci): bump actions/checkout from 4 to 7 *(PR · ready)* — no linked issue
+- [#664](https://github.com/jwilleke/yourphr/pull/664) — chore(ci): bump docker/setup-buildx-action from 3 to 4 *(PR · ready)* — no linked issue
 - [#661](https://github.com/jwilleke/yourphr/pull/661) — chore(ci): bump actions/setup-node from 4 to 7 *(PR · ready)* — no linked issue
 - [#660](https://github.com/jwilleke/yourphr/pull/660) — chore(ci): bump docker/login-action from 3 to 4 *(PR · ready)* — no linked issue
 - [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
