@@ -13,19 +13,13 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] yarn build-tree high advisories: brace-expansion, cross-spawn, image-size, nanoid, semver
 - [#696](https://github.com/jwilleke/yourphr/issues/696) — [BUG] "Add record" opens a form that cannot save — manual entry 404s
 - [#695](https://github.com/jwilleke/yourphr/issues/695) — [BUG] Settings offers agent tokens the server does not implement — and no scoping, audit or expiry model
-- [#692](https://github.com/jwilleke/yourphr/issues/692) — [BUG] Glossary lookups 404 — the client calls /api/glossary/code, the server routes /api/secure/glossary/code
-- [#691](https://github.com/jwilleke/yourphr/issues/691) — [BUG] Account signup 404s — the form renders and cannot submit
 - [#690](https://github.com/jwilleke/yourphr/issues/690) — [BUG] No E2E coverage of any interaction path — only sign-in-and-look
-- [#689](https://github.com/jwilleke/yourphr/issues/689) — [BUG] Nothing fails when the frontend calls a path the server does not route
 - [#685](https://github.com/jwilleke/yourphr/issues/685) — [BUG] Provider connection errors are never recorded — POST /secure/jobs/error 404s
 - [#684](https://github.com/jwilleke/yourphr/issues/684) — [BUG] The record wizard cannot link or unlink related records
-- [#683](https://github.com/jwilleke/yourphr/issues/683) — [BUG] Practitioners: add, edit and history all 404 — only the list works
 - [#680](https://github.com/jwilleke/yourphr/issues/680) — [BUG] The Angular app calls 12 endpoints the TypeScript server does not serve
 - [#679](https://github.com/jwilleke/yourphr/issues/679) — [CHORE] Close or rewrite every Go-era issue — no open work against a deleted codebase
 - [#678](https://github.com/jwilleke/yourphr/issues/678) — [BUG] E2E coverage gap: the record-display specs went with the Go stack
-- [#677](https://github.com/jwilleke/yourphr/issues/677) — [CHORE] Delete the Go application; keep the relay
 - [#676](https://github.com/jwilleke/yourphr/issues/676) — [EPIC] The word "fasten" stops appearing in anything we ship
-- [#675](https://github.com/jwilleke/yourphr/issues/675) — [BUG] demo.yourphr.org is orphaned from image automation — pinned at 3.1.0 forever
 - [#649](https://github.com/jwilleke/yourphr/issues/649) — [EPIC] The TypeScript stack becomes YourPHR v3, in this repository
 - [#641](https://github.com/jwilleke/yourphr/issues/641) — [SPIKE] Ship a minimal working deployment for each of the three targets — bare metal, Docker, k8s
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
@@ -35,7 +29,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#624](https://github.com/jwilleke/yourphr/issues/624) — [SPIKE] Configuration: split the bootstrap flag — it is doing three jobs (raw-env, restart-required, secret)
 - [#608](https://github.com/jwilleke/yourphr/issues/608) — [SPIKE] Architecture: build on the ngdpbase model throughout — engine, managers as the only door, config-bound providers, request context (the agreed architecture doc, applied)
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
-- [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
 - [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
 - [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
@@ -52,15 +45,12 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#345](https://github.com/jwilleke/yourphr/issues/345) — [security] http-proxy-middleware (webpack-dev-server tree) — blocked on upstream hpm 3.x (GHSA-64mm-vxmg-q3vj)
 - [#697](https://github.com/jwilleke/yourphr/issues/697) — [ARCH] ngdpbase is already the framework — decide what YourPHR is relative to it
-- [#694](https://github.com/jwilleke/yourphr/issues/694) — [BUG] The route check had a blind spot — it only scanned the services layer
 - [#693](https://github.com/jwilleke/yourphr/issues/693) — [BUG] IdP callback posts to a route that does not exist
 - [#687](https://github.com/jwilleke/yourphr/issues/687) — [BUG] "Email this summary" calls an endpoint that does not exist
 - [#686](https://github.com/jwilleke/yourphr/issues/686) — [BUG] The sources page cannot tell you whether C-CDA import will work
 - [#674](https://github.com/jwilleke/yourphr/issues/674) — [BUG] A display label is used as a feature flag — "sandbox mode" keys off the instance's name
-- [#532](https://github.com/jwilleke/yourphr/issues/532) — [CHORE] Load webcrypto-liner only when crypto.subtle is missing
 - [#656](https://github.com/jwilleke/yourphr/issues/656) — [CHORE] Retire jwilleke/yourphr-ts-spike
 - [#639](https://github.com/jwilleke/yourphr/issues/639) — [SPIKE] Remove the SOPS Secret — .env on the volume supersedes it
-- [#625](https://github.com/jwilleke/yourphr/issues/625) — [ENHANCEMENT] Configuration: did-you-mean suggestions in the unknown-key report
 - [#552](https://github.com/jwilleke/yourphr/issues/552) — [CHORE] Port the DICOM viewer to dwv 0.36 — removed APIs and a build path that no longer exists
 - [#551](https://github.com/jwilleke/yourphr/issues/551) — [CHORE] Migrate 647 *ngIf uses to Angular built-in control flow (@if/@for)
 - [#535](https://github.com/jwilleke/yourphr/issues/535) — [FEATURE] No list view for Organizations (individual ones display fine)
@@ -122,7 +112,14 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#644](https://github.com/jwilleke/yourphr/issues/644) — [FEATURE] Demo mode: a read-only demo admin who sees everything and changes nothing
 - [#643](https://github.com/jwilleke/yourphr/issues/643) — [FEATURE] Demo mode: the shared demo account and its one-click sign-in
 - [#638](https://github.com/jwilleke/yourphr/issues/638) — [SPIKE] Secrets are not redacted from logs — /admin/logs serves them to any admin
+- [#694](https://github.com/jwilleke/yourphr/issues/694) — [BUG] The route check had a blind spot — it only scanned the services layer
+- [#692](https://github.com/jwilleke/yourphr/issues/692) — [BUG] Glossary lookups 404 — the client calls /api/glossary/code, the server routes /api/secure/glossary/code
+- [#691](https://github.com/jwilleke/yourphr/issues/691) — [BUG] Account signup 404s — the form renders and cannot submit
+- [#689](https://github.com/jwilleke/yourphr/issues/689) — [BUG] Nothing fails when the frontend calls a path the server does not route
 - [#688](https://github.com/jwilleke/yourphr/issues/688) — [BUG] Four API-client methods call endpoints that do not exist and nothing calls them
+- [#683](https://github.com/jwilleke/yourphr/issues/683) — [BUG] Practitioners: add, edit and history all 404 — only the list works
+- [#677](https://github.com/jwilleke/yourphr/issues/677) — [CHORE] Delete the Go application; keep the relay
+- [#675](https://github.com/jwilleke/yourphr/issues/675) — [BUG] demo.yourphr.org is orphaned from image automation — pinned at 3.1.0 forever
 - [#673](https://github.com/jwilleke/yourphr/issues/673) — [BUG] The image ships the sandbox Angular build — prod says "sandbox-3.1.0" and shows a false PHI-safety notice
 - [#659](https://github.com/jwilleke/yourphr/issues/659) — [BUG] The Releases page says the latest YourPHR is v2.10.3 — the v3 releases have no GitHub Release
 - [#655](https://github.com/jwilleke/yourphr/issues/655) — [FEATURE] End-user upgrade docs: renumbered to v2 to v3, and finished
@@ -133,6 +130,9 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#648](https://github.com/jwilleke/yourphr/issues/648) — [SPIKE] The role column must carry a configured role NAME, not one of two literals
 - [#646](https://github.com/jwilleke/yourphr/issues/646) — [FEATURE] Swap demo.yourphr.org to the TypeScript stack — the last Go instance
 - [#642](https://github.com/jwilleke/yourphr/issues/642) — [BUG] Version banner reports the wrong build and a blank environment name
+- [#625](https://github.com/jwilleke/yourphr/issues/625) — [ENHANCEMENT] Configuration: did-you-mean suggestions in the unknown-key report
+- [#588](https://github.com/jwilleke/yourphr/issues/588) — [SPIKE] Phase 5: the cut-over runbook — freeze, migrate, verify, swap, rollback rehearsed
+- [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
 
 ## ⏸ Deferred
 
@@ -144,4 +144,4 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## ❓ Needs triage
 
-- [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
+*None.*
