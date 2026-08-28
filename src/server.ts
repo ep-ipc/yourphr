@@ -1067,6 +1067,44 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // --- practitioners the patient maintains (yourphr#683) ---
+      //
+      // The Address book LIST already worked, through /resource/fhir?sourceResourceType=Practitioner.
+      // These are the three that did not: a patient could see their care team and not correct it.
+      //
+      // They write through the account's own `manual` source, never a provider's, so a
+      // hand-entered practitioner stays distinguishable from one a portal asserted (yourphr#611).
+      {
+        const practitionerHistory = url.pathname.match(/^\/api\/secure\/practitioners\/([^/]+)\/history$/);
+        if (practitionerHistory && req.method === 'GET') {
+          // The encounters that NAME this practitioner. The Angular page reads `relatedResources`
+          // at the top level rather than under `data` — its shape, kept rather than corrected,
+          // because changing it here would break the page this route exists to fix.
+          const related = await engine.managers.records.referencing(ctx, 'Practitioner', decodeURIComponent(practitionerHistory[1]!), 'Encounter');
+          send(res, 200, {success: true, relatedResources: related});
+          return;
+        }
+        const practitionerUpdate = url.pathname.match(/^\/api\/secure\/practitioners\/([^/]+)$/);
+        if ((url.pathname === '/api/secure/practitioners' && req.method === 'POST') || (practitionerUpdate && req.method === 'PUT')) {
+          const body = await readJsonBody(req);
+          const resource = (body?.['resource'] ?? null) as Record<string, unknown> | null;
+          if (!resource || typeof resource !== 'object') {
+            send(res, 400, {success: false, error: 'a resource is required'});
+            return;
+          }
+          if (String(resource['resourceType'] ?? '') !== 'Practitioner') {
+            send(res, 400, {success: false, error: 'this route saves a Practitioner'});
+            return;
+          }
+          // On PUT the id in the PATH wins over any id in the body: a request that says one thing
+          // in its URL and another in its payload must not get to choose which record it edits.
+          if (practitionerUpdate) resource['id'] = decodeURIComponent(practitionerUpdate[1]!);
+          const saved = await engine.managers.records.savePatientRecord(ctx, resource as never);
+          send(res, saved.outcome === 'created' ? 201 : 200, {success: true, data: saved});
+          return;
+        }
+      }
+
       // GET /api/secure/resource/fhir?sourceResourceType=Condition[&sourceID=…]
       if (url.pathname === '/api/secure/resource/fhir' && req.method === 'GET') {
         const resourceType = url.searchParams.get('sourceResourceType');

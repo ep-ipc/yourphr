@@ -352,6 +352,52 @@ export class RecordsManager extends BaseManager {
     return this.provider.writer(this.who(ctx), sourceId);
   }
 
+  /**
+   * Save a record the PATIENT wrote (yourphr#683).
+   *
+   * Distinct from `writer()` above, which the worker and the migration use: those write on behalf
+   * of a provider that asserted something. This writes on behalf of the person, through their own
+   * `manual` source, so provenance stays truthful and a hand-entered practitioner can never be
+   * mistaken for one Epic sent.
+   *
+   * Upsert by the resource's own id, which is what makes create and update the same operation —
+   * the Angular app POSTs a new Practitioner and PUTs an edited one, and both are "this is what I
+   * say about this record now".
+   */
+  async savePatientRecord(ctx: ApiContext, resource: Resource): Promise<{ id: string; outcome: 'created' | 'updated' }> {
+    ctx.requireAuthenticated();
+    if (!resource || typeof resource !== 'object') throw new ApiError(400, 'a resource is required');
+    const type = (resource as { resourceType?: unknown }).resourceType;
+    if (typeof type !== 'string' || type === '') throw new ApiError(400, 'the resource needs a resourceType');
+    const id = (resource as { id?: unknown }).id;
+    if (typeof id !== 'string' || id.trim() === '') throw new ApiError(400, 'the resource needs an id');
+
+    const source = await this.engine.managers.sources.manualSource(ctx);
+    const outcome = await this.writer(ctx, `source-${source.id}`).upsert(resource);
+    return { id, outcome };
+  }
+
+  /**
+   * The records that REFER to one resource — what the practitioner-history page calls "history"
+   * (yourphr#683): the encounters that name this practitioner.
+   *
+   * Reads the same edge the medical-history graph walks, so the two agree by construction rather
+   * than by two implementations of "related".
+   */
+  async referencing(ctx: ApiContext, resourceType: string, id: string, onlyType?: string): Promise<RecentItem[]> {
+    const userId = this.who(ctx);
+    const out: RecentItem[] = [];
+    for (const ref of await this.provider.referencedBy(userId, `${resourceType}/${id}`)) {
+      if (onlyType && ref.resourceType !== onlyType) continue;
+      const stored = await this.provider.read(userId, ref.resourceType, ref.id);
+      if (!stored) continue;
+      const shaped = toResourceFhir(stored.resource, stored.sourceId);
+      const date = String(shaped['sort_date'] ?? '').slice(0, 10);
+      out.push({ source_id: stored.sourceId, source_resource_type: stored.resourceType, source_resource_id: stored.id, title: String(shaped['sort_title'] ?? '') || stored.resourceType, ...(date ? { date } : {}) });
+    }
+    return out.sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')));
+  }
+
   async exists(ctx: ApiContext, resourceType: string, id: string): Promise<boolean> {
     return (await this.provider.read(this.who(ctx), resourceType, id)) !== undefined;
   }

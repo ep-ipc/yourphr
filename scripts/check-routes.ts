@@ -38,9 +38,6 @@ const FRONTEND = 'frontend/src/app';
  * every entry here is a feature a person can reach and cannot use. It should only ever shrink.
  */
 const KNOWN_MISSING: Record<string, string> = {
-  '/api/secure/practitioners': 'yourphr#683',
-  '/api/secure/practitioners/:p': 'yourphr#683',
-  '/api/secure/practitioners/:p/history': 'yourphr#683',
   '/api/secure/resource/related': 'yourphr#684',
   '/api/secure/encounter/:p/related/:p/:p': 'yourphr#684',
   '/api/secure/jobs/error': 'yourphr#685',

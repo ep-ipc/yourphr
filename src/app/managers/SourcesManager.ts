@@ -18,6 +18,9 @@ import type { Engine } from '../../framework/Engine.js';
 import { ApiContext, ApiError } from '../../framework/ApiContext.js';
 import { backgroundJobShape, type JobRecord } from '../../framework/managers/JobsManager.js';
 import type { BaseSourcesProvider, ConnectedSource, DynamicClient, NewSource } from '../providers/BaseSourcesProvider.js';
+
+/** Go's platform_type for a source the patient fills in themselves, rather than one that syncs. */
+export const MANUAL_PLATFORM_TYPE = 'manual';
 import type { BaseSourceClientProvider } from '../providers/BaseSourceClientProvider.js';
 import type { EventBus } from '../../events/index.js';
 import { providerRequiresLegalConsent } from '../../account/index.js';
@@ -178,6 +181,42 @@ export class SourcesManager extends BaseManager {
     if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
     if (source.userId !== ctx.username) throw new ApiError(403, 'a source can only be connected for the signed-in account');
     return this.provider.add(source);
+  }
+
+  /**
+   * The account's own source — where records the PATIENT wrote go (yourphr#683).
+   *
+   * Find-or-create, and the whole point is that patient-authored records are NOT anonymous. Every
+   * record in this stack is attributed to the source that said it (yourphr#611); writing a
+   * hand-entered practitioner with no source, or under a synced provider's source, would make the
+   * record claim an origin it does not have. A patient correcting their own care team is a
+   * different kind of statement from Epic asserting it, and the store should be able to tell them
+   * apart forever.
+   *
+   * `platformType: 'manual'` is Go's name for exactly this, carried by the migration
+   * (`LegacySource.platformType`), so a migrated instance and a fresh one agree.
+   *
+   * It holds no credentials and no endpoint, so the worker has nothing to sync and skips it — the
+   * same shape as a disconnected source.
+   */
+  async manualSource(ctx: ApiContext): Promise<ConnectedSource> {
+    ctx.requireAuthenticated();
+    const existing = (await this.list(ctx)).find((s) => s.platformType === MANUAL_PLATFORM_TYPE);
+    if (existing) return existing;
+    return this.add(ctx, {
+      userId: ctx.username,
+      display: 'Added by you',
+      fhirBaseUrl: '',
+      tokenUrl: '',
+      clientId: '',
+      patient: '',
+      resourceTypes: [],
+      accessToken: '',
+      refreshToken: '',
+      expiresAt: 0,
+      platformType: MANUAL_PLATFORM_TYPE,
+      environment: 'production',
+    });
   }
 
   /** Disconnect (Go's #437): the tokens go, the records stay; the worker skips it. */

@@ -693,6 +693,62 @@ async function main(): Promise<void> {
       unknownSystem.status === 400 && anonymous.status === 401, `system ${unknownSystem.status} anon ${anonymous.status}`);
   }
 
+  // --- practitioners the patient maintains (yourphr#683) ---
+  //
+  // LAST on purpose. Writing one creates alice's `manual` source, and several assertions above
+  // count her sources — running this earlier turns an isolation check into a count check and
+  // weakens it. The order is the fixture.
+  //
+  // The Address book LIST always worked; add, edit and history 404'd, so a patient could see their
+  // care team and not correct it. Exercised over HTTP because the bug was in the routing layer —
+  // the managers were never the problem, and a manager-level test would have passed throughout.
+  // carol's token, not alice's: alice is signed out everywhere by an earlier check, and signing
+  // in again here trips the rate limiter that another check deliberately exercises. Reusing a live
+  // token keeps this block independent of both.
+  const pracToken = carolToken;
+
+  const putJson = (path: string, token: string, body: unknown, method = 'POST') =>
+    fetch(`${base}${path}`, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+  const pracCreated = await putJson('/api/secure/practitioners', pracToken, {
+    resource: { resourceType: 'Practitioner', id: 'prac-1', name: [{ family: 'Ashworth', given: ['Jo'] }] },
+  });
+  check('POST /secure/practitioners creates and answers 201', pracCreated.status === 201, `status ${pracCreated.status}`);
+
+  const edited = await putJson('/api/secure/practitioners/prac-1', pracToken, {
+    resource: { resourceType: 'Practitioner', id: 'ignored-by-the-server', name: [{ family: 'Ashworth-Smith' }] },
+  }, 'PUT');
+  const editedBody = (await edited.json()) as { data?: { id?: string; outcome?: string } };
+  check('PUT /secure/practitioners/:id updates, and the PATH id wins over the body id',
+    edited.status === 200 && editedBody.data?.outcome === 'updated' && editedBody.data?.id === 'prac-1',
+    `status ${edited.status} ${JSON.stringify(editedBody.data)}`);
+
+  const afterEdit = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Practitioner`, authed(pracToken))).json()) as { data: unknown[] };
+  check('the edit replaced the practitioner rather than adding a second', afterEdit.data.length === 1, `${afterEdit.data.length} practitioner(s)`);
+
+  await putJson('/api/secure/practitioners', pracToken, {
+    resource: { resourceType: 'Encounter', id: 'enc-1', status: 'finished', participant: [{ individual: { reference: 'Practitioner/prac-1' } }] },
+  });
+  const wrongType = await putJson('/api/secure/practitioners', pracToken, {
+    resource: { resourceType: 'Encounter', id: 'enc-x', status: 'finished' },
+  });
+  check('the route refuses a resource that is not a Practitioner', wrongType.status === 400, `status ${wrongType.status}`);
+
+  const history = (await (await fetch(`${base}/api/secure/practitioners/prac-1/history`, authed(pracToken))).json()) as { relatedResources?: { source_resource_id?: string }[] };
+  check('GET /secure/practitioners/:id/history returns relatedResources at the TOP level — the shape the page reads',
+    Array.isArray(history.relatedResources), JSON.stringify(Object.keys(history)));
+
+  // TOOTH: another account must not see it — and ADMIN is the sharper case than another member,
+  // because `admin-read` opens the operator screens and must not open somebody's care team.
+  const adminSees = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Practitioner`, authed(adminToken))).json()) as { data: unknown[] };
+  const adminHistory = (await (await fetch(`${base}/api/secure/practitioners/prac-1/history`, authed(adminToken))).json()) as { relatedResources?: unknown[] };
+  check('TOOTH: an admin sees neither another account\'s practitioner nor its history',
+    adminSees.data.length === 0 && (adminHistory.relatedResources ?? []).length === 0,
+    `admin saw ${adminSees.data.length} practitioner(s)`);
+  const anon = await fetch(`${base}/api/secure/practitioners`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  check('and an unauthenticated caller cannot write one at all', anon.status === 401, `status ${anon.status}`);
+
+
   fake.close();
   await app.close();
   rmSync(dir, { recursive: true, force: true });
@@ -759,6 +815,7 @@ async function main(): Promise<void> {
     await twoVolume.close();
     rmSync(fastDir, { recursive: true, force: true });
   }
+
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
