@@ -16,8 +16,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      # --ignore-scripts: this job lints markdown and needs no native module built. Without it the
+      # whole root tree compiles better-sqlite3 to run a text linter.
+      - run: npm ci --ignore-scripts
+
       - name: Lint markdown
-        # No `globs:` here, deliberately (yourphr#561) — `.markdownlint-cli2.jsonc` carries both the
-        # rules and the file set, so CI, `npm run lint:md` and the editor give the same answer.
-        # An inline list here overrides that file and is how the three copies drifted apart before.
-        uses: DavidAnson/markdownlint-cli2-action@v24
+        # `npm run lint:md`, NOT markdownlint-cli2-action (yourphr#561). The action bundles its own
+        # markdownlint-cli2, so CI and a developer's machine could share one config and still
+        # disagree by VERSION — a rule tightened upstream fails here and passes locally, or the
+        # reverse, and neither is reproducible from the repository. Running the pinned
+        # devDependency makes CI, `npm run lint:md` and the editor the same tool on the same rules.
+        #
+        # The cost is the action's inline PR annotations; the failure output still names file,
+        # line and rule, which is what the fix needs.
+        #
+        # Globs are not passed here either: `.markdownlint-cli2.jsonc` carries rules AND file set.
+        run: npm run lint:md

@@ -116,15 +116,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      # --ignore-scripts: linting markdown needs no native module built.
+      - run: npm ci --ignore-scripts
       - name: markdownlint
-        # No `globs:` here, deliberately (yourphr#561). `.markdownlint-cli2.jsonc` is THE rulebook —
-        # rules AND what is linted — and it says so in its own header, because these lived in three
-        # places that disagreed: the rules in .markdownlint.jsonc, the glob in package.json, and a
-        # third list in this workflow. An inline `globs:` OVERRIDES the config file, which recreated
-        # exactly that split: CI linted a different set of files from `npm run lint:md` and VS Code,
-        # and only CI's copy still claimed CHANGELOG.md was machine-generated.
+        # ONE source and ONE tool (yourphr#561). `.markdownlint-cli2.jsonc` carries the rules AND
+        # the file set — these lived in three places that disagreed before: rules in
+        # .markdownlint.jsonc, the glob in package.json, and a third list right here. An inline
+        # `globs:` overrides the config file, which recreated exactly that split; only CI's copy
+        # still claimed CHANGELOG.md was machine-generated, long after release-please was removed.
         #
-        # The config excludes only LICENSE, and reaches everything else through `gitignore: true` —
+        # Running the pinned devDependency rather than markdownlint-cli2-action closes the last
+        # gap: the action bundles its own markdownlint-cli2, so CI could share the config and still
+        # differ by VERSION from what a developer runs.
+        #
+        # The config excludes only LICENSE and reaches everything else through `gitignore: true` —
         # git decides what is generated or vendored, so vendor/ and dist/ need no hand-maintained
-        # entry here and cannot drift out of date.
-        uses: DavidAnson/markdownlint-cli2-action@v24
+        # entry here and cannot rot the way the comment did.
+        run: npm run lint:md
