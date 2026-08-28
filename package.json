@@ -57,7 +57,8 @@
     "demo-reset": "tsx scripts/demo-reset-tests.ts",
     "baseline": "tsx scripts/build-demo-baseline.ts",
     "check:routes": "tsx scripts/check-routes.ts",
-    "agent-tokens": "tsx scripts/agent-token-tests.ts"
+    "agent-tokens": "tsx scripts/agent-token-tests.ts",
+    "lint:md": "markdownlint-cli2"
   },
   "dependencies": {
     "@medplum/core": "^5.1.29",
@@ -74,6 +75,7 @@
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "markdownlint-cli2": "^0.23.2",
     "tsx": "^4.19.2",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"

@@ -3,9 +3,13 @@
   "karmaTestExplorer.projectWorkspaces": [
     "frontend"
   ],
-  "markdownlint.config": {
-    "extends": ".markdownlint.jsonc"
-  },
+  // No "markdownlint.config" here, deliberately (yourphr#561): `.markdownlint-cli2.jsonc` is the
+  // ONE source for markdown rules and globs, and the extension discovers it by itself. This key
+  // extended `.markdownlint.jsonc` — note the missing `-cli2`, a file that is not in this tree —
+  // so the editor silently fell back to markdownlint's DEFAULTS and disagreed with CI on exactly
+  // the rules the rulebook pins: MD013 (line length) on, and MD049/MD050 left "consistent"
+  // instead of asterisk/underscore. An extends pointing at nothing fails quietly — no error,
+  // just a different answer from the one CI gives.
   "markdownlint.enable": true,
   "[markdown]": {
     "editor.wordWrap": "on",
