@@ -47,6 +47,11 @@ jobs:
       - name: Store boundary — the driver lives in providers, nothing reaches past a manager
         run: npm run check:store
 
+      # yourphr#689 — the frontend and the server are two halves of one contract, and nothing
+      # compared them until they had drifted apart across an entire rewrite.
+      - name: Route contract (frontend calls what the server routes)
+        run: npm run check:routes
+
       - name: Framework skeleton (typed registry, boot order, guards)
         run: npm run framework
       - name: Unit tests with coverage floors on src/framework and src/app
