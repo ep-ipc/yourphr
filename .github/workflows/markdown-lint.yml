@@ -17,17 +17,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Lint markdown
+        # No `globs:` here, deliberately (yourphr#561) — `.markdownlint-cli2.jsonc` carries both the
+        # rules and the file set, so CI, `npm run lint:md` and the editor give the same answer.
+        # An inline list here overrides that file and is how the three copies drifted apart before.
         uses: DavidAnson/markdownlint-cli2-action@v24
-        with:
-          # Canonical exclusion set — keep identical to development.yaml's markdownlint step.
-          # vendor/ + dist/ are gitignored build/vendor artifacts (absent in CI, present locally);
-          # LICENSE.md is legal text and CHANGELOG.md is release-please-generated — none hand-edited.
-          globs: |
-            **/*.md
-            !**/node_modules/**
-            !vendor/**
-            !**/dist/**
-            !**/test-results/**
-            !**/storybook-static/**
-            !LICENSE.md
-            !CHANGELOG.md
