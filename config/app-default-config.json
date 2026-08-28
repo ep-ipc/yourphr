@@ -15,6 +15,8 @@
   "yourphr.auth.session.absolute-seconds": 43200,
   "yourphr.auth.throttle.max-failures": 5,
   "yourphr.auth.throttle.window-seconds": 900,
+  "_comment_signup_enabled": "Self-service signup (yourphr#691). DEFAULT FALSE, deliberately: a self-hosted PHR reachable from the internet with an open signup form hands an account to whoever arrives first, and the first start already creates a bootstrap admin whose password is written to <data>/.admin_bootstrap_password \u2014 so nobody needs signup to get in. An operator who wants household members to register themselves turns it on; otherwise accounts are created at Admin -> Users. ngdpbase calls this ngdpbase.application.registration and splits it into a master policy plus a per-mechanism toggle for magic-link and OIDC; this stack has one mechanism (password), so it is one key. The name follows the WIRE format the Angular sign-in page already reads from /api/instance/public (signup.enabled) rather than ngdpbase's key name.",
+  "yourphr.auth.signup.enabled": false,
   "yourphr.auth.password.min-length": 12,
   "yourphr.auth.trusted-proxies": [],
   "_comment_auth_rate_limit": "yourphr#647 \u2014 a per-IP FIXED WINDOW on the unauthenticated sign-in routes (/api/auth/signin and /api/auth/demo-signin). Separate from the throttle above, which counts FAILURES per account and per IP: this one counts REQUESTS, because demo sign-in runs a bcrypt verify for an anonymous caller who posts nothing, and a caller who never fails is not slowed by a failure counter. Setting max-requests to 0 or less turns it OFF, deliberately \u2014 an automated suite driving real logins from one address is the case that needs that switch. A non-positive window is a typo rather than an instruction, so it falls back to 60 seconds instead of reading as 'disable the backstop'. Counters are per PROCESS, so N replicas allow N times the budget.",
@@ -108,6 +110,7 @@
     "yourphr.operator.name",
     "yourphr.operator.contact-url",
     "yourphr.auth.password.min-length",
+    "yourphr.auth.signup.enabled",
     "yourphr.demo.enabled"
   ],
   "_comment_config_secret_keys": "Keys masked on the Admin Configuration screen until an admin explicitly reveals one (yourphr#458). Deliberately SHORT: masking everything outside `public` makes an operator click through the listen port and the log level, and trains them to reveal reflexively. This list is the OPPOSITE shape to `public` and that is intentional \u2014 `public` is an allow-list because a mistake exposes a value to the internet; `secret` is a DENY-LIST because a mistake shows a value to an already-authenticated admin on their own screen. A value that is an ${VAR} environment reference masks itself and needs no entry here (yourphr#622).",

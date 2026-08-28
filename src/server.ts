@@ -357,6 +357,36 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // POST /api/auth/signup — self-service registration (yourphr#691), OFF unless an operator
+      // turns it on. The Angular route and form have always existed; the server half never did, so
+      // the form rendered and 404'd on submit after the person had typed everything.
+      //
+      // Default closed, and the reason is the shape of the product: a self-hosted PHR reachable
+      // from the internet with an open signup form hands an account to whoever arrives first. The
+      // first start already creates a bootstrap admin and writes its password to
+      // <data>/.admin_bootstrap_password, so nobody needs signup to get INTO a new instance — it
+      // exists for a household whose members should enrol themselves.
+      //
+      // Rate limited exactly like signin: it is unauthenticated, it writes, and it reveals whether
+      // a username is taken.
+      if (auth && url.pathname === '/api/auth/signup' && req.method === 'POST') {
+        if (!withinRateLimit()) return;
+        if (!engine.managers.configuration.getBool('yourphr.auth.signup.enabled')) {
+          // 403, not 404: the route exists and the instance has decided against it. Pretending it
+          // is absent would send an operator hunting for a missing build rather than a setting.
+          send(res, 403, {success: false, error: 'self-service signup is closed on this instance'});
+          return;
+        }
+        const body = await readJsonBody(req);
+        const username = typeof body?.['username'] === 'string' ? (body['username'] as string).trim() : '';
+        const password = typeof body?.['password'] === 'string' ? (body['password'] as string) : '';
+        // A system principal: nobody is signed in, so there is no actor to check `user-create`
+        // against. The gate above IS the authorisation, which is why it comes first.
+        await engine.managers.users.createUser(ApiContext.system('signup', username, engine), username, password);
+        send(res, 201, {success: true, data: username});
+        return;
+      }
+
       // POST /api/auth/signin — the only route that exists without a session. Throttling, the
       // generic error and the trusted-proxy rule all live in AuthStore; this is just transport.
       if (auth && url.pathname === '/api/auth/signin' && req.method === 'POST') {

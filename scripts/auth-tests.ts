@@ -220,6 +220,33 @@ async function main(): Promise<void> {
     check('the wire: no token is 401, not a record list', (await fetch(base + LIST)).status === 401);
     check('the wire: a garbage token is 401', (await fetch(base + LIST, { headers: { authorization: 'Bearer not-a-token' } })).status === 401);
     const signIn = async (u: string, p: string) => fetch(base + '/api/auth/signin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) });
+    // --- self-service signup, OFF by default (yourphr#691) ---
+    //
+    // The Angular form always existed and the server half never did, so it rendered and 404'd on
+    // submit. It is default-closed now, which means the FIRST thing to prove is the refusal.
+    const signUp = (u: string, pw: string) => fetch(base + '/api/auth/signup', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: pw }),
+    });
+    const closed = await signUp('interloper', 'a-long-enough-password');
+    check('signup is CLOSED by default — 403, and no account is created',
+      closed.status === 403 && (await t.engine.managers.users.roleOf('interloper')) === undefined, `status ${closed.status}`);
+    check('the shipped default is closed, not merely unset',
+      t.engine.managers.configuration.getBool('yourphr.auth.signup.enabled') === false);
+
+    t.engine.managers.configuration.set('yourphr.auth.signup.enabled', true);
+    const opened = await signUp('newcomer', 'a-long-enough-password');
+    check('opened by configuration, it creates a plain user — not an admin',
+      opened.status === 201 && (await t.engine.managers.users.roleOf('newcomer')) === 'user', `status ${opened.status}`);
+    check('the new account can sign in', (await signIn('newcomer', 'a-long-enough-password')).status === 200);
+    const dupe = await signUp('newcomer', 'a-long-enough-password');
+    check('a taken username is refused rather than overwritten', dupe.status === 400, `status ${dupe.status}`);
+    const weak = await signUp('shorty', 'short');
+    check('the instance password policy applies to signup too',
+      weak.status === 400 && (await t.engine.managers.users.roleOf('shorty')) === undefined, `status ${weak.status}`);
+    const badName = await signUp('Not A Username!', 'a-long-enough-password');
+    check('and the username rules apply', badName.status === 400, `status ${badName.status}`);
+    t.engine.managers.configuration.set('yourphr.auth.signup.enabled', false);
+
     const aliceBad = await signIn('alice', 'wrong-but-long-enough');
     check('the wire: a wrong password is 401 with the generic error', aliceBad.status === 401 && ((await aliceBad.json()) as { error: string }).error === GENERIC_SIGNIN_ERROR);
     const aliceToken = ((await (await signIn('alice', PASSWORD)).json()) as { data: string }).data;

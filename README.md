@@ -188,19 +188,33 @@ At this point you'll be redirected to the login page.
 
 ### Logging In
 
-Before you can use the YourPHR BETA, you'll need to [Create an Account](http://localhost:9090/auth/signup).
+You do not create an account — the first start already made one for you.
 
-It can be as simple as
+```bash
+# docker
+docker exec yourphr cat /opt/yourphr/data/.admin_bootstrap_password
+# or read it from the mounted volume
+cat ./data/.admin_bootstrap_password
+```
 
-- __Username:__ `testuser`
-- __Password:__ `testuser`
+Sign in as `admin` with that password, then change it. The file is deleted once that account has
+signed in, so read it before you do.
 
 > [!IMPORTANT]
-> __The first account you create owns the instance.__ Whoever registers first on an empty database becomes the __owner and admin__ — everyone after them is an ordinary user. That account controls configuration, the database (backup, restore, download), users, the provider catalog and the logs.
+> __The first start creates your admin account for you.__ It generates a password and writes it to
+> `<data>/.admin_bootstrap_password` (mode `0600`); the startup log names the file, never the value.
+> Sign in with it once and change it. That account controls configuration, the database (backup,
+> restore, download), users, the provider catalog and the logs.
 >
-> There is __no password-reset flow__ and no seeded admin account, so record that password somewhere durable. If you lose it, the only ways back in are editing the database directly or starting over with an empty one.
+> __Self-service signup is closed by default__ (`signup.enabled`). Nobody can register themselves
+> until you turn it on at Admin → Configuration, and an instance reachable from the internet is
+> safe to leave running while you get to it. Until then, add household members at __Admin →
+> Users__. Anyone who does sign up gets an ordinary user account, never an admin.
 >
-> The app decides this by counting users, not by who you are or where you connect from. On an instance reachable from the internet, register __immediately__ — otherwise whoever arrives first, including a bot, becomes your admin. Closing self-service signup afterwards is a setting (`signup.enabled`), and it deliberately never blocks that first account. See [`docs/deployment/README.md`](docs/deployment/README.md).
+> __If you lose the password__, the image can issue a new one without touching the database:
+> `docker run --rm -v "$PWD/data:/opt/yourphr/data" ghcr.io/jwilleke/yourphr:3.2.0 reset-password --user <account> --data /opt/yourphr/data`.
+> It writes the new password to `<data>/.recovery_password` and ends that account's sessions.
+> See [`docs/deployment/README.md`](docs/deployment/README.md).
 
 ## Using with multiple people
 

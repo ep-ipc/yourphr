@@ -32,7 +32,10 @@ describe('SettingsManager — what the instance says about itself, with the call
     expect(engine.registered).toEqual(['configuration', 'policy', 'settings']);
     const pub = settings.publicInstance(nobody);
     // Wire format, read by the Angular app — deliberately NOT the yourphr.* config key names (yourphr#627).
-    expect(Object.keys(pub).sort()).toEqual(['demo.admin.enabled', 'demo.enabled', 'operator.contact_url', 'operator.name', 'password.min_length']);
+    expect(Object.keys(pub).sort()).toEqual(['demo.admin.enabled', 'demo.enabled', 'operator.contact_url', 'operator.name', 'password.min_length', 'signup.enabled']);
+    // Closed unless an operator opens it (yourphr#691) — the sign-in page reads this to decide
+    // whether to offer a "create an account" link at all.
+    expect(pub['signup.enabled']).toBe(false);
     expect(pub).not.toHaveProperty('operator.contact_email'); // wire name: withheld from anonymous (yourphr#459)
     // The demo FLAG is public so the sign-in page can offer the one-click entrance (yourphr#643);
     // the account's NAME is not, and the password is a secret verified server-side.

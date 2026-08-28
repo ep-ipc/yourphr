@@ -104,6 +104,10 @@ export class SettingsManager extends BaseManager {
       'operator.name': config.getString('yourphr.operator.name'),
       'operator.contact_url': config.getString('yourphr.operator.contact-url'),
       'password.min_length': config.getInt('yourphr.auth.password.min-length'),
+      // The sign-in page hides its "create an account" link when this is false (yourphr#691), so
+      // it has to be readable BEFORE anyone has a session. Publishing it discloses nothing: it is
+      // a policy of the instance, and an attacker learns the same thing by pressing the button.
+      'signup.enabled': config.getBool('yourphr.auth.signup.enabled'),
       // The sign-in page decides whether to offer the one-click demo entrances (yourphr#643,
       // yourphr#644). Only the FLAGS are public: neither username is published — a name is half a
       // credential, and the entrances need no name — and both passwords are secrets verified

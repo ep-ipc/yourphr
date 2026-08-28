@@ -75,6 +75,11 @@ async function main(): Promise<void> {
   check('logout clears the cookie (Max-Age=0) — the one thing JavaScript cannot do', /yourphr_session=;.*Max-Age=0/.test(logout.headers.get('set-cookie') ?? ''));
   const boot = await Promise.all(['/api/version', '/api/health', '/api/instance/public'].map((p) => fetch(`${base}${p}`)));
   const bootBodies = await Promise.all(boot.map((r) => r.json() as Promise<{ success: boolean; data: Record<string, unknown> }>));
+  // The sign-in page hides its "create an account" link on this flag (yourphr#691), so it has to
+  // reach an anonymous caller. Published means readable BEFORE a session, which is the point.
+  check('instance/public tells an anonymous caller whether signup is open, and it is closed by default',
+    (bootBodies[2]!.data as Record<string, unknown>)['signup.enabled'] === false,
+    JSON.stringify((bootBodies[2]!.data as Record<string, unknown>)['signup.enabled']));
   check('the boot calls answer in the Go shapes: version, health, instance/public',
     boot.every((r) => r.status === 200) && typeof bootBodies[0]!.data['version'] === 'string' && bootBodies[1]!.data['first_run_wizard'] === false && bootBodies[2]!.data['password.min_length'] === 12);
 
