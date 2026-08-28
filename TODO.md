@@ -144,12 +144,4 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## ❓ Needs triage
 
-- [#671](https://github.com/jwilleke/yourphr/pull/671) — chore(deps): bump lforms from 43.0.0 to 43.1.0 in /frontend *(PR · ready)* — no linked issue
-- [#670](https://github.com/jwilleke/yourphr/pull/670) — chore(deps): bump typescript-eslint from 8.46.4 to 8.67.0 in /frontend *(PR · ready)* — no linked issue
-- [#668](https://github.com/jwilleke/yourphr/pull/668) — chore(deps): bump idb from 7.1.1 to 8.0.3 in /frontend *(PR · ready)* — no linked issue
-- [#667](https://github.com/jwilleke/yourphr/pull/667) — chore(ci): bump docker/build-push-action from 6 to 7 *(PR · ready)* — no linked issue
-- [#665](https://github.com/jwilleke/yourphr/pull/665) — chore(ci): bump actions/checkout from 4 to 7 *(PR · ready)* — no linked issue
-- [#664](https://github.com/jwilleke/yourphr/pull/664) — chore(ci): bump docker/setup-buildx-action from 3 to 4 *(PR · ready)* — no linked issue
-- [#661](https://github.com/jwilleke/yourphr/pull/661) — chore(ci): bump actions/setup-node from 4 to 7 *(PR · ready)* — no linked issue
-- [#660](https://github.com/jwilleke/yourphr/pull/660) — chore(ci): bump docker/login-action from 3 to 4 *(PR · ready)* — no linked issue
 - [#561](https://github.com/jwilleke/yourphr/issues/561) — [BUG] Two workflow comments justify a lint exclusion on a premise removed in #241
