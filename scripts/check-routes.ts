@@ -28,7 +28,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SERVER = 'src/server.ts';
-const SERVICES = 'frontend/src/app/services';
+const FRONTEND = 'frontend/src/app';
 
 /**
  * Endpoints the frontend calls that the server does not route, each with the issue that owns it.
@@ -56,6 +56,10 @@ const KNOWN_MISSING: Record<string, string> = {
   '/api/auth/signup': 'yourphr#691',
   '/api/glossary/code': 'yourphr#692',
   '/api/auth/callback/:p': 'yourphr#693',
+  // Invisible until yourphr#694 widened this check past the services layer — settings.component.ts
+  // injects HttpClient and calls it directly.
+  '/api/secure/access/token': 'yourphr#695',
+  '/api/secure/sync/discovery': 'yourphr#695',
 };
 
 /**
@@ -71,16 +75,41 @@ const KNOWN_SWALLOWED: Record<string, string> = {
   '/api/secure/source/manual': 'yourphr#407',
 };
 
-/** Every `/api/...` path the services build, with `${...}` interpolation normalised to `:p`. */
+/** Every `.ts` under the Angular app, specs excluded. */
+function sourceFiles(dir: string, out: string[] = []): string[] {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, e.name);
+    if (e.isDirectory()) sourceFiles(full, out);
+    else if (e.name.endsWith('.ts') && !e.name.endsWith('.spec.ts')) out.push(full);
+  }
+  return out;
+}
+
+/**
+ * Every `/api/...` path the app builds, with `${...}` interpolation normalised to `:p`.
+ *
+ * Scans the WHOLE app, not just services/. Scoping this to the API service was the check's own
+ * blind spot (yourphr#694): `settings.component.ts` calls `this.http` directly, so three unrouted
+ * endpoints sat inside a guard that reported clean. A check with a scope narrower than the problem
+ * is the same failure it exists to catch.
+ */
 function frontendPaths(): Map<string, string[]> {
   const found = new Map<string, string[]>();
-  for (const file of readdirSync(SERVICES).filter((f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'))) {
-    const text = readFileSync(join(SERVICES, file), 'utf8');
+  for (const file of sourceFiles(FRONTEND)) {
+    const text = readFileSync(file, 'utf8');
+    // Scan the whole file, not line by line: a URL is routinely built ACROSS lines, so the line
+    // holding the path often does not hold the http call. Filtering per line dropped
+    // getPractitionerHistory() — a real gap — and the check reported clean. Look BEHIND each match
+    // instead, far enough to see how it is being used.
     for (const m of text.matchAll(/\/(secure|auth|legal|glossary)\/([A-Za-z0-9/_\-.]+(?:\$\{[^}]*\}[A-Za-z0-9/_\-.]*)*)/g)) {
-      const path = `/api/${m[1]}/${(m[2] as string).replace(/\$\{[^}]*\}/g, ':p')}`.replace(/[,`'"?]+$/, '').replace(/\/$/, '');
+      const before = text.slice(Math.max(0, (m.index ?? 0) - 220), m.index ?? 0);
+      // An Angular ROUTER path looks identical to an API path and is not one.
+      if (/router\.navigate|routerLink|navigateByUrl|redirectTo|\bpath:\s*['"`]/.test(before.slice(-120))) continue;
+      const path = `/api/${m[1]}/${(m[2] as string).replace(/\$\{[^}]*\}/g, ':p')}`.replace(/[,`'"?.]+$/, '').replace(/\/$/, '');
+      const rel = file.replace(`${FRONTEND}/`, '');
       if (!found.has(path)) found.set(path, []);
       const at = found.get(path) as string[];
-      if (!at.includes(file)) at.push(file);
+      if (!at.includes(rel)) at.push(rel);
     }
   }
   return found;
