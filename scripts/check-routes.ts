@@ -46,11 +46,9 @@ const KNOWN_MISSING: Record<string, string> = {
   '/api/secure/jobs/error': 'yourphr#685',
   '/api/secure/source/cda-converter/status': 'yourphr#686',
   '/api/secure/summary/ips/email': 'yourphr#687',
-  // Dead client methods — no caller in the app; deleted by yourphr#688, not implemented.
-  '/api/secure/dashboards': 'yourphr#688',
-  '/api/secure/conditions/classified': 'yourphr#688',
-  '/api/secure/resource/patient-entry': 'yourphr#688',
-  '/api/secure/resource/composition': 'yourphr#688',
+  // "Add record" — a primary button in three places — opens a form that cannot save.
+  '/api/secure/resource/patient-entry': 'yourphr#696',
+  '/api/secure/resource/composition': 'yourphr#696',
   // Found by this check on its first run — none was in yourphr#680's original twelve, because that
   // list came from a grep of fasten-api.service.ts alone and these live in auth.service.ts.
   '/api/auth/signup': 'yourphr#691',
@@ -96,7 +94,13 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 function frontendPaths(): Map<string, string[]> {
   const found = new Map<string, string[]>();
   for (const file of sourceFiles(FRONTEND)) {
-    const text = readFileSync(file, 'utf8');
+    // Strip line comments first. A comment NAMING an endpoint is not a call, and counting one as a
+    // call is how a check comes to report a path the app never requests — which then gets
+    // allow-listed, and the allow-list stops meaning anything. `:` guards `https://`.
+    const text = readFileSync(file, 'utf8')
+      .split('\n')
+      .map((line) => line.replace(/(^|[^:])\/\/.*$/, '$1'))
+      .join('\n');
     // Scan the whole file, not line by line: a URL is routinely built ACROSS lines, so the line
     // holding the path often does not hold the http call. Filtering per line dropped
     // getPractitionerHistory() — a real gap — and the check reported clean. Look BEHIND each match

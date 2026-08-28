@@ -29,7 +29,6 @@ import {BinaryModel} from '../../lib/models/resources/binary-model';
 import {HTTP_CLIENT_TOKEN} from "../dependency-injection";
 import * as fhirpath from 'fhirpath';
 import _ from 'lodash';
-import {DashboardConfig} from '../models/widget/dashboard-config';
 import {DashboardWidgetQuery} from '../models/widget/dashboard-widget-query';
 import {ResourceGraphResponse} from '../models/fasten/resource-graph-response';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
@@ -177,15 +176,6 @@ export class FastenApiService {
 
   //TODO: Any significant API changes here should also be reflected in EventBusService
 
-  getDashboards(): Observable<DashboardConfig[]> {
-    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/dashboards`, )
-      .pipe(
-        map((response: ResponseWrapper) => {
-          return response.data as DashboardConfig[]
-        })
-      );
-  }
-
   getSummary(): Observable<Summary> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/summary`, )
       .pipe(
@@ -204,18 +194,10 @@ export class FastenApiService {
       );
   }
 
-  getClassifiedConditions(): Observable<ClassifiedCondition[]> {
-    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/conditions/classified`)
-      .pipe(
-        map((response: ResponseWrapper) => {
-          return (response.data || []) as ClassifiedCondition[]
-        })
-      );
-  }
-
-  // getReconciledConditions returns the DEDUPED problem-list view (one entry per clinical concept).
-  // Use this for "current problems"/problem-list presentations; getClassifiedConditions is the
-  // faithful 1:1 list (every Condition, never collapsed).
+  // The DEDUPED problem-list view — one entry per clinical concept — which is what every
+  // "current problems" presentation wants. A faithful 1:1 list of every Condition was once
+  // available too (getClassifiedConditions); it was removed in yourphr#688 because no screen
+  // called it and the server never routed it.
   getReconciledConditions(): Observable<ClassifiedCondition[]> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/conditions/reconciled`)
       .pipe(
@@ -790,17 +772,6 @@ export class FastenApiService {
 
   updateResource(resourceType: string, resourceId: string, payload: UpdateResourcePayload) : Observable<ResponseWrapper> {
     return this._httpClient.patch<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/resource/fhir/${resourceType}/${resourceId}`, payload)
-      .pipe(
-        map((response: ResponseWrapper) => {
-          return response
-        })
-      );
-  }
-
-  addDashboardLocation(location: string): Observable<ResponseWrapper> {
-    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/dashboards`, {
-      "location": location
-    })
       .pipe(
         map((response: ResponseWrapper) => {
           return response
