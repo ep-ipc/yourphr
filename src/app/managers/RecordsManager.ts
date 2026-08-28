@@ -114,17 +114,6 @@ export class RecordsManager extends BaseManager {
   }
 
   /**
-   * Everything the caller holds, as stored. For a capability that must process the records
-   * themselves rather than a view of them — chat's backfill (yourphr#594) is the only caller.
-   *
-   * Deliberately NOT a route: this is the whole account in one array, which is the right shape for
-   * a one-off backfill and the wrong shape for anything a browser asks for.
-   */
-  async storedFor(ctx: ApiContext, filter: { resourceType?: string; sourceId?: string } = {}): Promise<StoredRecord[]> {
-    return this.provider.list(this.who(ctx), filter);
-  }
-
-  /**
    * The caller's records matching `q`, as stored — the same full-text index the dashboard's search
    * box uses (yourphr#599), returning the records themselves rather than a list view of them.
    *
