@@ -67,7 +67,12 @@ export class FastenApiService {
   */
   getGlossarySearchByCode(code: string, codeSystem: string): Observable<ValueSet> {
 
-    const endpointUrl = new URL(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/glossary/code`);
+    // /secure/glossary/code, not /glossary/code (yourphr#692). Go served this unauthenticated and
+    // the client kept asking for the public path; yourphr#640 deliberately put it behind a session
+    // because the lookup can trigger an OUTBOUND request, and an unauthenticated endpoint that
+    // does that is a free proxy. Nothing is lost by requiring a session — the outbound call
+    // carries no identity at all, only a code and a code-system OID.
+    const endpointUrl = new URL(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/glossary/code`);
     endpointUrl.searchParams.set('code', code);
     endpointUrl.searchParams.set('code_system', codeSystem);
 
