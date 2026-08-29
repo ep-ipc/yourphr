@@ -91,6 +91,14 @@ __Note on identifiers:__ The word __fasten__ is being removed from everything th
 
 Everything else — the session cookie, paths, filenames, templates — is fair game.
 
+__No runtime dependency on Fasten-operated services. This is a rule, not a preference.__ Nothing YourPHR ships may call a host Fasten runs. The identifier note above is about NAMES; this is about where a patient's browser and this server send requests, which is a different and more serious thing. A self-hosted personal health record whose provider-connection path traverses a third party's infrastructure is not self-hosted in the sense the mission claims, and it is not something the patient is told about on the screen where they connect.
+
+It is also incoherent with the reason this project exists: the paragraph above says YourPHR went standalone BECAUSE upstream's Lighthouse relay moved into the commercial Fasten Connect product. Continuing to call that relay is depending on the thing we forked away from, and it is a liveness risk in every self-hosted instance — if Fasten retires or gates the endpoint, that path breaks everywhere at once, and no operator can fix it without a rebuild.
+
+Known and being removed ([#700](https://github.com/jwilleke/yourphr/issues/700)): `frontend/src/environments/environment*.ts` sets `connect_gateway_api_endpoint_base` to `https://lighthouse.fastenhealth.com/...` in EVERY configuration including `environment.prod.ts`, and `connect-gateway.service.ts` calls `/search`, `/catalog`, `/connect/{id}`, `/redirect/{state}` and `/token/{endpoint_id}` there. It is live, not dead code — `medical-sources.component.ts` and `explore.component.ts` both inject the service — and the strings are verifiably in the shipped bundle on the live demo. The replacement is ours and already exists: `CatalogManager`, `SmartSourceClientProvider`, and `relay/`.
+
+When touching provider connection, source authorisation, or the catalog: route through OUR catalog and OUR relay. If a change would add or preserve a call to a Fasten-operated host, stop and raise it rather than carrying it forward because it was already there.
+
 | | |
 |---|---|
 | Live SMART sync | Generic SMART client + store-and-poll relay + provider catalog — map: [`docs/SMART-flow-map.md`](docs/SMART-flow-map.md) |
@@ -201,6 +209,19 @@ Standard Angular 20 module layout (upgraded 14→20 via foundation epic [#12](ht
 - `services/` — `fasten-api.service.ts` is the main backend API client; `auth.service.ts` + `auth-interceptor.service.ts` handle JWT; `event-bus.service.ts` for SSE/streaming.
 - `pages/`, `components/`, `widgets/` — UI; `models/` — typed view models (the `patient-access-brands/` subdir is tygo-generated, don't edit).
 - Backend `/api/secure/events/stream` is a Server-Sent Events endpoint (used for sync/job progress).
+
+__Yarn Classic is on its way out — do not extend it ([#699](https://github.com/jwilleke/yourphr/issues/699)).__ `frontend/` is the only part of this repository not on npm, and nobody here chose that: the lockfile arrived with the Angular app from fasten-onprem in 2022 (`fa09bfaf`), and `packageManager: yarn@1.22.22` was pinned later only to stop Node/Yarn version drift during the Angular 14→20 upgrade (`2fbd59bb`, closing [#13](https://github.com/jwilleke/yourphr/issues/13)) — freezing the status quo, not endorsing it. `1.22.22` is the FINAL Yarn Classic release; the line is finished and takes no fixes.
+
+Four defects it has already cost us, all still live:
+
+- __`yarn audit` exits a severity BITMASK__ (1 info, 2 low, 4 moderate, 8 high, 16 critical), not pass/fail, and `--level` does not filter — it still reports and still counts. That is the whole reason for the 37-line audit-gate workaround in `development.yaml`.
+- __`yarn upgrade <pkg>` silently does nothing for a transitive dependency__ and prints `success`. It only re-resolves DIRECT dependencies. Do not read its success as "already fixed" — [#590](https://github.com/jwilleke/yourphr/issues/590) was nearly closed on that misreading.
+- __It rewrites the lockfile behind you__: yarn 1.22.22 turns `elliptic "git+https://…git"` back into `"https://…"`, undoing what Dependabot writes. Expect that hunk on unrelated installs and do not commit it.
+- __Its lax peer resolution hides real defects.__ `@angular/common` and `@angular/forms`, both declared `^20.3.29`, resolve to DIFFERENT patches today. Yarn installs that happily; npm refuses it. The skew is real and is in the tree that builds the image.
+
+Plus the cost of two package managers: `npm audit` reads clean while the frontend carries 39 advisories, which is exactly how [#530](https://github.com/jwilleke/yourphr/issues/530) hid a vulnerable `elliptic` in the shipped bundle for months.
+
+So: do not add yarn scripts, yarn-only syntax, or new `resolutions` entries. `resolutions` is a Yarn field npm ignores entirely — a naive `npm install` silently drops all 37 of the pins there, most of which are security pins from [#416](https://github.com/jwilleke/yourphr/issues/416). Anything new that needs pinning should be written so it survives the move (npm `overrides`). Yarn Berry is not the destination either; the goal is ONE package manager for the repository, and that is npm.
 
 ### Deployment
 
