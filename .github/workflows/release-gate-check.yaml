@@ -1,0 +1,84 @@
+name: Release gate check
+# The alarm for a silent release failure (yourphr#658). The deployment contract says a vX.Y.Z tag
+# publishes ghcr.io/jwilleke/yourphr:X.Y.Z — but pushing v3.1.0 once created no workflow run at
+# all, and a missing image looks exactly like a working deployment: no red run, Flux keeps the old
+# digest, done. The build now has two triggers (tag push + release published), yet both live in the
+# same Actions machinery that already dropped one event. This check sits outside that path: it
+# compares the newest release tag against the registry itself, on a clock, and breaks the silence
+# when they diverge.
+#
+# Deliberately dependency-free: the package is public, so one anonymous registry token and one
+# manifest GET answer "does the image for the newest tag exist". No docker, no packages scope.
+
+on:
+  schedule:
+    # Daily, 09:13 UTC. Odd minute on purpose — GitHub sheds load by skipping on-the-hour crons.
+    - cron: '13 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (tags only matter)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Newest release tag has a published image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Newest by semver, not by date — a hotfix on an old minor must not shadow the real head.
+          tag=$(git tag --list 'v*.*.*' --sort=-v:refname | head -1)
+          if [ -z "$tag" ]; then
+            echo "No vX.Y.Z tags exist; nothing to check."
+            exit 0
+          fi
+          version=${tag#v}
+          echo "Newest release tag: $tag (expect ghcr image :$version)"
+
+          # Grace period: a tag cut minutes ago may still be building. The build takes ~15 min;
+          # two hours is comfortably past any legitimate in-flight run.
+          tag_time=$(git for-each-ref --format='%(creatordate:unix)' "refs/tags/$tag")
+          age=$(( $(date +%s) - tag_time ))
+          if [ "$age" -lt 7200 ]; then
+            echo "Tag is ${age}s old (< 2h); build may be in flight. Skipping."
+            exit 0
+          fi
+
+          # The package is public: an anonymous pull token is enough for a manifest HEAD-equivalent.
+          registry_token=$(curl -fsS 'https://ghcr.io/token?scope=repository:jwilleke/yourphr:pull' \
+            | jq -r .token)
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $registry_token" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/jwilleke/yourphr/manifests/$version")
+
+          if [ "$code" = "200" ]; then
+            echo "OK: ghcr.io/jwilleke/yourphr:$version exists."
+            exit 0
+          fi
+
+          echo "DIVERGED: tag $tag exists but ghcr.io/jwilleke/yourphr:$version returned HTTP $code."
+
+          # A red scheduled run alone is still nearly silence — file (or find) a tracking issue so
+          # the divergence lands in the ranked backlog. Marker keeps it idempotent across days.
+          marker="release-gate-check:$tag"
+          existing=$(gh issue list --state open --search "$marker" --json number --jq '.[0].number // empty')
+          if [ -z "$existing" ]; then
+            gh issue create \
+              --title "[BUG] Release $tag has no published image — the release gate failed silently" \
+              --label bug,P0 \
+              --body "$(printf 'The scheduled release-gate check found tag `%s` on the repo but no `ghcr.io/jwilleke/yourphr:%s` in the registry (HTTP %s).\n\nThe fix that usually works: dispatch the build from the tag —\n\n```console\ngh workflow run release-image.yaml --ref %s\n```\n\nthen re-run this check (`gh workflow run release-gate-check.yaml`) to confirm, and close this issue.\n\nContext: yourphr#658. Marker: %s\n' "$tag" "$version" "$code" "$tag" "$marker")"
+          else
+            echo "Tracking issue #$existing already open."
+          fi
+          exit 1

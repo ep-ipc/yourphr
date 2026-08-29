@@ -164,3 +164,9 @@ Two steps, and neither is optional, because __both failure modes here are silent
    one (yourphr#659). Take the body from the matching `CHANGELOG.md` entry. Publishing also fires the
    image build a second time, which is the point: the two announcements of a release are also two
    chances for it to exist.
+
+Behind both sits a backstop that does not depend on anyone remembering: the scheduled
+[`release-gate-check.yaml`](../../.github/workflows/release-gate-check.yaml) workflow compares the
+newest `vX.Y.Z` tag against the registry daily, and when the tag has no published image it fails red
+__and files a P0 issue__ — because the failure mode being guarded against is precisely a silence
+that looks like success (yourphr#658).
