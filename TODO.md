@@ -9,6 +9,7 @@
 - Parked / half-done: none in this repo. NOTE — `jwilleke/ngdpbase` has uncommitted work that is NOT mine (`src/routes/WikiRoutes.ts`, its attachments test, and an untracked `WikiRoutes.criticalDeleteAudit.test.ts`), plus a commit I did not make (`d4255e53`, agent-token retention 30 days → 1, its #1111). Leave it alone or ask before touching.
 - Next steps:
   - [#704](https://github.com/jwilleke/yourphr/issues/704) is filed and unstarted: step 1 alone (`@angular-devkit/build-angular:karma` → `@angular/build:karma`) clears the deprecation Angular 22 prints on every `ng test`, and is close to a one-line change.
+  - [#657](https://github.com/jwilleke/yourphr/issues/657) is APPROVED and handed to the external contributor (kheniparth) for the first slice: one read-only `search_records` MCP tool in `src/`, on agent tokens, config-gated off. All four of his questions are answered in-thread. Expect a PR; he was asked to raise questions as he goes rather than save them.
   - [#700](https://github.com/jwilleke/yourphr/issues/700) is P1 and unstarted: its first task is to establish, against the running demo, WHICH provider-connection path a patient is actually offered — ours or Fasten's Lighthouse — before removing anything.
   - [#695](https://github.com/jwilleke/yourphr/issues/695) agent tokens: server side is done and pushed; the account-page UI is not built, and Settings still calls the dead Go routes.
 - Blockers / significant notes:
