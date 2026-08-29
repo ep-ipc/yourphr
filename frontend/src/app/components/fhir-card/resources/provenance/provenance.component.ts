@@ -1,6 +1,6 @@
-import {ChangeDetectorRef, Component, Input, OnInit} from '@angular/core';
+import {ChangeDetectorRef, Component, Input, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {NgbCollapseModule} from '@ng-bootstrap/ng-bootstrap';
-import {CommonModule} from '@angular/common';
+
 import {TableComponent} from '../../common/table/table.component';
 import {Router, RouterModule} from '@angular/router';
 import {FhirCardComponentInterface} from '../../fhir-card/fhir-card-component-interface';
@@ -8,9 +8,10 @@ import {TableRowItem, TableRowItemDataType} from '../../common/table/table-row-i
 import {ProvenanceModel} from '../../../../../lib/models/resources/provenance-model';
 
 @Component({
-    imports: [NgbCollapseModule, CommonModule, TableComponent, RouterModule],
+    imports: [NgbCollapseModule, TableComponent, RouterModule],
     selector: 'fhir-provenance',
     templateUrl: './provenance.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrls: ['./provenance.component.scss']
 })
 export class ProvenanceComponent implements OnInit, FhirCardComponentInterface {

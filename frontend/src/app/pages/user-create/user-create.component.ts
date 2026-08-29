@@ -1,18 +1,19 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { User } from '../../models/fasten/user';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { ToastNotification, ToastType } from '../../models/fasten/toast';
 import { Router } from '@angular/router';
-import { CommonModule } from '@angular/common';
+
 import { AdminBackLinkComponent } from '../../components/admin-back-link/admin-back-link.component';
 
 @Component({
     selector: 'app-user-create',
     templateUrl: './user-create.component.html',
     styleUrls: ['./user-create.component.scss'],
-    imports: [CommonModule, ReactiveFormsModule, AdminBackLinkComponent]
+    changeDetection: ChangeDetectionStrategy.Eager,
+    imports: [ReactiveFormsModule, AdminBackLinkComponent]
 })
 export class UserCreateComponent implements OnInit {
   userForm: FormGroup;

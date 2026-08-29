@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ProviderCatalogAdminComponent } from './provider-catalog-admin.component';
-import { HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { RouterTestingModule } from '@angular/router/testing';
 import { HTTP_CLIENT_TOKEN } from '../../dependency-injection';
@@ -14,7 +14,7 @@ describe('ProviderCatalogAdminComponent', () => {
       imports: [ProviderCatalogAdminComponent, RouterTestingModule],
       providers: [
         { provide: HTTP_CLIENT_TOKEN, useClass: HttpClient },
-        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClient(withXhr(), withInterceptorsFromDi()),
         provideHttpClientTesting(),
       ],
     }).compileComponents();
@@ -36,6 +36,15 @@ describe('ProviderCatalogAdminComponent', () => {
     req.flush({ success: true, data: [
       { id: 'a', display: 'Epic (Sandbox)', api_endpoint_base_url: 'https://fhir.epic.com', scopes: 'openid', client_id: 'cid', has_client_secret: false, enabled: false },
     ]});
+    // markForCheck(): flush() delivers the response OUTSIDE change detection, and Angular 22's
+    // detectChanges() no longer marks the fixture dirty implicitly, so the first pass would
+    // render the stale value and the verification pass reports NG0100 (yourphr#482).
+    fixture.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    // A SECOND pass: the row views are created by this first one, so their own bindings are
+    // evaluated after the parent was already checked — which Angular 22 reports as NG0100 with
+    // "the view has been created after its parent ... has been dirty checked". The second pass
+    // checks the now-existing rows in a settled tree.
     fixture.detectChanges();
 
     expect(component.entries.length).toBe(1);

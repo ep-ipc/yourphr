@@ -3,9 +3,9 @@
  * Copyright (c) 2022 Alain Dumesny - see GridStack root license
  */
 
-import { Component, ElementRef, Input, ViewChild, ViewContainerRef, OnDestroy } from '@angular/core';
+import { Component, ElementRef, Input, ViewChild, ViewContainerRef, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { GridItemHTMLElement, GridStackNode } from 'gridstack';
-import {CommonModule} from '@angular/common';
+
 
 /** store element to Ng Class pointer back */
 export interface GridItemCompHTMLElement extends GridItemHTMLElement {
@@ -16,7 +16,7 @@ export interface GridItemCompHTMLElement extends GridItemHTMLElement {
  * HTML Component Wrapper for gridstack items, in combination with GridstackComponent for parent grid
  */
 @Component({
-    imports: [CommonModule],
+    imports: [],
     selector: 'gridstack-item',
     template: `
     <div class="grid-stack-item-content">
@@ -27,6 +27,7 @@ export interface GridItemCompHTMLElement extends GridItemHTMLElement {
       <!-- fallback HTML content from GridStackWidget content field if used instead -->
       {{options.content}}
     </div>`,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
     :host { display: block; }
   `]

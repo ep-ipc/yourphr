@@ -1,14 +1,15 @@
-import {Component} from '@angular/core';
-import {CommonModule} from '@angular/common';
+import {Component, ChangeDetectionStrategy} from '@angular/core';
+
 import {RouterModule} from '@angular/router';
 import {ATTRIBUTIONS, AttributionNotice} from '../../models/fasten/attributions';
 
 // Full list of third-party attribution notices (#428). Source: attributions registry.
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [RouterModule],
   selector: 'app-attributions',
   templateUrl: './attributions.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./attributions.component.scss'],
 })
 export class AttributionsComponent {

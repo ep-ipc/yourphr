@@ -1,13 +1,14 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {BaseChartDirective} from 'ng2-charts';
 import {ChartConfiguration} from 'chart.js';
-import {CommonModule} from '@angular/common';
+
 import {NgbPopoverModule} from '@ng-bootstrap/ng-bootstrap';
 
 @Component({
-    imports: [BaseChartDirective, CommonModule, NgbPopoverModule],
+    imports: [BaseChartDirective, NgbPopoverModule],
     selector: 'complex-line-widget',
     templateUrl: './complex-line-widget.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrls: ['./complex-line-widget.component.scss']
 })
 export class ComplexLineWidgetComponent implements OnInit {

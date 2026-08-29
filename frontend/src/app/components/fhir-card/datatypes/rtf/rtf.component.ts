@@ -1,12 +1,13 @@
-import {Component, Input, OnInit} from '@angular/core';
-import {CommonModule} from '@angular/common';
+import {Component, Input, OnInit, ChangeDetectionStrategy} from '@angular/core';
+
 import {BinaryModel} from '../../../../../lib/models/resources/binary-model';
 import {EMFJS, RTFJS, WMFJS} from 'rtf.js';
 
 @Component({
-    imports: [CommonModule],
+    imports: [],
     selector: 'fhir-rtf',
     templateUrl: './rtf.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrls: ['./rtf.component.scss']
 })
 export class RtfComponent implements OnInit {

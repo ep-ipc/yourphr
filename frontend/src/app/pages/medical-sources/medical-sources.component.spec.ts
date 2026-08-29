@@ -4,7 +4,7 @@ import { MedicalSourcesComponent } from './medical-sources.component';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import {RouterTestingModule} from '@angular/router/testing';
 import {HTTP_CLIENT_TOKEN} from '../../dependency-injection';
-import { HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 import {FormsModule, ReactiveFormsModule} from '@angular/forms';
 import { LoadingSpinnerComponent } from 'src/app/components/loading-spinner/loading-spinner.component';
 import { MedicalSourcesFilterComponent } from 'src/app/components/medical-sources-filter/medical-sources-filter.component';
@@ -23,7 +23,7 @@ describe('MedicalSourcesComponent', () => {
             provide: HTTP_CLIENT_TOKEN,
             useClass: HttpClient,
         },
-        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClient(withXhr(), withInterceptorsFromDi()),
         provideHttpClientTesting(),
     ]
 })
@@ -51,6 +51,10 @@ describe('MedicalSourcesComponent', () => {
       { id: 'a', display: 'Medicare — Blue Button 2.0 (Sandbox)' },
       { id: 'b', display: 'Epic (Sandbox)' },
     ]});
+    // markForCheck(): flush() delivers the response OUTSIDE change detection, and Angular 22's
+    // detectChanges() no longer marks the fixture dirty implicitly, so the first pass would
+    // render the stale value and the verification pass reports NG0100 (yourphr#482).
+    fixture.changeDetectorRef.markForCheck();
     fixture.detectChanges();
 
     expect(component.connectableProviders.length).toBe(2);

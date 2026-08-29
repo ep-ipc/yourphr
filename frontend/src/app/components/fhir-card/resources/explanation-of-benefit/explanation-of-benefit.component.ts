@@ -1,6 +1,6 @@
-import {ChangeDetectorRef, Component, Input, OnInit} from '@angular/core';
+import {ChangeDetectorRef, Component, Input, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {NgbCollapseModule} from '@ng-bootstrap/ng-bootstrap';
-import {CommonModule} from '@angular/common';
+
 import {Router, RouterModule} from '@angular/router';
 import {BadgeComponent} from '../../common/badge/badge.component';
 import {TableComponent} from '../../common/table/table.component';
@@ -22,9 +22,10 @@ export {money};
  * who provided it, when, and then the money.
  */
 @Component({
-  imports: [NgbCollapseModule, CommonModule, BadgeComponent, TableComponent, RouterModule],
+  imports: [NgbCollapseModule, BadgeComponent, TableComponent, RouterModule],
   selector: 'fhir-explanation-of-benefit',
   templateUrl: './explanation-of-benefit.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./explanation-of-benefit.component.scss'],
 })
 export class ExplanationOfBenefitComponent implements OnInit, FhirCardComponentInterface {

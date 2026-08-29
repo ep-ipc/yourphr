@@ -1,5 +1,5 @@
-import {Component, Input} from '@angular/core';
-import {CommonModule} from '@angular/common';
+import {Component, Input, ChangeDetectionStrategy} from '@angular/core';
+
 import {NgbTooltipModule} from '@ng-bootstrap/ng-bootstrap';
 
 // App-wide "Data Not Provided" marker (#178). The visible expression of the no-guessing principle:
@@ -8,9 +8,10 @@ import {NgbTooltipModule} from '@ng-bootstrap/ng-bootstrap';
 // is zero/none. Use it for prominent fields only; silently omit truly-minor optional fields.
 @Component({
   standalone: true,
-  imports: [CommonModule, NgbTooltipModule],
+  imports: [NgbTooltipModule],
   selector: 'app-missing-data',
   templateUrl: './missing-data.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./missing-data.component.scss']
 })
 export class MissingDataComponent {

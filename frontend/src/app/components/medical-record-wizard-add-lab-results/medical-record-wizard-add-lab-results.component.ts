@@ -1,5 +1,5 @@
-import {Component, CUSTOM_ELEMENTS_SCHEMA, ElementRef, Input, OnInit, ViewChild} from '@angular/core';
-import {CommonModule} from '@angular/common';
+import {Component, CUSTOM_ELEMENTS_SCHEMA, ElementRef, Input, OnInit, ViewChild, ChangeDetectionStrategy} from '@angular/core';
+
 import {FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators} from '@angular/forms';
 import {NlmTypeaheadComponent} from '../nlm-typeahead/nlm-typeahead.component';
 import {HighlightModule} from 'ngx-highlightjs';
@@ -11,15 +11,15 @@ import {LoadingSpinnerComponent} from '../loading-spinner/loading-spinner.compon
 
 @Component({
     imports: [
-        CommonModule,
-        NlmTypeaheadComponent,
-        ReactiveFormsModule,
-        FormsModule,
-        LoadingSpinnerComponent
-    ],
+    NlmTypeaheadComponent,
+    ReactiveFormsModule,
+    FormsModule,
+    LoadingSpinnerComponent
+],
     selector: 'app-medical-record-wizard-add-lab-results',
     templateUrl: './medical-record-wizard-add-lab-results.component.html',
     styleUrls: ['./medical-record-wizard-add-lab-results.component.scss'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     schemas: [CUSTOM_ELEMENTS_SCHEMA]
 })
 export class MedicalRecordWizardAddLabResultsComponent implements OnInit {

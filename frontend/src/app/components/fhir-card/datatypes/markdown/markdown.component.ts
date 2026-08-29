@@ -1,11 +1,12 @@
-import {Component, Input, OnInit} from '@angular/core';
+import {Component, Input, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {BinaryModel} from '../../../../../lib/models/resources/binary-model';
-import {CommonModule} from "@angular/common";
+
 
 @Component({
-    imports: [CommonModule],
+    imports: [],
     selector: 'fhir-markdown',
     templateUrl: './markdown.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     styleUrls: ['./markdown.component.scss']
 })
 export class MarkdownComponent implements OnInit {

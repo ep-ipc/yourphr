@@ -3,14 +3,17 @@
  * Copyright (c) 2022 Alain Dumesny - see GridStack root license
  */
 
-import { AfterContentInit, Component, ContentChildren, ElementRef, EventEmitter, Input,
-  OnDestroy, OnInit, Output, QueryList, Type, ViewChild, ViewContainerRef, reflectComponentType } from '@angular/core';
+import {
+  AfterContentInit, Component, ContentChildren, ElementRef, EventEmitter, Input,
+  OnDestroy, OnInit, Output, QueryList, Type, ViewChild, ViewContainerRef, reflectComponentType,
+  ChangeDetectionStrategy
+} from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { GridHTMLElement, GridItemHTMLElement, GridStack, GridStackNode, GridStackOptions, GridStackWidget } from 'gridstack';
 
 import { GridItemCompHTMLElement, GridstackItemComponent } from './gridstack-item.component';
-import {CommonModule} from '@angular/common';
+
 import {WidgetsModule, WidgetComponents} from '../../widgets/widgets.module';
 import {DashboardWidgetComponentInterface} from '../../widgets/dashboard-widget-component-interface';
 
@@ -45,16 +48,19 @@ export type SelectorToType = Record<string, Type<object>>;
  * HTML Component Wrapper for gridstack, in combination with GridstackItemComponent for the items
  */
 @Component({
-    imports: [CommonModule, GridstackItemComponent, WidgetsModule],
+    imports: [GridstackItemComponent, WidgetsModule],
     selector: 'gridstack',
     template: `
     <!-- content to show when when grid is empty, like instructions on how to add widgets -->
-    <ng-content select="[empty-content]" *ngIf="isEmpty"></ng-content>
+    @if (isEmpty) {
+      <ng-content select="[empty-content]"></ng-content>
+    }
     <!-- where dynamic items go -->
     <ng-template #container></ng-template>
     <!-- where template items go -->
     <ng-content></ng-content>
-  `,
+    `,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [`
     :host { display: block; }
   `]

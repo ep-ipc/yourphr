@@ -1,6 +1,6 @@
-import {ChangeDetectorRef, Component, Input, OnInit} from '@angular/core';
+import {ChangeDetectorRef, Component, Input, OnInit, ChangeDetectionStrategy} from '@angular/core';
 import {NgbCollapseModule} from '@ng-bootstrap/ng-bootstrap';
-import {CommonModule} from '@angular/common';
+
 import {Router, RouterModule} from '@angular/router';
 import {BadgeComponent} from '../../common/badge/badge.component';
 import {TableComponent} from '../../common/table/table.component';
@@ -20,9 +20,10 @@ import {money} from '../explanation-of-benefit/explanation-of-benefit.component'
  * exactly the guess the display rules forbid (#262).
  */
 @Component({
-  imports: [NgbCollapseModule, CommonModule, BadgeComponent, TableComponent, RouterModule],
+  imports: [NgbCollapseModule, BadgeComponent, TableComponent, RouterModule],
   selector: 'fhir-claim',
   templateUrl: './claim.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./claim.component.scss'],
 })
 export class ClaimComponent implements OnInit, FhirCardComponentInterface {
