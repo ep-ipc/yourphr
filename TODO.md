@@ -4,7 +4,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔴 P0 — Security & Critical
 
-- [#703](https://github.com/jwilleke/yourphr/issues/703) — [BUG] athena health Notification of API breaking changes
 - [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably automatic
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
