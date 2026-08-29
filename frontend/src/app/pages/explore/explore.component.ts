@@ -2,7 +2,6 @@ import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {Source} from '../../models/fasten/source';
 import {forkJoin, of} from 'rxjs';
-import {ConnectGatewayService} from '../../services/connect-gateway.service';
 import {Router} from '@angular/router';
 import {SourceListItem} from '../medical-sources/medical-sources.component';
 import {AuthService} from '../../services/auth.service';
@@ -31,7 +30,6 @@ export class ExploreComponent implements OnInit {
 
   constructor(
     private fastenApi: FastenApiService,
-    private connectGatewayApi: ConnectGatewayService,
     private authService: AuthService,
     private router: Router
   ) { }
@@ -51,9 +49,10 @@ export class ExploreComponent implements OnInit {
     this.fastenApi.getSources().subscribe(results => {
       const connectedSources = results as Source[]
       forkJoin(connectedSources.map((source) => {
-        //TODO: remove this, and similar code in medical-sources-card.component.ts
+        // Local stand-in brand for the two synthetic platform types, so the card can pick its icon.
+        // (Previously fetched from Fasten's Lighthouse for real brands — that path is gone, #700.)
         if(source.platform_type == 'fasten' || source.platform_type == 'manual') {
-          return this.connectGatewayApi.getConnectGatewayCatalogBrand(source.platform_type)
+          return of({id: source.platform_type, last_updated: '', portal_ids: [], name: '', platform_type: source.platform_type})
         } else {
           return of(null)
         }

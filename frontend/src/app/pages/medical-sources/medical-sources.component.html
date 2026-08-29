@@ -188,58 +188,6 @@
 </div><!-- az-content -->
 
 
-<ng-template #contentModalRef let-modal>
-
-  <div class="modal-header">
-    <div class="media">
-      <img class="modal-header-media-image mg-sm-r-20 mg-b-20 mg-sm-b-0" [src]="'assets/sources/'+($safeNavigationMigration(modalSelectedBrandListItem?.id) +'.png')" [alt]="$safeNavigationMigration(modalSelectedBrandListItem?.name)">
-      <div class="media-body">
-        <h6>{{modalSelectedBrandListItem?.name}}</h6>
-        @if (modalSelectedBrandListItem?.brand_website) {
-          <a
-            [href]="$safeNavigationMigration(modalSelectedBrandListItem?.brand_website)"
-          class="mg-b-0" externalLink>{{$safeNavigationMigration(modalSelectedBrandListItem?.brand_website) | shortDomain}}</a>
-        }
-      </div><!-- media-body -->
-    </div><!-- media -->
-    <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss('Cross click')"></button>
-  </div>
-
-  <div class="modal-body">
-    <h6>Connect Source</h6>
-    <p>Would you like to connect this healthcare institution with YourPHR? You will be redirected to their patient portal,
-      where you can authenticate and select data to import into YourPHR.
-    </p>
-    <div class="alert alert-warning">
-      Patients must safeguard their health information, as HIPAA doesn't cover individual handling or most personal apps
-    </div>
-    <p>
-      If the data about this institution is missing or incorrect, you can <a class="link" href="https://yourphr.org" externalLink>click here</a> to submit a correction.
-    </p>
-
-
-    @for (portal of modalSelectedBrandListItem?.portals; track portal) {
-      <div class="list-group">
-        @for (endpoint of portal?.endpoints; track endpoint) {
-          <div (click)="connectHandler($event, modalSelectedBrandListItem.id, portal.id, endpoint.id)" class="list-group-item list-group-item-action flex-column align-items-start cursor-pointer">
-            <div class="d-flex w-100 justify-content-between align-items-center">
-              <h5 class="mb-1">
-                @if (status[endpoint.id] == 'authorize') {
-                  <span class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span>
-                }
-                {{portal.name}}
-              </h5>
-              <span class="badge bg-primary rounded-pill">{{endpoint.platform_type}}</span>
-            </div>
-            <p class="mb-1">{{portal.description}}</p>
-            <small>{{portal.portal_website | shortDomain}}</small>
-          </div>
-        }
-      </div>
-    }
-  </div>
-</ng-template>
-
 
 <ng-template #ccdaWarningModalRef let-modal>
 

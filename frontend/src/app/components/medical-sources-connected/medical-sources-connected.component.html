@@ -37,7 +37,7 @@
       <ul>
         <li><p><strong>Sync</strong> — Download updated records from this provider into YourPHR</p></li>
         <li><p><strong>Download</strong> — Export every record retrieved from this provider as a FHIR Bundle (.json)</p></li>
-        <li><p><strong>Reconnect</strong> — If the connection expired or you disconnected, sign in again at the provider</p></li>
+        <li><p><strong>Reconnect</strong> — If the connection expired, disconnect and connect the provider again from the Sources page</p></li>
         <li><p><strong>Disconnect</strong> — Clear OAuth tokens so this instance stops syncing. Imported records stay until you remove them. Does not change data held by Medicare/CMS or your provider.</p></li>
         <li><p><strong>Remove data</strong> — Delete records imported from this source on this instance. Connection/tokens can remain (or reconnect later).</p></li>
         <li><p><strong>Disconnect &amp; remove data</strong> — Both at once: clear tokens and delete imported records, and remove the source card. Does not delete your whole YourPHR account.</p></li>
@@ -77,9 +77,6 @@
             <button ngbDropdownItem (click)="sourceSyncHandler($safeNavigationMigration(modalSelectedSourceListItem?.source))" type="button" class="btn btn-az-primary">Sync</button>
           }
           <button ngbDropdownItem (click)="sourceExportHandler($safeNavigationMigration(modalSelectedSourceListItem?.source))" type="button" class="btn btn-az-primary">Download</button>
-          @if (modalSelectedSourceListItem?.source?.platform_type != 'manual') {
-            <button ngbDropdownItem (click)="sourceReconnectHandler(modalSelectedSourceListItem)" type="button" class="btn btn-outline-secondary">Reconnect</button>
-          }
           @if (modalSelectedSourceListItem?.source?.platform_type != 'manual') {
             <button ngbDropdownItem (click)="sourceDisconnectHandler()" type="button" class="btn btn-outline-danger">Disconnect</button>
           }

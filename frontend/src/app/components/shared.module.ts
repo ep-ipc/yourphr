@@ -7,9 +7,7 @@ import {BrowserModule} from '@angular/platform-browser';
 import { GlossaryLookupComponent } from './glossary-lookup/glossary-lookup.component';
 import { LoadingSpinnerComponent } from './loading-spinner/loading-spinner.component';
 import { MedicalSourcesCardComponent } from './medical-sources-card/medical-sources-card.component';
-import { MedicalSourcesCategoryLookupPipe } from './medical-sources-filter/medical-sources-category-lookup.pipe';
 import { MedicalSourcesConnectedComponent } from './medical-sources-connected/medical-sources-connected.component';
-import { MedicalSourcesFilterComponent } from './medical-sources-filter/medical-sources-filter.component';
 import { BaseChartDirective } from 'ng2-charts';
 import { NlmTypeaheadComponent } from './nlm-typeahead/nlm-typeahead.component';
 import { ReportHeaderComponent } from './report-header/report-header.component';
@@ -79,16 +77,13 @@ import { RawResourceComponent } from './raw-resource/raw-resource.component';
     ReportMedicalHistoryTimelinePanelComponent,
 
     ReportMedicalHistoryExplanationOfBenefitComponent,
-    MedicalSourcesFilterComponent,
     MedicalSourcesConnectedComponent,
-    MedicalSourcesCategoryLookupPipe,
     MedicalSourcesCardComponent,
     FormRequestHealthSystemComponent,
     RawResourceComponent,
   ],
     exports: [
         ComponentsSidebarComponent,
-        MedicalSourcesFilterComponent,
         NlmTypeaheadComponent,
         ReportHeaderComponent,
         ReportLabsObservationComponent,
@@ -112,7 +107,6 @@ import { RawResourceComponent } from './raw-resource/raw-resource.component';
       MedicalRecordWizardAddPractitionerComponent,
       MedicalRecordWizardComponent,
       MedicalRecordWizardAddLabResultsComponent,
-      MedicalSourcesCategoryLookupPipe,
       NlmTypeaheadComponent,
     ]
 })

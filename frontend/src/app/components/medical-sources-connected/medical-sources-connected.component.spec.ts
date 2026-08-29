@@ -10,7 +10,6 @@ import { LoadingSpinnerComponent } from '../loading-spinner/loading-spinner.comp
 import { FastenApiService } from '../../services/fasten-api.service';
 import { EventBusService } from '../../services/event-bus.service';
 import { AuthService } from '../../services/auth.service';
-import { ConnectGatewayService } from '../../services/connect-gateway.service';
 import { ToastService } from '../../services/toast.service';
 import { EventSourceComplete } from '../../models/events/event_source_complete';
 import { EventSourceSync } from '../../models/events/event_source_sync';
@@ -46,7 +45,6 @@ describe('MedicalSourcesConnectedComponent', () => {
         { provide: FastenApiService, useValue: fastenApi },
         { provide: EventBusService, useValue: eventBus },
         { provide: AuthService, useValue: { IsAuthenticatedSubject: of(true) } },
-        { provide: ConnectGatewayService, useValue: jasmine.createSpyObj('ConnectGatewayService', ['getConnectGatewayCatalogBrand', 'getSourceState']) },
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['show']) },
     ]
 })
@@ -64,21 +62,6 @@ describe('MedicalSourcesConnectedComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
-
-  it('should handle nanosecond and microsecond token expirations', () => {
-    const tokenResponse = {
-      token_type: "Bearer",
-      expires_in: "3600",
-      // Dummy values — this test only exercises expires_in; the token strings are
-      // unused by the assertion. Kept obviously-fake so secret scanners don't flag them.
-      access_token: "fake-access-token-for-test",
-      refresh_token: "fake-refresh-token-for-test",
-      patient: "a-80000.xxxx"
-    }
-
-    const expiresAt = component.getAccessTokenExpiration(tokenResponse)
-    expect(expiresAt.toString().length).toEqual(10)
-  })
 
   it('clears progress spinner on source_complete SSE (#337)', () => {
     component.status['src-1'] = 'token';

@@ -259,19 +259,6 @@ app-nlm-typeahead {
 }
 
 
-//Medical Source Filter
-.category-label {
-  font-weight: 400
-}
-
-app-medical-sources-filter > .az-content-left-components {
-  overflow-x: hidden;
-}
-
-app-medical-sources-filter > .az-content-left-components:hover {
-  overflow-x: auto;
-}
-
 //Fhir Datadable
 .datatable-body .datatable-body-row.active {
   background-color: $indigo !important;

@@ -9,7 +9,6 @@ import { LoadingSpinnerComponent } from 'src/app/components/loading-spinner/load
 import { RouterTestingModule } from '@angular/router/testing';
 import { AuthService } from 'src/app/services/auth.service';
 import { FastenApiService } from 'src/app/services/fasten-api.service';
-import { ConnectGatewayService } from 'src/app/services/connect-gateway.service';
 import { of } from 'rxjs';
 import { Source } from 'src/app/models/fasten/source';
 
@@ -30,8 +29,6 @@ describe('ExploreComponent', () => {
     fastenApi.getSources.and.returnValue(of([productionSource, sandboxSource]));
     fastenApi.getSummary.and.returnValue(of({ sources: [], patients: [], resource_type_counts: [] }));
     fastenApi.getResources.and.returnValue(of([]));
-    const connectGateway = jasmine.createSpyObj('ConnectGatewayService', ['getConnectGatewayCatalogBrand']);
-    connectGateway.getConnectGatewayCatalogBrand.and.returnValue(of(null));
 
     await TestBed.configureTestingModule({
     declarations: [ExploreComponent, ReportHeaderComponent],
@@ -39,7 +36,6 @@ describe('ExploreComponent', () => {
     providers: [
         { provide: AuthService, useValue: authService },
         { provide: FastenApiService, useValue: fastenApi },
-        { provide: ConnectGatewayService, useValue: connectGateway },
         {
             provide: HTTP_CLIENT_TOKEN,
             useClass: HttpClient,

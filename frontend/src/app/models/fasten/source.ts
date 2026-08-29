@@ -1,4 +1,3 @@
-import {ConnectGatewaySourceMetadata} from '../connect-gateway/connect-gateway-source-metadata';
 import {BackgroundJob} from './background-job';
 
 export class Source {
@@ -10,7 +9,6 @@ export class Source {
   display?: string
   // "sandbox" (admin testing) or "production" (real patient data); used to split /sandbox vs /sources (#331)
   environment?: string
-  lighthouse_env_type?: 'prod' | 'sandbox'
   brand_id?: string
   portal_id?: string
   endpoint_id: string

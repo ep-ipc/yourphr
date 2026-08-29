@@ -1,24 +1,11 @@
 import {Component, EventEmitter, OnInit, Optional, Output, TemplateRef, ViewChild, ChangeDetectionStrategy} from '@angular/core';
-import {ConnectGatewayService} from '../../services/connect-gateway.service';
 import {FastenApiService} from '../../services/fasten-api.service';
-import {ConnectGatewaySourceMetadata} from '../../models/connect-gateway/connect-gateway-source-metadata';
 import {Source} from '../../models/fasten/source';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {ActivatedRoute} from '@angular/router';
 import {environment} from '../../../environments/environment';
 import {CDAConverterStatus} from '../../models/fasten/cda-converter-status';
-import {BehaviorSubject, forkJoin, Observable, of, Subject} from 'rxjs';
-import {
-  ConnectGatewaySourceSearch,
-  ConnectGatewaySourceSearchAggregation,
-  ConnectGatewayBrandListDisplayItem
-} from '../../models/connect-gateway/connect-gateway-source-search';
-import {debounceTime, distinctUntilChanged, pairwise, startWith} from 'rxjs/operators';
-import {MedicalSourcesFilter, MedicalSourcesFilterService} from '../../services/medical-sources-filter.service';
-import {FormControl, FormGroup} from '@angular/forms';
-import * as _ from 'lodash';
 import {PatientAccessBrand} from '../../models/patient-access-brands';
-import {FormRequestHealthSystemComponent} from '../../components/form-request-health-system/form-request-health-system.component';
 import {extractErrorFromResponse} from '../../../lib/utils/error_extract';
 import {
   formatSmartConnectFailure,
@@ -39,7 +26,7 @@ const defaultRelayPollSeconds = 55
 
 export class SourceListItem {
   source?: Source
-  brand: ConnectGatewayBrandListDisplayItem | PatientAccessBrand
+  brand: PatientAccessBrand
   searchHighlights?: string[]
   // Resolved patient display name for this source (e.g. "Camila Lopez"), shown on the connected tile.
   patientName?: string
@@ -63,28 +50,6 @@ export class MedicalSourcesComponent implements OnInit {
   // (the import itself then runs in the background — progress shows on the Connected Sources list).
   uploadInProgress = false
   dragActive = false
-
-  searchTermUpdate = new BehaviorSubject<string>("");
-  status: Record<string, undefined | "token" | "authorize"> = {}
-
-  //aggregation/filter data & limits
-  globalLimits: {
-    // aggregations: ConnectGatewaySourceSearchAggregations | undefined,
-  } = {
-    // categories: [],
-    // aggregations: undefined,
-  }
-
-
-
-
-  //source of truth for current state
-  //TODO: see if we can remove this without breaking search/filtering
-  filterForm = this.filterService.filterForm;
-
-  //modal
-  modalSelectedBrandListItem: ConnectGatewayBrandListDisplayItem | PatientAccessBrand = null;
-  modalCloseResult = '';
 
 
   // CCDA-FHIR modal
@@ -116,10 +81,8 @@ export class MedicalSourcesComponent implements OnInit {
   pendingConnectProvider: ConnectableProvider | null = null
 
   constructor(
-    private connectGatewayApi: ConnectGatewayService,
     private fastenApi: FastenApiService,
     private activatedRoute: ActivatedRoute,
-    private filterService: MedicalSourcesFilterService,
     private modalService: NgbModal,
 
   ) {
@@ -309,83 +272,6 @@ export class MedicalSourcesComponent implements OnInit {
   private refreshConnectedList(): void {
     this.showConnectedList = false
     setTimeout(() => { this.showConnectedList = true }, 0)
-  }
-
-
-
-  //OLD FUNCTIONS
-  //
-  //
-  // private populateAvailableSourceList(results: ConnectGatewaySourceSearch): void {
-  //   console.log("AGGREGATIONS!!!!!", results.aggregations)
-  //   this.totalAvailableSourceList = results.hits.total.value
-  //   if(results.hits.hits.length == 0){
-  //     this.scrollComplete = true
-  //     console.log("scroll complete")
-  //     return
-  //   }
-  //   this.scrollId = results._scroll_id
-  //   this.availableSourceList = this.availableSourceList.concat(results.hits.hits.map((result) => {
-  //     return {metadata: result._source}
-  //   }).filter((item) => {
-  //     return !this.connectedSourceList.find((connectedItem) => connectedItem.metadata.source_type == item.metadata.source_type)
-  //   }))
-  // }
-  //
-
-
-  // /**
-  //  * after pressing the logo (connectModalHandler button), this function will display a modal with information about the source
-  //  * @param $event
-  //  * @param sourceType
-  //  */
-  public connectModalHandler(contentModalRef, sourceListItem: SourceListItem) :void {
-    console.log("TODO: connect Handler")
-
-
-    this.modalSelectedBrandListItem = sourceListItem.brand
-    this.modalService.open(contentModalRef, {ariaLabelledBy: 'modal-basic-title'}).result.then((result) => {
-      this.modalSelectedBrandListItem = null
-      this.modalCloseResult = `Closed with: ${result}`;
-    }, (reason) => {
-      this.modalSelectedBrandListItem = null
-    });
-  }
-
-  // /**
-  //  * after pressing the connect button in the Modal, this function will generate an authorize url for this source, and redirect the user.
-  //  * @param $event
-  //  * @param sourceType
-  //  */
-  public connectHandler($event, brandId: string, portalId: string, endpointId: string): void {
-
-    ($event.currentTarget as HTMLButtonElement).disabled = true;
-    this.status[brandId] = "authorize"
-    this.status[endpointId] = "authorize"
-
-    this.connectGatewayApi.getConnectGatewaySource(endpointId)
-      .then(async (sourceMetadata: ConnectGatewaySourceMetadata) => {
-        sourceMetadata.brand_id = brandId
-        sourceMetadata.portal_id = portalId
-
-        const authorizationUrl = await this.connectGatewayApi.generateSourceAuthorizeUrl(sourceMetadata)
-
-        // redirect to the connect gateway with uri's (or open a new window in desktop mode)
-        this.connectGatewayApi.redirectWithOriginAndDestination(authorizationUrl.toString(), sourceMetadata).subscribe((desktopRedirectData) => {
-          if(!desktopRedirectData){
-            return //wait for redirect
-          }
-
-          //Note: this code will only run in Desktop mode (with popups)
-          //in non-desktop environments, the user is redirected in the same window, and this code is never executed.
-
-          //always close the modal
-          this.modalService.dismissAll()
-
-          //redirect the browser back to this page with the code in the query string parameters
-          this.connectGatewayApi.redirectWithDesktopCode(desktopRedirectData.state, desktopRedirectData.codeData)
-        })
-      });
   }
 
 
