@@ -173,3 +173,6 @@ dist-seed/
 # here is an accident, and committing one means two copies of the same logic (yourphr#682).
 scripts/**/*.js
 scripts/**/*.js.map
+
+# e2e writes the admin password here at runtime (e2e/server.ts says 0600, gitignored — now true)
+e2e/.admin-pass
