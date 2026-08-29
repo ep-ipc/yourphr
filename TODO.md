@@ -42,6 +42,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 - [#698](https://github.com/jwilleke/yourphr/issues/698) — [FEATURE] Sessions manager: do not back up credentials, and three defects inherited from ngdpbase's token manager
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
+- [#705](https://github.com/jwilleke/yourphr/issues/705) — [FEATURE] Reconnect an expired source through the catalog — re-authorize without disconnect + re-import
 - [#704](https://github.com/jwilleke/yourphr/issues/704) — [CHORE] Frontend tests: off the deprecated Karma builder, then Karma/Jasmine to Vitest
 - [#702](https://github.com/jwilleke/yourphr/issues/702) — [CHORE] Replace frontend baseUrl with paths mappings — TypeScript 7 removes it
 - [#699](https://github.com/jwilleke/yourphr/issues/699) — [CHORE] Migrate the frontend off Yarn Classic to npm — one package manager, one audit surface
