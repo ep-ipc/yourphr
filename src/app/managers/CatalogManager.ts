@@ -246,7 +246,7 @@ export class CatalogManager extends BaseManager {
     let redirectUri = typeof body['redirect_uri'] === 'string' ? (body['redirect_uri'] as string).trim() : '';
     // Go's rule, restored (yourphr#700): when the request carries no redirect_uri, derive it from
     // this deployment's relay — the frontend never compiles one in (the product's #399).
-    if (redirectUri === '' && this.options.relay) redirectUri = this.options.relay.callbackUrl();
+    if (redirectUri === '' && this.options.relay?.ready()) redirectUri = this.options.relay.callbackUrl();
     if (redirectUri === '') throw new ApiError(501, 'no SMART relay is configured — supply redirect_uri, or set yourphr.relay.public-url / YOURPHR_RELAY_SECRET');
     try {
       const started = await this.client.beginAuthorization(await this.smartApp(e), redirectUri);
@@ -280,7 +280,7 @@ export class CatalogManager extends BaseManager {
       if (!this.options.relay) throw new ApiError(501, 'no SMART relay is configured — the callback page must send the authorization code');
       code = await this.options.relay.fetchCode(str('state'));
     }
-    const redirectUri = str('redirect_uri') !== '' ? str('redirect_uri') : (this.options.relay?.callbackUrl() ?? '');
+    const redirectUri = str('redirect_uri') !== '' ? str('redirect_uri') : (this.options.relay?.ready() ? this.options.relay.callbackUrl() : '');
     if (redirectUri === '') throw new ApiError(400, 'redirect_uri is required (the one the authorization used)');
     let granted;
     try {

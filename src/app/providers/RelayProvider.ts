@@ -100,6 +100,15 @@ export class RelayProvider {
   }
 
   /**
+   * Whether a relay-poll connect can actually complete (the shared secret is set). authorize must
+   * not derive the relay callback when this is false: the provider would send the code to a relay
+   * this instance cannot poll, stranding the patient at "you may close this window" forever.
+   */
+  ready(): boolean {
+    return this.key(SECRET_KEY) !== '';
+  }
+
+  /**
    * Poll `/pending?state=` until the code arrives or the window closes. Error codes are the
    * product's #406 contract, which the frontend keys its retry loop off: only `relay_poll_timeout`
    * is retryable — misconfiguration must not spin for minutes.

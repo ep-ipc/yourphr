@@ -172,6 +172,7 @@ describe('CatalogManager — a member connects', () => {
     const fetched: string[] = [];
     const relay = {
       callbackUrl: () => 'https://relay.example.org/callback',
+      ready: () => true,
       fetchCode: async (state: string) => { fetched.push(state); return 'code-from-relay'; },
       resolved: () => ({}),
     } as unknown as import('../../providers/RelayProvider.js').RelayProvider;
@@ -193,6 +194,7 @@ describe('CatalogManager — a member connects', () => {
   it('with a relay: a poll timeout surfaces retryably, and no source is created', async () => {
     const relay = {
       callbackUrl: () => 'https://relay.example.org/callback',
+      ready: () => true,
       fetchCode: async () => { const { ApiError } = await import('../../../framework/ApiContext.js'); throw new ApiError(504, 'timed out waiting for the authorization code', { error_code: 'relay_poll_timeout' }); },
       resolved: () => ({}),
     } as unknown as import('../../providers/RelayProvider.js').RelayProvider;
