@@ -1,5 +1,33 @@
 # Changelog
 
+## [3.3.0](https://github.com/jwilleke/yourphr/compare/v3.2.0...v3.3.0) (2026-08-30)
+
+__No Fasten host is called by anything this release ships.__ The Lighthouse connect gateway — dead since the fork, but still compiled into every bundle and still one click away on the Reconnect button — is gone ([#700](https://github.com/jwilleke/yourphr/issues/700)). Nothing a patient or operator could actually use has been removed: provider connection has been catalog-only since it existed, and the one Lighthouse button left was broken. This is a minor release on purpose.
+
+### Features
+
+- __Agent tokens__ ([#695](https://github.com/jwilleke/yourphr/issues/695)) — a patient can let an agent read named parts of their record
+- __Self-service signup, closed by default__ ([#691](https://github.com/jwilleke/yourphr/issues/691))
+- __Practitioners the patient can add, edit and trace__ ([#683](https://github.com/jwilleke/yourphr/issues/683))
+- __Configured secrets are redacted from log lines__ ([#638](https://github.com/jwilleke/yourphr/issues/638), [#682](https://github.com/jwilleke/yourphr/issues/682))
+- A typo'd configuration key is reported with the key it was probably meant to be ([#625](https://github.com/jwilleke/yourphr/issues/625))
+- CI fails when the frontend calls a path the server does not route ([#689](https://github.com/jwilleke/yourphr/issues/689), [#694](https://github.com/jwilleke/yourphr/issues/694)); a scheduled check fails red — and files a P0 issue — when the newest release tag has no published image ([#658](https://github.com/jwilleke/yourphr/issues/658))
+- Frontend on Angular 22 ([#482](https://github.com/jwilleke/yourphr/issues/482))
+
+### Bug Fixes
+
+- __Go-era `/web/…` URLs redirect to the app instead of rendering a blank page__ ([#706](https://github.com/jwilleke/yourphr/issues/706)) — old bookmarks work again
+- __A source whose token expired with no refresh token no longer hammers the provider every 15 minutes__ ([#706](https://github.com/jwilleke/yourphr/issues/706)) — one log line, one failure job, sync paused until reconnect
+- __Every runtime call to Fasten's Lighthouse removed__ ([#700](https://github.com/jwilleke/yourphr/issues/700)) — `grep fastenhealth.com` over the built bundle finds nothing; the broken Reconnect button is gone (its catalog-path replacement is [#705](https://github.com/jwilleke/yourphr/issues/705))
+- Escaped markup no longer becomes live markup in record text ([#681](https://github.com/jwilleke/yourphr/issues/681))
+- The glossary client asks the path the server serves ([#692](https://github.com/jwilleke/yourphr/issues/692))
+- Frontend build-tree advisories cleared: brace-expansion, nanoid, semver ([#576](https://github.com/jwilleke/yourphr/issues/576)); body-parser, diff ([#590](https://github.com/jwilleke/yourphr/issues/590))
+
+### Operational notes
+
+- __Everyone signs in again once after this upgrade__: the session cookie is now `yourphr_session`, not `fasten_session` ([#676](https://github.com/jwilleke/yourphr/issues/676))
+- The Go application is deleted from the tree; the frozen Go image lives on as `ghcr.io/jwilleke/yourphr-go:2.10.3` ([#677](https://github.com/jwilleke/yourphr/issues/677))
+
 ## [3.2.0](https://github.com/jwilleke/yourphr/compare/v3.1.0...v3.2.0) (2026-08-27)
 
 __Upgrade from here, not from 3.1.0, if you are coming off the Go stack.__ This is the first release whose image can actually perform the migration, and the first whose UI reports the environment it is really running in.
