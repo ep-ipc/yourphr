@@ -4,6 +4,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔴 P0 — Security & Critical
 
+- [#706](https://github.com/jwilleke/yourphr/issues/706) — [BUG] Repeating log entries
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟠 P1
@@ -103,8 +104,8 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] frontend build-tree high advisories: brace-expansion, image-size, nanoid, semver
 - [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] frontend build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
+- [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] frontend build-tree high advisories: brace-expansion, image-size, nanoid, semver
 - [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably automatic
 - [#482](https://github.com/jwilleke/yourphr/issues/482) — [FEATURE] Upgrade angular Angular to 22.x
 
