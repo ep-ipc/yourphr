@@ -160,11 +160,33 @@ describe('SourcesManager — the pass (what src/worker was)', () => {
     expect((await jobs.latest(1))).toMatchObject({ outcome: 'success', received: 4, created: 0, updated: 4 });
   });
 
-  it('a source with no refresh token logs the reconnect signal and still syncs on what it has', async () => {
-    await sources.add(alice, newSource('alice', { refreshToken: '', expiresAt: NOW - 10 }));
-    const report = await sources.pass(NOW);
-    expect(report).toMatchObject({ refreshAttempted: 1, refreshed: 0, synced: 1 });
-    expect(lines.some((l) => l.includes('no refresh token is available; reconnect the source'))).toBe(true);
+  it('expired with no refresh token: says so ONCE, records one failure job, and pauses the sync instead of hammering the provider (yourphr#706)', async () => {
+    const s = await sources.add(alice, newSource('alice', { refreshToken: '', expiresAt: NOW - 10 }));
+    const first = await sources.pass(NOW);
+    expect(first).toEqual({ refreshAttempted: 0, refreshed: 0, synced: 0, failed: 0 });
+    expect(client.fetches).toEqual([]); // no doomed fetch with a token known to be dead
+    expect(lines.filter((l) => l.includes('reconnect the source')).length).toBe(1);
+    expect(await jobs.latest(s.id)).toMatchObject({ outcome: 'failure', error: expect.stringContaining('reconnect the source') });
+
+    // Every later cycle is silent — no new log line, no new job.
+    await sources.pass(NOW + 900);
+    await sources.pass(NOW + 1800);
+    expect(lines.filter((l) => l.includes('reconnect the source')).length).toBe(1);
+    expect((await jobsProvider.all()).filter((j) => j.sourceId === s.id).length).toBe(1);
+
+    // A reconnect (new tokens) lifts the pause and the source syncs again.
+    await sourcesProvider.updateTokens(s.id, 'fresh', 'rotated', NOW + 7200);
+    const after = await sources.pass(NOW + 2700);
+    expect(after).toMatchObject({ synced: 1, failed: 0 });
+    expect(client.fetches.length).toBeGreaterThan(0);
+  });
+
+  it('a user-triggered sync still attempts an expired unrefreshable source and reports honestly', async () => {
+    await sources.add(alice, newSource('alice', { refreshToken: '', accessToken: 'dead', expiresAt: NOW - 10 }));
+    await sources.pass(NOW); // paused for the worker
+    const before = client.fetches.length;
+    await sources.syncNow(alice, 'source-1', NOW);
+    expect(client.fetches.length).toBeGreaterThan(before); // syncNow is not gated by the pause
   });
 
   it('a failed refresh is logged, not fatal: the sync runs on the old token', async () => {

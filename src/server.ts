@@ -1268,6 +1268,15 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       if (options.webDir && !url.pathname.startsWith('/api/')) {
+        // The Go stack served the app under /web/ and those URLs live on in bookmarks (yourphr#706).
+        // Left alone, /web/dashboard hits the SPA fallback and the page's relative asset URLs
+        // resolve under /web/ — every script 404s and the patient sees a blank page. Redirect
+        // permanently to the same route at the root, keeping any query string.
+        if (url.pathname === '/web' || url.pathname.startsWith('/web/')) {
+          res.writeHead(301, {Location: (url.pathname.slice('/web'.length) || '/') + url.search});
+          res.end();
+          return;
+        }
         serveStatic(options.webDir, url.pathname, res);
         return;
       }

@@ -91,6 +91,13 @@ export class SourcesManager extends BaseManager {
   readonly name = 'sources';
   override readonly dependsOn = ['records', 'jobs'] as const;
   private readonly log: (line: string) => void;
+  /**
+   * Sources the worker has already reported as expired-with-no-refresh-token (yourphr#706). One
+   * log line and one failure job per outage, not one per 15-minute cycle — and no doomed fetches
+   * against the provider with a token known to be dead. Per-process on purpose: a restart repeats
+   * the warning once, which is a feature.
+   */
+  private readonly unrefreshable = new Set<number>();
 
   constructor(
     engine: Engine,
@@ -326,6 +333,19 @@ export class SourcesManager extends BaseManager {
     for (const source of await this.provider.list()) {
       if (isDisconnected(source)) continue; // disconnected on purpose (yourphr#594): nothing to refresh, nothing to fetch with
       const ctx = ApiContext.system('worker', source.userId, this.engine);
+      // Expired and unrefreshable: the worker can do nothing but hammer the provider with a dead
+      // token (yourphr#706). Say so once, record one failure job so the Sources page shows why the
+      // sync stopped, then stay quiet until a reconnect changes the tokens. A user-triggered Sync
+      // still goes through syncNow and reports its own honest error.
+      if (source.expiresAt < now && source.refreshToken === '') {
+        if (!this.unrefreshable.has(source.id)) {
+          this.unrefreshable.add(source.id);
+          this.log(`token-refresh: source ${source.id} (${source.display}): access token expired and no refresh token is available; reconnect the source — its scheduled sync is paused until then`);
+          await this.engine.managers.jobs.record(ctx, { sourceId: source.id, outcome: 'failure', received: 0, created: 0, updated: 0, error: 'access token expired and no refresh token is available; reconnect the source', startedAt: now, finishedAt: now });
+        }
+        continue;
+      }
+      this.unrefreshable.delete(source.id);
       const job = await this.syncOne(ctx, source, now, report);
       if (job.outcome === 'success') report.synced++;
       else report.failed++;
