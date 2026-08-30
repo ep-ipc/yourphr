@@ -10,7 +10,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 - [#700](https://github.com/jwilleke/yourphr/issues/700) — [SECURITY] The shipped app still calls Fasten's Lighthouse — remove every runtime dependency on Fasten infrastructure
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] frontend build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
-- [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] frontend build-tree high advisories: brace-expansion, image-size, nanoid, semver
 - [#696](https://github.com/jwilleke/yourphr/issues/696) — [BUG] "Add record" opens a form that cannot save — manual entry 404s
 - [#695](https://github.com/jwilleke/yourphr/issues/695) — [BUG] Settings offers agent tokens the server does not implement — and no scoping, audit or expiry model
 - [#690](https://github.com/jwilleke/yourphr/issues/690) — [BUG] No E2E coverage of any interaction path — only sign-in-and-look
@@ -104,6 +103,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
+- [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] frontend build-tree high advisories: brace-expansion, image-size, nanoid, semver
 - [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] frontend build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
 - [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably automatic
 - [#482](https://github.com/jwilleke/yourphr/issues/482) — [FEATURE] Upgrade angular Angular to 22.x
