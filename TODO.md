@@ -38,6 +38,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟡 P2
 
+- [#707](https://github.com/jwilleke/yourphr/issues/707) — [security] image-size — both DoS advisories have no patched release (blocked upstream)
 - [#698](https://github.com/jwilleke/yourphr/issues/698) — [FEATURE] Sessions manager: do not back up credentials, and three defects inherited from ngdpbase's token manager
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#705](https://github.com/jwilleke/yourphr/issues/705) — [FEATURE] Reconnect an expired source through the catalog — re-authorize without disconnect + re-import
@@ -103,11 +104,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#706](https://github.com/jwilleke/yourphr/issues/706) — [BUG] Repeating log entries
-- [#590](https://github.com/jwilleke/yourphr/issues/590) — [security] frontend build-tree low advisories: body-parser (GHSA-v422-hmwv-36x6), diff (GHSA-73rr-hh4g-fpgx)
-- [#576](https://github.com/jwilleke/yourphr/issues/576) — [security] frontend build-tree high advisories: brace-expansion, image-size, nanoid, semver
-- [#658](https://github.com/jwilleke/yourphr/issues/658) — [BUG] Pushing v3.1.0 created no workflow run — the release gate is not reliably automatic
-- [#482](https://github.com/jwilleke/yourphr/issues/482) — [FEATURE] Upgrade angular Angular to 22.x
+*None.*
 
 ## ⏸ Deferred
 
