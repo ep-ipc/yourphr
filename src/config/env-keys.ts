@@ -53,6 +53,7 @@ export const FALLBACK_ENV_KEYS: EnvKeyMap = {
   'yourphr.web.static-dir': 'YOURPHR_WEB_STATIC_DIR',
   'yourphr.database.encryption.key': 'YOURPHR_DATABASE_ENCRYPTION_KEY',
   'yourphr.backup.encryption.key': 'YOURPHR_BACKUP_ENCRYPTION_KEY',
+  'yourphr.relay.secret': 'YOURPHR_RELAY_SECRET',
 };
 
 export interface PropertyDescription {

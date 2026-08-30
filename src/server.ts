@@ -802,10 +802,10 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // The SMART relay card (yourphr#602) — before the per-source routes, whose :id would swallow it.
-      // No SMART relay in this stack (the product's #408 is not ported): honestly not configured,
-      // rather than a shape that suggests one is coming.
+      // Real effective settings with provenance (yourphr#700); the secret's value is never echoed.
       if (url.pathname === '/api/secure/source/relay-config' && req.method === 'GET') {
-        send(res, 200, {success: true, data: {callback_url: '', configured: false, ready: false, public_url: '', poll_url: '', secret: ''}});
+        const relay = engine.has('catalog') ? engine.managers.catalog.relayResolved() : undefined;
+        send(res, 200, {success: true, data: relay ?? {callback_url: '', configured: false, ready: false, public_url: '', poll_url: '', secret: ''}});
         return;
       }
 

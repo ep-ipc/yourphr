@@ -341,7 +341,12 @@ export async function openStores(dataDir: string, env: Record<string, string | u
     log: (line) => appLog.info(line),
   }));
   // 8. Catalog (yourphr#613): what the instance can connect to; connects through Sources and the same client.
-  engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(db), sourceClient, { allowInternal, log: (line) => appLog.warn(line) }));
+  // The SMART OAuth relay (yourphr#700): derives redirect_uri and polls the authorization code
+  // home, so provider connect completes without this instance being publicly reachable.
+  const { RelayProvider } = await import('./app/providers/RelayProvider.js');
+  const { OutboundHttp } = await import('./http/index.js');
+  const relay = new RelayProvider(engine, new OutboundHttp({ allowInternal }));
+  engine.register('catalog', new CatalogManager(engine, new SqliteCatalogProvider(db), sourceClient, { allowInternal, log: (line) => appLog.warn(line), relay }));
   // The glossary (yourphr#640): plain-language explanations of coded values, cached locally.
   engine.register('glossary', new GlossaryManager(engine, await glossaryProviderFor(config.getString('yourphr.glossary.provider'), env), new SqliteGlossaryCache(db), (line) => appLog.info(line)));
   // Demo mode (yourphr#643): inert unless this instance opted in. Registered always, so the

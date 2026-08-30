@@ -20,6 +20,7 @@ import { validateUrl } from '../../http/index.js';
 import { type BaseCatalogProvider, type CatalogEntry, type CatalogFields, type ProviderEnvironment } from '../providers/BaseCatalogProvider.js';
 import { type BaseSourceClientProvider, SourceClientError } from '../providers/BaseSourceClientProvider.js';
 import { catalogEntryShape, connectableShape, connectionPolicy, normalizeConsentPolicy, normalizePreConnectProfile } from '../../catalog/index.js';
+import { LOGIN_WAIT_SECONDS, RELAY_POLL_SECONDS, type RelayProvider } from '../providers/RelayProvider.js';
 import { resourceTypesFromScopes } from '../../migrate/index.js';
 import { sourceShape } from './SourcesManager.js';
 
@@ -58,6 +59,8 @@ export interface CatalogOptions {
   /** Tests only — lets loopback fakes into the catalog (the SSRF guard stays on for everything else). */
   allowInternal?: boolean;
   log?: (line: string) => void;
+  /** The SMART OAuth relay (yourphr#700). Absent = no relay: callers must supply redirect_uri and code. */
+  relay?: RelayProvider;
 }
 
 const MANAGE = 'admin role required to manage the provider catalog';
@@ -210,6 +213,12 @@ export class CatalogManager extends BaseManager {
 
   // --- a member's side -------------------------------------------------------------------------
 
+  /** The relay card's payload (yourphr#602): effective settings with provenance, or an honest "none". */
+  relayResolved(): Record<string, unknown> {
+    if (!this.options.relay) return { callback_url: '', configured: false, ready: false, public_url: '', poll_url: '', secret: '' };
+    return this.options.relay.resolved() as unknown as Record<string, unknown>;
+  }
+
   /** What members may connect to, in Go's ConnectableProvider shape: enabled PRODUCTION entries only. */
   async connectable(ctx: ApiContext): Promise<Record<string, unknown>[]> {
     ctx.requireAuthenticated();
@@ -234,12 +243,19 @@ export class CatalogManager extends BaseManager {
     // screen to be turned away afterwards would have them hand credentials over for nothing.
     if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
     const e = await this.enabledEntry(publicId);
-    const redirectUri = typeof body['redirect_uri'] === 'string' ? (body['redirect_uri'] as string).trim() : '';
-    // Go derives the callback from its SMART relay; there is no relay in this stack (the product's #408).
-    if (redirectUri === '') throw new ApiError(501, 'no SMART relay in this stack — supply redirect_uri (this deployment\'s /sources/callback/<state> page)');
+    let redirectUri = typeof body['redirect_uri'] === 'string' ? (body['redirect_uri'] as string).trim() : '';
+    // Go's rule, restored (yourphr#700): when the request carries no redirect_uri, derive it from
+    // this deployment's relay — the frontend never compiles one in (the product's #399).
+    if (redirectUri === '' && this.options.relay) redirectUri = this.options.relay.callbackUrl();
+    if (redirectUri === '') throw new ApiError(501, 'no SMART relay is configured — supply redirect_uri, or set yourphr.relay.public-url / YOURPHR_RELAY_SECRET');
     try {
       const started = await this.client.beginAuthorization(await this.smartApp(e), redirectUri);
-      return { authorize_url: started.authorizeUrl, state: started.state, code_verifier: started.codeVerifier, redirect_uri: redirectUri };
+      return {
+        authorize_url: started.authorizeUrl, state: started.state, code_verifier: started.codeVerifier, redirect_uri: redirectUri,
+        // The frontend's retry contract (the product's #406): poll this long per connect attempt,
+        // keep retrying timeouts across the login window.
+        relay_poll_seconds: RELAY_POLL_SECONDS, login_wait_seconds: LOGIN_WAIT_SECONDS,
+      };
     } catch (err) {
       throw this.asApiError(err);
     }
@@ -255,11 +271,16 @@ export class CatalogManager extends BaseManager {
     }
     const str = (k: string): string => (typeof body[k] === 'string' ? (body[k] as string).trim() : '');
     const verifier = str('code_verifier');
-    const code = str('code');
+    let code = str('code');
     if (verifier === '') throw new ApiError(400, 'code_verifier is required');
     if (code === '' && str('state') === '') throw new ApiError(400, 'one of code or state is required');
-    if (code === '') throw new ApiError(501, 'no SMART relay in this stack — the callback page must send the authorization code');
-    const redirectUri = str('redirect_uri');
+    // No code in the request: the provider redirected the patient's browser to the RELAY, so the
+    // code is waiting there under the state. Poll it home (yourphr#700).
+    if (code === '') {
+      if (!this.options.relay) throw new ApiError(501, 'no SMART relay is configured — the callback page must send the authorization code');
+      code = await this.options.relay.fetchCode(str('state'));
+    }
+    const redirectUri = str('redirect_uri') !== '' ? str('redirect_uri') : (this.options.relay?.callbackUrl() ?? '');
     if (redirectUri === '') throw new ApiError(400, 'redirect_uri is required (the one the authorization used)');
     let granted;
     try {

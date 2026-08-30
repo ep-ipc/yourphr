@@ -168,6 +168,42 @@ describe('CatalogManager — the admin curates', () => {
 });
 
 describe('CatalogManager — a member connects', () => {
+  it('with a relay: authorize derives redirect_uri from it, connect polls the code home (yourphr#700)', async () => {
+    const fetched: string[] = [];
+    const relay = {
+      callbackUrl: () => 'https://relay.example.org/callback',
+      fetchCode: async (state: string) => { fetched.push(state); return 'code-from-relay'; },
+      resolved: () => ({}),
+    } as unknown as import('../../providers/RelayProvider.js').RelayProvider;
+    catalog = new CatalogManager(engine, provider, client, { log: (l) => lines.push(l), relay });
+    await provider.initialize();
+    await users.setConsent(alice, '2026-01-01T00:00:00Z');
+
+    const started = await catalog.authorize(alice, '1', {});
+    expect(started).toMatchObject({ redirect_uri: 'https://relay.example.org/callback', relay_poll_seconds: 55, login_wait_seconds: 240 });
+    expect(client.redirects[0]).toBe('https://relay.example.org/callback');
+
+    const r = await catalog.connect(alice, '1', { code_verifier: 'v', state: 'st-9' });
+    expect(fetched).toEqual(['st-9']);
+    expect(client.exchanges[0]).toEqual({ code: 'code-from-relay', verifier: 'v' });
+    expect(client.redirects[1]).toBe('https://relay.example.org/callback'); // derived for the exchange too
+    expect(r.source).toMatchObject({ user_id: 'alice' });
+  });
+
+  it('with a relay: a poll timeout surfaces retryably, and no source is created', async () => {
+    const relay = {
+      callbackUrl: () => 'https://relay.example.org/callback',
+      fetchCode: async () => { const { ApiError } = await import('../../../framework/ApiContext.js'); throw new ApiError(504, 'timed out waiting for the authorization code', { error_code: 'relay_poll_timeout' }); },
+      resolved: () => ({}),
+    } as unknown as import('../../providers/RelayProvider.js').RelayProvider;
+    catalog = new CatalogManager(engine, provider, client, { log: (l) => lines.push(l), relay });
+    await provider.initialize();
+    await users.setConsent(alice, '2026-01-01T00:00:00Z');
+    await expect(catalog.connect(alice, '1', { code_verifier: 'v', state: 'st' }))
+      .rejects.toMatchObject({ status: 504, extra: { error_code: 'relay_poll_timeout' } });
+    expect(await sourcesProvider.list()).toHaveLength(0);
+  });
+
   beforeEach(async () => {
     await catalog.createEntry(admin, { ...PROD, authorizeUrlOverride: 'https://override.example.org/authorize' });
     await catalog.createEntry(admin, { ...PROD, display: 'Off', enabled: false });
@@ -177,7 +213,7 @@ describe('CatalogManager — a member connects', () => {
     await expect(catalog.authorize(alice, '2', { redirect_uri: 'https://app/cb' })).rejects.toMatchObject({ status: 404, message: 'no such enabled catalog entry' });
     await expect(catalog.authorize(alice, '1', {})).rejects.toMatchObject({ status: 501 });
     const started = await catalog.authorize(alice, '1', { redirect_uri: ' https://app/cb ' });
-    expect(started).toEqual({ authorize_url: 'https://override.example.org/authorize?client_id=cid', state: 'st', code_verifier: 'ver', redirect_uri: 'https://app/cb' });
+    expect(started).toEqual({ authorize_url: 'https://override.example.org/authorize?client_id=cid', state: 'st', code_verifier: 'ver', redirect_uri: 'https://app/cb', relay_poll_seconds: 55, login_wait_seconds: 240 });
     expect(client.apps[0]).toMatchObject({ clientId: 'cid', clientSecret: 'the-secret', scopes: ['patient/Condition.read', 'patient/Observation.read'] });
     client.failDiscovery = true;
     await expect(catalog.authorize(alice, '1', { redirect_uri: 'https://app/cb' })).rejects.toMatchObject({ status: 502, message: 'SMART discovery failed: no .well-known' });
