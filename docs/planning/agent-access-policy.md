@@ -1,0 +1,97 @@
+# AI agent access policy
+
+__Status: proposed with the first slice (yourphr#657), for review before merge.__
+
+__Code:__ `scripts/mcp-server.ts` (the bridge), `src/framework/managers/AgentTokensManager.ts` (the credential), `src/account/index.ts` (`accessCategoryFor`, the scope and log vocabulary), `src/server.ts` (the gate)
+__Harnesses:__ `npm run mcp-tests`, `npm run agent-tokens`
+__Companion to:__ [`connection-policy.md`](../connection-policy.md), which answers the same shape of question for medical sources — what leaves, on whose decision, and what is refused.
+
+This is the written policy [yourphr#599](https://github.com/jwilleke/yourphr/issues/599) asked for before any LLM touched a record: *"records must not leave the machine without an explicit, per-conversation statement."*
+
+## The posture, in one paragraph
+
+YourPHR runs no model, bundles no weights, calls no inference service, and sends no record anywhere. A patient who wants an AI to help them read their own records mints a short-lived, scoped credential for themselves and hands it to a client they already run. That client fetches their records, under their own credential, on their own machine, subject to whatever terms they accepted from whoever wrote it. YourPHR's part is to serve an authenticated read and record that it happened.
+
+The distinction is the whole design and it is not a technicality: __the product is not the party disclosing anything.__ There is no configuration in which YourPHR transmits a record to a third party of its own accord, and adding one would be a different decision requiring its own review.
+
+## Default posture
+
+| Question | Default |
+|---|---|
+| Agent tokens | __Off__ — `yourphr.auth.agent-token.enabled` is `false`; an operator opts in |
+| Token lifetime | __24 hours__, a ceiling rather than a default; there is no never-expires option |
+| Token capability | __Read-only__ — no write scope exists to grant |
+| Scope | __Required__ — an unscoped token is rejected, never treated as unrestricted |
+| Which records | __Only the minting patient's own__, by the same `user_id` seam every other read uses |
+| The MCP bridge | Runs on the __patient's machine__, launched by their client; the server neither hosts nor advertises it |
+
+Nothing in that table is new to this feature. Every row is a property of [yourphr#695](https://github.com/jwilleke/yourphr/issues/695), inherited rather than re-implemented, which is the point of building the bridge on the HTTP surface instead of beside it.
+
+## What may leave the machine, and on whose decision
+
+Records leave only when a patient has taken three deliberate steps, each of which they can undo:
+
+1. An operator enabled agent tokens for the instance.
+2. The patient minted a token, chose its scopes, and saw what those scopes let an agent read.
+3. The patient pasted that token into a client they chose and configured.
+
+The __per-conversation statement__ yourphr#599 requires is served by the bridge itself. Its `initialize` response tells the connecting client, in words the model reads at the start of every session:
+
+> These are one patient's own health records, read live from their YourPHR instance. Every read is recorded in their access log under this client's name. Nothing here can be changed.
+
+That is a statement to the model rather than a consent dialog to the human, and it is worth being honest about the difference. The human's consent moment is the minting screen, which is where the scopes are chosen and where the words have to be right.
+
+## What is recorded
+
+Every agent read is written to the patient's access log __before__ the read is served, under the __token's name__ rather than the patient's — so the log says "Claude Desktop read your record search" and not "you did", on a day the patient may not have opened the app at all. `npm run mcp-tests` asserts both halves: that the agent's name appears, and that the patient's does not.
+
+The log is bucketed per owner, actor, category and day, with a count. So a chatty agent produces one row with a rising number rather than a flood, and the patient can still see how much was read and when it started and stopped.
+
+## What the product refuses
+
+- __Any write.__ Not "no write tool is offered" — no write path has an access category, and the gate admits only categorised GETs, so a write route added next year is refused by inheritance rather than by someone remembering.
+- __Any read with no category.__ An uncategorised read is one the log cannot record, and yourphr#614's rule is that an unaudited disclosure did not happen. An agent asking for one gets a 403.
+- __A token used from a browser.__ Agent tokens are accepted from an `Authorization` header only, never from a cookie, so a page cannot silently borrow one.
+- __A token that renews or mints another.__ Two independent locks: the edge gate refuses the route, and `AgentTokensManager.requireHuman` refuses the call.
+- __Bundling, recommending, or proxying a model.__ Out of scope by policy, not merely unimplemented.
+
+## The decision this policy owes: is the audit a guarantee or a list?
+
+[yourphr#657](https://github.com/jwilleke/yourphr/issues/657) asked whether "who read this record" is a manager guarantee or an HTTP-layer allow-list, and said the MCP safety case rests on the answer.
+
+__Today it is an allow-list.__ `accessCategoryFor(pathname)` maps a path to a category; `src/server.ts` consults it and writes the log entry. The managers — which `scripts/check-store-boundary.sh` does prove are the only path to a store — have no part in it. A read that reaches a manager through an uncategorised route is served and never recorded.
+
+That is not hypothetical. Find-anything-by-words ([yourphr#599](https://github.com/jwilleke/yourphr/issues/599)) shipped with no category, so the dashboard's search box read across every resource type a patient owns and the access log said nothing had happened. This slice is what fixes it, because it had to: an uncategorised route is also unreachable by an agent token, so `search_records` could not work until the route was named.
+
+__The allow-list is fail-safe for agents and fail-open for sessions.__ Omit a category and an agent gets a 403 — loud, immediate, and the reason this gap surfaced at all. Omit it and a signed-in patient's own read goes unlogged, silently, forever. The two halves of one mechanism fail in opposite directions, and only one of them tells you.
+
+__The recommendation is to keep the allow-list and make omission loud.__ Moving the audit into the managers is the tempting answer and the wrong one here: scopes are the log's categories, so a category is a property of *the surface a request arrives on*, not of the manager underneath — several routes with different categories share one manager, and `Full export` and `Records (FHIR)` are the same manager reached two ways. Binding audit to the manager would break the property that makes scoping trustworthy.
+
+What is missing is not a different mechanism but a check that fails, per the twelfth architecture principle. A CI step that requires every GET under `/api/secure/` to either resolve a category or appear on an explicit __not-an-access__ list would convert a silent hole into a build failure, and would have caught yourphr#599's search route on the commit that introduced it. That belongs in its own issue rather than this slice, and this policy is the argument for filing it.
+
+## Connecting a client
+
+The bridge is a plain stdio process; any MCP-capable client can launch it. For Claude Desktop, in its configuration file:
+
+```json
+{
+  "mcpServers": {
+    "yourphr": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/yourphr/scripts/mcp-server.ts"],
+      "env": {
+        "YOURPHR_URL": "http://localhost:8080",
+        "YOURPHR_AGENT_TOKEN": "yphr_at_…"
+      }
+    }
+  }
+}
+```
+
+Mint the token at Account Profile with the __Record search__ scope. It lasts at most 24 hours by design; when it expires the client stops working and says so, and the patient mints another. That friction is the feature — a credential that outlives the patient's attention is the thing yourphr#695 exists to prevent.
+
+## What this policy does not cover
+
+- __Whether the patient's chosen client is trustworthy.__ It cannot; that is theirs to judge, and the honest scope of this design is that it makes the judgement theirs rather than the product's. What YourPHR owes is that the credential is short-lived, narrow, revocable, and that every use of it is visible.
+- __Prompt injection.__ Hostile text inside an imported document could try to induce a client to fetch more than the patient meant. Read-only, scoping and the audit bound the blast radius; they do not eliminate the class. A second tool that returns whole resources would widen it, which is one reason there is only one tool.
+- __What a model infers.__ A summary drawn from real records can be wrong in ways the records are not. Nothing here makes an AI's reading of a record clinically reliable, and no part of the product should imply otherwise.

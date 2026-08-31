@@ -3,7 +3,7 @@
   "version": "3.3.0",
   "private": true,
   "type": "module",
-  "description": "YourPHR — your medical records, immediately and in your hands, for free. The TypeScript stack that succeeds the Go backend.",
+  "description": "YourPHR \u2014 your medical records, immediately and in your hands, for free. The TypeScript stack that succeeds the Go backend.",
   "engines": {
     "node": ">=24"
   },
@@ -58,6 +58,8 @@
     "baseline": "tsx scripts/build-demo-baseline.ts",
     "check:routes": "tsx scripts/check-routes.ts",
     "agent-tokens": "tsx scripts/agent-token-tests.ts",
+    "mcp": "tsx scripts/mcp-server.ts",
+    "mcp-tests": "tsx scripts/mcp-tests.ts",
     "lint:md": "markdownlint-cli2"
   },
   "dependencies": {

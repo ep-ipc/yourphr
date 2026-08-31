@@ -79,6 +79,8 @@ jobs:
         run: npm run auth
       - name: Agent tokens — the delegated-read gate (yourphr#695)
         run: npm run agent-tokens
+      - name: MCP bridge — one patient's records, over the agent-token surface (yourphr#657)
+        run: npm run mcp-tests
       - name: Configuration system (precedence, overlay, refusals)
         run: npm run config
       - name: Bootstrap environment (.env precedence)

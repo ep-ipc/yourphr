@@ -1,0 +1,236 @@
+/**
+ * YourPHR as an MCP server (yourphr#657) — the patient's own AI client reads their own records.
+ *
+ *   YOURPHR_URL=http://localhost:8080 YOURPHR_AGENT_TOKEN=yphr_at_… npm run mcp
+ *
+ * A patient mints an agent token for themselves (yourphr#695), scoped to `Record search`, and hands
+ * it to an AI client they already run. The client launches this bridge; the bridge asks YourPHR's
+ * own HTTP API the same question the dashboard's search box asks. YourPHR transmits nothing to
+ * anyone: the record goes to the client the patient chose, under the patient's own credential.
+ *
+ * WHY A BRIDGE RATHER THAN A ROUTE, which is the whole design and the reason this is small:
+ *
+ * The agent-token gate in server.ts is default-deny — an agent reaches a GET whose path has an
+ * access category and whose category its token names, and nothing else. Presenting the token to
+ * that surface inherits scoping, auditing and read-only *for free*. An MCP endpoint inside the
+ * server could not: JSON-RPC is a POST, every POST is refused there, so it would have to sit
+ * outside the gate and re-implement all three — the "beside it rather than on top of it" mistake.
+ *
+ * It also cannot live under src/ even if we wanted it to: `check:boundary` refuses `fetch` there,
+ * because Node's fetch is undici and ignores the guarded DNS lookup that is the SSRF control.
+ * scripts/ is the exempt place for loopback drivers, and that exemption is why this lives here —
+ * the same reason scripts/agent-token-tests.ts does.
+ *
+ * So this process holds no database handle, no session, and no privilege. It is an HTTP client with
+ * a scoped bearer token, and every safety property it has belongs to the server it calls.
+ *
+ * ZERO DEPENDENCIES, deliberately. The official SDK would be the conventional choice, but MCP's
+ * stdio transport is newline-delimited JSON-RPC 2.0 and the surface used here is four methods. In a
+ * store of medical records, a dependency tree is a standing supply-chain question, and this repo
+ * runs on sixteen packages. If the maintainers would rather take the SDK, the shape below is the
+ * same either way — only the plumbing changes.
+ */
+import { createInterface } from 'node:readline';
+
+/** MCP revisions this bridge speaks. A client asking for one of these is answered in its own. */
+const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+const FALLBACK_PROTOCOL = '2025-06-18';
+
+const BASE = (process.env['YOURPHR_URL'] ?? '').replace(/\/+$/, '');
+const TOKEN = process.env['YOURPHR_AGENT_TOKEN'] ?? '';
+
+/** Diagnostics go to stderr; stdout is the JSON-RPC channel and carries nothing else. */
+function note(message: string): void {
+  process.stderr.write(`yourphr-mcp: ${message}\n`);
+}
+
+interface Rpc {
+  jsonrpc: '2.0';
+  id?: number | string | null;
+  method?: string;
+  params?: Record<string, unknown>;
+}
+
+function reply(id: number | string | null | undefined, result: unknown): void {
+  process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
+}
+
+function fail(id: number | string | null | undefined, code: number, message: string): void {
+  process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } })}\n`);
+}
+
+/** A tool result the model reads. `isError` keeps a refusal in-band, so the model can say why. */
+function toolResult(text: string, isError = false): Record<string, unknown> {
+  return { content: [{ type: 'text', text }], isError };
+}
+
+const SEARCH_RECORDS = {
+  name: 'search_records',
+  title: 'Search health records',
+  description:
+    "Search the signed-in patient's own health records by words — conditions, medications, lab " +
+    'results, immunizations, procedures, encounters and documents. Returns matching records with a ' +
+    'short snippet each, newest and best-matching first. Read-only.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'Words to look for, e.g. "metformin" or "blood pressure". At least two characters.' },
+      limit: { type: 'integer', description: 'How many records to return (1–100). Defaults to 20.', minimum: 1, maximum: 100 },
+    },
+    required: ['query'],
+    additionalProperties: false,
+  },
+} as const;
+
+interface SearchHit {
+  source_resource_type: string;
+  source_resource_id: string;
+  title: string;
+  date?: string;
+  snippet: string;
+}
+
+/**
+ * One search, as the patient, against their own instance.
+ *
+ * The refusals are worth as much as the results here: an agent token that has been revoked, expired
+ * or minted without `Record search` is the normal way this stops working, and a model that is told
+ * which of those happened can tell the patient what to do about it.
+ */
+async function searchRecords(query: string, limit: number): Promise<Record<string, unknown>> {
+  const url = `${BASE}/api/secure/resources/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { authorization: `Bearer ${TOKEN}`, accept: 'application/json' } });
+  } catch (err) {
+    return toolResult(`Could not reach YourPHR at ${BASE}: ${(err as Error).message}`, true);
+  }
+
+  if (res.status === 401) {
+    return toolResult(
+      'YourPHR refused the agent token. It has been revoked, or it has expired — agent tokens last at ' +
+        'most 24 hours. Mint a fresh one from Account Profile and update this client.',
+      true,
+    );
+  }
+  if (res.status === 403) {
+    return toolResult(
+      'This agent token was not given access to record search. Mint one from Account Profile with the ' +
+        '"Record search" scope selected.',
+      true,
+    );
+  }
+  if (!res.ok) {
+    return toolResult(`YourPHR answered ${res.status} ${res.statusText}.`, true);
+  }
+
+  const body = (await res.json()) as { data?: SearchHit[] };
+  const hits = body.data ?? [];
+  if (hits.length === 0) return toolResult(`No records matched "${query}".`);
+
+  // Rendered rather than raw JSON: the reference is what a follow-up question needs, the title and
+  // date are what a person recognises, and the snippet is the evidence for the match.
+  const lines = hits.map((h) => {
+    const when = h.date ? ` (${h.date})` : '';
+    const snippet = h.snippet ? ` — ${h.snippet.replace(/\s+/g, ' ').trim()}` : '';
+    return `- ${h.source_resource_type}/${h.source_resource_id}: ${h.title}${when}${snippet}`;
+  });
+  return toolResult(`${hits.length} record${hits.length === 1 ? '' : 's'} matching "${query}":\n${lines.join('\n')}`);
+}
+
+async function handle(msg: Rpc): Promise<void> {
+  const { id, method, params } = msg;
+
+  // A notification has no id and takes no reply — `notifications/initialized` is the common one.
+  const isNotification = id === undefined;
+
+  switch (method) {
+    case 'initialize': {
+      const asked = String((params as { protocolVersion?: string } | undefined)?.protocolVersion ?? '');
+      reply(id, {
+        protocolVersion: SUPPORTED_PROTOCOLS.includes(asked) ? asked : FALLBACK_PROTOCOL,
+        capabilities: { tools: {} },
+        serverInfo: { name: 'yourphr', version: '1.0.0' },
+        instructions:
+          'These are one patient\'s own health records, read live from their YourPHR instance. Every ' +
+          'read is recorded in their access log under this client\'s name. Nothing here can be changed.',
+      });
+      return;
+    }
+
+    case 'notifications/initialized':
+      return;
+
+    case 'ping':
+      reply(id, {});
+      return;
+
+    case 'tools/list':
+      reply(id, { tools: [SEARCH_RECORDS] });
+      return;
+
+    case 'tools/call': {
+      const call = params as { name?: string; arguments?: Record<string, unknown> } | undefined;
+      if (call?.name !== SEARCH_RECORDS.name) {
+        fail(id, -32602, `unknown tool: ${String(call?.name ?? '')}`);
+        return;
+      }
+      const args = call.arguments ?? {};
+      const query = typeof args['query'] === 'string' ? args['query'].trim() : '';
+      if (query.length < 2) {
+        reply(id, toolResult('Give at least two characters to search for.', true));
+        return;
+      }
+      const asked = Number(args['limit'] ?? 20);
+      const limit = Number.isInteger(asked) ? Math.min(Math.max(asked, 1), 100) : 20;
+      reply(id, await searchRecords(query, limit));
+      return;
+    }
+
+    default:
+      if (!isNotification) fail(id, -32601, `method not found: ${String(method ?? '')}`);
+  }
+}
+
+function main(): void {
+  if (BASE === '' || TOKEN === '') {
+    note('set YOURPHR_URL and YOURPHR_AGENT_TOKEN. Mint a token at Account Profile → Agent tokens,');
+    note('with the "Record search" scope. See docs/planning/agent-access-policy.md.');
+    process.exit(1);
+  }
+
+  // Newline-delimited JSON, which is MCP's stdio framing (not LSP's Content-Length headers).
+  const lines = createInterface({ input: process.stdin });
+
+  // A tool call is a round trip to the server, so requests are in flight when stdin closes —
+  // which is the normal end of a piped session, not only a shutdown. Exiting on `close` alone
+  // dropped every answer that had not come back yet: the handshake replied and the searches
+  // vanished. Drain instead, so the last question asked is still answered.
+  let pending = 0;
+  let inputClosed = false;
+  const exitWhenDrained = (): void => { if (inputClosed && pending === 0) process.exit(0); };
+
+  lines.on('line', (line) => {
+    const text = line.trim();
+    if (text === '') return;
+    let msg: Rpc;
+    try {
+      msg = JSON.parse(text) as Rpc;
+    } catch {
+      fail(null, -32700, 'parse error');
+      return;
+    }
+    pending += 1;
+    void handle(msg)
+      .catch((err) => {
+        // Never the record, and never a stack: a tool failure is a sentence the model can pass on.
+        note(`request failed: ${(err as Error).message}`);
+        if (msg.id !== undefined) fail(msg.id, -32603, 'internal error');
+      })
+      .finally(() => { pending -= 1; exitWhenDrained(); });
+  });
+  lines.on('close', () => { inputClosed = true; exitWhenDrained(); });
+  note(`ready — ${BASE}`);
+}
+
+main();
