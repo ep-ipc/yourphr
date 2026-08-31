@@ -1,5 +1,6 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
 import {of, throwError} from 'rxjs';
+import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {buildTimeTicks, HealthComponent, RANGE_MS, sleepAsleepTotal, timeAxisBounds, toDayPoints, toTimePoints, utcDayMs} from './health.component';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {HealthMetricSummary} from '../../models/fasten/health-sample';
@@ -40,11 +41,12 @@ describe('HealthComponent', () => {
 
   beforeEach(async () => {
     localStorage.removeItem('yourphr.health.weightUnit');
-    mockApi = jasmine.createSpyObj('FastenApiService', ['getHealthMetrics', 'getHealthSeries', 'listHealthSamples']);
+    mockApi = jasmine.createSpyObj('FastenApiService', ['getHealthMetrics', 'getHealthSeries', 'listHealthSamples', 'getResources']);
     mockApi.getHealthMetrics.and.returnValue(of({
       last_synced_at: '2026-08-24T12:10:00Z',
       metrics: [hr, sys, dia],
     }));
+    mockApi.getResources.and.returnValue(of([]));
     mockApi.getHealthSeries.and.returnValue(of({
       metric_type: 'heart_rate',
       unit: 'count/min',
@@ -96,10 +98,45 @@ describe('HealthComponent', () => {
     expect(el.textContent).toContain('118/76 mmHg');
   });
 
-  it('leaves Prepare visit summary disabled', () => {
-    const button = (fixture.nativeElement as HTMLElement).querySelector('button[disabled]') as HTMLButtonElement;
+  it('enables Prepare visit summary when metrics exist', () => {
+    const button = prepareButton(fixture);
     expect(button).toBeTruthy();
-    expect(button.textContent).toContain('Prepare visit summary');
+    expect(button.disabled).toBeFalse();
+  });
+
+  it('disables Prepare visit summary when the catalog is empty', () => {
+    mockApi.getHealthMetrics.and.returnValue(of({metrics: []}));
+    fixture = TestBed.createComponent(HealthComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    expect(component.entries.length).toBe(0);
+    expect(prepareButton(fixture).disabled).toBeTrue();
+  });
+
+  it('opens the visit summary with all metrics checked and a 30-day range', () => {
+    const modal = TestBed.inject(NgbModal);
+    spyOn(modal, 'open');
+    component.openVisitSummary();
+    expect(modal.open).toHaveBeenCalled();
+    expect(component.summaryRange).toBe('30d');
+    expect(component.summaryChecks).toEqual({heart_rate: true, blood_pressure: true});
+  });
+
+  it('downloads a visit summary for the selected metrics', () => {
+    spyOn(URL, 'createObjectURL').and.returnValue('blob:test');
+    spyOn(URL, 'revokeObjectURL');
+    const clickSpy = spyOn(HTMLAnchorElement.prototype, 'click');
+    mockApi.getHealthSeries.calls.reset();
+    component.summaryChecks = {heart_rate: true, blood_pressure: false};
+    component.summaryRange = '30d';
+    component.confirmVisitSummary();
+    expect(mockApi.getResources).toHaveBeenCalledWith('Patient');
+    expect(mockApi.getHealthSeries).toHaveBeenCalled();
+    const types = mockApi.getHealthSeries.calls.allArgs().map((args) => args[0]?.metricTypes);
+    expect(types.some((t) => t?.includes('heart_rate'))).toBeTrue();
+    expect(types.some((t) => t?.includes('blood_pressure_systolic'))).toBeFalse();
+    expect(clickSpy).toHaveBeenCalled();
+    expect(component.summaryBuilding).toBeFalse();
   });
 
   it('loads the table for the same window on request', () => {
@@ -118,6 +155,7 @@ describe('HealthComponent', () => {
     fixture.detectChanges();
     expect(component.entries.length).toBe(0);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('No Apple Health data yet');
+    expect(prepareButton(fixture).disabled).toBeTrue();
   });
 
   it('shows an error when the catalog cannot be loaded', () => {
@@ -371,3 +409,8 @@ describe('health chart time helpers', () => {
     }])).toBeCloseTo(7.5, 5);
   });
 });
+
+function prepareButton(fixture: ComponentFixture<HealthComponent>): HTMLButtonElement {
+  const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')) as HTMLButtonElement[];
+  return buttons.find((button) => (button.textContent || '').includes('Prepare visit summary'));
+}

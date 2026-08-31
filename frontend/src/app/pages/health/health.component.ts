@@ -1,12 +1,36 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, TemplateRef, ViewChild} from '@angular/core';
 import {CommonModule} from '@angular/common';
-import {forkJoin, of} from 'rxjs';
-import {catchError} from 'rxjs/operators';
+import {FormsModule} from '@angular/forms';
+import {forkJoin, Observable, of} from 'rxjs';
+import {catchError, map} from 'rxjs/operators';
 import {ChartConfiguration, ChartData} from 'chart.js';
 import {BaseChartDirective} from 'ng2-charts';
+import {NgbModal, NgbModalRef, NgbModule} from '@ng-bootstrap/ng-bootstrap';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {HealthSample, HealthSeries, HealthSeriesPoint} from '../../models/fasten/health-sample';
+import {ResourceFhir} from '../../models/fasten/resource_fhir';
+import {PatientModel} from '../../../lib/models/resources/patient-model';
 import {LoadingSpinnerComponent} from '../../components/loading-spinner/loading-spinner.component';
+import {
+  buildPrintChartConfig,
+  buildVisitSummaryHtml,
+  defaultSummarySelection,
+  emptySeries,
+  errorSection,
+  hasSummarySelection,
+  PrintChartConfig,
+  renderChartPng,
+  seriesQueryFor,
+  SUMMARY_RANGE_DEFAULT,
+  tableSectionFromEntry,
+  triggerHtmlDownload,
+  VisitSummaryPatient,
+  VisitSummarySection,
+  VisitSummaryWindow,
+  visitSummaryFilename,
+  visitSummaryWindow,
+  convertSeriesStats,
+} from './health-visit-summary';
 import {
   asPercent,
   CatalogEntry,
@@ -61,7 +85,7 @@ export interface TableRow {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, BaseChartDirective, LoadingSpinnerComponent],
+  imports: [CommonModule, FormsModule, NgbModule, BaseChartDirective, LoadingSpinnerComponent],
   selector: 'app-health',
   templateUrl: './health.component.html',
   styleUrls: ['./health.component.scss'],
@@ -109,7 +133,14 @@ export class HealthComponent implements OnInit {
   private rawSeries: HealthSeries | null = null;
   private rawSamples: HealthSample[] = [];
 
-  constructor(private fastenApi: FastenApiService) {}
+  @ViewChild('visitSummaryDialog') visitSummaryDialog: TemplateRef<any>;
+  summaryRange: RangePreset = SUMMARY_RANGE_DEFAULT;
+  summaryChecks: Record<string, boolean> = {};
+  summaryBuilding = false;
+  summaryError = '';
+  private summaryModal: NgbModalRef | null = null;
+
+  constructor(private fastenApi: FastenApiService, private modalService: NgbModal) {}
 
   ngOnInit(): void {
     this.weightUnit = parseStoredWeightUnit(safeLocalStorageGet(WEIGHT_UNIT_STORAGE_KEY));
@@ -258,6 +289,129 @@ export class HealthComponent implements OnInit {
 
   get showWeightUnits(): boolean {
     return this.selected?.id === 'body_mass';
+  }
+
+  get summaryHasSelection(): boolean {
+    return hasSummarySelection(this.summaryChecks);
+  }
+
+  openVisitSummary(): void {
+    if (!this.entries.length) return;
+    this.summaryChecks = defaultSummarySelection(this.entries);
+    this.summaryRange = SUMMARY_RANGE_DEFAULT;
+    this.summaryBuilding = false;
+    this.summaryError = '';
+    this.summaryModal = this.modalService.open(this.visitSummaryDialog, {ariaLabelledBy: 'visit-summary-title'});
+  }
+
+  confirmVisitSummary(): void {
+    if (!this.summaryHasSelection || this.summaryBuilding) return;
+    this.summaryBuilding = true;
+    this.summaryError = '';
+    const now = new Date();
+    const window = visitSummaryWindow(this.summaryRange, now);
+    const selected = this.entries.filter((entry) => this.summaryChecks[entry.id]);
+    forkJoin({
+      patient: this.fastenApi.getResources('Patient').pipe(catchError(() => of([] as ResourceFhir[]))),
+      sections: forkJoin(selected.map((entry) => this.loadVisitSection(entry, window))),
+    }).subscribe({
+      next: ({patient, sections}) => {
+        const html = buildVisitSummaryHtml({
+          generatedAt: now,
+          windowLabel: window.label,
+          lastSyncedAt: this.lastSyncedAt,
+          patient: patientFromResources(patient),
+          sections,
+        });
+        triggerHtmlDownload(html, visitSummaryFilename(now));
+        this.summaryBuilding = false;
+        this.summaryModal?.close();
+        this.summaryModal = null;
+      },
+      error: () => {
+        this.summaryBuilding = false;
+        this.summaryError = 'The summary could not be built. Please try again.';
+      },
+    });
+  }
+
+  private loadVisitSection(entry: CatalogEntry, window: VisitSummaryWindow): Observable<VisitSummarySection> {
+    if (entry.def.viz === 'table') {
+      return of(tableSectionFromEntry(entry));
+    }
+    const bounds: {startAfter?: string, startBefore?: string} = {};
+    if (window.startAfter) bounds.startAfter = window.startAfter;
+    if (window.startBefore) bounds.startBefore = window.startBefore;
+    const mode = seriesQueryFor(entry).mode;
+    if (entry.def.viz === 'dual-line') {
+      return forkJoin({
+        sys: this.fastenApi.getHealthSeries({metricTypes: ['blood_pressure_systolic'], mode, ...bounds}).pipe(
+          catchError(() => of(null)),
+        ),
+        dia: this.fastenApi.getHealthSeries({metricTypes: ['blood_pressure_diastolic'], mode, ...bounds}).pipe(
+          catchError(() => of(null)),
+        ),
+      }).pipe(
+        map(({sys, dia}) => {
+          if (!sys && !dia) return errorSection(entry);
+          const dual = {sys: sys || emptySeries(), dia: dia || emptySeries()};
+          const config = buildPrintChartConfig(
+            entry.def, dual.sys, this.weightUnit, this.summaryRange, window.start, window.end, dual,
+          );
+          return this.sectionFromChart(
+            entry, config, (dual.sys.total || 0) + (dual.dia.total || 0),
+            !!(dual.sys.downsampled || dual.dia.downsampled),
+            dual.sys.stats || dual.dia.stats || null,
+          );
+        }),
+      );
+    }
+    const query = seriesQueryFor(entry);
+    return this.fastenApi.getHealthSeries({
+      metricTypes: query.metricTypes,
+      hkType: query.hkType,
+      mode: query.mode,
+      ...bounds,
+    }).pipe(
+      map((series) => {
+        const config = buildPrintChartConfig(
+          entry.def, series, this.weightUnit, this.summaryRange, window.start, window.end,
+        );
+        return this.sectionFromChart(entry, config, series.total || 0, !!series.downsampled, series.stats);
+      }),
+      catchError(() => of(errorSection(entry))),
+    );
+  }
+
+  private sectionFromChart(
+    entry: CatalogEntry,
+    config: PrintChartConfig,
+    total: number,
+    downsampled: boolean,
+    stats: HealthSeries['stats'],
+  ): VisitSummarySection {
+    if (!config.hasData) {
+      return {
+        id: entry.id,
+        label: entry.def.label,
+        latestLabel: entry.latestLabel,
+        unit: displayUnit(entry.def, undefined, this.weightUnit),
+        stats: null,
+        sampleCount: 0,
+        downsampled: false,
+        empty: true,
+      };
+    }
+    return {
+      id: entry.id,
+      label: entry.def.label,
+      latestLabel: entry.latestLabel,
+      unit: displayUnit(entry.def, undefined, this.weightUnit),
+      stats: convertSeriesStats(stats, entry.def, this.weightUnit),
+      sampleCount: total,
+      downsampled,
+      chartPng: renderChartPng(config),
+    };
   }
 
   formatChartStat(value: number | undefined | null): string {
@@ -433,8 +587,18 @@ export class HealthComponent implements OnInit {
   }
 }
 
-function emptySeries(): HealthSeries {
-  return {total: 0, downsampled: false, points: []};
+function patientFromResources(results: ResourceFhir[] | unknown): VisitSummaryPatient | undefined {
+  const list = Array.isArray(results) ? results : [];
+  const raw = list[0]?.resource_raw;
+  if (!raw) return undefined;
+  const model = new PatientModel(raw);
+  const name = (model.patient_name || '').trim();
+  const birthDate = (model.patient_birthdate || '').trim();
+  if (!name && !birthDate) return undefined;
+  return {
+    name: name || undefined,
+    birthDate: birthDate || undefined,
+  };
 }
 
 function safeLocalStorageGet(key: string): string | null {

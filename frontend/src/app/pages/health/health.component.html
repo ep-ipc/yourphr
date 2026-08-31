@@ -11,7 +11,10 @@
             <ng-container *ngIf="!lastSyncedAt && !loading"> · waiting for the companion app to sync</ng-container>
           </p>
         </div>
-        <button type="button" class="btn btn-outline-secondary" disabled title="Coming in a later iteration">
+        <button type="button" class="btn btn-outline-secondary"
+                [disabled]="entries.length === 0"
+                [title]="entries.length === 0 ? 'No Apple Health data to summarize' : 'Download a printable summary'"
+                (click)="openVisitSummary()">
           Prepare visit summary
         </button>
       </div>
@@ -139,3 +142,54 @@
     </div>
   </div>
 </div>
+
+<ng-template #visitSummaryDialog let-modal>
+  <div class="modal-header">
+    <h5 class="modal-title" id="visit-summary-title">Prepare visit summary</h5>
+    <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss()" [disabled]="summaryBuilding"></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group mg-b-15">
+      <label class="d-block">Time range</label>
+      <div class="btn-group" role="group" aria-label="Summary time range">
+        <button type="button" class="btn btn-sm" *ngFor="let preset of rangePresets"
+                [class.btn-az-primary]="summaryRange === preset.id"
+                [class.btn-outline-primary]="summaryRange !== preset.id"
+                [disabled]="summaryBuilding"
+                (click)="summaryRange = preset.id">{{ preset.label }}</button>
+      </div>
+    </div>
+
+    <div class="form-group mg-b-15">
+      <label class="d-block">Metrics to include</label>
+      <div class="form-check" *ngFor="let entry of entries">
+        <input class="form-check-input" type="checkbox"
+               [id]="'summary-metric-' + entry.id"
+               [name]="'summary-metric-' + entry.id"
+               [(ngModel)]="summaryChecks[entry.id]"
+               [disabled]="summaryBuilding">
+        <label class="form-check-label" [for]="'summary-metric-' + entry.id">
+          {{ entry.def.label }}
+          <span class="tx-gray-600" *ngIf="entry.latestLabel"> — {{ entry.latestLabel }}</span>
+        </label>
+      </div>
+    </div>
+
+    <p>This downloads a printable summary of the Apple Health metrics you select.</p>
+    <p class="mg-b-0">
+      <strong>The file is not protected.</strong> It contains your health information in readable form,
+      with no password and no expiry — anyone who can open the file, or the backup it ends up in, can
+      read it. Save it somewhere you would keep a paper copy of your records.
+    </p>
+    <div *ngIf="summaryError" class="alert alert-danger mg-t-15 mg-b-0">{{ summaryError }}</div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-secondary" (click)="modal.dismiss()" [disabled]="summaryBuilding">Cancel</button>
+    <button type="button" class="btn btn-az-primary"
+            (click)="confirmVisitSummary()"
+            [disabled]="!summaryHasSelection || summaryBuilding">
+      <span *ngIf="summaryBuilding" class="spinner-border spinner-border-sm mg-r-5"></span>
+      {{ summaryBuilding ? 'Preparing…' : 'Download summary' }}
+    </button>
+  </div>
+</ng-template>
