@@ -71,16 +71,42 @@ What is missing is not a different mechanism but a check that fails, per the twe
 
 ## Connecting a client
 
-The bridge is a plain stdio process; any MCP-capable client can launch it. For Claude Desktop, in its configuration file:
+Verified end to end against Cursor and a hand-driven client. Four steps, and the reason for each.
+
+### 1. Turn agent tokens on
+
+Off by default, so nothing below is reachable until an operator opts in:
+
+```bash
+YOURPHR_AUTH_AGENT_TOKEN_ENABLED=true
+```
+
+### 2. Mint a token
+
+__There is no minting screen yet.__ [yourphr#695](https://github.com/jwilleke/yourphr/issues/695) shipped the server side — `GET`/`POST /api/secure/account/agent-tokens`, which already serve `available_scopes` and the TTL policy for exactly such a screen — but the Angular half does not exist, so today a patient cannot do this without a terminal. That is a real gap for a feature aimed at patients rather than operators, and it is the natural next issue; the API is settled, so it is a screen over a finished contract.
+
+Until then, with a signed-in session token:
+
+```bash
+curl -s -X POST "$BASE/api/secure/account/agent-tokens" \
+  -H "authorization: Bearer $SESSION" -H 'content-type: application/json' \
+  -d '{"name":"Claude Desktop","scopes":["Record search"]}'
+```
+
+The `name` is what the access log will show, so it should say which client this is rather than which person — the log already knows the person. The cleartext token comes back __once__ and is never stored.
+
+### 3. Point a client at the bridge
+
+Claude Desktop reads `~/Library/Application Support/Claude/claude_desktop_config.json`; Cursor reads `~/.cursor/mcp.json`. The same block works in both:
 
 ```json
 {
   "mcpServers": {
     "yourphr": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/yourphr/scripts/mcp-server.ts"],
+      "command": "/path/to/yourphr/node_modules/.bin/tsx",
+      "args": ["/path/to/yourphr/scripts/mcp-server.ts"],
       "env": {
-        "YOURPHR_URL": "http://localhost:8080",
+        "YOURPHR_URL": "http://127.0.0.1:8080",
         "YOURPHR_AGENT_TOKEN": "yphr_at_…"
       }
     }
@@ -88,7 +114,15 @@ The bridge is a plain stdio process; any MCP-capable client can launch it. For C
 }
 ```
 
-Mint the token at Account Profile with the __Record search__ scope. It lasts at most 24 hours by design; when it expires the client stops working and says so, and the patient mints another. That friction is the feature — a credential that outlives the patient's attention is the thing yourphr#695 exists to prevent.
+__Absolute paths, and the local `tsx` binary rather than `npx`.__ A desktop client is launched by the window manager, not a shell, so it inherits neither the shell `PATH` nor a useful working directory: `npx tsx` there resolves nothing locally and tries to fetch the package over the network, which fails on exactly the offline instance this product is built for. Naming the binary in `node_modules/.bin` removes both problems.
+
+### 4. Ask a question — there is nothing to select
+
+The bridge offers a __tool__, and MCP tools are called by the model when a question warrants one. They deliberately do not appear in the attachment or resource picker, which lists MCP __resources__ and __prompts__; this server publishes neither, so that menu is correctly empty and the server is still working. The client's MCP settings are where to confirm it: "yourphr — 1 tool enabled".
+
+Then simply ask — *"search my records for metformin"*, *"when was my last tetanus shot?"* — and check the access log afterwards, where the read appears under the token's name.
+
+A token lasts at most 24 hours by design; when it expires the client stops working and says so, and the patient mints another. That friction is the feature — a credential that outlives the patient's attention is the thing yourphr#695 exists to prevent.
 
 ## What this policy does not cover
 
