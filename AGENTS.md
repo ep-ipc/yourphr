@@ -62,7 +62,7 @@ linted instead.
 
 ## TypeScript stack: DEFAULT TO ngdpbase
 
-__Before any work on the TypeScript stack, read [`docs/planning/architecture-principles-typescript.md`](docs/planning/architecture-principles-typescript.md).__ It is the guiding document, and its first section is the rule that matters most:
+__Before any work on the TypeScript stack, read [`architecture-principles-typescript.md`](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/architecture-principles-typescript.md).__ It lives in __ngdpbase__, not here — it is the baseline `src/framework/` is extracted from, so it sits beside the code it describes rather than in one consumer. It is the guiding document, and its first section is the rule that matters most:
 
 - __Default to `/Volumes/hd2A/workspaces/github/ngdpbase`__ — the code, not its docs. It is checked out locally. When this stack needs a mechanism ngdpbase already has, take ngdpbase's shape as it is built, even where something else looks tidier.
 - __Improvements are FILED, not built in flight.__ A better idea found mid-implementation becomes an issue against the adopted shape, never a structure invented on the spot.
@@ -161,8 +161,8 @@ cd frontend && ng test --include='**/badge.component.spec.ts'
 ### Server architecture (`src/`)
 
 Built on the ngdpbase model ([#608](https://github.com/jwilleke/yourphr/issues/608)) — read
-[`docs/planning/architecture-principles-typescript.md`](docs/planning/architecture-principles-typescript.md)
-before changing any of it.
+[`architecture-principles-typescript.md`](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/architecture-principles-typescript.md)
+(in ngdpbase) before changing any of it.
 
 - __Entry point__: `src/main.ts` — a subcommand layer ([#654](https://github.com/jwilleke/yourphr/issues/654)) over `src/cli/`: `start` (the default), `migrate`, `reset-password`, `version`, `help`. An unknown command exits non-zero and never starts a server.
 - __Composition root__: `src/app.ts` — `openStores()` and `assembleApp()` build the engine, its managers in dependency order, and the providers configuration selects.

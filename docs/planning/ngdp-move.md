@@ -410,7 +410,7 @@ Recorded because each was asserted confidently before being checked, and the pat
 | Two theme systems; unification is its own project | Both sides are Bootstrap 5.3 with `--bs-*` custom properties |
 | ngdpbase is not on Bootstrap (checked package.json only) | Bootstrap 5.3 by CDN, and the theme system is built on its variables |
 | The twelve overlapping issues all transfer | About five transfer cleanly; the rest depend on the front-end decision |
-| `architecture-principles-typescript.md` is missing | It moved to ngdpbase in `653a2441`; six inbound references were never repointed |
+| `architecture-principles-typescript.md` is missing | It moved to ngdpbase in `653a2441`; nine inbound references across eight files were never repointed — two of them told every agent to read it first |
 | `repoForUser(username)` is what compartmentalises records | Gone from `src/` since [#608](https://github.com/jwilleke/yourphr/issues/608) — it survives only in two test harnesses. Managers narrow internally on `ctx.username`, so isolation survives a host swap untouched |
 
 ## Open, not decided

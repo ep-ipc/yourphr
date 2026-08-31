@@ -1,7 +1,7 @@
 /**
  * The outbound HTTP capability — the only way anything in this codebase reaches the network.
  *
- * Follows `docs/planning/architecture-principles-typescript.md` in the product repo. Two rules from
+ * Follows `docs/planning/architecture-principles-typescript.md` in ngdpbase. Two rules from
  * it shape this file:
  *
  *   "All code that touches a resource goes through that resource's manager. There is no second

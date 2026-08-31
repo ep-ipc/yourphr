@@ -2,7 +2,7 @@
 #
 # Only src/http may reach the network directly.
 #
-# From docs/planning/architecture-principles-typescript.md in the product repo: an invariant enforced
+# From ngdpbase's docs/planning/architecture-principles-typescript.md: an invariant enforced
 # only by documentation decays at the first deadline, and its decay is invisible — the code still
 # works and the tests still pass. The SSRF guard is worth exactly as much as this check.
 #

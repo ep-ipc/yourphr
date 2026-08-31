@@ -2,7 +2,7 @@
 #
 # The store boundary (yourphr#608, #609): a resource has exactly one door.
 #
-# From docs/planning/architecture-principles-typescript.md: "only managers/ may import the store or
+# From ngdpbase's docs/planning/architecture-principles-typescript.md: "only managers/ may import the store or
 # the driver, with everything else importing managers. Then the check earns its place the way every
 # other harness here has: delete the rule, prove CI goes red." An invariant enforced only by a
 # document decays silently; this one goes red.

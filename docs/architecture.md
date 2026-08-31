@@ -8,7 +8,7 @@ The single, leading map of how YourPHR fits together. Start here, then follow th
 
 A __self-hosted personal/family Personal Health Record (PHR) viewer__ — a standalone, community-maintained continuation of [Fasten OnPrem](https://github.com/fastenhealth/fasten-onprem) (GPL v3, attribution retained; see [`../README.md`](../README.md)). A __TypeScript backend__ (`src/`, Node 24, SQLite) serves a JSON API and the compiled __Angular 20__ single-page app, both built from this repository into one image. It imports __FHIR R4__ bundles — today by manual upload; live provider sync through the relay is a roadmap item (see [Roadmap](./Roadmap.md)).
 
-> __The Go backend is gone.__ It served the product to v2.10.3 and was deleted on 2026-08-27 ([#677](https://github.com/jwilleke/yourphr/issues/677)); its history lives in the `v1.0.0`…`v2.10.3` tags. The only Go left is the OAuth relay. The rules the current stack is built on are in [`planning/architecture-principles-typescript.md`](./planning/architecture-principles-typescript.md) — read that before changing any of it.
+> __The Go backend is gone.__ It served the product to v2.10.3 and was deleted on 2026-08-27 ([#677](https://github.com/jwilleke/yourphr/issues/677)); its history lives in the `v1.0.0`…`v2.10.3` tags. The only Go left is the OAuth relay. The rules the current stack is built on are in [`architecture-principles-typescript.md`](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/architecture-principles-typescript.md) (in ngdpbase) — read that before changing any of it.
 
 It is a __display-only client__, not an EHR and not a FHIR server: it requests/imports records and presents them legibly. That framing drives the conformance posture (see [US Core support](./us-core/README.md)).
 
