@@ -10,6 +10,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 - [#700](https://github.com/jwilleke/yourphr/issues/700) — [SECURITY] The shipped app still calls Fasten's Lighthouse — remove every runtime dependency on Fasten infrastructure
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] frontend build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
+- [#708](https://github.com/jwilleke/yourphr/issues/708) — [ARCH] relay/main.go is the last Go module — port it to TypeScript or record that it stays Go
 - [#696](https://github.com/jwilleke/yourphr/issues/696) — [BUG] "Add record" opens a form that cannot save — manual entry 404s
 - [#695](https://github.com/jwilleke/yourphr/issues/695) — [BUG] Settings offers agent tokens the server does not implement — and no scoping, audit or expiry model
 - [#690](https://github.com/jwilleke/yourphr/issues/690) — [BUG] No E2E coverage of any interaction path — only sign-in-and-look
@@ -41,6 +42,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#707](https://github.com/jwilleke/yourphr/issues/707) — [security] image-size — both DoS advisories have no patched release (blocked upstream)
 - [#698](https://github.com/jwilleke/yourphr/issues/698) — [FEATURE] Sessions manager: do not back up credentials, and three defects inherited from ngdpbase's token manager
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
+- [#709](https://github.com/jwilleke/yourphr/issues/709) — [FEATURE] Per-user settings have no store — Go's user_settings table got no successor, so preferences live in one browser
 - [#705](https://github.com/jwilleke/yourphr/issues/705) — [FEATURE] Reconnect an expired source through the catalog — re-authorize without disconnect + re-import
 - [#704](https://github.com/jwilleke/yourphr/issues/704) — [CHORE] Frontend tests: off the deprecated Karma builder, then Karma/Jasmine to Vitest
 - [#702](https://github.com/jwilleke/yourphr/issues/702) — [CHORE] Replace frontend baseUrl with paths mappings — TypeScript 7 removes it
@@ -76,7 +78,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#369](https://github.com/jwilleke/yourphr/issues/369) — [FEATURE] /medical-history — server-side grouping endpoint (counts + paged detail) for scale
 - [#364](https://github.com/jwilleke/yourphr/issues/364) — [FEATURE] Admin Database card — polish (free space, schema version, totals, vacuum)
 - [#360](https://github.com/jwilleke/yourphr/issues/360) — [FEATURE] Attach `classified` on resource-graph / list rows (per-row synthesized badges)
-- [#354](https://github.com/jwilleke/yourphr/issues/354) — [FEATURE] Integrate assets from HL7 FHIR GitHub organization (fhir-test-cases, fhir-codegen, etc.)
 - [#353](https://github.com/jwilleke/yourphr/issues/353) — [FEATURE] Patient private notes on records (persist + indicator)
 - [#352](https://github.com/jwilleke/yourphr/issues/352) — [FEATURE] Patient-friendly Body Diagram / Body Map View
 - [#348](https://github.com/jwilleke/yourphr/issues/348) — [FEATURE] Binary import: skip already-stored documents on re-sync (cross-sync existence check)
@@ -99,17 +100,17 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#251](https://github.com/jwilleke/yourphr/issues/251) — [FEATURE] Explore Apple Health's supported-institution list as a provider-catalog / FHIR-endpoint source
 - [#244](https://github.com/jwilleke/yourphr/issues/244) — [EPIC] Per-profile dashboard widgets (US Core display end-state)
 - [#53](https://github.com/jwilleke/yourphr/issues/53) — [SMART] Veradigm/FollowMyHealth registration + end-to-end integration
-- [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 - [#14](https://github.com/jwilleke/yourphr/issues/14) — [FEATURE] User Profile Update
 
 ## 🔵 In review
 
-*None.*
+- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
+- [#354](https://github.com/jwilleke/yourphr/issues/354) — [FEATURE] Integrate assets from HL7 FHIR GitHub organization (fhir-test-cases, fhir-codegen, etc.)
+- [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 
 ## ⏸ Deferred
 
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
-- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
