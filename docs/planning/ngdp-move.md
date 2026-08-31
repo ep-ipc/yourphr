@@ -329,11 +329,11 @@ So the working test is concrete: __would The Fairways or GeoHazardWatch want thi
 | Contribution | Why core | Size |
 |---|---|---|
 | SQLite / SQLCipher providers | ngdpbase has no SQLite, but the seams are cut — `DatabaseAuditProvider` is a scaffold and `database.type` is advertised in config | Large, into declared holes |
-| Outbound HTTP boundary and the SSRF guard | `ImportManager.ts:958` fetches a user-supplied URL unguarded. That is an SSRF in a wiki, not a PHR concern | Medium |
+| Outbound HTTP boundary and the SSRF guard | Three unguarded `fetch()` sites; the most reachable is gated on the __page edit ACL__, so any author can make the server fetch any URL and keep the bytes. Filed as [ngdpbase#1133](https://github.com/jwilleke/ngdpbase/issues/1133) | Medium |
 | Retire `WikiEngine.setContext()` | The doc names it as one concurrent request from a cross-user leak | __Small__ — see below. Filed as [ngdpbase#1132](https://github.com/jwilleke/ngdpbase/issues/1132) |
-| The store-boundary lint | The doc calls it core and unwritten; YourPHR wrote it | Small |
+| The store-boundary lint | The doc calls it core and unwritten; YourPHR wrote it. Filed as [ngdpbase#1134](https://github.com/jwilleke/ngdpbase/issues/1134) | Small |
 | Typed manager registry; dependency-ordered boot; provider factory with required-vs-optional | Three of the doc's own five "mechanisms to tighten" | Large |
-| Agent-token lifecycle audit; the event registry and its parity test | `AgentTokenManager` is core; the registry is core mechanism | Small to medium |
+| ~~Agent-token lifecycle audit~~ | __Not an upstream gap.__ ngdpbase shipped it in its #1111, and its #1121 made critical events flush before the action with a coherent failure policy — `recordAuditEvent` refuses when a sink cannot promise durability and rethrows for critical events. The gap is __ours__: `AgentTokensManager` emits no audit at all | — |
 | A per-subject audit view | `searchAuditLogs(filters, options, caller)` is operator-facing only. *"Show a person what was read about them"* is GDPR Article 15 — any application holding personal data | Medium |
 | Cross-manager backup quiescing | The doc names it as engine-level work | Large |
 | Encryption and egress as binding attributes | The doc names it as a known gap | Medium |
@@ -375,6 +375,25 @@ Which inverts the usual framing. __YourPHR's contribution upstream is mostly sec
 features__: the two boundary lints, the guarded fetch, audit that refuses to boot, and no global
 context. They are what a PHR forced into existence and a wiki never would have, and every ngdpbase
 consumer inherits the benefit.
+
+### Filed upstream so far
+
+| Issue | What | Grade |
+|---|---|---|
+| [ngdpbase#1132](https://github.com/jwilleke/ngdpbase/issues/1132) | `WikiEngine.setContext()` — a process-global request-state slot with zero callers | P2, latent |
+| [ngdpbase#1133](https://github.com/jwilleke/ngdpbase/issues/1133) | SSRF — NCM image localization fetches any URL a page author writes, gated only by the page edit ACL | P1, __live__ |
+| [ngdpbase#1134](https://github.com/jwilleke/ngdpbase/issues/1134) | The store-boundary lint the architecture document records as missing, and the drift it would already catch | P2 |
+
+A fourth was drafted and __withdrawn before filing__. The claim was that ngdpbase ships contradictory
+audit durability rules — fire-and-forget in its #1111 against `token.mint` marked critical in
+its #1121. Reading `recordAuditEvent` shows no contradiction: it looks the event type up in the registry,
+__refuses__ when a critical event meets a sink that cannot promise durability, awaits
+`flushAuditQueue()` when it can, and rethrows on failure for critical events only. The fire-and-forget
+rule governs non-critical events. The policy is coherent, and #1121 is what made it so.
+
+The real gap that resembles it is __ours__: `AgentTokensManager` in this repo emits no audit event on
+mint, renew or revoke — the defect ngdpbase fixed in its #1111 and we have not adopted. It is one of
+the six held audit gaps.
 
 ### `WikiEngine.setContext()` is dead surface, not a refactor
 
