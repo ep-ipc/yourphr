@@ -296,6 +296,114 @@ Two defects worth filing upstream, found while reading:
 - __Bootstrap is pinned twice__, at 5.3.0 and 5.3.3 in different views, by CDN rather than as a
   dependency.
 
+## Core improvement or add-on? Sorting what YourPHR would contribute
+
+If the move happens, the same question arrives for every piece: does it improve ngdpbase for
+everyone, or does it belong to the PHR? Getting this wrong in either direction is expensive — put
+domain logic in core and every consumer carries it; put a mechanism in the add-on and the next
+derivative rebuilds it.
+
+### The line is already drawn
+
+The governing document's split table settles the principle: core owns *"engine and lifecycle, config
+system, manager and provider base contracts, auth, policy evaluator, audit, users/roles/sessions,
+backup and restore contract, share tokens, the permission registry __mechanism__"*; the derivative
+owns *"its resources and their managers, the permission registry __contents__, its scope resolver, its
+providers, its UI."*
+
+__Mechanism to core. Contents to the add-on.__
+
+### The project has already tested it, in both directions
+
+- __Wrongly core, moved out.__ `addons/demo` exists because demo pages went into core
+  `required-pages/` first, which shipped them everywhere: *"The Fairways and the temp build both carry
+  'Demo Welcome' on disk today, offered as __New__ in their required-pages sync screens. Demo content
+  belongs to the demo."*
+- __Rightly core, flowed down.__ `SimpleRateLimiter` is a core utility, and YourPHR ported it for
+  [#647](https://github.com/jwilleke/yourphr/issues/647).
+
+So the working test is concrete: __would The Fairways or GeoHazardWatch want this?__ If yes, it is core.
+
+### Core improvements
+
+| Contribution | Why core | Size |
+|---|---|---|
+| SQLite / SQLCipher providers | ngdpbase has no SQLite, but the seams are cut — `DatabaseAuditProvider` is a scaffold and `database.type` is advertised in config | Large, into declared holes |
+| Outbound HTTP boundary and the SSRF guard | `ImportManager.ts:958` fetches a user-supplied URL unguarded. That is an SSRF in a wiki, not a PHR concern | Medium |
+| Retire `WikiEngine.setContext()` | The doc names it as one concurrent request from a cross-user leak | __Small__ — see below. Filed as [ngdpbase#1132](https://github.com/jwilleke/ngdpbase/issues/1132) |
+| The store-boundary lint | The doc calls it core and unwritten; YourPHR wrote it | Small |
+| Typed manager registry; dependency-ordered boot; provider factory with required-vs-optional | Three of the doc's own five "mechanisms to tighten" | Large |
+| Agent-token lifecycle audit; the event registry and its parity test | `AgentTokenManager` is core; the registry is core mechanism | Small to medium |
+| A per-subject audit view | `searchAuditLogs(filters, options, caller)` is operator-facing only. *"Show a person what was read about them"* is GDPR Article 15 — any application holding personal data | Medium |
+| Cross-manager backup quiescing | The doc names it as engine-level work | Large |
+| Encryption and egress as binding attributes | The doc names it as a known gap | Medium |
+
+### Add-on
+
+The FHIR store and repository; the Records, Sources, Catalog and Glossary managers; classification,
+IPS composition, medication reconciliation and provenance; SMART, DCR and the relay wiring; the Go
+migration tooling; the Angular application. Plus two the governing document assigns explicitly: __the
+compartment model__ (*"the `PolicyEvaluator` shape transfers; its subject model does not"*) and __the
+nine access-log categories__, which are registry contents rather than mechanism.
+
+### Three worth arguing
+
+- __Demo mode.__ ngdpbase answered this for *content*. YourPHR's demo is different in kind: a shared
+  account whose password is __verified, not trusted__, writes refused at the manager door, and the
+  password regenerated when the configured value and the stored hash drift apart. That is mechanism.
+  Split it — core takes *"a shared credential whose writes are refused at the door"*, the add-on keeps
+  which writes and the content.
+- __Rate limiting.__ Already core and already flowed down. But `SimpleRateLimiter`'s own header says
+  *"not suitable for distributed deployments (each pod has its own counter)"*, and YourPHR runs on
+  Kubernetes. The upstream improvement is a shared-store limiter, not a new mechanism.
+- __Agent-token scopes as auditable categories.__ YourPHR's own insight — *a surface that cannot be
+  logged cannot be scoped*. The __derivation__ is core; the category map is add-on.
+
+### Proportion, by line
+
+| Destination | Lines | Share |
+|---|---|---|
+| Core improvements — `framework` 3,649, `http` 513, `log`, `config`, `events` | ~4,650 | 34% |
+| Add-on domain — `app` 3,315, `migrate` 820, and the FHIR/classification/IPS/SMART cluster | ~7,050 | 51% |
+| Glue that dissolves — `server.ts` 1,295, `app.ts` 454, `cli` 330 | ~2,080 | 15% |
+
+One caveat on the first row: most of `framework/` is __not missing__ from ngdpbase. It is a parallel
+implementation with five deliberate tightenings. What is genuinely absent from core is shorter and
+higher-value — the SQLCipher provider, the HTTP boundary, and the hardening list.
+
+Which inverts the usual framing. __YourPHR's contribution upstream is mostly security invariants, not
+features__: the two boundary lints, the guarded fetch, audit that refuses to boot, and no global
+context. They are what a PHR forced into existence and a wiki never would have, and every ngdpbase
+consumer inherits the benefit.
+
+### `WikiEngine.setContext()` is dead surface, not a refactor
+
+Sized by grep rather than by assumption, and the answer is better than the doc implies. `WikiEngine`
+declares `public context: WikiContext | null` with `setContext()` and `getContext()` around it — and
+__nothing calls them.__ Searched `src/`, `tests/`, `views/` and every bundled add-on:
+
+- The only `setContext(` matches in `src/` are the definition itself, a doc-comment *example* on the
+  line above it, and `WikiDocument.setContext()` — a different method on a different class.
+- The only `getContext()` matches are its own definition and doc example, plus
+  `WikiContext.getContext()`, which returns a *string* naming the context type (`EDIT`, `VIEW`) and is
+  unrelated.
+- `engine.context` is never read as a field anywhere.
+
+Managers already take context as a parameter — `options.context`, `wikiContext` — which is the shape
+the governing document asks for. The migration happened; the slot was simply never removed.
+
+So the risk is __latent, not active__: today nothing leaks, but a public mutable `context` on a
+process-wide singleton is a loaded gun for the next person who finds it and thinks it is the intended
+way to pass a caller. In a wiki that surfaces someone else's draft. In a PHI store it is a
+cross-patient disclosure.
+
+Retiring it is deleting one field, two methods and a constructor parameter — a small, high-value
+upstream contribution that should land __before__ a PHI add-on shares that process, not after.
+
+__Filed upstream as [ngdpbase#1132](https://github.com/jwilleke/ngdpbase/issues/1132)__ (2026-08-31),
+as the first of the contributions in this section. It stands on its own merits and needs none of the
+platform decision.
+
 ## Where the governing document already stands
 
 Relevant because a divergence is only legitimate if that document names it:
