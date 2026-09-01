@@ -23,6 +23,9 @@
         <li class="nav-item" ngbDropdown [ngClass]="{ 'active': $safeNavigationMigration(labs?.isActive) }">
           <a routerLink="/labs" routerLinkActive="active" #labs="routerLinkActive" class="nav-link"><fa-icon [icon]="['fas', 'heart-pulse']"></fa-icon>&nbsp; Labs</a>
         </li>
+        <li class="nav-item" ngbDropdown [ngClass]="{ 'active': $safeNavigationMigration(health?.isActive) }">
+          <a routerLink="/health" routerLinkActive="active" #health="routerLinkActive" class="nav-link"><fa-icon [icon]="['fas', 'chart-line']"></fa-icon>&nbsp; Health</a>
+        </li>
         <li class="nav-item" ngbDropdown [ngClass]="{ 'active': $safeNavigationMigration(explore?.isActive) }">
           <a routerLink="/explore" routerLinkActive="active" #explore="routerLinkActive" class="nav-link"><fa-icon [icon]="['fas', 'folder-tree']"></fa-icon>&nbsp; Explore</a>
         </li>

@@ -32,6 +32,7 @@ import {RecordsManager} from './app/managers/RecordsManager.js';
 import {SimpleRateLimiter} from './http/rate-limit.js';
 import {clientIp} from './framework/managers/SessionsManager.js';
 import {SqliteRecordsProvider} from './app/providers/SqliteRecordsProvider.js';
+import {serverDiscovery} from './app/discovery.js';
 
 /**
  * The session cookie. HttpOnly throughout: the Angular app (yourphr#118 Phase 2b) never sees a
@@ -227,19 +228,32 @@ function serveStatic(webDir: string, pathname: string, res: ServerResponse): voi
 
 /** Reads a small JSON body; refuses anything over 64KB — sign-in bodies have no reason to be big. */
 function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | undefined> {
+  return readJsonBodyLimited(req, 64 * 1024).then((body) => (body === 'too-large' ? undefined : body));
+}
+
+/** HealthKit ingest is a batch of samples, not a sign-in form — Go allowed 8 MiB. */
+const HEALTH_INGEST_MAX_BYTES = 8 * 1024 * 1024;
+
+function readJsonBodyLimited(
+  req: IncomingMessage,
+  maxBytes: number,
+): Promise<Record<string, unknown> | 'too-large' | undefined> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let overflow = false;
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size > 64 * 1024) {
+      if (size > maxBytes) {
+        overflow = true;
         req.destroy();
-        resolve(undefined);
+        resolve('too-large');
         return;
       }
       chunks.push(chunk);
     });
     req.on('end', () => {
+      if (overflow) return;
       try {
         resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>);
       } catch {
@@ -248,6 +262,12 @@ function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | u
     });
     req.on('error', () => resolve(undefined));
   });
+}
+
+function csvQuery(url: URL, name: string): string[] {
+  const raw = url.searchParams.get(name);
+  if (!raw) return [];
+  return raw.split(',').map((s) => s.trim()).filter((s) => s !== '');
 }
 
 export function createYourPhrServer(options: ServerOptions) {
@@ -295,6 +315,9 @@ export function createYourPhrServer(options: ServerOptions) {
     }
     return authLimiter;
   };
+
+  /** HealthKit ingest: 60 batches per username per minute — the Go companion's budget. */
+  const healthIngestLimiter = new SimpleRateLimiter({max: 60, windowMs: 60_000});
 
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -459,20 +482,31 @@ export function createYourPhrServer(options: ServerOptions) {
         const token = bearer !== '' ? bearer : readCookie(req.headers['cookie'], SESSION_COOKIE);
         const session = token ? await engine.managers.sessions.verify(token) : ({ok: false} as const);
         if (!session.ok) {
-          // Not a session — it may be an AGENT TOKEN (yourphr#695), which is an alternative to a
-          // session rather than a replacement for one. Tried second and never for a cookie: an
-          // agent presents a Bearer header, and accepting one from a cookie would make it usable
-          // by a browser page, which is exactly what a delegated read credential must not be.
-          const agent = bearer !== '' && engine.has('agentTokens')
-            ? await engine.managers.agentTokens.verify(bearer)
+          // Not a session — it may be a COMPANION DEVICE TOKEN, which is a full user credential
+          // (writes allowed), then an AGENT TOKEN (yourphr#695), which is GET+scope only.
+          // Tried after the session and never for a cookie: a companion presents a Bearer header,
+          // and accepting one from a cookie would make it usable by a browser page.
+          const device = bearer !== '' && engine.has('deviceTokens')
+            ? await engine.managers.deviceTokens.verify(bearer)
             : undefined;
-          if (!agent) {
-            send(res, 401, {success: false, error: 'unauthorized'});
-            return;
+          if (device) {
+            sessionUser = device.owner;
+            const role = engine.has('users')
+              ? ((await engine.managers.users.roleOf(device.owner)) ?? 'user')
+              : 'user';
+            ctx = ApiContext.device(device.owner, role, {id: device.id, name: device.name}, engine);
+          } else {
+            const agent = bearer !== '' && engine.has('agentTokens')
+              ? await engine.managers.agentTokens.verify(bearer)
+              : undefined;
+            if (!agent) {
+              send(res, 401, {success: false, error: 'unauthorized'});
+              return;
+            }
+            sessionUser = agent.owner;
+            ctx = ApiContext.agent(agent.owner, {id: agent.id, name: agent.name, scopes: agent.scopes}, engine);
+            agentRequest = true;
           }
-          sessionUser = agent.owner;
-          ctx = ApiContext.agent(agent.owner, {id: agent.id, name: agent.name, scopes: agent.scopes}, engine);
-          agentRequest = true;
         } else {
         if (session.renewed) {
           res.setHeader('X-Renewed-Token', session.renewed);
@@ -652,6 +686,9 @@ export function createYourPhrServer(options: ServerOptions) {
           // the account itself (consent goes with it). Order matters — each door is asked in turn.
           if (engine.has('sources')) await engine.managers.sources.removeAll(ctx);
           await engine.managers.records.removeAll(ctx);
+          if (engine.has('health')) await engine.managers.health.removeForUser(ctx);
+          if (engine.has('deviceTokens')) await engine.managers.deviceTokens.removeForUser(ctx);
+          if (engine.has('agentTokens')) await engine.managers.agentTokens.removeForUser(ctx);
           if (engine.has('audit')) await engine.managers.audit.removeForUser(ctx);
           await users.deleteSelf(ctx);
           res.setHeader('Set-Cookie', sessionCookie('', 0, auth.secureCookies ?? false));
@@ -673,6 +710,120 @@ export function createYourPhrServer(options: ServerOptions) {
           demo_account: engine.has('demo') && engine.managers.demo.isDemoSession(ctx),
           last_login: null, login_count: 0,
         }});
+        return;
+      }
+
+      // Companion device tokens (Settings → Connected Devices) and the LAN URLs the QR encodes.
+      // Mint/revoke need a human session — DeviceTokensManager.requireHuman refuses an agent or
+      // another companion. POST data is the cleartext token ONCE, matching the Go envelope the
+      // iPhone companion already stores.
+      if (auth && engine.has('deviceTokens') && url.pathname === '/api/secure/access/token') {
+        const tokens = engine.managers.deviceTokens;
+        if (req.method === 'GET') {
+          const listed = (await tokens.listForOwner(ctx)).map((t) => ({
+            token_id: t.id,
+            name: t.name,
+            issued_at: t.createdAt,
+            expires_at: t.expiresAt,
+            status: t.status,
+          }));
+          send(res, 200, {success: true, data: listed});
+          return;
+        }
+        if (req.method === 'POST') {
+          if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'minting a device token');
+          const body = (await readJsonBody(req)) ?? {};
+          const minted = await tokens.mint(
+            ctx,
+            String(body['name'] ?? ''),
+            body['expiration'] === undefined || body['expiration'] === null || body['expiration'] === ''
+              ? 0
+              : Number(body['expiration']),
+          );
+          send(res, 200, {success: true, data: minted.token});
+          return;
+        }
+        if (req.method === 'DELETE') {
+          if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'revoking a device token');
+          const body = (await readJsonBody(req)) ?? {};
+          const tokenId = String(body['token_id'] ?? '').trim();
+          if (tokenId === '') {
+            send(res, 400, {success: false, error: 'token_id is required'});
+            return;
+          }
+          await tokens.revoke(ctx, tokenId);
+          send(res, 200, {success: true});
+          return;
+        }
+      }
+
+      if (auth && engine.has('configuration') && url.pathname === '/api/secure/sync/discovery' && req.method === 'GET') {
+        const config = engine.managers.configuration;
+        send(res, 200, {success: true, data: serverDiscovery({
+          listenPort: config.getInt('yourphr.web.listen.port'),
+          hostPort: config.getString('yourphr.host.port'),
+          hostIp: config.getString('yourphr.host.ip'),
+          https: config.getBool('yourphr.web.secure-cookies'),
+        })});
+        return;
+      }
+
+      // Apple Health / HealthKit samples. POSTs are companion/session only (the agent gate above
+      // already refused an agent POST). GETs carry the Health access category so they are logged
+      // and an agent scoped to Health can read them later.
+      if (auth && engine.has('health') && url.pathname === '/api/secure/health/samples' && req.method === 'POST') {
+        if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'ingesting health samples');
+        const limited = healthIngestLimiter.consume(ctx.username);
+        if (!limited.allowed) {
+          res.setHeader('Retry-After', String(Math.ceil(limited.retryAfterMs / 1000)));
+          send(res, 429, {success: false, error: 'too many requests — try again shortly'});
+          return;
+        }
+        const body = await readJsonBodyLimited(req, HEALTH_INGEST_MAX_BYTES);
+        if (body === 'too-large') {
+          send(res, 413, {success: false, error: 'request body too large'});
+          return;
+        }
+        if (!body) {
+          send(res, 400, {success: false, error: 'invalid request'});
+          return;
+        }
+        send(res, 200, {success: true, data: await engine.managers.health.ingest(ctx, {
+          device: body['device'] as {device_id?: unknown; name?: unknown} | undefined,
+          samples: body['samples'],
+          anchors: body['anchors'],
+        })});
+        return;
+      }
+      if (auth && engine.has('health') && url.pathname === '/api/secure/health/samples' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.health.list(ctx, {
+          metricTypes: csvQuery(url, 'metric_type'),
+          hkType: url.searchParams.get('hk_type') ?? '',
+          startAfter: url.searchParams.get('start_after') ?? undefined,
+          startBefore: url.searchParams.get('start_before') ?? undefined,
+          limit: url.searchParams.get('limit') ?? undefined,
+          offset: url.searchParams.get('offset') ?? undefined,
+          sort: url.searchParams.get('sort') ?? undefined,
+        })});
+        return;
+      }
+      if (auth && engine.has('health') && url.pathname === '/api/secure/health/metrics' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.health.metrics(ctx)});
+        return;
+      }
+      if (auth && engine.has('health') && url.pathname === '/api/secure/health/series' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.health.series(ctx, {
+          metricTypes: csvQuery(url, 'metric_type'),
+          hkType: url.searchParams.get('hk_type') ?? '',
+          startAfter: url.searchParams.get('start_after') ?? undefined,
+          startBefore: url.searchParams.get('start_before') ?? undefined,
+          maxPoints: url.searchParams.get('max_points') ?? undefined,
+          mode: url.searchParams.get('mode') ?? undefined,
+        })});
+        return;
+      }
+      if (auth && engine.has('health') && url.pathname === '/api/secure/health/sync-state' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.health.syncState(ctx, url.searchParams.get('device_id') ?? undefined)});
         return;
       }
 

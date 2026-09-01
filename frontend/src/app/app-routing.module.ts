@@ -47,6 +47,7 @@ import { PractitionerHistoryComponent } from "./pages/practitioner-history/pract
 import { SettingsComponent } from './pages/settings/settings.component';
 import { GetEncryptionKeyWizardComponent } from './pages/get-encryption-key-wizard/get-encryption-key-wizard.component';
 import { SetupEncryptionKeyComponent } from './pages/setup-encryption-key/setup-encryption-key.component';
+import { HealthComponent } from './pages/health/health.component';
 
 const routes: Routes = [
   { path: 'auth/signup/wizard', component: AuthSignupWizardComponent },
@@ -109,6 +110,7 @@ const routes: Routes = [
   { path: 'admin/config', component: AdminConfigComponent, canActivate: [ IsAuthenticatedAuthGuard, IsAdminAuthGuard ] },
   { path: 'labs', component: ReportLabsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
   { path: 'labs/report/:source_id/:resource_type/:resource_id', component: ReportLabsComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
+  { path: 'health', component: HealthComponent, canActivate: [ IsAuthenticatedAuthGuard ] },
 
   { path: 'users', component: UserListComponent, canActivate: [ IsAuthenticatedAuthGuard, IsAdminAuthGuard ] },
   { path: 'users/new', component: UserCreateComponent, canActivate: [ IsAuthenticatedAuthGuard, IsAdminAuthGuard ] },
