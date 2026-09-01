@@ -67,8 +67,45 @@ These are __open YourPHR issues that ngdpbase core already implements__:
 | [#709](https://github.com/jwilleke/yourphr/issues/709) per-user settings have no store | `UserManager` + `NotificationManager` per-user state |
 | [#695](https://github.com/jwilleke/yourphr/issues/695) agent tokens — no UI | `AgentTokenManager` + the `profile.ejs` card, mint form, live table, revoke, admin oversight |
 | Token-expiry notification, deferred in [#695](https://github.com/jwilleke/yourphr/issues/695) | `NotificationManager` — per-user, with expiry and dismiss |
+| [#714](https://github.com/jwilleke/yourphr/issues/714) Maintenance mode — no way to say the instance is briefly not itself | The gate, the page, the toggle, the notification and the config, all shipped |
 
-Twelve issues, four of them P1.
+Thirteen issues, four of them P1.
+
+### The gap nobody had filed: maintenance mode
+
+Worth separating from the rest of the table, because it was found the opposite way round. Every other
+row is an issue somebody wrote down and ngdpbase happens to answer. This one had __no issue at all__
+until [#714](https://github.com/jwilleke/yourphr/issues/714), and it was invisible for the reason
+missing capabilities usually are: nothing fails, so nothing gets filed. The product simply has no way
+to say *"this instance is briefly not itself"*, and every operation that needs to say it has quietly
+worked around the absence.
+
+It surfaced from [#713](https://github.com/jwilleke/yourphr/issues/713). A rebuild of the search index
+over 20,000 resources measures __48.5 seconds__, and `reindexAll()` empties both derived tables before
+repopulating them — so search returns nothing throughout. Without a maintenance mode the options are
+all bad: rebuild under live traffic and let a household member watch search break and heal, or stop
+the process, which on Kubernetes means scaling to zero and back. The ordinary answer — put up a page,
+do the work, take it down — was not available.
+
+ngdpbase has all of it: `src/app.ts:705-738` (the gate, after the session resolves so it knows whether
+the caller is an admin), `WikiRoutes.ts:9496` (the toggle, `admin-system` gated and logged),
+`views/maintenance.ejs`, `NotificationManager.ts:322` (every user told), and four config keys. The
+details that carry the design are the unglamorous ones — the exemption list for `/admin`, `/login` and
+static assets, without which the admin cannot reach the switch that turns it off; `allow-admins`
+defaulting true; and a real `503` rather than a `200`.
+
+__One defect to fix on adoption rather than after.__ `adminToggleMaintenance()` mutates
+`engine.config` in memory and nothing persists it, so a pod restart during maintenance — a rollout, an
+OOM kill, a node drain — brings the instance back live with nobody told. For an index rebuild that is
+worse than having no maintenance mode: the index would be neither old-and-complete nor
+new-and-complete, and the instance would be serving from it. This stack has a persisting configuration
+overlay, so writing through it is a small change. Worth filing upstream as well, since every ngdpbase
+consumer has the same hole.
+
+The general lesson is the one this document keeps running into from the other direction. The
+core-versus-add-on section below is mostly about what YourPHR would __contribute__; this is the
+clearest case of what it would __receive__, and it took a performance measurement on an unrelated bug
+to notice a capability that was never missed because nothing ever demanded it out loud.
 
 __Document search is a real want, not a wiki artefact.__ [#599](https://github.com/jwilleke/yourphr/issues/599)
 shipped full-text search over *record text*. Help content is a different corpus needing a different
