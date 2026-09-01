@@ -48,6 +48,7 @@ const KNOWN_MISSING: Record<string, string> = {
   // Found by this check on its first run — none was in yourphr#680's original twelve, because that
   // list came from a grep of fasten-api.service.ts alone and these live in auth.service.ts.
   '/api/auth/callback/:p': 'yourphr#693',
+
   // Invisible until yourphr#694 widened this check past the services layer — settings.component.ts
   // injects HttpClient and calls it directly.
   //
