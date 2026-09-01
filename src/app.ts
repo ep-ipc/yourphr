@@ -25,6 +25,10 @@ import { FileConfigProvider } from './framework/providers/FileConfigProvider.js'
 import { addColumnWithDefault, type Migration } from './framework/providers/sqlite-migrations.js';
 import { AgentTokensManager } from './framework/managers/AgentTokensManager.js';
 import { SqliteAgentTokensProvider } from './framework/providers/SqliteAgentTokensProvider.js';
+import { DeviceTokensManager } from './app/managers/DeviceTokensManager.js';
+import { SqliteDeviceTokensProvider } from './app/providers/SqliteDeviceTokensProvider.js';
+import { HealthManager } from './app/managers/HealthManager.js';
+import { SqliteHealthProvider } from './app/providers/SqliteHealthProvider.js';
 import { DatabaseManager } from './framework/managers/DatabaseManager.js';
 import { SqliteDatabaseProvider } from './framework/providers/SqliteDatabaseProvider.js';
 import { UsersManager, BOOTSTRAP_ADMIN_USERNAME } from './framework/managers/UsersManager.js';
@@ -165,6 +169,62 @@ const APP_MIGRATIONS: Migration[] = [
       )`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_tokens_hash ON agent_tokens(hash)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_tokens_owner ON agent_tokens(owner, created_at DESC)`);
+    },
+  },
+  {
+    id: '20260901140000',
+    description: 'device_tokens — companion credentials minted in Settings → Connected Devices',
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS device_tokens (
+        id TEXT PRIMARY KEY,
+        owner TEXT NOT NULL,
+        name TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
+        prefix TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_used_at TEXT NOT NULL DEFAULT '',
+        revoked_at TEXT NOT NULL DEFAULT '',
+        revoked_by TEXT NOT NULL DEFAULT ''
+      )`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_device_tokens_hash ON device_tokens(hash)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_device_tokens_owner ON device_tokens(owner, created_at DESC)`);
+    },
+  },
+  {
+    id: '20260901150000',
+    description: 'health_samples + health_sync_states — Apple Health ingest, not FHIR Observations',
+    up: (db) => {
+      db.exec(`CREATE TABLE IF NOT EXISTS health_samples (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        external_uuid TEXT NOT NULL,
+        hk_type TEXT NOT NULL,
+        metric_type TEXT NOT NULL DEFAULT '',
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        value_num REAL,
+        unit TEXT NOT NULL DEFAULT '',
+        value_text TEXT NOT NULL DEFAULT '',
+        correlation_uuid TEXT NOT NULL DEFAULT '',
+        source_name TEXT NOT NULL DEFAULT '',
+        source_bundle_id TEXT NOT NULL DEFAULT '',
+        device_name TEXT NOT NULL DEFAULT '',
+        metadata TEXT NOT NULL DEFAULT '',
+        UNIQUE (user_id, external_uuid)
+      )`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_health_sample_series ON health_samples(user_id, metric_type, start_time)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_health_sample_correlation ON health_samples(correlation_uuid)`);
+      db.exec(`CREATE TABLE IF NOT EXISTS health_sync_states (
+        user_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        metric_type TEXT NOT NULL,
+        anchor TEXT NOT NULL DEFAULT '',
+        last_sample_end_time TEXT NOT NULL DEFAULT '',
+        last_synced_at TEXT NOT NULL,
+        device_name TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (user_id, device_id, metric_type)
+      )`);
     },
   },
 ];
@@ -325,8 +385,12 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // yourphr#695: after sessions, because an agent token is an alternative to one rather than a
   // replacement for it — the bearer path tries a session first and falls through to here.
   engine.register('agentTokens', new AgentTokensManager(engine, new SqliteAgentTokensProvider(db)));
+  // Companion device tokens (Settings → Connected Devices): a full user credential, not a
+  // scoped agent. Distinct prefix, hashed like agent tokens, so the iPhone can POST HealthKit samples.
+  engine.register('deviceTokens', new DeviceTokensManager(engine, new SqliteDeviceTokensProvider(db)));
   const recordsManager = new RecordsManager(engine, recordsProvider, new SqliteFavoritesProvider(db));
   engine.register('records', recordsManager);
+  engine.register('health', new HealthManager(engine, new SqliteHealthProvider(db)));
   // Backups (yourphr#615): the coordinator over OPTIONAL storage; the records door is the exporter.
   engine.register('backups', new BackupManager(engine, backupProviderFor(config.getString('yourphr.backup.storage.provider')), { dataDir, exporter: recordsManager, alsoExport: [db] }));
   // 7. Jobs and Sources (yourphr#612): the source client is an OPTIONAL capability — bound by
