@@ -4,6 +4,8 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔴 P0 — Security & Critical
 
+- [#711](https://github.com/jwilleke/yourphr/pull/711) — feat(mcp): the patient's own AI client reads their records, over the agent-token surface *(PR · ready)* — refs [#657](https://github.com/jwilleke/yourphr/issues/657), [#695](https://github.com/jwilleke/yourphr/issues/695)
+- [#710](https://github.com/jwilleke/yourphr/pull/710) — fix(search): index a record's clinical name — `code` is a CodeableConcept, not a bare code *(PR · ready)* — refs [#657](https://github.com/jwilleke/yourphr/issues/657)
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟠 P1
@@ -39,6 +41,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟡 P2
 
+- [#712](https://github.com/jwilleke/yourphr/issues/712) — [security] frontend build-tree low advisory: elliptic (GHSA-848j-6mx2-7j84) via webcrypto-liner
 - [#707](https://github.com/jwilleke/yourphr/issues/707) — [security] image-size — both DoS advisories have no patched release (blocked upstream)
 - [#698](https://github.com/jwilleke/yourphr/issues/698) — [FEATURE] Sessions manager: do not back up credentials, and three defects inherited from ngdpbase's token manager
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
