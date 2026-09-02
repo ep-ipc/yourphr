@@ -107,14 +107,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#721](https://github.com/jwilleke/yourphr/issues/721) — [security] frontend dev-tree moderate advisories: qs (GHSA-4mjr-xmp4-gh2g, GHSA-x5fp-wj9c-mxmx)
-- [#720](https://github.com/jwilleke/yourphr/issues/720) — [security] frontend build-tree high advisories: fast-uri (4 GHSAs) — and the pin from #483 is now the vulnerable version
-- [#718](https://github.com/jwilleke/yourphr/issues/718) — [security] frontend build-tree low advisory: postcss-selector-parser (GHSA-w9m9-85wc-3x92)
-- [#717](https://github.com/jwilleke/yourphr/issues/717) — [security] frontend build-tree high advisories: browserslist (GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g)
-- [#695](https://github.com/jwilleke/yourphr/issues/695) — [BUG] Settings offers agent tokens the server does not implement — and no scoping, audit or expiry model
-- [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
-- [#354](https://github.com/jwilleke/yourphr/issues/354) — [FEATURE] Integrate assets from HL7 FHIR GitHub organization (fhir-test-cases, fhir-codegen, etc.)
-- [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
+*None.*
 
 ## ⏸ Deferred
 
