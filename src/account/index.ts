@@ -40,6 +40,24 @@ export const ACCESS_CATEGORIES = [
 
 export type AccessCategory = (typeof ACCESS_CATEGORIES)[number];
 
+/**
+ * Credential lifecycle, in the same patient-visible log (yourphr#698 item 4).
+ *
+ * Deliberately NOT members of ACCESS_CATEGORIES, and the distinction is load-bearing: that list is
+ * also the SCOPE vocabulary, so a category placed in it becomes something an agent token can be
+ * granted. Minting is not a read surface, and a token that could be scoped to "Agent token minted"
+ * would be a delegation that reaches the management surface it is supposed to be barred from.
+ *
+ * They live in the access log rather than in a second sink because the token store cannot answer
+ * the question the review asked — "what could this credential do, and when was it stopped?" —
+ * once retention drops the dead row. The log is the only record in this stack that outlives it.
+ */
+export const CREDENTIAL_EVENT_CATEGORIES = {
+  minted: 'Agent token minted',
+  renewed: 'Agent token renewed',
+  revoked: 'Agent token revoked',
+} as const;
+
 /** Is this a category this build knows? A scope that is not one can never match a request. */
 export function isAccessCategory(value: string): value is AccessCategory {
   return (ACCESS_CATEGORIES as readonly string[]).includes(value);

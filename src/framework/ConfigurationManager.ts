@@ -20,6 +20,7 @@ import { BaseManager, type BackupData } from './BaseManager.js';
 import type { Engine } from './Engine.js';
 import type { BaseConfigProvider } from './providers/BaseConfigProvider.js';
 import { envNameFor, legacyEnvNameFor, isConfigObject, PUBLIC_KEYS_KEY, type ConfigObject, type ConfigValue } from '../config/index.js';
+import { appLog } from '../log/index.js';
 import { coerceToTypeOf, describePropertySource, ENV_KEYS_CONFIG_KEY, FALLBACK_ENV_KEYS, SECRET_KEYS_CONFIG_KEY, type EnvKeyMap, type PropertyDescription } from '../config/env-keys.js';
 
 declare module './Engine.js' {
@@ -467,4 +468,29 @@ function mergeArrays(defaults: ConfigValue[], custom: ConfigValue[]): ConfigValu
     return Array.from(merged.values());
   }
   return custom;
+}
+
+/**
+ * A number from configuration, or the fallback when it is not a usable one — ngdpbase's
+ * `boundedNumber` (its #1110), kept by that name because it is the same decision.
+ *
+ * `min` is where the MEANING of the setting goes, and the reason it is a parameter rather than a
+ * blanket `> 0`: an interval or a TTL has no meaningful zero (a zero TTL mints a credential that
+ * is already expired), while a count or a retention window does — `retention-days: 0` means purge
+ * a record as soon as it is dead, and `max-per-user: 0` means allow none. ngdpbase rejected both
+ * of those, told the operator their deliberate value "is not a positive number", and used the
+ * default instead (yourphr#698 item 2).
+ *
+ * The fallback is never silent. `Number('24h')` is NaN and `ttl > NaN` is false, so a single typo
+ * used to remove a ceiling with nothing said; a limit a typo can disable is not a limit.
+ */
+export function boundedNumber(value: unknown, fallback: number, key: string, min: number, warn: (line: string) => void = (line) => appLog.warn(line)): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < min) {
+    // JSON.stringify rather than String: a config value may be an object, and "[object Object]"
+    // is not something an operator can diagnose a typo from.
+    if (value !== undefined && value !== null) warn(`${key}=${JSON.stringify(value)} is not a number >= ${min} — using ${fallback}`);
+    return fallback;
+  }
+  return Math.trunc(n);
 }

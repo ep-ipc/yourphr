@@ -41,7 +41,8 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
 import { ApiError, type ApiContext } from '../ApiContext.js';
-import { ACCESS_CATEGORIES, isAccessCategory } from '../../account/index.js';
+import { ACCESS_CATEGORIES, CREDENTIAL_EVENT_CATEGORIES, isAccessCategory } from '../../account/index.js';
+import { boundedNumber } from '../ConfigurationManager.js';
 import type { AgentTokenRecord, BaseAgentTokensProvider } from '../providers/BaseAgentTokensProvider.js';
 
 declare module '../Engine.js' {
@@ -118,7 +119,7 @@ export class AgentTokensManager extends BaseManager {
   readonly name = 'agentTokens' as const;
   // Configuration, not users: the policy is read at initialize, and an owner is a string this
   // manager stores rather than an account it resolves.
-  override readonly dependsOn = ['configuration'] as const;
+  override readonly dependsOn = ['configuration', 'audit'] as const;
 
   private policy: AgentTokenPolicy = { ...DefaultAgentTokenPolicy };
 
@@ -131,18 +132,26 @@ export class AgentTokensManager extends BaseManager {
     await this.provider.initialize();
 
     const cfg = this.engine.managers.configuration;
-    const num = (key: string, fallback: number): number => positiveInt(cfg.getInt(`${CONFIG_PREFIX}.${key}`), fallback);
+    /**
+     * Validated against what each setting MEANS, never a blanket positivity check — the shared
+     * `boundedNumber` carries the reasoning and the warning (yourphr#698 item 2, ngdpbase#1110).
+     */
+    const positive = (key: string, fallback: number): number =>
+      boundedNumber(cfg.getInt(`${CONFIG_PREFIX}.${key}`), fallback, `${CONFIG_PREFIX}.${key}`, 1);
+    const count = (key: string, fallback: number): number =>
+      boundedNumber(cfg.getInt(`${CONFIG_PREFIX}.${key}`), fallback, `${CONFIG_PREFIX}.${key}`, 0);
     this.policy = {
       enabled: cfg.getBool(`${CONFIG_PREFIX}.enabled`),
       readOnly: cfg.getBool(`${CONFIG_PREFIX}.read-only`),
-      defaultTtlHours: num('default-ttl-hours', DefaultAgentTokenPolicy.defaultTtlHours),
-      maxTtlHours: num('max-ttl-hours', DefaultAgentTokenPolicy.maxTtlHours),
-      maxPerUser: num('max-per-user', DefaultAgentTokenPolicy.maxPerUser),
-      retentionDays: num('retention-days', DefaultAgentTokenPolicy.retentionDays),
+      defaultTtlHours: positive('default-ttl-hours', DefaultAgentTokenPolicy.defaultTtlHours),
+      maxTtlHours: positive('max-ttl-hours', DefaultAgentTokenPolicy.maxTtlHours),
+      // Zero is an instruction here, not a typo: none allowed, and drop a dead record at once.
+      maxPerUser: count('max-per-user', DefaultAgentTokenPolicy.maxPerUser),
+      retentionDays: count('retention-days', DefaultAgentTokenPolicy.retentionDays),
       renewable: cfg.getBool(`${CONFIG_PREFIX}.renewable`),
-      // 0 is a MEANING here (unlimited), not a typo, so it cannot go through positiveInt.
-      maxRenewals: Math.max(0, Math.trunc(Number(cfg.getInt(`${CONFIG_PREFIX}.max-renewals`)) || 0)),
-      renewWindowHours: num('renew-window-hours', DefaultAgentTokenPolicy.renewWindowHours),
+      // 0 = unlimited, which is why it cannot be read as a positive-only setting.
+      maxRenewals: count('max-renewals', DefaultAgentTokenPolicy.maxRenewals),
+      renewWindowHours: positive('renew-window-hours', DefaultAgentTokenPolicy.renewWindowHours),
     };
 
     // Dead records go on every boot, as ngdpbase does — but unlike ngdpbase (its #1108) this is
@@ -188,7 +197,26 @@ export class AgentTokensManager extends BaseManager {
   ): Promise<{ token: string; record: AgentTokenView }> {
     this.requireEnabled();
     this.requireHuman(ctx);
-    return this.issue(ctx.username, name, scopes, ttlHours, now, { renewals: 0, renewedFrom: '' });
+    const issued = await this.issue(ctx.username, name, scopes, ttlHours, now, { renewals: 0, renewedFrom: '' });
+    await this.recordLifecycle(ctx, CREDENTIAL_EVENT_CATEGORIES.minted, new Date(now));
+    return issued;
+  }
+
+  /**
+   * A credential's life, written where the patient can see it (yourphr#698 item 4).
+   *
+   * The store cannot answer "what could this credential do, and when was it stopped?" — retention
+   * drops the dead row, and a restore of the database would un-revoke it. The access log is the
+   * one record that outlives both, so mint, renewal and revocation go there under categories that
+   * are deliberately outside the scope vocabulary (see `CREDENTIAL_EVENT_CATEGORIES`).
+   *
+   * The order differs by event, each in the safe direction. A MINT is logged after the row exists
+   * but its failure still fails the call, so nothing hands back a live credential the log missed.
+   * A REVOKE is logged after the state change, because a line claiming a revocation that did not
+   * happen would tell a patient a leaked token is dead when it is not.
+   */
+  private async recordLifecycle(ctx: ApiContext, category: string, at: Date): Promise<void> {
+    await this.engine.managers.audit.record(ctx, category, at);
   }
 
   /** The shared minting path — a fresh mint and a renewal differ only in provenance. */
@@ -332,6 +360,9 @@ export class AgentTokensManager extends BaseManager {
     });
     // The old record stays as revoked until retention drops it, so the rotation is visible.
     await this.provider.revoke(existing.id, new Date(now).toISOString(), ctx.username);
+    // One event, not a mint plus a revoke: a rotation is a single decision, and reading it as two
+    // would tell the patient a credential was created that they did not create.
+    await this.recordLifecycle(ctx, CREDENTIAL_EVENT_CATEGORIES.renewed, new Date(now));
     return issued;
   }
 
@@ -341,7 +372,10 @@ export class AgentTokensManager extends BaseManager {
     this.requireHuman(ctx);
     const existing = await this.provider.get(id);
     if (!existing || existing.owner !== ctx.username) throw new ApiError(404, 'no such token');
-    return this.provider.revoke(id, new Date(now).toISOString(), ctx.username);
+    const revoked = await this.provider.revoke(id, new Date(now).toISOString(), ctx.username);
+    // Only when this call is what ended it — a second revoke of the same token is not a new event.
+    if (revoked) await this.recordLifecycle(ctx, CREDENTIAL_EVENT_CATEGORIES.revoked, new Date(now));
+    return revoked;
   }
 
   /** Drop dead records past the retention window. */

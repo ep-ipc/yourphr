@@ -40,10 +40,32 @@ const BASE_POLICY = {
   'yourphr.auth.agent-token.renew-window-hours': 6,
 };
 
+/**
+ * The audit door, recording only what the assertions read. Registered because the manager now
+ * DEPENDS on it (yourphr#698 item 4): a credential whose life nothing records is one the store
+ * alone remembers, and retention deletes that.
+ */
+class FakeAudit {
+  readonly name = 'audit' as const;
+  readonly dependsOn = [] as const;
+  events: { owner: string; category: string; at: Date }[] = [];
+  failNext = false;
+  async record(ctx: { username: string }, category: string, at = new Date()): Promise<void> {
+    if (this.failNext) { this.failNext = false; throw new Error('audit sink refused the write'); }
+    this.events.push({ owner: ctx.username, category, at });
+  }
+  async initialize(): Promise<void> { /* nothing to do */ }
+  async shutdown(): Promise<void> { /* nothing to do */ }
+  isInitialized(): boolean { return true; }
+  async backup(): Promise<never> { throw new Error('not used'); }
+  async restore(): Promise<never> { throw new Error('not used'); }
+}
+
 let db: InstanceType<typeof Database>;
 let engine: Engine;
 let tokens: AgentTokensManager;
 let config: FakeConfig;
+let audit: FakeAudit;
 let jim: ApiContext;
 let pat: ApiContext;
 
@@ -53,6 +75,8 @@ async function boot(overrides: Record<string, unknown> = {}): Promise<void> {
   config = new FakeConfig();
   config.values = { ...BASE_POLICY, ...overrides };
   engine.register('configuration', config as never);
+  audit = new FakeAudit();
+  engine.register('audit', audit as never);
   tokens = new AgentTokensManager(engine, new SqliteAgentTokensProvider(db));
   engine.register('agentTokens', tokens);
   await engine.initialize();
@@ -306,5 +330,84 @@ describe('listing, revocation and retention', () => {
     await tokens.removeForUser(jim);
     expect(await tokens.listForOwner(jim)).toHaveLength(0);
     expect(await tokens.listForOwner(pat)).toHaveLength(1);
+  });
+});
+
+/**
+ * The four constraints yourphr#698 carried over from the ngdpbase review (its #1110). Two were
+ * already held by this design and are asserted so they stay held; two were not, and are the
+ * behaviour below.
+ */
+describe('yourphr#698: what a credential store owes', () => {
+  it('1. a backup of the token store carries no credential material — not even a listing', async () => {
+    // Restoring a credential store UN-REVOKES, so there is deliberately nothing here to restore
+    // from: the rows ride the app database's own encrypted backup or they do not exist.
+    await tokens.mint(jim, 'x', ['Summary']);
+    const taken = await tokens.backup();
+    expect(JSON.stringify(taken)).not.toContain('sha256:');
+    expect((taken as unknown as Record<string, unknown>)['payload']).toBeUndefined();
+  });
+
+  it('2. retention-days 0 is an instruction, not a typo — a dead record goes at once', async () => {
+    await boot({ 'yourphr.auth.agent-token.retention-days': 0 });
+    const { record } = await tokens.mint(jim, 'x', ['Summary']);
+    await tokens.mint(jim, 'keep', ['Summary']);
+    await tokens.revoke(jim, record.id);
+    expect(await tokens.purgeExpired()).toBe(1);
+    // The live one is untouched: "dropped as soon as it is dead" is not "dropped".
+    expect((await tokens.listForOwner(jim)).map((t) => t.name)).toEqual(['keep']);
+  });
+
+  it('2. max-per-user 0 means no token may be minted, rather than silently meaning 10', async () => {
+    await boot({ 'yourphr.auth.agent-token.max-per-user': 0 });
+    await expect(tokens.mint(jim, 'x', ['Summary'])).rejects.toThrow(/revoke one first|already have 0/);
+  });
+
+  it('2. a value that is not a number still falls back — a typo must not remove a limit', async () => {
+    await boot({ 'yourphr.auth.agent-token.retention-days': 'thirty' });
+    await tokens.mint(jim, 'x', ['Summary']);
+    // 30 days, the shipped default: nothing dead yet, so nothing goes.
+    expect(await tokens.purgeExpired()).toBe(0);
+  });
+
+  it('3. scopes are normalised at the MINT and stored normalised', async () => {
+    // ngdpbase validated a trimmed scope and stored the untrimmed one, so the credential minted
+    // and then matched nothing. Authorisation is exact membership; normalise once, at the door.
+    const { record } = await tokens.mint(jim, 'x', ['  Medications  ', 'Medications']);
+    expect(record.scopes).toEqual(['Medications']);
+    const stored = db.prepare('SELECT scopes FROM agent_tokens').get() as { scopes: string };
+    expect(JSON.parse(stored.scopes)).toEqual(['Medications']);
+  });
+
+  it('4. mint, renewal and revocation reach the access log, which outlives the row', async () => {
+    const { record } = await tokens.mint(jim, 'Claude', ['Summary'], 24);
+    const renewed = await tokens.renew(jim, record.id, Date.now() + 23 * 3_600_000);
+    await tokens.revoke(jim, renewed.record.id);
+    expect(audit.events.map((e) => e.category)).toEqual([
+      'Agent token minted', 'Agent token renewed', 'Agent token revoked',
+    ]);
+    expect(audit.events.every((e) => e.owner === 'jim')).toBe(true);
+
+    // The point of writing them there: retention takes the rows, and the answer survives.
+    expect(await tokens.purgeExpired(Date.now() + 40 * 86_400_000)).toBeGreaterThan(0);
+    expect(await tokens.listForOwner(jim)).toHaveLength(0);
+    expect(audit.events).toHaveLength(3);
+  });
+
+  it('4. a mint the log could not record FAILS, rather than handing back an unlogged credential', async () => {
+    audit.failNext = true;
+    await expect(tokens.mint(jim, 'x', ['Summary'])).rejects.toThrow(/audit sink/);
+  });
+
+  it('4. a revoke stands even if the log write fails — the token is dead either way', async () => {
+    const { record } = await tokens.mint(jim, 'x', ['Summary']);
+    audit.failNext = true;
+    await expect(tokens.revoke(jim, record.id)).rejects.toThrow(/audit sink/);
+    expect((await tokens.listForOwner(jim))[0]?.live).toBe(false);
+  });
+
+  it('a lifecycle category can never be granted as a scope', async () => {
+    // The scope vocabulary is the ACCESS categories; management is not a read surface.
+    await expect(tokens.mint(jim, 'x', ['Agent token minted'])).rejects.toThrow(/not something this instance can share/);
   });
 });

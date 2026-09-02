@@ -18,6 +18,7 @@ import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
 import { ApiError, type ApiContext, type Principal } from '../ApiContext.js';
 import type { BaseAuthProvider } from '../providers/BaseAuthProvider.js';
+import { boundedNumber } from '../ConfigurationManager.js';
 
 declare module '../Engine.js' {
   interface ManagerRegistry {
@@ -107,8 +108,32 @@ export class SessionsManager extends BaseManager {
     super(engine);
     for (const p of providers) this.providers.set(p.name, p);
     this.sessionKey = options.sessionKey ?? randomBytes(32);
-    this.policy = options.session ?? DefaultSessionPolicy;
-    this.throttle = new Throttle(options.throttle ?? DefaultThrottlePolicy);
+    /**
+     * Every number is checked before it becomes policy (yourphr#698 item 2). These arrive straight
+     * from configuration, and the two failures are not symmetrical:
+     *
+     * - `session.sliding-seconds: '60m'` is NaN, so `exp` is NaN, `JSON.stringify` writes it as
+     *   null, and `decodeToken` refuses every token — nobody can sign in, and nothing says why.
+     * - `throttle.max-failures: '5 tries'` is NaN, and `recent.length >= NaN` is FALSE, so the
+     *   brute-force throttle silently stops limiting. That one fails OPEN, which is the reason
+     *   this is validated here rather than trusted from the caller.
+     *
+     * All four are intervals or TTLs, so none has a meaningful zero — a zero window throttles
+     * nothing and a zero TTL mints a session already expired. Counts with a real zero (the agent
+     * token caps) pass `min: 0` instead; the shared helper carries that distinction.
+     */
+    const atLeastOne = (value: number | undefined, fallback: number, key: string): number =>
+      value === undefined ? fallback : boundedNumber(value, fallback, key, 1);
+    const session = options.session;
+    const throttle = options.throttle;
+    this.policy = {
+      slidingSeconds: atLeastOne(session?.slidingSeconds, DefaultSessionPolicy.slidingSeconds, 'yourphr.auth.session.sliding-seconds'),
+      absoluteSeconds: atLeastOne(session?.absoluteSeconds, DefaultSessionPolicy.absoluteSeconds, 'yourphr.auth.session.absolute-seconds'),
+    };
+    this.throttle = new Throttle({
+      maxFailures: atLeastOne(throttle?.maxFailures, DefaultThrottlePolicy.maxFailures, 'yourphr.auth.throttle.max-failures'),
+      windowSeconds: atLeastOne(throttle?.windowSeconds, DefaultThrottlePolicy.windowSeconds, 'yourphr.auth.throttle.window-seconds'),
+    });
     this.trustedProxies = options.trustedProxies ?? [];
     this.factors = options.factors?.length ? options.factors : ['password'];
   }

@@ -209,6 +209,28 @@ describe('SessionsManager — sign-in, tokens, revocation, throttling, cardinali
     expect((await sessions.signIn('alice', { password: PW }, { remoteAddr: '203.0.113.9' }, 200)).ok).toBe(true);
   });
 
+  it('TOOTH: a mistyped throttle setting does not silently switch the throttle OFF (yourphr#698)', async () => {
+    // `Number('5 tries')` is NaN and `recent.length >= NaN` is FALSE — so the brute-force limit
+    // used to fail OPEN on a typo, with nothing logged and nothing refused. It falls back now.
+    const failOpen = new SessionsManager(engine, [new PasswordAuthProvider()], {
+      throttle: { maxFailures: '5 tries' as unknown as number, windowSeconds: 60 },
+    });
+    for (let i = 0; i < 5; i++) failOpen.throttle.recordFailure('acct:alice', 100 + i);
+    expect(failOpen.throttle.isLimited('acct:alice', 110)).toBe(true);
+  });
+
+  it('a mistyped session TTL falls back rather than refusing every token (yourphr#698)', async () => {
+    // NaN exp survives JSON.stringify as null, which decodeToken rejects: nobody signs in, and
+    // the reason appears nowhere.
+    await users.createUser(sys, 'carol', PW);
+    const bad = new SessionsManager(engine, [new PasswordAuthProvider()], {
+      session: { slidingSeconds: '60m' as unknown as number, absoluteSeconds: 250 },
+    });
+    const signedIn = await bad.signIn('carol', { password: PW }, { remoteAddr: '203.0.113.5' }, 100);
+    expect(signedIn.ok).toBe(true);
+    expect((await bad.verify((signedIn as { token: string }).token, 200)).ok).toBe(true);
+  });
+
   it('persists an upgraded hash after a legacy sign-in without bumping the generation', async () => {
     const { default: bcryptjs } = await import('bcryptjs');
     await users.importLegacy(ApiContext.system('migration', '', engine), [{ username: 'jim', passwordHash: bcryptjs.hashSync('go-era-password-long', 4), tokenGeneration: 3, role: 'user' }]);
