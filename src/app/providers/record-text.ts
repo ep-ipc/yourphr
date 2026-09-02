@@ -43,7 +43,13 @@ export function textFor(resource: unknown): string {
     if (Array.isArray(node)) { node.forEach((n) => walk(n, key)); return; }
     if (node && typeof node === 'object') {
       for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-        if (SKIP_KEYS.has(k)) continue;
+        // A key in SKIP_KEYS is skipped only when its VALUE is a leaf. `code` is the case that
+        // matters: in FHIR it is usually a CodeableConcept, so skipping it by name threw away the
+        // clinical name of most resources — Condition.code, Observation.code, Procedure.code,
+        // AllergyIntolerance.code, DiagnosticReport.code — and searching "prediabetes" or
+        // "colonoscopy" matched nothing while the index looked like it worked. The bare `code`
+        // STRING inside each coding is still skipped, which is what the rule was reaching for.
+        if (SKIP_KEYS.has(k) && !(k === 'code' && v !== null && typeof v === 'object')) continue;
         if (k === 'div' && typeof v === 'string') { out.push(stripTags(v)); continue; }
         walk(v, k);
       }

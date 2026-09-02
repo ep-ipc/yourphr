@@ -54,4 +54,42 @@ describe('record text: narrative entities', () => {
     expect(text).toContain('"stable"');
     expect(text).toContain("patient's");
   });
+
+  /**
+   * The clinical name of a record, which is the thing a person actually searches for.
+   *
+   * `code` is in SKIP_KEYS to keep bare codes and identifiers out of the index — "metformin" should
+   * match the medication rather than every record with those letters in an id. But it was matched by
+   * KEY NAME, and in FHIR `code` is normally a CodeableConcept, so the whole subtree went: Condition,
+   * Observation, Procedure, AllergyIntolerance and DiagnosticReport were all indexed with their type
+   * and status and no name at all. Search returned nothing for "prediabetes" while looking like it
+   * worked, which is the yourphr#598 empty-`sort_title` failure wearing a different hat.
+   */
+  describe('the clinical name survives, the bare code does not', () => {
+    const named: [string, Record<string, unknown>, string][] = [
+      ['Condition', { resourceType: 'Condition', code: { text: 'Prediabetes' } }, 'Prediabetes'],
+      ['Procedure', { resourceType: 'Procedure', status: 'completed', code: { text: 'Colonoscopy' } }, 'Colonoscopy'],
+      ['AllergyIntolerance', { resourceType: 'AllergyIntolerance', code: { text: 'Penicillin' } }, 'Penicillin'],
+      ['DiagnosticReport', { resourceType: 'DiagnosticReport', status: 'final', code: { text: 'CBC panel' } }, 'CBC panel'],
+      ['Observation', { resourceType: 'Observation', status: 'final', code: { coding: [{ display: 'Hemoglobin A1c' }] } }, 'Hemoglobin A1c'],
+    ];
+    for (const [type, resource, name] of named) {
+      it(`indexes ${type} by its name`, () => {
+        expect(textFor(resource)).toContain(name);
+      });
+    }
+
+    it('keeps the bare code, the system URI and the identifier out', () => {
+      const text = textFor({
+        resourceType: 'Observation', status: 'final',
+        code: { coding: [{ system: 'http://loinc.org', code: '4548-4', display: 'Hemoglobin A1c' }], text: 'HbA1c' },
+        identifier: [{ system: 'urn:x', value: 'metformin-lookalike-id' }],
+      });
+      expect(text).toContain('Hemoglobin A1c');
+      expect(text).toContain('HbA1c');
+      expect(text).not.toContain('4548-4');
+      expect(text).not.toContain('loinc.org');
+      expect(text).not.toContain('metformin-lookalike-id');
+    });
+  });
 });
