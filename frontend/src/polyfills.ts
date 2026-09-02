@@ -27,7 +27,12 @@
  * Standard animation support in Angular DOES NOT require any polyfills (as of Angular 6.0).
  */
 // import 'web-animations-js';  // Run `npm install --save web-animations-js`.
-import 'webcrypto-liner'
+/**
+ * No WebCrypto polyfill. `webcrypto-liner` used to be imported here; it pulled in `elliptic`
+ * (GHSA-848j-6mx2-7j84, no patched release) from a GitHub fork, and nothing in the app needs it:
+ * the only SubtleCrypto caller is @panva/oauth4webapi on the hello.coop IdP path, and every
+ * browser in the support matrix ships `crypto.subtle` in a secure context. yourphr#712.
+ */
 /**
  * By default, zone.js will patch all possible macroTask and DomEvents
  * user can disable parts of macroTask/DomEvents patch by setting following flags

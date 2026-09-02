@@ -61,7 +61,6 @@
     "rtf.js": "^3.0.9",
     "rxjs": "^7.8.1",
     "tslib": "^2.0.0",
-    "webcrypto-liner": "^1.4.3",
     "zone.js": "~0.15.1"
   },
   "devDependencies": {
@@ -137,7 +136,6 @@
     "@angular/platform-browser": "22.1.4",
     "@angular/platform-browser-dynamic": "22.1.4",
     "@angular/router": "22.1.4",
-    "elliptic": "^6.6.1",
     "nanoid": "3.3.18",
     "browserslist": "4.28.8",
     "postcss-selector-parser": "7.1.5",
