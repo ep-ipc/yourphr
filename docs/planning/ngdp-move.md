@@ -5,6 +5,9 @@
 > keeps recurring and has been answered from structure rather than from evidence each time — see
 > [yourphr#697](https://github.com/jwilleke/yourphr/issues/697), which argues it from repo layout alone.
 >
+> __Amended 2026-09-02__ with the security-posture comparison, and two claims it superseded — see that
+> section and the strikethrough under *What flows the other way*.
+>
 > Read with [`architecture-principles-typescript.md`](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/architecture-principles-typescript.md),
 > which now lives in ngdpbase. That document is the governing one and already answers part of this.
 
@@ -314,15 +317,49 @@ question this slice raises and does not answer.
 
 YourPHR has mechanisms ngdpbase lacks. These are filed against ngdpbase, per the working agreement.
 
-- __`scripts/check-http-boundary.sh` and the SSRF guard (47 checks).__ ngdpbase has no outbound
-  boundary at all, and its three call sites are unguarded.
+- ~~__`scripts/check-http-boundary.sh` and the SSRF guard (47 checks).__ ngdpbase has no outbound
+  boundary at all, and its three call sites are unguarded.~~ __Superseded 2026-09-02.__ ngdpbase now
+  ships `src/http/{egressPolicy,guardedFetch,guardedLookup,ssrf}.ts` and its own
+  `scripts/check-http-boundary.ts`, with no raw `fetch(` left outside tests. It went __further__ than
+  this stack: [ngdpbase#1133](https://github.com/jwilleke/ngdpbase/issues/1133) added
+  operator-configurable `ngdpbase.security.egress.allowed-ranges` / `denied-ranges`, reconciled by
+  longest-prefix match with deny winning a tie (D8 of the security-posture record) — a layer YourPHR
+  does not have, since `src/http/ssrf.ts` hardcodes the inward ranges. The issue itself is still open,
+  so this is the boundary being built rather than the work being closed.
 - __`scripts/check-store-boundary.sh`.__ The governing document's own known-gaps table still records
   this lint as *"Not written. Until it exists, the invariant is documentation"* — YourPHR wrote it.
 - __Audit refuses to boot.__ YourPHR never had the `NullAuditProvider` fallback ngdpbase had to fix in
   its #1118; `AuditManager` states the divergence deliberately.
 - __Agent-token scopes as auditable access categories.__ A surface that cannot be logged cannot be
-  scoped — structurally stronger than ngdpbase's *owner minus admin* rule.
-- __Demo mode and its guards__, and per-IP rate limiting on the sign-in routes.
+  scoped — structurally stronger than ngdpbase's *owner minus admin* rule. __Sharpened 2026-09-02__,
+  and the enforceable half is the other one: YourPHR runs the ceiling __once, at the HTTP edge__, so an
+  unnamed surface is refused by inheritance. ngdpbase enforces at two call sites reached by convention,
+  which is how [ngdpbase#1164](https://github.com/jwilleke/ngdpbase/issues/1164) happened — twelve
+  places bypass it by passing a username string instead of a context. The transferable property is
+  __default-deny at one choke point__, not the read-only category map, which is YourPHR-specific.
+- __Demo mode's guards are a method gate, not an absent permission.__ ngdpbase's `demo-admin` is
+  read-only because the role holds only `admin-read`; YourPHR refuses by HTTP method at the edge
+  (`DemoManager.refuseUnlessRead`) and again at named manager doors. Same asymmetry as the agent-token
+  ceiling above — permission-absence fails open on a route that forgot to require a write permission.
+  YourPHR additionally __verifies__ the demo password against the stored hash and regenerates on drift,
+  which has no upstream analogue. Per-IP rate limiting on the sign-in routes is core and already flowed
+  down, so it is not a gap.
+- __It cannot boot with auditing off.__ `AuditManager.ts:228` still loads `NullAuditProvider` when
+  `ngdpbase.audit.enabled` is false — a deliberate opt-out upstream rather than the fallback its #1118
+  removed. YourPHR ships no Null provider, so the choice does not exist here.
+- __Encryption at rest.__ SQLCipher on both databases (`SqliteDatabaseProvider.ts:18`,
+  `SqliteFhirRepository.ts:108`) plus `backup.encryption.key`. ngdpbase has no `encryption.key` and no
+  SQLCipher — downstream of it having no relational store, so this is the *"large, into declared holes"*
+  row of the core-improvements table rather than a defect.
+- __Audit writes are durable per event, and undefended.__ `SqliteDatabaseProvider.ts:16` opens the app
+  database — which holds `access_events` — setting neither `journal_mode` nor `synchronous`, so SQLite's
+  defaults apply and every `record()` commits and fsyncs before it returns. ngdpbase's `FileAuditProvider`
+  queues in memory and flushes on a 30-second timer, with only the critical tier fsynced since its #1158.
+  So YourPHR is __ahead on the axis its own audit is weakest elsewhere__ — but by accident, not decision:
+  nothing states durability was the reason, and `SqliteFhirRepository.ts:111` already sets
+  `journal_mode = WAL` on the *records* database. Copying that one line to the app database for
+  performance drops the log to WAL + `synchronous=NORMAL`, where commits are not fsynced, and no test
+  would notice. __Pin `synchronous = FULL` explicitly, with the reason in a comment.__
 
 Two defects worth filing upstream, found while reading:
 
@@ -420,6 +457,7 @@ consumer inherits the benefit.
 | [ngdpbase#1132](https://github.com/jwilleke/ngdpbase/issues/1132) | `WikiEngine.setContext()` — a process-global request-state slot with zero callers | P2, latent |
 | [ngdpbase#1133](https://github.com/jwilleke/ngdpbase/issues/1133) | SSRF — NCM image localization fetches any URL a page author writes, gated only by the page edit ACL | P1, __live__ |
 | [ngdpbase#1134](https://github.com/jwilleke/ngdpbase/issues/1134) | The store-boundary lint the architecture document records as missing, and the drift it would already catch | P2 |
+| [ngdpbase#1164](https://github.com/jwilleke/ngdpbase/issues/1164) | The agent-token scope ceiling is bypassed by __call shape__ — `UserManager.hasPermission()` skips it when handed a username string, and twelve call sites do exactly that, five of them the `admin-system` gate on admin writes. A `page-read` token reaches organization delete, required-page edit and the deleted-page browser, while `AgentTokenManager` refuses `admin-*` at mint | P0, __live__ |
 
 A fourth was drafted and __withdrawn before filing__. The claim was that ngdpbase ships contradictory
 audit durability rules — fire-and-forget in its #1111 against `token.mint` marked critical in
@@ -473,6 +511,120 @@ Relevant because a divergence is only legitimate if that document names it:
   compartments, and `PageManager` / `RenderingManager` / `TemplateManager` have no PHR analogue *for
   records*. That table has been over-applied to the whole product — help pages and themes are exactly
   where those managers do have an analogue.
+
+## Security posture — ngdpbase settled it in the open, and YourPHR has most of the gaps
+
+> __Added 2026-09-02__, after reading [`docs/security-posture.md`](https://github.com/jwilleke/ngdpbase/blob/master/docs/security-posture.md) in ngdpbase against this tree. Twenty-three numbered decisions, D1–D23, each naming the issue that carries it; [ngdpbase#1137](https://github.com/jwilleke/ngdpbase/issues/1137) closed 2026-09-02 with all twelve sub-issues landed. This is __not a plan__ — `ngdpbase.security.posture` and `ngdpbase.audit.chain-witness.*` are shipped keys in `config/app-default-config.json`, and `scripts/verify-audit-chain.ts` exists. It is a decision record for something that runs.
+
+Worth reading here for a reason this document keeps arriving at: a decision record is portable without the platform. Every one of these is adoptable as a __rule__ whether or not the deciding question below ever resolves — which makes it the clearest test yet of what "default to ngdpbase, improvements are filed" actually buys.
+
+### The state of play, decision by decision
+
+| ngdpbase decision | YourPHR today |
+|---|---|
+| D1–D2 — one posture, the active one; `baseline`/`hardened`/`regulated` are __advice__, not configuration | No posture concept. Also __no `security.profile` key was ever introduced__, so there is nothing to unwind — D7's removal is a mistake YourPHR skipped rather than a debt it carries |
+| D3, D4, D16 — the posture is a curated __view__ over existing keys, shaped as a map so items merge per entry | Nothing. Admin → Configuration ([#458](https://github.com/jwilleke/yourphr/issues/458), [#472](https://github.com/jwilleke/yourphr/issues/472)) lists every key with a secret deny-list — a config browser, not a posture |
+| D5 — edited from an admin dashboard section | Admin → Configuration exists; no posture section |
+| D6 — restart requirement is __per item__, declared by the ingredient | Partly. See [#624](https://github.com/jwilleke/yourphr/issues/624) below — YourPHR has the concept, bundled into a flag doing three jobs |
+| D8 — egress conflicts resolve by longest-prefix, deny wins a tie, nothing is fatal | No operator-configurable egress at all; `src/http/ssrf.ts` hardcodes the inward ranges |
+| D9–D12 — a fatal configuration entry boots into __maintenance mode__, not a dead process | `src/cli/start.ts:31` calls `process.exit(EX_CONFIG)`. No maintenance mode: `grep -rl maintenance src/` returns `src/cli/migrate.ts` only. This is [#714](https://github.com/jwilleke/yourphr/issues/714) |
+| D13 — deployment methodology is not an input to the design | Not stated anywhere. Relevant to [#641](https://github.com/jwilleke/yourphr/issues/641)'s three targets |
+| D15 — the ingredient list, with secrets and plumbing excluded by rule | Not surveyed. Done below |
+| D17 — the recommendations ship as __required pages__ inside the instance, carrying an accountability disclaimer | No page system. Same dependency as help, below |
+| D18 — the posture section needs `admin-system` to __view__, not just to edit | Live gap. See below |
+| D19 — posture changes audited; the posture recorded at boot and compared to the previous boot; hash-chained | None of it. See below |
+| D20 — the instance never scores itself against a recommendation | Not stated. The temptation is far stronger here than in a wiki |
+| D21 — the report states measurable facts and is not called `guarantees` | No report of any kind |
+| D22 — audit storage isolation is operator advice, with its limits stated | `yourphr.audit.provider: "sqlite"` — the log lives in the same database file as the PHI |
+| D23 — the witness: five ways it looks like it is working when it is not | No witness, no chain to witness |
+
+### D6 answers one third of [#624](https://github.com/jwilleke/yourphr/issues/624), from a direction it had not considered
+
+[#624](https://github.com/jwilleke/yourphr/issues/624) says the bootstrap flag is doing three jobs — raw-env, restart-required, secret. D6 is the finished argument for the second of them: __the ingredient declares whether it needs a restart__, maintained by hand and updated in the same commit as any consumer that changes when it reads.
+
+The valuable half is the __rejection__. Comparing the running process against the configuration was considered and refused as over-built, with two concrete failure shapes: a boot snapshot reports a false restart-pending for consumers that re-read live, and the alternative — every consumer publishing the value it applied — is instrumentation across every subsystem to produce a flag a maintainer can simply write down. That reasoning transfers unchanged, and it is the design [#624](https://github.com/jwilleke/yourphr/issues/624) would otherwise have to derive.
+
+The shipped encoding is worth copying too, because the obvious one is wrong: groups holding arrays of key names break per-item editing, since array merge replaces wholesale. ngdpbase ships a __map keyed by the ingredient__, each entry carrying `group` and `restart`, with removal expressed as `null`.
+
+### D9–D12 are the worked answer to [#714](https://github.com/jwilleke/yourphr/issues/714)
+
+[#714](https://github.com/jwilleke/yourphr/issues/714) — *"no way to say the instance is briefly not itself"* — was filed from the capability side. D9–D12 arrives at the same mechanism from the __failure__ side, and lands somewhere more useful:
+
+- __D10's gate is a question, not a severity ranking:__ *can an administrator repair this through the admin UI?* Survivable means boot into maintenance mode with a link to the screen that fixes it; fatal means `process.exit`, reserved for when the machinery that would serve the repair is itself gone — configuration, the user and session layer, an unreadable data directory. A malformed deny rule is serious __and__ survivable; the distinction is whether stopping the process helps.
+- __D11 folds `audit.on-failure: refuse-boot` into that path.__ Directly relevant: YourPHR's audit already refuses the boot (`src/app.ts:321`), which under D11 is the __worse__ shape. A process that exits on a bad audit configuration restarts, fails identically, restarts again, and the operator never gets an instance to repair it with. Readiness, not exiting, is what pulls it out of rotation.
+- __D12 names the two changes that make it a repair path rather than a lockout:__ the not-ready gate must distinguish *starting* from *configuration-blocked* and pass `/admin` and `/login` in the second case, and the readiness endpoint must actually learn about the blocked state instead of reporting healthy.
+
+One caution before copying: ngdpbase had to land [ngdpbase#1147](https://github.com/jwilleke/ngdpbase/issues/1147) first, because its maintenance mode had two sources of truth and a toggle that did not survive a restart. YourPHR building [#714](https://github.com/jwilleke/yourphr/issues/714) fresh does not inherit that debt — but it does inherit the lesson about which mistake to not make, and should read D12 before choosing a mechanism.
+
+[#714](https://github.com/jwilleke/yourphr/issues/714) is currently P2. Nothing above changes that on its own, but it is a __dependency__ of any survivable-configuration-failure work, which is worth knowing before something else is scheduled that assumes one exists.
+
+### D18 is a live disclosure question here, not a hypothetical
+
+D18 requires `admin-system` to __view__ the posture section, departing from the usual view-with-`admin-read` pattern, and the concrete case it closes is __exactly YourPHR's shape__: a `demo-admin` role holding `admin-read` so a public demo can show every admin screen to visitors would, under the usual pattern, publish the instance's throttle thresholds, session flags and egress ranges to anonymous users.
+
+YourPHR has a public demo instance and a read-only demo admin ([#644](https://github.com/jwilleke/yourphr/issues/644)), and Admin → Configuration is already shipped. So the question is answerable today: __what can the demo admin see on Admin → Configuration?__ The masking there is a deliberate deny-list — correct for its job, which is deciding what an already-authorised admin sees unmasked — and it says nothing about who may open the screen at all. `auth.throttle.max-failures` and `auth.throttle.window-seconds` together tell a reader how to pace a password-guessing attempt without tripping the lock, and they are not secrets, so no deny-list would cover them.
+
+__Worth checking before adopting anything else from this document.__ It is a defect if it is true, and it is cheap to establish.
+
+### D19, D21 and D23 are where the distance is largest — and larger than this document has been saying
+
+YourPHR's `AuditManager` is not a general audit log. It is a __record-access counter__:
+
+```ts
+interface AccessEvent { actor_username: string; category: string; day: string; count: number; first_at: string; last_at: string; }
+```
+
+One row per `(actor, category, day)`, folded. Everything D19 builds on is therefore absent rather than merely unimplemented:
+
+- __No event types__, so there is nowhere for a configuration change, a lifecycle event, or a token mint/renew/revoke to be recorded. The `AgentTokensManager` audit gap this document already notes is not an oversight in that manager; the log has no shape to hold it.
+- __No `seq`, no `prevHash`__ — `grep -rl "chainSeq\|chainPrevHash" src/` returns nothing. There is no tamper evidence of any kind, so D19's strongest claim, D21's honesty about what may be promised, and all of D23 have no foundation to sit on.
+- __Day-folding is itself a limit worth naming.__ A `count` per day cannot answer *which record was read* and cannot order two reads. For an access log whose stated purpose ([#614](https://github.com/jwilleke/yourphr/issues/614)) is telling a patient what was disclosed, that granularity is a decision nobody has revisited.
+- __`audit.provider: "sqlite"` puts the log in the same database file as the PHI.__ D22's isolation advice has no analogue, and the coupling is tighter than ngdpbase's default, where `audit.provider.file.logdirectory` is already separate from the log directory.
+
+__A correction to this document.__ *"Audit refuses to boot"* is listed above under what flows upward, and it is a genuine YourPHR strength — but it is a claim about the __availability__ of the log, not its __integrity__. ngdpbase now has both halves; YourPHR has one, and the one it lacks is the one a PHI store has the stronger reason to want. The two should not be totalled as a single advantage.
+
+D23 is the most immediately useful part of the whole document regardless of any of this, because it is written from configuring the mechanism on a live instance and lists five ways a witness looks like it is working when it is not — including a witness that silently lands on the same volume as the log, which is __strictly worse than no witness at all__ since it converts an honest `unknown` into a confident `intact` backed by nothing.
+
+### D15's ingredient survey, done for this tree
+
+Applying D15's two exclusion rules — never a secret, never plumbing — to `config/app-default-config.json`:
+
+| Group | YourPHR ingredients |
+|---|---|
+| Session and cookie | `web.secure-cookies`, `auth.session.sliding-seconds`, `auth.session.absolute-seconds`, `auth.trusted-proxies` |
+| Identity and registration | `auth.signup.enabled`, `auth.password.min-length`, `auth.providers`, `auth.factors` |
+| Login throttling | `auth.throttle.max-failures`, `auth.throttle.window-seconds` |
+| Rate limiting | `auth.rate-limit.max-requests`, `auth.rate-limit.window-seconds` |
+| Agent tokens | `auth.agent-token.enabled`, `.read-only`, `.default-ttl-hours`, `.max-ttl-hours`, `.max-per-user`, `.retention-days`, `.renewable`, `.max-renewals`, `.renew-window-hours` |
+| Audit | `audit.provider` |
+| Encryption at rest | `database.encryption.key`, `backup.encryption.key` — __presence only, never the value__ |
+
+Two groups from ngdpbase's list have no YourPHR analogue, and both absences are correct: __content sanitisation__, because nothing here renders user markup server-side, and __egress ranges__, because the boundary is hardcoded rather than configured.
+
+Two observations the survey produced, which is the point of doing one:
+
+- __`yourphr.auth.factors` ships `["password"]`__ — the identical fact D15 calls out in ngdpbase, where it is what makes the absence of MFA visible rather than something a reader has to already know. Here it is [#507](https://github.com/jwilleke/yourphr/issues/507)'s subject, and a posture view is where it would stop being a survey item and become a stated property of the running instance.
+- __`yourphr.auth.trusted-proxies` and `yourphr.web.secure-cookies` belong in the same group__, for D15's reason: they are read together, and showing one without the other hides half of a known interaction.
+
+The cost of D16's map is lower here than it looks, because __this config file already carries three curated key lists__ — `yourphr.public` (an allow-list, because a mistake exposes a value to the internet), `yourphr.config.secret-keys` (a deny-list, because a mistake shows a value to an already-authenticated admin) and `yourphr.config.env-keys` (a map of key to owning variable). A fourth curated list in the same file is the mechanism it already uses three times, not a new idea to introduce.
+
+### D17 is a second required-pages dependency
+
+The `baseline`/`hardened`/`regulated` recommendations ship as __required pages rendered inside the instance__, one click from the section that edits the posture, each carrying a disclaimer that the operator alone is accountable for their configuration.
+
+That places them on the same side of the deciding question as help. This document already found one shipped page answering a YourPHR gap — *"Using Tokens"*, which is [#695](https://github.com/jwilleke/yourphr/issues/695)'s minting-screen criterion. The posture recommendations are the second, and the pattern is now the argument rather than a coincidence: capability ngdpbase ships as __content__ costs YourPHR a page system it does not have.
+
+### D20 matters more here than it does upstream
+
+*The instance never scores itself against a recommended posture.* No drift warning, no compliance percentage, no badge.
+
+ngdpbase's reason is that the thing being compared against does not exist — no authoritative value set, no two auditors agreeing on the same instance. __That reason is stronger for a PHR, and so is the pressure to ignore it.__ A personal health record is precisely where somebody will eventually ask for a `hipaa` profile value or a compliance score on the admin dashboard, and D2's objection applies exactly: naming a posture is a claim the label itself cannot establish. Adopting D20 as a standing rule costs nothing today and is much harder to adopt after the first such request has been agreed to.
+
+### What this changes about the deciding question
+
+__Nothing, and that is the finding.__ Every decision above is portable as a decision without adopting the platform, which is what a decision record is for. What is not portable by reading is the code behind D19, D21 and D23 — the chain, the witness, the verifier — and the maintenance-mode boot path behind D9–D12. Those are `src/framework`-shaped, which is the 34% column in the proportion table above, and they are reachable by the standing policy: copy the pattern, file the improvement.
+
+The one exception is D17, which is required-pages and therefore lands on the far side of the same question help does.
 
 ## Help as a real document system — the `required-pages` mechanism
 
@@ -584,3 +736,7 @@ Recorded because each was asserted confidently before being checked, and the pat
   `AuditManager` or become *"adopt ngdpbase's"* — they are written differently depending on this
   document's outcome, so they are held.
 - Repointing the six dangling references to the governing document.
+- __Whether YourPHR's demo admin can read Admin -> Configuration__, which D18 of the security-posture
+  record says it must not. Cheap to establish, and a defect if it is true.
+- __Whether the access log's day-folding is the granularity [#614](https://github.com/jwilleke/yourphr/issues/614)
+  wants.__ Raised by the D19 comparison; nobody has revisited it since the shape was chosen.
