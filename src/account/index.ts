@@ -55,6 +55,12 @@ export function accessCategoryFor(pathname: string): string | undefined {
     '/api/secure/allergies/classified': 'Allergies',
     '/api/secure/immunizations/classified': 'Immunizations',
     '/api/secure/resources/recent': 'Record search',
+    // Find-anything-by-words (yourphr#599) was serving results without recording them: the
+    // dashboard's search box read across every resource type a person has and the access log said
+    // nothing happened. Both spellings, because server.ts answers both and a category that covers
+    // one of two aliases is a hole shaped like a typo.
+    '/api/secure/resources/search': 'Record search',
+    '/api/secure/search': 'Record search',
     '/api/secure/resource/fhir': 'Records (FHIR)',
   };
   if (exact[pathname]) return exact[pathname];

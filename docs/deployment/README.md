@@ -34,6 +34,7 @@ This page covers running and configuring an instance. The rest of the deployment
 | [`../medicare-bluebutton.md`](../medicare-bluebutton.md) | A full worked SMART-on-FHIR connect example with exact settings. |
 | [`../cms-bluebutton-production-access.md`](../cms-bluebutton-production-access.md) | CMS production access: form, Zoom demo script, PP/ToS gates (#433). |
 | [`../FHIR/fhir-converter-local.md`](../FHIR/fhir-converter-local.md) | The optional C-CDA/CCD converter sidecar. |
+| [`../agent-access-policy.md`](../agent-access-policy.md) | Letting a patient point their own AI client at their own records ([#657](https://github.com/jwilleke/yourphr/issues/657)): the default posture, what is logged and under whose name, what the product refuses, and how to connect a client. Off unless `yourphr.auth.agent-token.enabled` is set. |
 | [`../recovery/`](../recovery/) | Backup, restore, and the __restore drill__ — what a backup contains, and how to prove your instance can come back. |
 
 > __Deployment-agnostic by rule.__ Every option below is driven by the same `YOURPHR_*` environment contract and a SQLite file — nothing requires Kubernetes, Flux, SOPS, or any specific orchestrator. The maintainer's production instance uses Flux/GitOps in a separate repo (`mj-infra-flux`); that repo's only job is to *populate the same env vars* a `docker run` would. If a feature can only be configured one way, that is a bug — file it.
