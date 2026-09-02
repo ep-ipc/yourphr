@@ -51,8 +51,13 @@ const KNOWN_MISSING: Record<string, string> = {
   '/api/auth/callback/:p': 'yourphr#693',
   // Invisible until yourphr#694 widened this check past the services layer — settings.component.ts
   // injects HttpClient and calls it directly.
-  '/api/secure/access/token': 'yourphr#695',
-  '/api/secure/sync/discovery': 'yourphr#695',
+  //
+  // Repointed from yourphr#695 to yourphr#719: the server half of #695 shipped (the routes are
+  // /api/secure/account/agent-tokens), so what keeps these two unrouted is the frontend never having
+  // been moved off the Go endpoints. Neither is repaired by routing it — #719 DELETES both, because
+  // the screen they belong to pairs a companion mobile app that does not exist.
+  '/api/secure/access/token': 'yourphr#719',
+  '/api/secure/sync/discovery': 'yourphr#719',
 };
 
 /**
