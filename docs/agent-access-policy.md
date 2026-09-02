@@ -128,7 +128,7 @@ The bridge offers three kinds of thing, and they are reached differently:
 
 Resources and prompts are what a client's attachment picker lists, which is why the first slice appeared in no picker at all — it published a tool and nothing else.
 
-Every resource is a GET that already has an access category, so the same default-deny gate decides it and the same access-log line records it. The list offered is the full seven and is **not** filtered to the token's own scopes: an agent token cannot read its own record, and probing each route to find out would write an access-log line for a resource the patient never asked for. Reading one the token does not carry is refused by name — *"not given access to medications … mint one with the 'Medications' scope selected"* — and refused as a protocol **error** rather than as content, so a reason can never be attached to a conversation as though it were the record.
+Every resource is a GET that already has an access category, so the same default-deny gate decides it and the same access-log line records it. The list offered is the full seven and is __not__ filtered to the token's own scopes: an agent token cannot read its own record, and probing each route to find out would write an access-log line for a resource the patient never asked for. Reading one the token does not carry is refused by name — *"not given access to medications … mint one with the 'Medications' scope selected"* — and refused as a protocol __error__ rather than as content, so a reason can never be attached to a conversation as though it were the record.
 
 Then simply ask — *"search my records for metformin"*, *"when was my last tetanus shot?"* — and check the access log afterwards, where the read appears under the token's name.
 
