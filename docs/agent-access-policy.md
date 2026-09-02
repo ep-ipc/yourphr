@@ -116,9 +116,19 @@ Claude Desktop reads `~/Library/Application Support/Claude/claude_desktop_config
 
 __Absolute paths, and the local `tsx` binary rather than `npx`.__ A desktop client is launched by the window manager, not a shell, so it inherits neither the shell `PATH` nor a useful working directory: `npx tsx` there resolves nothing locally and tries to fetch the package over the network, which fails on exactly the offline instance this product is built for. Naming the binary in `node_modules/.bin` removes both problems.
 
-### 4. Ask a question — there is nothing to select
+### 4. Ask a question, or attach a record
 
-The bridge offers a __tool__, and MCP tools are called by the model when a question warrants one. They deliberately do not appear in the attachment or resource picker, which lists MCP __resources__ and __prompts__; this server publishes neither, so that menu is correctly empty and the server is still working. The client's MCP settings are where to confirm it: "yourphr — 1 tool enabled".
+The bridge offers three kinds of thing, and they are reached differently:
+
+| | reached by | what it is |
+|---|---|---|
+| __tool__ — `search_records` | the model, when a question warrants it | find-anything-by-words over the patient's own index |
+| __resources__ — summary, IPS summary, medications, conditions, allergies, immunizations, recent records | the PATIENT, from the attachment picker | the document itself, as JSON, exactly as the app's own screens read it |
+| __prompts__ — *What is in my record?*, *What am I taking, and why?*, *Find something in my record* | the patient, from the same menu | a question already written, carrying the instruction to answer only from the record |
+
+Resources and prompts are what a client's attachment picker lists, which is why the first slice appeared in no picker at all — it published a tool and nothing else.
+
+Every resource is a GET that already has an access category, so the same default-deny gate decides it and the same access-log line records it. The list offered is the full seven and is **not** filtered to the token's own scopes: an agent token cannot read its own record, and probing each route to find out would write an access-log line for a resource the patient never asked for. Reading one the token does not carry is refused by name — *"not given access to medications … mint one with the 'Medications' scope selected"* — and refused as a protocol **error** rather than as content, so a reason can never be attached to a conversation as though it were the record.
 
 Then simply ask — *"search my records for metformin"*, *"when was my last tetanus shot?"* — and check the access log afterwards, where the read appears under the token's name.
 
@@ -127,5 +137,5 @@ A token lasts at most 24 hours by design; when it expires the client stops worki
 ## What this policy does not cover
 
 - __Whether the patient's chosen client is trustworthy.__ It cannot; that is theirs to judge, and the honest scope of this design is that it makes the judgement theirs rather than the product's. What YourPHR owes is that the credential is short-lived, narrow, revocable, and that every use of it is visible.
-- __Prompt injection.__ Hostile text inside an imported document could try to induce a client to fetch more than the patient meant. Read-only, scoping and the audit bound the blast radius; they do not eliminate the class. A second tool that returns whole resources would widen it, which is one reason there is only one tool.
+- __Prompt injection.__ Hostile text inside an imported document could try to induce a client to fetch more than the patient meant. Read-only, scoping and the audit bound the blast radius; they do not eliminate the class. The first slice noted that a second *tool* returning whole resources would widen it, and that is still the position: whole records are published as MCP __resources__, which the patient attaches, rather than as tools the model can decide to call. The reach is unchanged either way — a token scoped to `Record search` already matches words across every resource type — and what bounds it is the same thing it always was: the categories the patient ticked when they minted the credential.
 - __What a model infers.__ A summary drawn from real records can be wrong in ways the records are not. Nothing here makes an AI's reading of a record clinically reliable, and no part of the product should imply otherwise.

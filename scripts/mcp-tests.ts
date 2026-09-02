@@ -200,6 +200,54 @@ async function main(): Promise<void> {
     check('and is NOT attributed to the patient, who was not at the keyboard',
       !log.data.some((e) => e.actor_username === 'jim' && e.category === 'Record search'));
 
+    // --- resources and prompts (yourphr#657, second slice) ---
+    // The reason they exist: a client's attachment picker lists RESOURCES and PROMPTS, so a server
+    // publishing only a tool appears in no picker at all.
+    const meds = await mint(h.base, jimSession, ['Medications', 'Record search'], 'Attachment client');
+    const catalogue = await speak(h.base, meds.token, [
+      HELLO,
+      { jsonrpc: '2.0', id: 2, method: 'resources/list' },
+      { jsonrpc: '2.0', id: 3, method: 'prompts/list' },
+    ], 3);
+    const listed = (catalogue.find((r) => r.id === 2)?.result?.['resources'] ?? []) as { uri: string }[];
+    check('the bridge publishes resources, so the server appears in an attachment picker',
+      listed.length > 0 && listed.some((r) => r.uri === 'yourphr://medications'), `${listed.length} resource(s)`);
+    const prompts = (catalogue.find((r) => r.id === 3)?.result?.['prompts'] ?? []) as { name: string }[];
+    check('and prompts, which is the other half of that menu',
+      prompts.length > 0, prompts.map((p) => p.name).join(','));
+
+    const readOne = await speak(h.base, meds.token, [
+      HELLO, { jsonrpc: '2.0', id: 2, method: 'resources/read', params: { uri: 'yourphr://medications' } },
+    ], 2);
+    const contents = (readOne.find((r) => r.id === 2)?.result?.['contents'] ?? []) as { text?: string }[];
+    check('a resource the token was scoped to reads the patient\'s own records',
+      (contents[0]?.text ?? '').includes('Metformin'), (contents[0]?.text ?? '').slice(0, 60));
+
+    // The same default-deny gate, reached by a different method name.
+    const refusedResource = await speak(h.base, jimSession === '' ? '' : (await mint(h.base, jimSession, ['Record search'], 'Search only')).token, [
+      HELLO, { jsonrpc: '2.0', id: 2, method: 'resources/read', params: { uri: 'yourphr://medications' } },
+    ], 2);
+    const refusalMessage = refusedResource.find((r) => r.id === 2)?.error?.message ?? '';
+    check('TOOTH: a resource outside the token\'s scopes is refused, and names the scope to tick',
+      refusalMessage.includes('Medications'), refusalMessage.slice(0, 80));
+    check('and the refusal is an ERROR, not content — a reason must never attach as if it were the record',
+      (refusedResource.find((r) => r.id === 2)?.result ?? undefined) === undefined);
+
+    const promptGot = await speak(h.base, meds.token, [
+      HELLO, { jsonrpc: '2.0', id: 2, method: 'prompts/get', params: { name: 'find-in-my-record', arguments: { query: 'metformin' } } },
+    ], 2);
+    const messages = (promptGot.find((r) => r.id === 2)?.result?.['messages'] ?? []) as { content?: { text?: string } }[];
+    const promptText = messages[0]?.content?.text ?? '';
+    check('a prompt carries the query AND the instruction to answer only from the record',
+      promptText.includes('metformin') && promptText.includes('do not say'), promptText.slice(0, 60));
+
+    // A resource read is a disclosure, so it is logged like one.
+    const afterRead = (await (await fetch(`${h.base}/api/secure/account/access-log`, {
+      headers: { authorization: `Bearer ${jimSession}` },
+    })).json()) as { data: { actor_username: string; category: string }[] };
+    check('a resource read is logged under the agent\'s name, like every other read',
+      afterRead.data.some((e) => e.actor_username === 'Attachment client' && e.category === 'Medications'));
+
     // --- revocation, the property the whole design rests on ---
     await fetch(`${h.base}/api/secure/account/agent-tokens/${jim.id}/revoke`, {
       method: 'POST', headers: { authorization: `Bearer ${jimSession}` },

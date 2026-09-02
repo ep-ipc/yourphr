@@ -24,8 +24,13 @@
  * So this process holds no database handle, no session, and no privilege. It is an HTTP client with
  * a scoped bearer token, and every safety property it has belongs to the server it calls.
  *
+ * WHAT IT PUBLISHES: one read-only TOOL (`search_records`), seven RESOURCES — the categorised GET
+ * routes an agent token can already reach — and three PROMPTS. The last two are what a client's
+ * attachment picker lists, and publishing neither is why the first slice appeared in no picker.
+ *
  * ZERO DEPENDENCIES, deliberately. The official SDK would be the conventional choice, but MCP's
- * stdio transport is newline-delimited JSON-RPC 2.0 and the surface used here is four methods. In a
+ * stdio transport is newline-delimited JSON-RPC 2.0 and the surface used here is a handful of
+ * methods. In a
  * store of medical records, a dependency tree is a standing supply-chain question, and this repo
  * runs on sixteen packages. If the maintainers would rather take the SDK, the shape below is the
  * same either way — only the plumbing changes.
@@ -81,6 +86,86 @@ const SEARCH_RECORDS = {
     additionalProperties: false,
   },
 } as const;
+
+/**
+ * The records a client can ATTACH, rather than ask a question about (yourphr#657).
+ *
+ * The first slice published one tool and nothing else, which is why YourPHR did not appear in a
+ * client's attachment picker at all: that menu lists RESOURCES and PROMPTS, and this server had
+ * neither. A tool answers a question the model thought to ask; a resource is the patient handing
+ * over a document deliberately, which is the more honest shape for "here are my medications".
+ *
+ * Every entry is a GET that already has an access category, so the same default-deny gate decides
+ * it and the same access-log line records it. The `scope` field is not enforced here — it is what
+ * the server will demand, repeated so a refusal can name the exact thing to tick when minting.
+ *
+ * The list is STATIC and deliberately not filtered to the token's own scopes: an agent token
+ * cannot read its own record (managing one needs the owner's session), and probing each route to
+ * find out would write an access-log line for every resource the patient never asked for. So all
+ * of them are offered, and one the token does not carry refuses by name when it is read.
+ */
+const RESOURCES = [
+  { uri: 'yourphr://summary', name: 'summary', title: 'Health summary', scope: 'Summary', path: '/api/secure/summary',
+    description: 'The overview the patient sees first: their active problems, medications, allergies and recent activity.' },
+  { uri: 'yourphr://summary/ips', name: 'summary-ips', title: 'International Patient Summary', scope: 'Summary (IPS)', path: '/api/secure/summary/ips',
+    description: 'The same summary as an IPS FHIR bundle — the form a clinician abroad would be given.' },
+  { uri: 'yourphr://medications', name: 'medications', title: 'Medications', scope: 'Medications', path: '/api/secure/medications/reconciled',
+    description: "Reconciled medication list — one entry per drug, not one per prescription refill." },
+  { uri: 'yourphr://conditions', name: 'conditions', title: 'Conditions', scope: 'Conditions', path: '/api/secure/conditions/reconciled',
+    description: 'Reconciled problem list, de-duplicated across the sources the patient has connected.' },
+  { uri: 'yourphr://allergies', name: 'allergies', title: 'Allergies', scope: 'Allergies', path: '/api/secure/allergies/classified',
+    description: 'Allergies and intolerances, classified by what they are a reaction to.' },
+  { uri: 'yourphr://immunizations', name: 'immunizations', title: 'Immunizations', scope: 'Immunizations', path: '/api/secure/immunizations/classified',
+    description: 'Immunization history, classified by vaccine.' },
+  { uri: 'yourphr://recent', name: 'recent', title: 'Recent records', scope: 'Record search', path: '/api/secure/resources/recent',
+    description: 'The most recently added records across every type, newest first.' },
+] as const;
+
+/**
+ * Prompts — the other half of what a picker lists, and the place to say HOW to answer.
+ *
+ * Each one carries the same instruction the product holds itself to: answer from the record or say
+ * the record does not say. A model inventing a plausible medication history for someone reading it
+ * as their own is the failure this server would be blamed for, and a prompt is the cheapest place
+ * to refuse it.
+ */
+const GROUNDING =
+  'Answer only from the records returned by this server. Quote the record date beside anything you ' +
+  'state. If the records do not say, say that they do not say — never fill a gap with what is ' +
+  'usually true. This is not medical advice, and you are not the patient\'s clinician.';
+
+const PROMPTS = [
+  {
+    name: 'whats-in-my-record',
+    title: 'What is in my record?',
+    description: 'A plain-language tour of what this instance holds — conditions, medications, allergies, immunizations.',
+    arguments: [],
+    build: (): string =>
+      'Read the yourphr://summary resource, then tell me in plain language what my health record ' +
+      `currently holds. Group it by conditions, medications, allergies and immunizations. ${GROUNDING}`,
+  },
+  {
+    name: 'my-medications',
+    title: 'What am I taking, and why?',
+    description: 'The reconciled medication list, matched against the conditions in the record.',
+    arguments: [],
+    build: (): string =>
+      'Read the yourphr://medications and yourphr://conditions resources. List what I am taking, and ' +
+      'where the record links a medication to a condition, say so. Where it does not, say the record ' +
+      `does not say why. ${GROUNDING}`,
+  },
+  {
+    name: 'find-in-my-record',
+    title: 'Find something in my record',
+    description: 'Search the record by words and explain what the matches are.',
+    arguments: [{ name: 'query', description: 'What to look for, e.g. "metformin" or "blood pressure".', required: true }],
+    build: (args: Record<string, unknown>): string => {
+      const query = typeof args['query'] === 'string' ? args['query'] : '';
+      return `Use the search_records tool to find "${query}" in my records, then explain what each ` +
+        `match is, in plain language, with its date. ${GROUNDING}`;
+    },
+  },
+] as const;
 
 interface SearchHit {
   source_resource_type: string;
@@ -138,6 +223,29 @@ async function searchRecords(query: string, limit: number): Promise<Record<strin
   return toolResult(`${hits.length} record${hits.length === 1 ? '' : 's'} matching "${query}":\n${lines.join('\n')}`);
 }
 
+/**
+ * One resource, read as the patient. The refusals carry the same sentences the tool uses, because
+ * a patient meets them the same way: a token that expired, or one minted without the box ticked.
+ */
+async function readResource(entry: (typeof RESOURCES)[number]): Promise<{ ok: true; text: string } | { ok: false; message: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${entry.path}`, { headers: { authorization: `Bearer ${TOKEN}`, accept: 'application/json' } });
+  } catch (err) {
+    return { ok: false, message: `Could not reach YourPHR at ${BASE}: ${(err as Error).message}` };
+  }
+  if (res.status === 401) {
+    return { ok: false, message: 'YourPHR refused the agent token. It has been revoked, or it has expired — agent tokens last at most 24 hours. Mint a fresh one from Account Profile and update this client.' };
+  }
+  if (res.status === 403) {
+    return { ok: false, message: `This agent token was not given access to ${entry.title.toLowerCase()}. Mint one from Account Profile with the "${entry.scope}" scope selected.` };
+  }
+  if (!res.ok) return { ok: false, message: `YourPHR answered ${res.status} ${res.statusText}.` };
+  // JSON as it stands, not a rendering: a resource is the document itself, and a summary written
+  // here would be a second place for the record's meaning to drift from the app's.
+  return { ok: true, text: await res.text() };
+}
+
 async function handle(msg: Rpc): Promise<void> {
   const { id, method, params } = msg;
 
@@ -149,11 +257,13 @@ async function handle(msg: Rpc): Promise<void> {
       const asked = String((params as { protocolVersion?: string } | undefined)?.protocolVersion ?? '');
       reply(id, {
         protocolVersion: SUPPORTED_PROTOCOLS.includes(asked) ? asked : FALLBACK_PROTOCOL,
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: 'yourphr', version: '1.0.0' },
         instructions:
           'These are one patient\'s own health records, read live from their YourPHR instance. Every ' +
-          'read is recorded in their access log under this client\'s name. Nothing here can be changed.',
+          'read is recorded in their access log under this client\'s name. Nothing here can be changed. ' +
+          'Answer only from what these records say, with the record date beside anything you state; ' +
+          'where they do not say, say so rather than filling the gap with what is usually true.',
       });
       return;
     }
@@ -168,6 +278,49 @@ async function handle(msg: Rpc): Promise<void> {
     case 'tools/list':
       reply(id, { tools: [SEARCH_RECORDS] });
       return;
+
+    case 'resources/list':
+      reply(id, { resources: RESOURCES.map(({ uri, name, title, description }) => ({ uri, name, title, description, mimeType: 'application/json' })) });
+      return;
+
+    // Asked by clients that support parameterised resources. This server publishes none, and an
+    // empty list is the answer; a "method not found" makes some clients drop the server entirely.
+    case 'resources/templates/list':
+      reply(id, { resourceTemplates: [] });
+      return;
+
+    case 'resources/read': {
+      const uri = String((params as { uri?: string } | undefined)?.uri ?? '');
+      const entry = RESOURCES.find((r) => r.uri === uri);
+      if (!entry) {
+        fail(id, -32002, `no such resource: ${uri}`);
+        return;
+      }
+      const read = await readResource(entry);
+      // A refusal is an ERROR here rather than content: a resource that answers with the reason it
+      // could not be read would be attached to the conversation as if it were the record.
+      if (!read.ok) fail(id, -32002, read.message);
+      else reply(id, { contents: [{ uri, mimeType: 'application/json', text: read.text }] });
+      return;
+    }
+
+    case 'prompts/list':
+      reply(id, { prompts: PROMPTS.map(({ name, title, description, arguments: args }) => ({ name, title, description, arguments: args })) });
+      return;
+
+    case 'prompts/get': {
+      const asked = params as { name?: string; arguments?: Record<string, unknown> } | undefined;
+      const prompt = PROMPTS.find((p) => p.name === asked?.name);
+      if (!prompt) {
+        fail(id, -32602, `unknown prompt: ${String(asked?.name ?? '')}`);
+        return;
+      }
+      reply(id, {
+        description: prompt.description,
+        messages: [{ role: 'user', content: { type: 'text', text: prompt.build(asked?.arguments ?? {}) } }],
+      });
+      return;
+    }
 
     case 'tools/call': {
       const call = params as { name?: string; arguments?: Record<string, unknown> } | undefined;
