@@ -4,17 +4,23 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔴 P0 — Security & Critical
 
-- [#711](https://github.com/jwilleke/yourphr/pull/711) — feat(mcp): the patient's own AI client reads their records, over the agent-token surface *(PR · ready)* — refs [#657](https://github.com/jwilleke/yourphr/issues/657), [#695](https://github.com/jwilleke/yourphr/issues/695)
-- [#710](https://github.com/jwilleke/yourphr/pull/710) — fix(search): index a record's clinical name — `code` is a CodeableConcept, not a bare code *(PR · ready)* — refs [#657](https://github.com/jwilleke/yourphr/issues/657)
+- [#712](https://github.com/jwilleke/yourphr/issues/712) — [security] frontend build-tree low advisory: elliptic (GHSA-848j-6mx2-7j84) via webcrypto-liner
+- [#707](https://github.com/jwilleke/yourphr/issues/707) — [security] image-size — both DoS advisories have no patched release (blocked upstream)
+- [#700](https://github.com/jwilleke/yourphr/issues/700) — [SECURITY] The shipped app still calls Fasten's Lighthouse — remove every runtime dependency on Fasten infrastructure
+- [#698](https://github.com/jwilleke/yourphr/issues/698) — [FEATURE] Sessions manager: do not back up credentials, and three defects inherited from ngdpbase's token manager
+- [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] frontend build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
+- [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
+- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
+- [#711](https://github.com/jwilleke/yourphr/pull/711) — feat(mcp): the patient's own AI client reads their records, over the agent-token surface *(PR · ready)* — closes [#715](https://github.com/jwilleke/yourphr/issues/715)
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟠 P1
 
-- [#700](https://github.com/jwilleke/yourphr/issues/700) — [SECURITY] The shipped app still calls Fasten's Lighthouse — remove every runtime dependency on Fasten infrastructure
-- [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] frontend build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
+- [#719](https://github.com/jwilleke/yourphr/issues/719) — [BUG] Settings still offers device pairing for an app that does not exist — replace it with the agent-token minting screen
+- [#713](https://github.com/jwilleke/yourphr/issues/713) — [BUG] A fix to the search index reaches no record already stored — reindexAll() has no caller outside a test
+- [#710](https://github.com/jwilleke/yourphr/pull/710) — fix(search): index a record's clinical name — `code` is a CodeableConcept, not a bare code *(PR · ready)* — closes [#716](https://github.com/jwilleke/yourphr/issues/716)
 - [#708](https://github.com/jwilleke/yourphr/issues/708) — [ARCH] relay/main.go is the last Go module — port it to TypeScript or record that it stays Go
 - [#696](https://github.com/jwilleke/yourphr/issues/696) — [BUG] "Add record" opens a form that cannot save — manual entry 404s
-- [#695](https://github.com/jwilleke/yourphr/issues/695) — [BUG] Settings offers agent tokens the server does not implement — and no scoping, audit or expiry model
 - [#690](https://github.com/jwilleke/yourphr/issues/690) — [BUG] No E2E coverage of any interaction path — only sign-in-and-look
 - [#685](https://github.com/jwilleke/yourphr/issues/685) — [BUG] Provider connection errors are never recorded — POST /secure/jobs/error 404s
 - [#684](https://github.com/jwilleke/yourphr/issues/684) — [BUG] The record wizard cannot link or unlink related records
@@ -31,7 +37,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#608](https://github.com/jwilleke/yourphr/issues/608) — [SPIKE] Architecture: build on the ngdpbase model throughout — engine, managers as the only door, config-bound providers, request context (the agreed architecture doc, applied)
 - [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
-- [#494](https://github.com/jwilleke/yourphr/issues/494) — [FEATURE] Public demo: seeded demo account + golden-DB reset runbook (demo.yourphr.org)
 - [#438](https://github.com/jwilleke/yourphr/issues/438) — [EPIC] demo.yourphr.org — public CMS / sandbox demo instance
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
@@ -41,10 +46,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟡 P2
 
-- [#712](https://github.com/jwilleke/yourphr/issues/712) — [security] frontend build-tree low advisory: elliptic (GHSA-848j-6mx2-7j84) via webcrypto-liner
-- [#707](https://github.com/jwilleke/yourphr/issues/707) — [security] image-size — both DoS advisories have no patched release (blocked upstream)
-- [#698](https://github.com/jwilleke/yourphr/issues/698) — [FEATURE] Sessions manager: do not back up credentials, and three defects inherited from ngdpbase's token manager
-- [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
+- [#714](https://github.com/jwilleke/yourphr/issues/714) — [FEATURE] Maintenance mode — no way to say the instance is briefly not itself
 - [#709](https://github.com/jwilleke/yourphr/issues/709) — [FEATURE] Per-user settings have no store — Go's user_settings table got no successor, so preferences live in one browser
 - [#705](https://github.com/jwilleke/yourphr/issues/705) — [FEATURE] Reconnect an expired source through the catalog — re-authorize without disconnect + re-import
 - [#704](https://github.com/jwilleke/yourphr/issues/704) — [CHORE] Frontend tests: off the deprecated Karma builder, then Karma/Jasmine to Vitest
@@ -107,13 +109,17 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
+- [#721](https://github.com/jwilleke/yourphr/issues/721) — [security] frontend dev-tree moderate advisories: qs (GHSA-4mjr-xmp4-gh2g, GHSA-x5fp-wj9c-mxmx)
+- [#720](https://github.com/jwilleke/yourphr/issues/720) — [security] frontend build-tree high advisories: fast-uri (4 GHSAs) — and the pin from #483 is now the vulnerable version
+- [#718](https://github.com/jwilleke/yourphr/issues/718) — [security] frontend build-tree low advisory: postcss-selector-parser (GHSA-w9m9-85wc-3x92)
+- [#717](https://github.com/jwilleke/yourphr/issues/717) — [security] frontend build-tree high advisories: browserslist (GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g)
+- [#695](https://github.com/jwilleke/yourphr/issues/695) — [BUG] Settings offers agent tokens the server does not implement — and no scoping, audit or expiry model
 - [#388](https://github.com/jwilleke/yourphr/issues/388) — [ARCH] Extract the FHIR domain logic as a consumable library (own-datastore consumers)
 - [#354](https://github.com/jwilleke/yourphr/issues/354) — [FEATURE] Integrate assets from HL7 FHIR GitHub organization (fhir-test-cases, fhir-codegen, etc.)
 - [#20](https://github.com/jwilleke/yourphr/issues/20) — [EPIC] SMART on FHIR — live provider sync
 
 ## ⏸ Deferred
 
-- [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
 - [#351](https://github.com/jwilleke/yourphr/issues/351) — [FEATURE] /medical-history — group & filter by Date (default), Condition, Provider, Place, Type
 - [#263](https://github.com/jwilleke/yourphr/issues/263) — [FEATURE] Message Provider
 - [#131](https://github.com/jwilleke/yourphr/issues/131) — [FEATURE] E2E testing — remaining gap: lforms questionnaire render + interact
