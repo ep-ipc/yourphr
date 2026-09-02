@@ -11,14 +11,12 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] frontend build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
-- [#711](https://github.com/jwilleke/yourphr/pull/711) — feat(mcp): the patient's own AI client reads their records, over the agent-token surface *(PR · ready)* — closes [#715](https://github.com/jwilleke/yourphr/issues/715)
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟠 P1
 
 - [#719](https://github.com/jwilleke/yourphr/issues/719) — [BUG] Settings still offers device pairing for an app that does not exist — replace it with the agent-token minting screen
 - [#713](https://github.com/jwilleke/yourphr/issues/713) — [BUG] A fix to the search index reaches no record already stored — reindexAll() has no caller outside a test
-- [#710](https://github.com/jwilleke/yourphr/pull/710) — fix(search): index a record's clinical name — `code` is a CodeableConcept, not a bare code *(PR · ready)* — closes [#716](https://github.com/jwilleke/yourphr/issues/716)
 - [#708](https://github.com/jwilleke/yourphr/issues/708) — [ARCH] relay/main.go is the last Go module — port it to TypeScript or record that it stays Go
 - [#696](https://github.com/jwilleke/yourphr/issues/696) — [BUG] "Add record" opens a form that cannot save — manual entry 404s
 - [#690](https://github.com/jwilleke/yourphr/issues/690) — [BUG] No E2E coverage of any interaction path — only sign-in-and-look
