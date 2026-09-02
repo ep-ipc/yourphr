@@ -104,9 +104,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#712](https://github.com/jwilleke/yourphr/issues/712) — [security] frontend build-tree low advisory: elliptic (GHSA-848j-6mx2-7j84) via webcrypto-liner
-- [#698](https://github.com/jwilleke/yourphr/issues/698) — [FEATURE] Sessions manager: do not back up credentials, and three defects inherited from ngdpbase's token manager
-- [#589](https://github.com/jwilleke/yourphr/issues/589) — [security] frontend build-tree moderate advisories: ajv (GHSA-2g4f-4pwh-qvx6), yaml (GHSA-48c2-rrv3-qjmp)
+*None.*
 
 ## ⏸ Deferred
 
