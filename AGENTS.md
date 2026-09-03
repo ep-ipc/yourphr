@@ -77,7 +77,7 @@ Repo-specific brief for agents. The kit-managed protocol is __above__ `KIT:END`;
 
 __Mission: Your medical records, immediately and in your hands — for free.__ (Fulfilling the 21st Century Cures Act, 2016. See [issue #15](https://github.com/jwilleke/yourphr/issues/15) / `private/goals.md`.) Prioritize work that advances immediate, complete patient access to records.
 
-__YourPHR__ is a self-hosted personal/family electronic medical record viewer — a community continuation of Fasten OnPrem. It imports FHIR R4 bundles (manual upload or provider SMART sync) and displays them. A __TypeScript backend__ (`src/`, Node 24, SQLite via better-sqlite3-multiple-ciphers) serves a JSON API and the compiled __Angular 20 frontend__, both built from this repository into one image.
+__YourPHR__ is a self-hosted personal/family electronic medical record viewer — a community continuation of Fasten OnPrem. It imports FHIR R4 bundles (manual upload or provider SMART sync) and displays them. A __TypeScript backend__ (`src/`, Node 24, SQLite via better-sqlite3-multiple-ciphers) serves a JSON API and the compiled __Angular 22 frontend__, both built from this repository into one image.
 
 __The Go stack is gone.__ It served the product to v2.10.3 and was deleted on 2026-08-27 ([#677](https://github.com/jwilleke/yourphr/issues/677)) once both instances ran TypeScript. Its history is preserved by the `v1.0.0`…`v2.10.3` tags and the frozen image `ghcr.io/jwilleke/yourphr-go:2.10.3`. The ONLY Go left in the tree is `relay/` — a pure-stdlib SMART store-and-poll OAuth relay with no dependencies, kept because it is deployed and has no TypeScript replacement. Documents under `docs/planning/` and `docs/vendors/` that describe Go internals are history; read them as such.
 
@@ -204,7 +204,7 @@ bundle upload and C-CDA remain the zero-setup import path.
 
 ### Frontend architecture (`frontend/src/app/`)
 
-Standard Angular 20 module layout (upgraded 14→20 via foundation epic [#12](https://github.com/jwilleke/yourphr/issues/12)):
+Standard Angular 22 module layout (upgraded 14→20 via foundation epic [#12](https://github.com/jwilleke/yourphr/issues/12), then 20→22 in [#701](https://github.com/jwilleke/yourphr/pull/701)):
 
 - `services/` — `fasten-api.service.ts` is the main backend API client; `auth.service.ts` + `auth-interceptor.service.ts` handle JWT; `event-bus.service.ts` for SSE/streaming.
 - `pages/`, `components/`, `widgets/` — UI; `models/` — typed view models (the `patient-access-brands/` subdir is tygo-generated, don't edit).
@@ -212,12 +212,12 @@ Standard Angular 20 module layout (upgraded 14→20 via foundation epic [#12](ht
 
 __Yarn Classic is on its way out — do not extend it ([#699](https://github.com/jwilleke/yourphr/issues/699)).__ `frontend/` is the only part of this repository not on npm, and nobody here chose that: the lockfile arrived with the Angular app from fasten-onprem in 2022 (`fa09bfaf`), and `packageManager: yarn@1.22.22` was pinned later only to stop Node/Yarn version drift during the Angular 14→20 upgrade (`2fbd59bb`, closing [#13](https://github.com/jwilleke/yourphr/issues/13)) — freezing the status quo, not endorsing it. `1.22.22` is the FINAL Yarn Classic release; the line is finished and takes no fixes.
 
-Four defects it has already cost us, all still live:
+Four defects it has already cost us:
 
 - __`yarn audit` exits a severity BITMASK__ (1 info, 2 low, 4 moderate, 8 high, 16 critical), not pass/fail, and `--level` does not filter — it still reports and still counts. That is the whole reason for the 37-line audit-gate workaround in `development.yaml`.
 - __`yarn upgrade <pkg>` silently does nothing for a transitive dependency__ and prints `success`. It only re-resolves DIRECT dependencies. Do not read its success as "already fixed" — [#590](https://github.com/jwilleke/yourphr/issues/590) was nearly closed on that misreading.
 - __It rewrites the lockfile behind you__: yarn 1.22.22 turns `elliptic "git+https://…git"` back into `"https://…"`, undoing what Dependabot writes. Expect that hunk on unrelated installs and do not commit it.
-- __Its lax peer resolution hides real defects.__ `@angular/common` and `@angular/forms`, both declared `^20.3.29`, resolve to DIFFERENT patches today. Yarn installs that happily; npm refuses it. The skew is real and is in the tree that builds the image.
+- __Its lax peer resolution hides real defects.__ `@angular/common` and `@angular/forms`, both declared `^20.3.29`, once resolved to DIFFERENT patches — yarn installs that happily, npm refuses it. That instance is closed: every `@angular/*` package is now pinned exactly (`22.1.4`) through `resolutions`, so the skew is gone from the tree. The mechanism is not, and yarn will hide the next one the same way — note that the pins masking it are themselves a Yarn-only field npm ignores.
 
 Plus the cost of two package managers: `npm audit` reads clean while the frontend carries 39 advisories, which is exactly how [#530](https://github.com/jwilleke/yourphr/issues/530) hid a vulnerable `elliptic` in the shipped bundle for months.
 
