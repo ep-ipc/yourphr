@@ -1,36 +1,34 @@
-import {Component, OnInit, TemplateRef, ViewChild} from '@angular/core';
+import {ChangeDetectionStrategy, Component, OnInit, TemplateRef, ViewChild} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {forkJoin, Observable, of} from 'rxjs';
-import {catchError, map} from 'rxjs/operators';
+import {catchError, map, switchMap} from 'rxjs/operators';
 import {ChartConfiguration, ChartData} from 'chart.js';
 import {BaseChartDirective} from 'ng2-charts';
 import {NgbModal, NgbModalRef, NgbModule} from '@ng-bootstrap/ng-bootstrap';
 import {FastenApiService} from '../../services/fasten-api.service';
-import {HealthSample, HealthSeries, HealthSeriesPoint} from '../../models/fasten/health-sample';
+import {HealthSample, HealthSampleQuery, HealthSeries, HealthSeriesPoint} from '../../models/fasten/health-sample';
 import {ResourceFhir} from '../../models/fasten/resource_fhir';
 import {PatientModel} from '../../../lib/models/resources/patient-model';
 import {LoadingSpinnerComponent} from '../../components/loading-spinner/loading-spinner.component';
 import {
-  buildPrintChartConfig,
+  assembleVisitSummary,
   buildVisitSummaryHtml,
   defaultSummarySelection,
   emptySeries,
-  errorSection,
   hasSummarySelection,
-  PrintChartConfig,
-  renderChartPng,
+  SAMPLE_PAGE_LIMIT,
+  sampleQueriesFor,
   seriesQueryFor,
   SUMMARY_RANGE_DEFAULT,
-  tableSectionFromEntry,
-  triggerHtmlDownload,
+  triggerDownloads,
   VisitSummaryPatient,
-  VisitSummarySection,
   VisitSummaryWindow,
+  visitSummaryCsvFilename,
   visitSummaryFilename,
   visitSummaryWindow,
-  convertSeriesStats,
 } from './health-visit-summary';
+import {buildVisitSummaryCsv} from './health-visit-summary-csv';
 import {
   asPercent,
   CatalogEntry,
@@ -89,6 +87,7 @@ export interface TableRow {
   selector: 'app-health',
   templateUrl: './health.component.html',
   styleUrls: ['./health.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
 })
 export class HealthComponent implements OnInit {
   loading = true;
@@ -311,19 +310,35 @@ export class HealthComponent implements OnInit {
     const now = new Date();
     const window = visitSummaryWindow(this.summaryRange, now);
     const selected = this.entries.filter((entry) => this.summaryChecks[entry.id]);
+    const chartEntries = selected.filter((entry) => seriesQueryFor(entry));
     forkJoin({
       patient: this.fastenApi.getResources('Patient').pipe(catchError(() => of([] as ResourceFhir[]))),
-      sections: forkJoin(selected.map((entry) => this.loadVisitSection(entry, window))),
+      series: chartEntries.length
+        ? forkJoin(chartEntries.map((entry) => this.loadSummarySeries(entry, window).pipe(
+          map((series) => [entry.id, series] as const),
+        )))
+        : of([] as Array<readonly [string, HealthSeries | null]>),
+      samples: this.listAllSummarySamples(selected, window),
     }).subscribe({
-      next: ({patient, sections}) => {
-        const html = buildVisitSummaryHtml({
+      next: ({patient, series, samples}) => {
+        const seriesById: Record<string, HealthSeries | null> = {};
+        for (const [id, value] of series) seriesById[id] = value;
+        const csvFilename = visitSummaryCsvFilename(now);
+        const html = buildVisitSummaryHtml(assembleVisitSummary({
           generatedAt: now,
-          windowLabel: window.label,
+          window,
           lastSyncedAt: this.lastSyncedAt,
           patient: patientFromResources(patient),
-          sections,
-        });
-        triggerHtmlDownload(html, visitSummaryFilename(now));
+          selected,
+          seriesById,
+          samples,
+          weightUnit: this.weightUnit,
+          csvFilename,
+        }));
+        triggerDownloads([
+          {content: html, filename: visitSummaryFilename(now), mime: 'text/html;charset=utf-8'},
+          {content: buildVisitSummaryCsv(samples), filename: csvFilename, mime: 'text/csv;charset=utf-8'},
+        ]);
         this.summaryBuilding = false;
         this.summaryModal?.close();
         this.summaryModal = null;
@@ -335,83 +350,49 @@ export class HealthComponent implements OnInit {
     });
   }
 
-  private loadVisitSection(entry: CatalogEntry, window: VisitSummaryWindow): Observable<VisitSummarySection> {
-    if (entry.def.viz === 'table') {
-      return of(tableSectionFromEntry(entry));
-    }
+  private loadSummarySeries(entry: CatalogEntry, window: VisitSummaryWindow): Observable<HealthSeries | null> {
+    const query = seriesQueryFor(entry);
+    if (!query) return of(null);
     const bounds: {startAfter?: string, startBefore?: string} = {};
     if (window.startAfter) bounds.startAfter = window.startAfter;
     if (window.startBefore) bounds.startBefore = window.startBefore;
-    const mode = seriesQueryFor(entry).mode;
-    if (entry.def.viz === 'dual-line') {
-      return forkJoin({
-        sys: this.fastenApi.getHealthSeries({metricTypes: ['blood_pressure_systolic'], mode, ...bounds}).pipe(
-          catchError(() => of(null)),
-        ),
-        dia: this.fastenApi.getHealthSeries({metricTypes: ['blood_pressure_diastolic'], mode, ...bounds}).pipe(
-          catchError(() => of(null)),
-        ),
-      }).pipe(
-        map(({sys, dia}) => {
-          if (!sys && !dia) return errorSection(entry);
-          const dual = {sys: sys || emptySeries(), dia: dia || emptySeries()};
-          const config = buildPrintChartConfig(
-            entry.def, dual.sys, this.weightUnit, this.summaryRange, window.start, window.end, dual,
-          );
-          return this.sectionFromChart(
-            entry, config, (dual.sys.total || 0) + (dual.dia.total || 0),
-            !!(dual.sys.downsampled || dual.dia.downsampled),
-            dual.sys.stats || dual.dia.stats || null,
-          );
-        }),
-      );
-    }
-    const query = seriesQueryFor(entry);
     return this.fastenApi.getHealthSeries({
       metricTypes: query.metricTypes,
       hkType: query.hkType,
       mode: query.mode,
       ...bounds,
-    }).pipe(
-      map((series) => {
-        const config = buildPrintChartConfig(
-          entry.def, series, this.weightUnit, this.summaryRange, window.start, window.end,
-        );
-        return this.sectionFromChart(entry, config, series.total || 0, !!series.downsampled, series.stats);
-      }),
-      catchError(() => of(errorSection(entry))),
+    }).pipe(catchError(() => of(null)));
+  }
+
+  private listAllSummarySamples(entries: CatalogEntry[], window: VisitSummaryWindow): Observable<HealthSample[]> {
+    const queries = sampleQueriesFor(entries);
+    if (!queries.length) return of([]);
+    const bounds: {startAfter?: string, startBefore?: string} = {};
+    if (window.startAfter) bounds.startAfter = window.startAfter;
+    if (window.startBefore) bounds.startBefore = window.startBefore;
+    return forkJoin(queries.map((query) => this.listAllSamplePages({...query, ...bounds}))).pipe(
+      map((pages) => pages.reduce((acc, rows) => acc.concat(rows), [] as HealthSample[])),
     );
   }
 
-  private sectionFromChart(
-    entry: CatalogEntry,
-    config: PrintChartConfig,
-    total: number,
-    downsampled: boolean,
-    stats: HealthSeries['stats'],
-  ): VisitSummarySection {
-    if (!config.hasData) {
-      return {
-        id: entry.id,
-        label: entry.def.label,
-        latestLabel: entry.latestLabel,
-        unit: displayUnit(entry.def, undefined, this.weightUnit),
-        stats: null,
-        sampleCount: 0,
-        downsampled: false,
-        empty: true,
+  private listAllSamplePages(query: {metricTypes?: string[], hkType?: string, startAfter?: string, startBefore?: string}): Observable<HealthSample[]> {
+    const go = (offset: number, acc: HealthSample[]): Observable<HealthSample[]> => {
+      const pageQuery: HealthSampleQuery = {
+        ...query,
+        limit: SAMPLE_PAGE_LIMIT,
+        offset,
+        sort: 'asc',
       };
-    }
-    return {
-      id: entry.id,
-      label: entry.def.label,
-      latestLabel: entry.latestLabel,
-      unit: displayUnit(entry.def, undefined, this.weightUnit),
-      stats: convertSeriesStats(stats, entry.def, this.weightUnit),
-      sampleCount: total,
-      downsampled,
-      chartPng: renderChartPng(config),
+      return this.fastenApi.listHealthSamples(pageQuery).pipe(
+        switchMap((page) => {
+          const next = acc.concat(page.samples);
+          if (page.count === 0 || page.offset + page.count >= page.total) return of(next);
+          return go(offset + page.count, next);
+        }),
+        catchError(() => of(acc)),
+      );
     };
+    return go(0, []);
   }
 
   formatChartStat(value: number | undefined | null): string {

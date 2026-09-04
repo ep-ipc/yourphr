@@ -195,6 +195,7 @@ export class SqliteHealthProvider extends BaseHealthProvider {
       ...(query.metricTypes[0] ? { metric_type: query.metricTypes[0] } : {}),
     };
     if (query.mode === 'day') return this.seriesDay(userId, sql, params, series);
+    if (query.mode === 'daily-stats') return this.seriesDailyStats(userId, sql, params, series);
     if (query.mode === 'stages') return this.seriesStages(userId, sql, params, series);
     return this.seriesPoints(userId, sql, params, series, query.maxPoints);
   }
@@ -257,6 +258,33 @@ export class SqliteHealthProvider extends BaseHealthProvider {
        FROM health_samples WHERE ${sql}
        GROUP BY date(start_time) ORDER BY date ASC`
     ).all(userId, ...params) as HealthDailyBucket[];
+    return series;
+  }
+
+  private seriesDailyStats(userId: string, sql: string, params: unknown[], series: HealthSeries): HealthSeries {
+    const stats = this.db.prepare(
+      `SELECT MIN(value_num) AS min, MAX(value_num) AS max, AVG(value_num) AS avg, COUNT(*) AS n FROM health_samples WHERE ${sql} AND value_num IS NOT NULL`
+    ).get(userId, ...params) as { min: number | null; max: number | null; avg: number | null; n: number };
+    series.total = stats.n;
+    if (stats.n > 0 && (stats.min != null || stats.max != null || stats.avg != null)) {
+      series.stats = {
+        ...(stats.min != null ? { min: stats.min } : {}),
+        ...(stats.max != null ? { max: stats.max } : {}),
+        ...(stats.avg != null ? { avg: stats.avg } : {}),
+      };
+    }
+    const unit = this.unitOf(userId, sql, params);
+    if (unit) series.unit = unit;
+    if (stats.n === 0) {
+      series.daily = [];
+      return series;
+    }
+    const rows = this.db.prepare(
+      `SELECT date(start_time) AS date, MIN(value_num) AS min, MAX(value_num) AS max, AVG(value_num) AS avg, COUNT(*) AS n
+       FROM health_samples WHERE ${sql} AND value_num IS NOT NULL
+       GROUP BY date(start_time) ORDER BY date ASC`
+    ).all(userId, ...params) as { date: string; min: number; max: number; avg: number; n: number }[];
+    series.daily = rows.map((r) => ({ date: r.date, value: r.avg, min: r.min, max: r.max, n: r.n }));
     return series;
   }
 

@@ -9,7 +9,7 @@ export const HEALTH_SERIES_DEFAULT_POINTS = 400;
 export const HEALTH_SERIES_MAX_POINTS = 2000;
 export const HEALTH_SAMPLE_INSERT_BATCH = 250;
 
-export type HealthSeriesMode = 'points' | 'day' | 'stages';
+export type HealthSeriesMode = 'points' | 'day' | 'daily-stats' | 'stages';
 
 export interface HealthSampleRow {
   id: string;
@@ -72,7 +72,14 @@ export interface HealthMetricSummary {
 }
 
 export interface HealthSeriesPoint { t: string; v: number }
-export interface HealthDailyBucket { date: string; value: number }
+export interface HealthDailyBucket {
+  date: string;
+  /** SUM for mode=day, AVG for mode=daily-stats. */
+  value: number;
+  min?: number;
+  max?: number;
+  n?: number;
+}
 export interface HealthStageNight { date: string; stages: Record<string, number> }
 export interface HealthSeriesStats { min?: number; max?: number; avg?: number }
 

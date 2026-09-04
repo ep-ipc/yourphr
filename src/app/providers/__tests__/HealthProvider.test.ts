@@ -139,9 +139,29 @@ describe('reads', () => {
     expect(nights.nights?.[0]?.stages.asleepDeep).toBeCloseTo(2, 5);
   });
 
+  it('returns per-day min/max/avg for daily-stats without inventing gap days', async () => {
+    await health.ingest(jim, {
+      device,
+      samples: [
+        quantity({ uuid: 'a', start: '2026-08-24T10:00:00Z', end: '2026-08-24T10:00:00Z', value: 70 }),
+        quantity({ uuid: 'b', start: '2026-08-24T11:00:00Z', end: '2026-08-24T11:00:00Z', value: 80 }),
+        quantity({ uuid: 'c', start: '2026-08-26T09:00:00Z', end: '2026-08-26T09:00:00Z', value: 90 }),
+      ],
+    });
+    const series = await health.series(jim, { metricTypes: ['heart_rate'], mode: 'daily-stats' });
+    expect(series.total).toBe(3);
+    expect(series.stats).toMatchObject({ min: 70, max: 90, avg: 80 });
+    expect(series.daily).toEqual([
+      { date: '2026-08-24', value: 75, min: 70, max: 80, n: 2 },
+      { date: '2026-08-26', value: 90, min: 90, max: 90, n: 1 },
+    ]);
+    const steps = await health.series(jim, { metricTypes: ['step_count'], mode: 'day' });
+    expect(steps.daily).toEqual([]);
+  });
+
   it('refuses a series without a metric and an unknown mode', async () => {
     await expect(health.series(jim, {})).rejects.toThrow(/metric_type or hk_type/);
-    await expect(health.series(jim, { metricTypes: ['heart_rate'], mode: 'weekly' })).rejects.toThrow(/points, day, or stages/);
+    await expect(health.series(jim, { metricTypes: ['heart_rate'], mode: 'weekly' })).rejects.toThrow(/points, day, daily-stats, or stages/);
   });
 
   it('an account\'s samples go when the account does', async () => {
