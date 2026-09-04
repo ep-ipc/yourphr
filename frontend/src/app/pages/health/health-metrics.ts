@@ -23,7 +23,7 @@ export const KNOWN_METRICS: MetricDef[] = [
   {id: 'heart_rate', label: 'Heart Rate', metricTypes: ['heart_rate'], viz: 'line', unit: 'bpm'},
   {id: 'blood_pressure', label: 'Blood Pressure', metricTypes: ['blood_pressure_systolic', 'blood_pressure_diastolic'], viz: 'dual-line', unit: 'mmHg'},
   {id: 'resting_heart_rate', label: 'Resting Heart Rate', metricTypes: ['resting_heart_rate'], viz: 'line', unit: 'bpm'},
-  {id: 'heart_rate_variability_sdnn', label: 'Heart Rate Variability', metricTypes: ['heart_rate_variability_sdnn'], viz: 'line', unit: 'ms'},
+  {id: 'heart_rate_variability_sdnn', label: 'Heart Rate Variability (SDNN)', metricTypes: ['heart_rate_variability_sdnn'], viz: 'line', unit: 'ms'},
   {id: 'step_count', label: 'Steps', metricTypes: ['step_count'], viz: 'bar-daily', unit: 'steps'},
   {id: 'sleep_stage', label: 'Sleep', metricTypes: ['sleep_stage'], viz: 'sleep-stages'},
   {id: 'oxygen_saturation', label: 'Oxygen', metricTypes: ['oxygen_saturation'], viz: 'line', unit: '%'},

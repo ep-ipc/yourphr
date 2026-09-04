@@ -1,4 +1,4 @@
-import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
 import {of, throwError} from 'rxjs';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {buildTimeTicks, HealthComponent, RANGE_MS, sleepAsleepTotal, timeAxisBounds, toDayPoints, toTimePoints, utcDayMs} from './health.component';
@@ -122,22 +122,54 @@ describe('HealthComponent', () => {
     expect(component.summaryChecks).toEqual({heart_rate: true, blood_pressure: true});
   });
 
-  it('downloads a visit summary for the selected metrics', () => {
+  it('downloads a visit summary for the selected metrics', fakeAsync(() => {
     spyOn(URL, 'createObjectURL').and.returnValue('blob:test');
     spyOn(URL, 'revokeObjectURL');
     const clickSpy = spyOn(HTMLAnchorElement.prototype, 'click');
     mockApi.getHealthSeries.calls.reset();
+    mockApi.listHealthSamples.calls.reset();
+    mockApi.getHealthSeries.and.returnValue(of({
+      metric_type: 'heart_rate',
+      unit: 'count/min',
+      total: 2,
+      downsampled: false,
+      daily: [{date: '2026-08-24', value: 75, min: 70, max: 80, n: 2}],
+      stats: {min: 70, max: 80, avg: 75},
+    }));
     component.summaryChecks = {heart_rate: true, blood_pressure: false};
     component.summaryRange = '30d';
     component.confirmVisitSummary();
     expect(mockApi.getResources).toHaveBeenCalledWith('Patient');
     expect(mockApi.getHealthSeries).toHaveBeenCalled();
-    const types = mockApi.getHealthSeries.calls.allArgs().map((args) => args[0]?.metricTypes);
-    expect(types.some((t) => t?.includes('heart_rate'))).toBeTrue();
-    expect(types.some((t) => t?.includes('blood_pressure_systolic'))).toBeFalse();
-    expect(clickSpy).toHaveBeenCalled();
+    const queries = mockApi.getHealthSeries.calls.allArgs().map((args) => args[0]);
+    expect(queries.some((query) => query?.metricTypes?.includes('heart_rate') && query?.mode === 'daily-stats')).toBeTrue();
+    expect(queries.some((query) => query?.metricTypes?.includes('blood_pressure_systolic'))).toBeFalse();
+    expect(mockApi.listHealthSamples).toHaveBeenCalled();
+    const sampleQuery = mockApi.listHealthSamples.calls.mostRecent().args[0];
+    expect(sampleQuery.metricTypes).toContain('heart_rate');
+    expect(sampleQuery.sort).toBe('asc');
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    tick(300);
+    expect(clickSpy).toHaveBeenCalledTimes(2);
     expect(component.summaryBuilding).toBeFalse();
-  });
+  }));
+
+  it('loads blood pressure for the summary as samples, not a series chart', fakeAsync(() => {
+    spyOn(URL, 'createObjectURL').and.returnValue('blob:test');
+    spyOn(HTMLAnchorElement.prototype, 'click');
+    mockApi.getHealthSeries.calls.reset();
+    mockApi.listHealthSamples.calls.reset();
+    component.summaryChecks = {heart_rate: false, blood_pressure: true};
+    component.summaryRange = '30d';
+    component.confirmVisitSummary();
+    expect(mockApi.getHealthSeries).not.toHaveBeenCalled();
+    expect(mockApi.listHealthSamples).toHaveBeenCalled();
+    const types = mockApi.listHealthSamples.calls.mostRecent().args[0]?.metricTypes || [];
+    expect(types).toContain('blood_pressure_systolic');
+    expect(types).toContain('blood_pressure_diastolic');
+    tick(300);
+    expect(component.summaryBuilding).toBeFalse();
+  }));
 
   it('loads the table for the same window on request', () => {
     component.setView('table');

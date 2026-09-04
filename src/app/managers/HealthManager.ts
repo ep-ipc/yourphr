@@ -343,8 +343,8 @@ export class HealthManager extends BaseManager {
   ): Promise<HealthSeries> {
     const userId = this.who(ctx);
     const modeRaw = asString(query.mode).trim() || 'points';
-    if (modeRaw !== 'points' && modeRaw !== 'day' && modeRaw !== 'stages') {
-      throw new ApiError(400, 'mode must be points, day, or stages');
+    if (modeRaw !== 'points' && modeRaw !== 'day' && modeRaw !== 'daily-stats' && modeRaw !== 'stages') {
+      throw new ApiError(400, 'mode must be points, day, daily-stats, or stages');
     }
     const metricTypes = query.metricTypes ?? [];
     const hkType = query.hkType ?? '';

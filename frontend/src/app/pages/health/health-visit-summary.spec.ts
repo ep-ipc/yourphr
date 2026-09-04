@@ -1,12 +1,18 @@
 import {CatalogEntry} from './health-metrics';
+import {HealthSample, HealthSeries} from '../../models/fasten/health-sample';
+import {bandChartSvg, lineChartSvg, sparklineSvg} from './health-visit-summary-charts';
+import {buildVisitSummaryCsv} from './health-visit-summary-csv';
 import {
-  buildPrintChartConfig,
+  assembleVisitSummary,
   buildVisitSummaryHtml,
   defaultSummarySelection,
-  emptySeries,
   escapeHtml,
   hasSummarySelection,
-  tableSectionFromEntry,
+  namedGaps,
+  sampleQueriesFor,
+  seriesQueryFor,
+  summaryKind,
+  visitSummaryCsvFilename,
   visitSummaryFilename,
   visitSummaryWindow,
 } from './health-visit-summary';
@@ -14,8 +20,43 @@ import {
 describe('health visit summary', () => {
   const generatedAt = new Date(2026, 7, 28, 14, 30, 0);
 
-  it('names the file for the local calendar day', () => {
+  const hrEntry: CatalogEntry = {
+    id: 'heart_rate',
+    def: {id: 'heart_rate', label: 'Heart Rate', metricTypes: ['heart_rate'], viz: 'line', unit: 'bpm'},
+    summaries: [{
+      metric_type: 'heart_rate',
+      hk_type: 'HKQuantityTypeIdentifierHeartRate',
+      latest_at: '2026-08-26T12:00:00Z',
+      earliest_at: '2026-08-01T00:00:00Z',
+      sample_count: 3,
+      device_name: 'Apple Watch',
+    }],
+    latestLabel: '90 bpm',
+  };
+
+  const bpEntry: CatalogEntry = {
+    id: 'blood_pressure',
+    def: {
+      id: 'blood_pressure',
+      label: 'Blood Pressure',
+      metricTypes: ['blood_pressure_systolic', 'blood_pressure_diastolic'],
+      viz: 'dual-line',
+      unit: 'mmHg',
+    },
+    summaries: [{
+      metric_type: 'blood_pressure_systolic',
+      hk_type: 'HKQuantityTypeIdentifierBloodPressureSystolic',
+      latest_at: '2026-08-26T08:00:00Z',
+      earliest_at: '2026-08-01T00:00:00Z',
+      sample_count: 2,
+      source_name: 'Health',
+    }],
+    latestLabel: '128/82 mmHg',
+  };
+
+  it('names the HTML and CSV files for the local calendar day, without a patient name', () => {
     expect(visitSummaryFilename(generatedAt)).toBe('yourphr-health-20260828.html');
+    expect(visitSummaryCsvFilename(generatedAt)).toBe('yourphr-health-20260828.csv');
   });
 
   it('defaults every catalog metric to selected', () => {
@@ -37,59 +78,94 @@ describe('health visit summary', () => {
     expect(visitSummaryWindow('all', now)).toEqual({start: null, end: now, label: 'All time'});
   });
 
-  it('builds HTML with the chosen metrics, window, and no patient when absent', () => {
-    const html = buildVisitSummaryHtml({
-      generatedAt,
-      windowLabel: 'Jul 29, 2026 – Aug 28, 2026',
-      lastSyncedAt: '2026-08-24T12:10:00Z',
-      sections: [{
-        id: 'heart_rate',
-        label: 'Heart Rate',
-        latestLabel: '72 bpm',
-        unit: 'bpm',
-        stats: {min: 70, max: 80, avg: 75},
-        sampleCount: 40,
-        downsampled: false,
-        chartPng: 'data:image/png;base64,abc',
-      }],
-    });
-    expect(html).toContain('Health visit summary');
-    expect(html).toContain('Heart Rate');
-    expect(html).toContain('Jul 29, 2026 – Aug 28, 2026');
-    expect(html).toContain('Apple Health');
-    expect(html).toContain('72 bpm');
-    expect(html).toContain('Min 70');
-    expect(html).toContain('data:image/png;base64,abc');
-    expect(html).not.toContain('Born');
-    expect(html).toContain('page-break-inside: avoid');
+  it('classifies heart rate as a band chart and blood pressure as a reading table', () => {
+    expect(summaryKind(hrEntry.def)).toBe('band');
+    expect(summaryKind(bpEntry.def)).toBe('readings');
+    expect(seriesQueryFor(hrEntry)).toEqual({metricTypes: ['heart_rate'], hkType: undefined, mode: 'daily-stats'});
+    expect(seriesQueryFor(bpEntry)).toBeNull();
+    expect(sampleQueriesFor([hrEntry, bpEntry])).toEqual([{
+      metricTypes: ['heart_rate', 'blood_pressure_systolic', 'blood_pressure_diastolic'],
+    }]);
   });
 
-  it('includes patient name and birth date when present, escaped', () => {
-    const html = buildVisitSummaryHtml({
+  it('names contiguous missing days', () => {
+    expect(namedGaps(['2026-08-14', '2026-08-15', '2026-08-16'])).toContain('3-day gap');
+    expect(namedGaps(['2026-08-14', '2026-08-15', '2026-08-16'])).toContain('Aug');
+    expect(namedGaps([])).toBeUndefined();
+  });
+
+  it('assembles a glance row, HR band SVG, and BP reading table without typical-range flags', () => {
+    const window = visitSummaryWindow('5d', new Date('2026-08-27T00:00:00Z'));
+    const hrSeries: HealthSeries = {
+      total: 3,
+      downsampled: false,
+      stats: {min: 70, max: 90, avg: 80},
+      daily: [
+        {date: '2026-08-24', value: 75, min: 70, max: 80, n: 2},
+        {date: '2026-08-26', value: 90, min: 90, max: 90, n: 1},
+      ],
+    };
+    const samples: HealthSample[] = [
+      bpSample('sys-1', 'blood_pressure_systolic', 128, '2026-08-26T08:00:00Z', 'c1'),
+      bpSample('dia-1', 'blood_pressure_diastolic', 82, '2026-08-26T08:00:00Z', 'c1'),
+    ];
+    const model = assembleVisitSummary({
       generatedAt,
-      windowLabel: 'All time',
+      window,
+      lastSyncedAt: '2026-08-26T12:10:00Z',
       patient: {name: 'Ada <script>', birthDate: '1935-12-10'},
-      sections: [],
+      selected: [hrEntry, bpEntry],
+      seriesById: {heart_rate: hrSeries},
+      samples,
+      weightUnit: 'kg',
+      csvFilename: 'yourphr-health-20260828.csv',
     });
+    expect(model.patientAge).toBe(90);
+    expect(model.glance.map((row) => row.id)).toEqual(['heart_rate', 'blood_pressure']);
+    expect(model.glance[0].latest).toContain('70');
+    expect(model.glance[0].latest).toContain('90');
+    expect(model.glance[1].latest).toBe('128/82');
+    expect(model.sections[0].chartSvg).toContain('<svg');
+    expect(model.sections[1].readingHeaders).toEqual(['Date & time', 'Systolic', 'Diastolic']);
+    expect(model.sections[1].readings?.length).toBe(1);
+    expect(model.provenance.devices).toContain('Apple Watch');
+
+    const html = buildVisitSummaryHtml(model);
+    expect(html).toContain('Health summary');
+    expect(html).toContain('At a glance');
     expect(html).toContain('Ada &lt;script&gt;');
     expect(html).not.toContain('Ada <script>');
-    expect(html).toContain('Born 1935-12-10');
+    expect(html).toContain('Born');
+    expect(html).toContain('1935-12-10');
+    expect(html).toContain('Apple Health');
+    expect(html).toContain('yourphr-health-20260828.csv');
+    expect(html).toContain('page-break-inside: avoid');
+    expect(html).toContain('Systolic');
+    expect(html).toContain('128');
+    expect(html).toContain('Sampling');
+    expect(html).not.toContain('Above typical');
+    expect(html).not.toContain('Typical range');
+    expect(html).not.toContain('fonts.googleapis.com');
+    expect(html).not.toContain('<img');
   });
 
   it('renders an empty series as a note rather than a broken image', () => {
     const html = buildVisitSummaryHtml({
       generatedAt,
       windowLabel: 'All time',
+      provenance: emptyProvenance(),
+      glance: [],
       sections: [{
         id: 'heart_rate',
         label: 'Heart Rate',
-        latestLabel: '72 bpm',
-        unit: 'bpm',
-        stats: null,
+        spec: 'bpm',
+        latestLabel: '',
+        stats: [],
         sampleCount: 0,
-        downsampled: false,
+        quality: '',
         empty: true,
       }],
+      csvFilename: 'yourphr-health-20260828.csv',
     });
     expect(html).toContain('No samples in this time range.');
     expect(html).not.toContain('<img');
@@ -99,69 +175,99 @@ describe('health visit summary', () => {
     const html = buildVisitSummaryHtml({
       generatedAt,
       windowLabel: 'All time',
+      provenance: emptyProvenance(),
+      glance: [],
       sections: [{
         id: 'heart_rate',
         label: 'Heart Rate',
+        spec: '',
         latestLabel: '',
-        unit: '',
-        stats: null,
+        stats: [],
         sampleCount: 0,
-        downsampled: false,
+        quality: '',
         error: true,
       }],
+      csvFilename: 'yourphr-health-20260828.csv',
     });
     expect(html).toContain('This metric could not be loaded.');
-    expect(html).not.toContain('<img');
   });
 
   it('escapes names in titles', () => {
     expect(escapeHtml('a <b> & "c"')).toBe('a &lt;b&gt; &amp; &quot;c&quot;');
   });
 
-  it('turns a table-only metric into latest-value rows, not a chart', () => {
-    const entry: CatalogEntry = {
-      id: 'mindful',
-      def: {id: 'mindful', label: 'Mindful Minutes', metricTypes: ['mindful'], viz: 'table'},
-      summaries: [{
-        metric_type: 'mindful',
-        hk_type: 'HKCategoryTypeIdentifierMindfulSession',
-        latest_at: '2026-08-24T12:00:00Z',
-        earliest_at: '2026-08-01T00:00:00Z',
-        sample_count: 3,
-        value_text: 'session',
-      }],
-      latestLabel: 'session',
-    };
-    const section = tableSectionFromEntry(entry);
-    expect(section.tableRows).toEqual([
-      {label: 'Latest', value: 'session'},
-      {label: 'Samples', value: '3'},
+  it('writes a timestamped CSV of every sample, sorted ascending', () => {
+    const csv = buildVisitSummaryCsv([
+      {
+        id: '2',
+        external_uuid: 'b',
+        hk_type: 'HKQuantityTypeIdentifierHeartRate',
+        metric_type: 'heart_rate',
+        start_time: '2026-08-26T11:00:00Z',
+        end_time: '2026-08-26T11:00:00Z',
+        value_num: 90,
+        unit: 'count/min',
+        source_name: 'Apple Watch, "S9"',
+      },
+      {
+        id: '1',
+        external_uuid: 'a',
+        hk_type: 'HKQuantityTypeIdentifierHeartRate',
+        metric_type: 'heart_rate',
+        start_time: '2026-08-24T10:00:00Z',
+        end_time: '2026-08-24T10:00:00Z',
+        value_num: 70,
+        unit: 'count/min',
+        source_name: 'Apple Watch',
+      },
     ]);
-    const html = buildVisitSummaryHtml({
-      generatedAt,
-      windowLabel: 'All time',
-      sections: [section],
-    });
-    expect(html).toContain('Mindful Minutes');
-    expect(html).toContain('<table>');
-    expect(html).not.toContain('<img');
+    const lines = csv.trim().split('\n');
+    expect(lines[0]).toBe('start_time,end_time,metric_type,hk_type,value_num,unit,value_text,correlation_uuid,source_name,device_name');
+    expect(lines[1]).toContain('2026-08-24T10:00:00Z');
+    expect(lines[1]).toContain('70');
+    expect(lines[2]).toContain('2026-08-26T11:00:00Z');
+    expect(lines[2]).toContain('"Apple Watch, ""S9"""');
   });
 
-  it('builds a line chart config from points and marks an empty series', () => {
-    const def = {id: 'heart_rate', label: 'Heart Rate', metricTypes: ['heart_rate'], viz: 'line' as const, unit: 'bpm'};
-    const withData = buildPrintChartConfig(
-      def,
-      {total: 2, downsampled: false, points: [{t: '2026-08-24T10:00:00Z', v: 70}, {t: '2026-08-24T11:00:00Z', v: 80}]},
-      'kg',
-      '30d',
-      new Date('2026-07-29T16:00:00Z'),
-      new Date('2026-08-28T16:00:00Z'),
-    );
-    expect(withData.hasData).toBeTrue();
-    expect(withData.type).toBe('line');
-    expect((withData.data.datasets[0].data as {y: number}[]).map((p) => p.y)).toEqual([70, 80]);
-
-    const empty = buildPrintChartConfig(def, emptySeries(), 'kg', '30d', null, new Date());
-    expect(empty.hasData).toBeFalse();
+  it('draws a sparkline and a band chart from daily values', () => {
+    expect(sparklineSvg([65, null, 63])).toContain('<path');
+    expect(sparklineSvg([null, null])).toBe('');
+    expect(lineChartSvg([65, 66, 63])).toContain('viewBox');
+    const band = bandChartSvg([50, 52], [140, 141], [95, 96]);
+    expect(band).toContain('<path');
+    expect(band).toContain('var(--data-fill)');
   });
 });
+
+function bpSample(
+  id: string,
+  metricType: 'blood_pressure_systolic' | 'blood_pressure_diastolic',
+  value: number,
+  start: string,
+  corr: string,
+): HealthSample {
+  return {
+    id,
+    external_uuid: id,
+    hk_type: metricType === 'blood_pressure_systolic'
+      ? 'HKQuantityTypeIdentifierBloodPressureSystolic'
+      : 'HKQuantityTypeIdentifierBloodPressureDiastolic',
+    metric_type: metricType,
+    start_time: start,
+    end_time: start,
+    value_num: value,
+    unit: 'mmHg',
+    correlation_uuid: corr,
+  };
+}
+
+function emptyProvenance() {
+  return {
+    devices: 'not recorded',
+    deviceNote: 'consumer-grade',
+    daysRecorded: 0,
+    daysInWindow: 0,
+    lastSyncedLabel: 'not recorded',
+    lastSyncedNote: 'companion has not synced',
+  };
+}

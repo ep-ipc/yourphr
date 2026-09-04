@@ -175,11 +175,12 @@
       </div>
     </div>
 
-    <p>This downloads a printable summary of the Apple Health metrics you select.</p>
+    <p>This downloads a printable HTML summary and a CSV of every sample in the window. Open the HTML
+      and use the browser’s Print dialog to save a PDF.</p>
     <p class="mg-b-0">
-      <strong>The file is not protected.</strong> It contains your health information in readable form,
+      <strong>Neither file is protected.</strong> They contain your health information in readable form,
       with no password and no expiry — anyone who can open the file, or the backup it ends up in, can
-      read it. Save it somewhere you would keep a paper copy of your records.
+      read it. Save them somewhere you would keep a paper copy of your records.
     </p>
     <div *ngIf="summaryError" class="alert alert-danger mg-t-15 mg-b-0">{{ summaryError }}</div>
   </div>
@@ -189,7 +190,7 @@
             (click)="confirmVisitSummary()"
             [disabled]="!summaryHasSelection || summaryBuilding">
       <span *ngIf="summaryBuilding" class="spinner-border spinner-border-sm mg-r-5"></span>
-      {{ summaryBuilding ? 'Preparing…' : 'Download summary' }}
+      {{ summaryBuilding ? 'Preparing…' : 'Download HTML + CSV' }}
     </button>
   </div>
 </ng-template>

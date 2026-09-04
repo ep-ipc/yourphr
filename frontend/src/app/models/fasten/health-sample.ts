@@ -26,6 +26,9 @@ export interface HealthSeriesPoint {
 export interface HealthDailyBucket {
   date: string
   value: number
+  min?: number
+  max?: number
+  n?: number
 }
 
 export interface HealthStageNight {
@@ -78,7 +81,7 @@ export interface HealthSeriesQuery {
   hkType?: string
   startAfter?: string
   startBefore?: string
-  mode?: 'points' | 'day' | 'stages'
+  mode?: 'points' | 'day' | 'daily-stats' | 'stages'
 }
 
 export interface HealthSampleQuery {
