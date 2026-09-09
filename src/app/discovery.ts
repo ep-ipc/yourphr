@@ -1,9 +1,9 @@
 /**
  * LAN discovery for the companion QR (Go's GetServerBaseURLs).
  *
- * The iPhone tries every URL in order until one answers /account/me. Hostname, an optional
- * operator override, and the machine's non-loopback addresses cover "the phone is on the same
- * Wi-Fi as this instance" without the patient typing an IP.
+ * The iPhone tries every URL in order until one answers /account/me. The operator override
+ * (host.ip / HOST_IP) is first, then the machine's non-loopback addresses, then hostname —
+ * inside Docker the hostname and bridge IP are not reachable from a phone on Wi-Fi.
  */
 import { hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 
@@ -44,13 +44,14 @@ export function serverBaseUrls(cfg: DiscoveryConfig, ifaces: NodeJS.Dict<Network
   };
 
   const urls: string[] = [];
-  try { add(hostname(), urls); } catch { /* hostname is best-effort */ }
+  // Operator / LAN override first: the iOS companion probes this list in order.
   add(cfg.hostIp, urls);
   for (const infos of Object.values(ifaces)) {
     for (const info of infos ?? []) {
       if (isUsable(info)) add(info.address, urls);
     }
   }
+  try { add(hostname(), urls); } catch { /* hostname is best-effort */ }
   return urls;
 }
 

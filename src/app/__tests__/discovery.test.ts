@@ -14,9 +14,9 @@ describe('serverBaseUrls', () => {
       ],
     };
     const urls = serverBaseUrls({ ...cfg, hostIp: '10.0.0.5', hostPort: '9099' }, ifaces);
-    expect(urls.some((u) => u.endsWith(':9099'))).toBe(true);
-    expect(urls).toContain('http://10.0.0.5:9099');
+    expect(urls[0]).toBe('http://10.0.0.5:9099');
     expect(urls).toContain('http://192.168.1.20:9099');
+    expect(urls.some((u) => u.endsWith(':9099'))).toBe(true);
     expect(urls.some((u) => u.includes('127.0.0.1'))).toBe(false);
     expect(urls.some((u) => u.includes('fe80'))).toBe(false);
   });
