@@ -11,32 +11,28 @@ describe('HealthComponent', () => {
   let mockApi: jasmine.SpyObj<FastenApiService>;
 
   const hr: HealthMetricSummary = {
+    code: '8867-4',
     metric_type: 'heart_rate',
     hk_type: 'HKQuantityTypeIdentifierHeartRate',
-    unit: 'count/min',
+    unit: '/min',
     value_num: 72,
     latest_at: '2026-08-24T12:00:00Z',
     earliest_at: '2026-08-01T00:00:00Z',
     sample_count: 40,
     source_name: 'Apple Watch',
   };
-  const sys: HealthMetricSummary = {
-    metric_type: 'blood_pressure_systolic',
-    hk_type: 'HKQuantityTypeIdentifierBloodPressureSystolic',
-    unit: 'mmHg',
-    value_num: 118,
+  const bp: HealthMetricSummary = {
+    code: '85354-9',
+    metric_type: 'blood_pressure',
+    hk_type: 'HKCorrelationTypeIdentifierBloodPressure',
+    unit: 'mm[Hg]',
     latest_at: '2026-08-24T08:00:00Z',
     earliest_at: '2026-08-01T00:00:00Z',
     sample_count: 4,
-  };
-  const dia: HealthMetricSummary = {
-    metric_type: 'blood_pressure_diastolic',
-    hk_type: 'HKQuantityTypeIdentifierBloodPressureDiastolic',
-    unit: 'mmHg',
-    value_num: 76,
-    latest_at: '2026-08-24T08:00:00Z',
-    earliest_at: '2026-08-01T00:00:00Z',
-    sample_count: 4,
+    components: [
+      {code: '8480-6', value: 118, unit: 'mm[Hg]'},
+      {code: '8462-4', value: 76, unit: 'mm[Hg]'},
+    ],
   };
 
   beforeEach(async () => {
@@ -44,7 +40,7 @@ describe('HealthComponent', () => {
     mockApi = jasmine.createSpyObj('FastenApiService', ['getHealthMetrics', 'getHealthSeries', 'listHealthSamples', 'getResources']);
     mockApi.getHealthMetrics.and.returnValue(of({
       last_synced_at: '2026-08-24T12:10:00Z',
-      metrics: [hr, sys, dia],
+      metrics: [hr, bp],
     }));
     mockApi.getResources.and.returnValue(of([]));
     mockApi.getHealthSeries.and.returnValue(of({
@@ -142,11 +138,11 @@ describe('HealthComponent', () => {
     expect(mockApi.getResources).toHaveBeenCalledWith('Patient');
     expect(mockApi.getHealthSeries).toHaveBeenCalled();
     const queries = mockApi.getHealthSeries.calls.allArgs().map((args) => args[0]);
-    expect(queries.some((query) => query?.metricTypes?.includes('heart_rate') && query?.mode === 'daily-stats')).toBeTrue();
-    expect(queries.some((query) => query?.metricTypes?.includes('blood_pressure_systolic'))).toBeFalse();
+    expect(queries.some((query) => query?.codes?.includes('8867-4') && query?.mode === 'daily-stats')).toBeTrue();
+    expect(queries.some((query) => query?.codes?.includes('85354-9'))).toBeFalse();
     expect(mockApi.listHealthSamples).toHaveBeenCalled();
     const sampleQuery = mockApi.listHealthSamples.calls.mostRecent().args[0];
-    expect(sampleQuery.metricTypes).toContain('heart_rate');
+    expect(sampleQuery.codes).toContain('8867-4');
     expect(sampleQuery.sort).toBe('asc');
     expect(clickSpy).toHaveBeenCalledTimes(1);
     tick(300);
@@ -164,9 +160,8 @@ describe('HealthComponent', () => {
     component.confirmVisitSummary();
     expect(mockApi.getHealthSeries).not.toHaveBeenCalled();
     expect(mockApi.listHealthSamples).toHaveBeenCalled();
-    const types = mockApi.listHealthSamples.calls.mostRecent().args[0]?.metricTypes || [];
-    expect(types).toContain('blood_pressure_systolic');
-    expect(types).toContain('blood_pressure_diastolic');
+    const codes = mockApi.listHealthSamples.calls.mostRecent().args[0]?.codes || [];
+    expect(codes).toContain('85354-9');
     tick(300);
     expect(component.summaryBuilding).toBeFalse();
   }));
@@ -186,7 +181,7 @@ describe('HealthComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
     expect(component.entries.length).toBe(0);
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No Apple Health data yet');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No health data yet');
     expect(prepareButton(fixture).disabled).toBeTrue();
   });
 
@@ -196,11 +191,12 @@ describe('HealthComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
     expect(component.errored).toBeTrue();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Could not load your Apple Health data');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Could not load your health data');
   });
 
   it('converts weight between kg, lbs, and stone without refetching', () => {
     const mass: HealthMetricSummary = {
+      code: '29463-7',
       metric_type: 'body_mass',
       hk_type: 'HKQuantityTypeIdentifierBodyMass',
       unit: 'kg',
@@ -271,6 +267,7 @@ describe('HealthComponent', () => {
   it('restores the stored weight unit on load', () => {
     localStorage.setItem('yourphr.health.weightUnit', 'lbs');
     const mass: HealthMetricSummary = {
+      code: '29463-7',
       metric_type: 'body_mass',
       hk_type: 'HKQuantityTypeIdentifierBodyMass',
       unit: 'kg',
@@ -296,6 +293,7 @@ describe('HealthComponent', () => {
 
   it('plots oxygen saturation as a percentage rather than a HealthKit fraction', () => {
     const oxygen: HealthMetricSummary = {
+      code: '2708-6',
       metric_type: 'oxygen_saturation',
       hk_type: 'HKQuantityTypeIdentifierOxygenSaturation',
       unit: '%',
@@ -355,6 +353,7 @@ describe('HealthComponent', () => {
 
   it('places daily bars on the same linear time axis so missing days leave a gap', () => {
     const steps: HealthMetricSummary = {
+      code: '55423-8',
       metric_type: 'step_count',
       hk_type: 'HKQuantityTypeIdentifierStepCount',
       unit: 'count',

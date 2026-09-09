@@ -91,6 +91,93 @@ describe('ingest', () => {
     expect((await health.list(pat, {})).total).toBe(1);
     expect((await health.list(pat, {})).samples[0]?.external_uuid).toBe('pat-hr');
   });
+
+  it('merges a HealthKit blood-pressure correlation into one panel Observation', async () => {
+    const result = await health.ingest(jim, {
+      device,
+      samples: [
+        quantity({
+          uuid: 'sys-1',
+          type: 'HKQuantityTypeIdentifierBloodPressureSystolic',
+          value: 128,
+          unit: 'mmHg',
+          correlation_uuid: 'corr-9',
+        }),
+        quantity({
+          uuid: 'dia-1',
+          type: 'HKQuantityTypeIdentifierBloodPressureDiastolic',
+          value: 82,
+          unit: 'mmHg',
+          correlation_uuid: 'corr-9',
+        }),
+      ],
+    });
+    expect(result).toMatchObject({ received: 2, accepted: 1, stored: 1, rejected: 0 });
+    const listed = await health.list(jim, { metricTypes: ['blood_pressure'] });
+    expect(listed.total).toBe(1);
+    expect(listed.samples[0]?.code).toBe('85354-9');
+    expect(listed.samples[0]?.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: '8480-6', value: 128 }),
+      expect.objectContaining({ code: '8462-4', value: 82 }),
+    ]));
+    const obs = await health.observation(jim, listed.samples[0]!.id);
+    expect(obs.component).toHaveLength(2);
+    const series = await health.series(jim, { codes: ['85354-9'], mode: 'points' });
+    expect(series.components?.['8480-6']?.map((p) => p.v)).toEqual([128]);
+    expect(series.components?.['8462-4']?.map((p) => p.v)).toEqual([82]);
+  });
+
+  it('accepts a blood-pressure panel Observation with components', async () => {
+    const result = await health.ingest(jim, {
+      device,
+      samples: [{
+        resourceType: 'Observation',
+        identifier: [{ system: 'urn:uuid', value: 'corr-obs' }],
+        status: 'final',
+        code: { coding: [{ system: 'http://loinc.org', code: '85354-9' }] },
+        effectiveDateTime: '2026-08-24T08:00:00Z',
+        component: [
+          { code: { coding: [{ system: 'http://loinc.org', code: '8480-6' }] }, valueQuantity: { value: 120, code: 'mm[Hg]' } },
+          { code: { coding: [{ system: 'http://loinc.org', code: '8462-4' }] }, valueQuantity: { value: 80, code: 'mm[Hg]' } },
+        ],
+      }],
+    });
+    expect(result).toMatchObject({ received: 1, accepted: 1, stored: 1 });
+    const listed = await health.list(jim, { codes: ['85354-9'] });
+    expect(listed.total).toBe(1);
+    expect(listed.samples[0]?.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: '8480-6', value: 120 }),
+      expect.objectContaining({ code: '8462-4', value: 80 }),
+    ]));
+  });
+
+  it('accepts a FHIR Observation and a Bundle of Observations', async () => {
+    const observation = {
+      resourceType: 'Observation',
+      identifier: [{ system: 'urn:uuid', value: 'obs-hr' }],
+      status: 'final',
+      code: { coding: [{ system: 'http://loinc.org', code: '8867-4' }] },
+      effectiveDateTime: '2026-08-24T15:00:00Z',
+      valueQuantity: { value: 64, unit: 'beats/minute', system: 'http://unitsofmeasure.org', code: '/min' },
+      device: { display: 'Apple Watch' },
+      meta: { source: 'Health' },
+    };
+    const result = await health.ingest(jim, { device, samples: [observation] });
+    expect(result).toMatchObject({ received: 1, accepted: 1, stored: 1 });
+    const listed = await health.list(jim, { codes: ['8867-4'] });
+    expect(listed.samples[0]?.value_num).toBe(64);
+    expect(listed.samples[0]?.device_name).toBe('Apple Watch');
+    expect(listed.samples[0]?.source_name).toBe('Health');
+    const bundleIn = await health.ingest(jim, {
+      device,
+      resourceType: 'Bundle',
+      entry: [{ resource: { ...observation, identifier: [{ value: 'obs-hr-2' }], valueQuantity: { value: 80, code: '/min' } } }],
+    });
+    expect(bundleIn.stored).toBe(1);
+    const bundle = await health.bundle(jim, { codes: ['8867-4'] });
+    expect(bundle.resourceType).toBe('Bundle');
+    expect(bundle.total).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe('reads', () => {
@@ -104,6 +191,7 @@ describe('reads', () => {
       anchors: { heart_rate: 'a1' },
     });
     const catalog = await health.metrics(jim);
+    expect(catalog.metrics[0]?.code).toBe('8867-4');
     expect(catalog.metrics[0]?.metric_type).toBe('heart_rate');
     expect(catalog.metrics[0]?.sample_count).toBe(2);
     expect(catalog.last_synced_at).toBeTruthy();
@@ -136,7 +224,7 @@ describe('reads', () => {
     const nights = await health.series(jim, { metricTypes: ['sleep_stage'], mode: 'stages' });
     // 04:00–06:00 UTC minus 12 hours buckets onto 2026-08-23.
     expect(nights.nights?.[0]?.date).toBe('2026-08-23');
-    expect(nights.nights?.[0]?.stages.asleepDeep).toBeCloseTo(2, 5);
+    expect(nights.nights?.[0]?.stages['248220008']).toBeCloseTo(2, 5);
   });
 
   it('returns per-day min/max/avg for daily-stats without inventing gap days', async () => {
@@ -160,7 +248,7 @@ describe('reads', () => {
   });
 
   it('refuses a series without a metric and an unknown mode', async () => {
-    await expect(health.series(jim, {})).rejects.toThrow(/metric_type or hk_type/);
+    await expect(health.series(jim, {})).rejects.toThrow(/code, metric_type, or hk_type/);
     await expect(health.series(jim, { metricTypes: ['heart_rate'], mode: 'weekly' })).rejects.toThrow(/points, day, daily-stats, or stages/);
   });
 

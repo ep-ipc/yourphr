@@ -1,11 +1,22 @@
 // Mirrors GET /api/secure/health/metrics and /health/series. Hand-maintained (not tygo-exported).
 
+export interface HealthComponentValue {
+  code: string
+  display?: string
+  value: number
+  unit: string
+}
+
 export interface HealthMetricSummary {
+  code: string
+  code_system?: string
+  category?: string
   metric_type: string
   hk_type: string
   unit?: string
   value_num?: number
   value_text?: string
+  components?: HealthComponentValue[]
   latest_at: string
   earliest_at: string
   sample_count: number
@@ -43,6 +54,7 @@ export interface HealthSeriesStats {
 }
 
 export interface HealthSeries {
+  code?: string
   metric_type?: string
   hk_type?: string
   unit?: string
@@ -52,18 +64,24 @@ export interface HealthSeries {
   daily?: HealthDailyBucket[]
   nights?: HealthStageNight[]
   stats?: HealthSeriesStats
+  components?: Record<string, HealthSeriesPoint[]>
 }
 
 export interface HealthSample {
   id: string
   external_uuid: string
+  identifier_system?: string
   hk_type: string
   metric_type: string
+  code?: string
+  code_system?: string
+  category?: string
   start_time: string
   end_time: string
   value_num?: number
   unit?: string
   value_text?: string
+  components?: HealthComponentValue[]
   correlation_uuid?: string
   source_name?: string
   device_name?: string
@@ -77,6 +95,7 @@ export interface HealthSamplePage {
 }
 
 export interface HealthSeriesQuery {
+  codes?: string[]
   metricTypes?: string[]
   hkType?: string
   startAfter?: string
@@ -85,6 +104,7 @@ export interface HealthSeriesQuery {
 }
 
 export interface HealthSampleQuery {
+  codes?: string[]
   metricTypes?: string[]
   hkType?: string
   startAfter?: string

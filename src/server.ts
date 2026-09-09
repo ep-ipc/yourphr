@@ -795,9 +795,9 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
-      // Apple Health / HealthKit samples. POSTs are companion/session only (the agent gate above
-      // already refused an agent POST). GETs carry the Health access category so they are logged
-      // and an agent scoped to Health can read them later.
+      // Wearable PGHD. POSTs are companion/session only (the agent gate above already refused an
+      // agent POST). GETs carry the Health access category so they are logged and an agent scoped
+      // to Health can read them later.
       if (auth && engine.has('health') && url.pathname === '/api/secure/health/samples' && req.method === 'POST') {
         if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'ingesting health samples');
         const limited = healthIngestLimiter.consume(ctx.username);
@@ -819,11 +819,14 @@ export function createYourPhrServer(options: ServerOptions) {
           device: body['device'] as {device_id?: unknown; name?: unknown} | undefined,
           samples: body['samples'],
           anchors: body['anchors'],
+          resourceType: body['resourceType'],
+          entry: body['entry'],
         })});
         return;
       }
       if (auth && engine.has('health') && url.pathname === '/api/secure/health/samples' && req.method === 'GET') {
         send(res, 200, {success: true, data: await engine.managers.health.list(ctx, {
+          codes: csvQuery(url, 'code'),
           metricTypes: csvQuery(url, 'metric_type'),
           hkType: url.searchParams.get('hk_type') ?? '',
           startAfter: url.searchParams.get('start_after') ?? undefined,
@@ -834,12 +837,28 @@ export function createYourPhrServer(options: ServerOptions) {
         })});
         return;
       }
+      const healthObservation = url.pathname.match(/^\/api\/secure\/health\/observation\/([^/]+)$/);
+      if (auth && engine.has('health') && healthObservation && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.health.observation(ctx, decodeURIComponent(healthObservation[1]!))});
+        return;
+      }
+      if (auth && engine.has('health') && url.pathname === '/api/secure/health/bundle' && req.method === 'GET') {
+        send(res, 200, {success: true, data: await engine.managers.health.bundle(ctx, {
+          codes: csvQuery(url, 'code'),
+          metricTypes: csvQuery(url, 'metric_type'),
+          hkType: url.searchParams.get('hk_type') ?? '',
+          startAfter: url.searchParams.get('start_after') ?? undefined,
+          startBefore: url.searchParams.get('start_before') ?? undefined,
+        })});
+        return;
+      }
       if (auth && engine.has('health') && url.pathname === '/api/secure/health/metrics' && req.method === 'GET') {
         send(res, 200, {success: true, data: await engine.managers.health.metrics(ctx)});
         return;
       }
       if (auth && engine.has('health') && url.pathname === '/api/secure/health/series' && req.method === 'GET') {
         send(res, 200, {success: true, data: await engine.managers.health.series(ctx, {
+          codes: csvQuery(url, 'code'),
           metricTypes: csvQuery(url, 'metric_type'),
           hkType: url.searchParams.get('hk_type') ?? '',
           startAfter: url.searchParams.get('start_after') ?? undefined,

@@ -6,6 +6,8 @@ import {
   displayUnit,
   formatStoneFromDecimal,
   kgToWeightUnit,
+  LOINC_BP_DIA,
+  LOINC_BP_SYS,
   MetricDef,
   SLEEP_STAGE_LABELS,
   SLEEP_STAGE_ORDER,
@@ -128,11 +130,11 @@ export function summarySeriesMode(def: MetricDef): SummarySeriesMode | null {
   return null;
 }
 
-export function seriesQueryFor(entry: CatalogEntry): {metricTypes?: string[], hkType?: string, mode: SummarySeriesMode} | null {
+export function seriesQueryFor(entry: CatalogEntry): {codes?: string[], hkType?: string, mode: SummarySeriesMode} | null {
   const mode = summarySeriesMode(entry.def);
   if (!mode) return null;
   return {
-    metricTypes: entry.def.metricTypes.length ? entry.def.metricTypes : undefined,
+    codes: entry.def.codes.length ? entry.def.codes : undefined,
     hkType: entry.def.hkType,
     mode,
   };
@@ -201,12 +203,12 @@ export function convertSeriesStats(
   };
 }
 
-export function sampleQueriesFor(entries: CatalogEntry[]): {metricTypes?: string[], hkType?: string}[] {
-  const metricTypes = [...new Set(entries.flatMap((entry) => entry.def.metricTypes))];
-  const queries: {metricTypes?: string[], hkType?: string}[] = [];
-  if (metricTypes.length) queries.push({metricTypes});
+export function sampleQueriesFor(entries: CatalogEntry[]): {codes?: string[], hkType?: string}[] {
+  const codes = [...new Set(entries.flatMap((entry) => entry.def.codes))];
+  const queries: {codes?: string[], hkType?: string}[] = [];
+  if (codes.length) queries.push({codes});
   for (const entry of entries) {
-    if (entry.def.hkType && !entry.def.metricTypes.length) {
+    if (entry.def.hkType && !entry.def.codes.length) {
       queries.push({hkType: entry.def.hkType});
     }
   }
@@ -483,7 +485,7 @@ export function buildVisitSummaryHtml(model: VisitSummaryModel): string {
   <dl class="provenance">
     <div>
       <dt>Source</dt>
-      <dd>Apple Health<br><span class="q">export via YourPHR</span></dd>
+      <dd>Wearable devices<br><span class="q">export via YourPHR</span></dd>
     </div>
     <div>
       <dt>Recording devices</dt>
@@ -911,8 +913,9 @@ function buildBloodPressure(
 ): {glance: GlanceRow, section: VisitSummarySection} {
   const rows = pairBloodPressure(samples);
   if (!rows.length) return emptyMetric(entry, unit);
-  const daily = dailyFromSamples(days, samples.filter((s) => s.metric_type === 'blood_pressure_systolic'), (sample) =>
-    sample.value_num != null ? sample.value_num : null,
+  const daily = dailyFromSamples(days, samples, (sample) =>
+    sample.components?.find((c) => c.code === LOINC_BP_SYS)?.value
+      ?? (sample.metric_type === 'blood_pressure_systolic' ? sample.value_num ?? null : null),
   );
   const sys = rows.map((row) => row.sys).filter((v): v is number => v != null);
   const dia = rows.map((row) => row.dia).filter((v): v is number => v != null);
@@ -988,23 +991,23 @@ function buildFallbackTable(entry: CatalogEntry, samples: HealthSample[], unit: 
 }
 
 function pairBloodPressure(samples: HealthSample[]): {at: string, sys?: number, dia?: number}[] {
-  const byCorr = new Map<string, {at: string, sys?: number, dia?: number}>();
-  const unpaired: {at: string, sys?: number, dia?: number}[] = [];
+  const rows: {at: string, sys?: number, dia?: number}[] = [];
   for (const sample of samples) {
-    const target = sample.correlation_uuid ? (byCorr.get(sample.correlation_uuid) || {at: sample.start_time}) : {at: sample.start_time};
-    if (sample.metric_type === 'blood_pressure_systolic') target.sys = sample.value_num;
-    if (sample.metric_type === 'blood_pressure_diastolic') target.dia = sample.value_num;
-    if (Date.parse(sample.start_time) < Date.parse(target.at)) target.at = sample.start_time;
-    if (sample.correlation_uuid) byCorr.set(sample.correlation_uuid, target);
-    else unpaired.push(target);
+    const sys = sample.components?.find((c) => c.code === LOINC_BP_SYS)?.value
+      ?? (sample.metric_type === 'blood_pressure_systolic' ? sample.value_num : undefined);
+    const dia = sample.components?.find((c) => c.code === LOINC_BP_DIA)?.value
+      ?? (sample.metric_type === 'blood_pressure_diastolic' ? sample.value_num : undefined);
+    if (sys != null || dia != null) {
+      rows.push({at: sample.start_time, sys, dia});
+    }
   }
-  return [...byCorr.values(), ...unpaired].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }
 
 function samplesFor(entry: CatalogEntry, samples: HealthSample[]): HealthSample[] {
-  if (entry.def.metricTypes.length) {
-    const types = new Set(entry.def.metricTypes);
-    return samples.filter((sample) => types.has(sample.metric_type));
+  if (entry.def.codes.length) {
+    const codes = new Set(entry.def.codes);
+    return samples.filter((sample) => codes.has(sample.code || '') || (entry.id === sample.metric_type));
   }
   if (entry.def.hkType) return samples.filter((sample) => sample.hk_type === entry.def.hkType);
   return [];
@@ -1082,7 +1085,7 @@ function specFor(def: MetricDef, unit: string): string {
   switch (def.id) {
     case 'heart_rate': return `${unit} · daily range`;
     case 'resting_heart_rate': return `${unit} · one value per day`;
-    case 'heart_rate_variability_sdnn': return 'ms · SDNN (Apple Health)';
+    case 'heart_rate_variability_sdnn': return 'ms · SDNN';
     case 'step_count': return 'count · per day';
     case 'sleep_stage': return 'hours · by night';
     case 'blood_pressure': return 'mmHg · individual readings';
@@ -1106,13 +1109,13 @@ function qualityNote(entry: CatalogEntry, missing: string[], samples: HealthSamp
     step_count: '<b>Activity context, not a clinical measure.</b> Useful as a backdrop for the cardiac trends above rather than on its own.',
     blood_pressure: device
       ? `<b>Recorded as blood pressure samples from ${escapeHtml(device)}.</b> Consumer-grade. Confirm with an in-clinic measurement before acting.`
-      : '<b>Spot readings from Apple Health — device model not recorded.</b> Not a validated clinical feed. Confirm with an in-clinic measurement before acting.',
+      : '<b>Spot readings from a consumer device — device model not recorded.</b> Not a validated clinical feed. Confirm with an in-clinic measurement before acting.',
     oxygen_saturation: '<b>Optical sensor on a consumer device, not a clinical pulse oximeter.</b>',
-    body_mass: '<b>Spot checks from a home scale or the Health app.</b> Not a clinical weigh-in.',
+    body_mass: '<b>Spot checks from a home scale or health app.</b> Not a clinical weigh-in.',
     body_temperature: '<b>Spot checks from a consumer thermometer.</b> Not a clinical measurement.',
-    sleep_stage: '<b>Watch-estimated sleep stages, not a clinical sleep study.</b> Stage labels are Apple Health categories.',
+    sleep_stage: '<b>Watch-estimated sleep stages, not a clinical sleep study.</b> Stage labels are device categories mapped to SNOMED.',
   };
-  const base = notes[entry.id] || '<b>Recorded by Apple Health on a consumer device.</b>';
+  const base = notes[entry.id] || '<b>Recorded on a consumer device.</b>';
   const gapBit = gaps ? ` No readings ${escapeHtml(gaps)}.` : '';
   return base + gapBit;
 }

@@ -2,13 +2,25 @@ import {HealthMetricSummary} from '../../models/fasten/health-sample';
 
 export type VizKind = 'line' | 'dual-line' | 'bar-daily' | 'sleep-stages' | 'table';
 
+export const LOINC_HEART_RATE = '8867-4';
+export const LOINC_RESTING_HR = '40443-4';
+export const LOINC_HRV = '80404-7';
+export const LOINC_BP_PANEL = '85354-9';
+export const LOINC_BP_SYS = '8480-6';
+export const LOINC_BP_DIA = '8462-4';
+export const LOINC_STEPS = '55423-8';
+export const LOINC_WEIGHT = '29463-7';
+export const LOINC_OXYGEN = '2708-6';
+export const LOINC_TEMP = '8310-5';
+export const LOINC_SLEEP = '93832-4';
+
 export interface MetricDef {
   id: string
   label: string
-  metricTypes: string[]
+  codes: string[]
   viz: VizKind
   unit?: string
-  // Unrecognized HealthKit types have no metric_type; the series endpoint filters on hk_type instead.
+  // Unrecognized vendor types have no code; the series endpoint filters on hk_type instead.
   hkType?: string
 }
 
@@ -20,20 +32,33 @@ export interface CatalogEntry {
 }
 
 export const KNOWN_METRICS: MetricDef[] = [
-  {id: 'heart_rate', label: 'Heart Rate', metricTypes: ['heart_rate'], viz: 'line', unit: 'bpm'},
-  {id: 'blood_pressure', label: 'Blood Pressure', metricTypes: ['blood_pressure_systolic', 'blood_pressure_diastolic'], viz: 'dual-line', unit: 'mmHg'},
-  {id: 'resting_heart_rate', label: 'Resting Heart Rate', metricTypes: ['resting_heart_rate'], viz: 'line', unit: 'bpm'},
-  {id: 'heart_rate_variability_sdnn', label: 'Heart Rate Variability (SDNN)', metricTypes: ['heart_rate_variability_sdnn'], viz: 'line', unit: 'ms'},
-  {id: 'step_count', label: 'Steps', metricTypes: ['step_count'], viz: 'bar-daily', unit: 'steps'},
-  {id: 'sleep_stage', label: 'Sleep', metricTypes: ['sleep_stage'], viz: 'sleep-stages'},
-  {id: 'oxygen_saturation', label: 'Oxygen', metricTypes: ['oxygen_saturation'], viz: 'line', unit: '%'},
-  {id: 'body_mass', label: 'Weight', metricTypes: ['body_mass'], viz: 'line', unit: 'kg'},
-  {id: 'body_temperature', label: 'Body Temperature', metricTypes: ['body_temperature'], viz: 'line', unit: '°C'},
+  {id: 'heart_rate', label: 'Heart Rate', codes: [LOINC_HEART_RATE], viz: 'line', unit: 'bpm'},
+  {id: 'blood_pressure', label: 'Blood Pressure', codes: [LOINC_BP_PANEL], viz: 'dual-line', unit: 'mmHg'},
+  {id: 'resting_heart_rate', label: 'Resting Heart Rate', codes: [LOINC_RESTING_HR], viz: 'line', unit: 'bpm'},
+  {id: 'heart_rate_variability_sdnn', label: 'Heart Rate Variability (SDNN)', codes: [LOINC_HRV], viz: 'line', unit: 'ms'},
+  {id: 'step_count', label: 'Steps', codes: [LOINC_STEPS], viz: 'bar-daily', unit: 'steps'},
+  {id: 'sleep_stage', label: 'Sleep', codes: [LOINC_SLEEP], viz: 'sleep-stages'},
+  {id: 'oxygen_saturation', label: 'Oxygen', codes: [LOINC_OXYGEN], viz: 'line', unit: '%'},
+  {id: 'body_mass', label: 'Weight', codes: [LOINC_WEIGHT], viz: 'line', unit: 'kg'},
+  {id: 'body_temperature', label: 'Body Temperature', codes: [LOINC_TEMP], viz: 'line', unit: '°C'},
 ];
 
-export const SLEEP_STAGE_ORDER = ['awake', 'asleepCore', 'asleepDeep', 'asleepREM', 'asleepUnspecified', 'inBed'] as const;
+export const SLEEP_AWAKE = '248218006';
+export const SLEEP_CORE = '248219008';
+export const SLEEP_DEEP = '248220008';
+export const SLEEP_REM = '248218000';
+export const SLEEP_UNSPECIFIED = '248171000';
+export const SLEEP_IN_BED = '133877004';
+
+export const SLEEP_STAGE_ORDER = [SLEEP_AWAKE, SLEEP_CORE, SLEEP_DEEP, SLEEP_REM, SLEEP_UNSPECIFIED, SLEEP_IN_BED] as const;
 
 export const SLEEP_STAGE_LABELS: Record<string, string> = {
+  [SLEEP_AWAKE]: 'Awake',
+  [SLEEP_CORE]: 'Core',
+  [SLEEP_DEEP]: 'Deep',
+  [SLEEP_REM]: 'REM',
+  [SLEEP_UNSPECIFIED]: 'Asleep',
+  [SLEEP_IN_BED]: 'In bed',
   awake: 'Awake',
   asleepCore: 'Core',
   asleepDeep: 'Deep',
@@ -42,7 +67,7 @@ export const SLEEP_STAGE_LABELS: Record<string, string> = {
   inBed: 'In bed',
 };
 
-export const SLEEP_ASLEEP_STAGES = ['asleepCore', 'asleepDeep', 'asleepREM', 'asleepUnspecified'] as const;
+export const SLEEP_ASLEEP_STAGES = [SLEEP_CORE, SLEEP_DEEP, SLEEP_REM, SLEEP_UNSPECIFIED, 'asleepCore', 'asleepDeep', 'asleepREM', 'asleepUnspecified'] as const;
 
 export function asleepHours(stages: Record<string, number> | undefined): number {
   if (!stages) return 0;
@@ -50,7 +75,7 @@ export function asleepHours(stages: Record<string, number> | undefined): number 
 }
 
 export function isAsleepStageLabel(label: string | undefined): boolean {
-  return !!label && SLEEP_ASLEEP_STAGES.some((stage) => SLEEP_STAGE_LABELS[stage] === label);
+  return !!label && ['Core', 'Deep', 'REM', 'Asleep'].includes(label);
 }
 
 export type WeightUnit = 'kg' | 'lbs' | 'st';
@@ -100,7 +125,7 @@ export function formatStoneFromDecimal(st: number): string {
 }
 
 // HealthKit's percent unit is a fraction of 1 (0.97 = 97%). Values already in 0–100 pass through
-// so a manual reading of 97 still displays as 97%.
+// so a reading stored as FHIR % still displays as 97%.
 export function asPercent(value: number): number {
   if (value >= 0 && value <= 1) return Math.round(value * 1000) / 10;
   return value;
@@ -111,14 +136,19 @@ export function parseStoredWeightUnit(raw: string | null): WeightUnit {
   return 'kg';
 }
 
-// groupSummaries folds the backend's one-row-per-metric_type catalog into the UI list: blood pressure
-// is one entry, unknown HealthKit types still appear, and known types keep a stable order.
+function summaryKey(summary: HealthMetricSummary): string {
+  return summary.code || summary.metric_type || '';
+}
+
+// groupSummaries folds the backend's one-row-per-code catalog into the UI list: blood pressure
+// is one entry, unknown vendor types still appear, and known types keep a stable order.
 export function groupSummaries(summaries: HealthMetricSummary[]): CatalogEntry[] {
-  const byType = new Map<string, HealthMetricSummary>();
+  const byKey = new Map<string, HealthMetricSummary>();
   const unknown: HealthMetricSummary[] = [];
   for (const summary of summaries || []) {
-    if (summary.metric_type) {
-      byType.set(summary.metric_type, summary);
+    const key = summaryKey(summary);
+    if (key) {
+      byKey.set(key, summary);
     } else {
       unknown.push(summary);
     }
@@ -127,9 +157,20 @@ export function groupSummaries(summaries: HealthMetricSummary[]): CatalogEntry[]
   const used = new Set<string>();
   const entries: CatalogEntry[] = [];
   for (const def of KNOWN_METRICS) {
-    const matched = def.metricTypes.map((t) => byType.get(t)).filter((s): s is HealthMetricSummary => !!s);
+    const matched = def.codes.map((c) => byKey.get(c) || byKey.get(def.id)).filter((s): s is HealthMetricSummary => !!s);
+    if (def.id === 'blood_pressure' && !matched.length) {
+      const sys = byKey.get('blood_pressure_systolic');
+      const dia = byKey.get('blood_pressure_diastolic');
+      if (sys) matched.push(sys);
+      if (dia) matched.push(dia);
+    }
     if (!matched.length) continue;
-    def.metricTypes.forEach((t) => used.add(t));
+    def.codes.forEach((c) => used.add(c));
+    used.add(def.id);
+    if (def.id === 'blood_pressure') {
+      used.add('blood_pressure_systolic');
+      used.add('blood_pressure_diastolic');
+    }
     entries.push({
       id: def.id,
       def,
@@ -138,8 +179,8 @@ export function groupSummaries(summaries: HealthMetricSummary[]): CatalogEntry[]
     });
   }
 
-  for (const [metricType, summary] of byType) {
-    if (used.has(metricType)) continue;
+  for (const [key, summary] of byKey) {
+    if (used.has(key) || used.has(summary.metric_type) || used.has(summary.code)) continue;
     const def = fallbackDef(summary);
     entries.push({id: def.id, def, summaries: [summary], latestLabel: formatLatest(def, [summary])});
   }
@@ -175,10 +216,11 @@ export function humanizeHkType(hkType: string): string {
 
 export function formatLatest(def: MetricDef, summaries: HealthMetricSummary[], weightUnit: WeightUnit = 'kg'): string {
   if (def.viz === 'dual-line') {
-    const sys = summaries.find((s) => s.metric_type === 'blood_pressure_systolic');
-    const dia = summaries.find((s) => s.metric_type === 'blood_pressure_diastolic');
-    const sysVal = sys?.value_num != null ? String(Math.round(sys.value_num)) : '—';
-    const diaVal = dia?.value_num != null ? String(Math.round(dia.value_num)) : '—';
+    const panel = summaries.find((s) => s.code === LOINC_BP_PANEL) || summaries[0];
+    const sys = componentValue(panel, LOINC_BP_SYS) ?? summaries.find((s) => s.metric_type === 'blood_pressure_systolic')?.value_num;
+    const dia = componentValue(panel, LOINC_BP_DIA) ?? summaries.find((s) => s.metric_type === 'blood_pressure_diastolic')?.value_num;
+    const sysVal = sys != null ? String(Math.round(sys)) : '—';
+    const diaVal = dia != null ? String(Math.round(dia)) : '—';
     return `${sysVal}/${diaVal} mmHg`;
   }
   const latest = newest(summaries);
@@ -197,25 +239,41 @@ export function formatLatest(def: MetricDef, summaries: HealthMetricSummary[], w
 export function displayUnit(def: MetricDef, stored?: string, weightUnit: WeightUnit = 'kg'): string {
   if (def.id === 'body_mass') return weightUnitLabel(weightUnit);
   if (def.unit) return def.unit;
-  if (stored === 'count/min') return 'bpm';
+  if (stored === 'count/min' || stored === '/min') return 'bpm';
+  if (stored === 'mm[Hg]') return 'mmHg';
+  if (stored === 'Cel') return '°C';
+  if (stored === '{steps}') return 'steps';
   return stored || '';
 }
 
+export function componentValue(summary: HealthMetricSummary | undefined, code: string): number | undefined {
+  return summary?.components?.find((c) => c.code === code)?.value;
+}
+
 function fallbackDef(summary: HealthMetricSummary): MetricDef {
-  const hasNum = summary.value_num != null;
+  const hasNum = summary.value_num != null || (summary.components?.length ?? 0) > 0;
+  if (summary.code) {
+    return {
+      id: summary.code,
+      label: humanizeMetricType(summary.metric_type) || summary.code,
+      codes: [summary.code],
+      viz: hasNum ? 'line' : 'table',
+      unit: displayUnit({id: '', label: '', codes: [], viz: 'line'}, summary.unit),
+    };
+  }
   if (summary.metric_type) {
     return {
       id: summary.metric_type,
       label: humanizeMetricType(summary.metric_type),
-      metricTypes: [summary.metric_type],
+      codes: [],
       viz: hasNum ? 'line' : 'table',
-      unit: displayUnit({id: '', label: '', metricTypes: [], viz: 'line'}, summary.unit),
+      unit: displayUnit({id: '', label: '', codes: [], viz: 'line'}, summary.unit),
     };
   }
   return {
     id: `hk:${summary.hk_type}`,
     label: humanizeHkType(summary.hk_type),
-    metricTypes: [],
+    codes: [],
     viz: hasNum ? 'line' : 'table',
     unit: summary.unit,
     hkType: summary.hk_type,

@@ -22,8 +22,9 @@ describe('health visit summary', () => {
 
   const hrEntry: CatalogEntry = {
     id: 'heart_rate',
-    def: {id: 'heart_rate', label: 'Heart Rate', metricTypes: ['heart_rate'], viz: 'line', unit: 'bpm'},
+    def: {id: 'heart_rate', label: 'Heart Rate', codes: ['8867-4'], viz: 'line', unit: 'bpm'},
     summaries: [{
+      code: '8867-4',
       metric_type: 'heart_rate',
       hk_type: 'HKQuantityTypeIdentifierHeartRate',
       latest_at: '2026-08-26T12:00:00Z',
@@ -39,17 +40,22 @@ describe('health visit summary', () => {
     def: {
       id: 'blood_pressure',
       label: 'Blood Pressure',
-      metricTypes: ['blood_pressure_systolic', 'blood_pressure_diastolic'],
+      codes: ['85354-9'],
       viz: 'dual-line',
       unit: 'mmHg',
     },
     summaries: [{
-      metric_type: 'blood_pressure_systolic',
-      hk_type: 'HKQuantityTypeIdentifierBloodPressureSystolic',
+      code: '85354-9',
+      metric_type: 'blood_pressure',
+      hk_type: 'HKCorrelationTypeIdentifierBloodPressure',
       latest_at: '2026-08-26T08:00:00Z',
       earliest_at: '2026-08-01T00:00:00Z',
       sample_count: 2,
       source_name: 'Health',
+      components: [
+        {code: '8480-6', value: 128, unit: 'mm[Hg]'},
+        {code: '8462-4', value: 82, unit: 'mm[Hg]'},
+      ],
     }],
     latestLabel: '128/82 mmHg',
   };
@@ -81,10 +87,10 @@ describe('health visit summary', () => {
   it('classifies heart rate as a band chart and blood pressure as a reading table', () => {
     expect(summaryKind(hrEntry.def)).toBe('band');
     expect(summaryKind(bpEntry.def)).toBe('readings');
-    expect(seriesQueryFor(hrEntry)).toEqual({metricTypes: ['heart_rate'], hkType: undefined, mode: 'daily-stats'});
+    expect(seriesQueryFor(hrEntry)).toEqual({codes: ['8867-4'], hkType: undefined, mode: 'daily-stats'});
     expect(seriesQueryFor(bpEntry)).toBeNull();
     expect(sampleQueriesFor([hrEntry, bpEntry])).toEqual([{
-      metricTypes: ['heart_rate', 'blood_pressure_systolic', 'blood_pressure_diastolic'],
+      codes: ['8867-4', '85354-9'],
     }]);
   });
 
@@ -106,8 +112,7 @@ describe('health visit summary', () => {
       ],
     };
     const samples: HealthSample[] = [
-      bpSample('sys-1', 'blood_pressure_systolic', 128, '2026-08-26T08:00:00Z', 'c1'),
-      bpSample('dia-1', 'blood_pressure_diastolic', 82, '2026-08-26T08:00:00Z', 'c1'),
+      bpSample('bp-1', 128, 82, '2026-08-26T08:00:00Z'),
     ];
     const model = assembleVisitSummary({
       generatedAt,
@@ -137,7 +142,7 @@ describe('health visit summary', () => {
     expect(html).not.toContain('Ada <script>');
     expect(html).toContain('Born');
     expect(html).toContain('1935-12-10');
-    expect(html).toContain('Apple Health');
+    expect(html).toContain('Wearable devices');
     expect(html).toContain('yourphr-health-20260828.csv');
     expect(html).toContain('page-break-inside: avoid');
     expect(html).toContain('Systolic');
@@ -222,7 +227,7 @@ describe('health visit summary', () => {
       },
     ]);
     const lines = csv.trim().split('\n');
-    expect(lines[0]).toBe('start_time,end_time,metric_type,hk_type,value_num,unit,value_text,correlation_uuid,source_name,device_name');
+    expect(lines[0]).toBe('start_time,end_time,code,code_system,category,metric_type,hk_type,value_num,unit,value_text,components,source_name,device_name');
     expect(lines[1]).toContain('2026-08-24T10:00:00Z');
     expect(lines[1]).toContain('70');
     expect(lines[2]).toContain('2026-08-26T11:00:00Z');
@@ -241,23 +246,23 @@ describe('health visit summary', () => {
 
 function bpSample(
   id: string,
-  metricType: 'blood_pressure_systolic' | 'blood_pressure_diastolic',
-  value: number,
+  sys: number,
+  dia: number,
   start: string,
-  corr: string,
 ): HealthSample {
   return {
     id,
     external_uuid: id,
-    hk_type: metricType === 'blood_pressure_systolic'
-      ? 'HKQuantityTypeIdentifierBloodPressureSystolic'
-      : 'HKQuantityTypeIdentifierBloodPressureDiastolic',
-    metric_type: metricType,
+    hk_type: 'HKCorrelationTypeIdentifierBloodPressure',
+    metric_type: 'blood_pressure',
+    code: '85354-9',
     start_time: start,
     end_time: start,
-    value_num: value,
-    unit: 'mmHg',
-    correlation_uuid: corr,
+    unit: 'mm[Hg]',
+    components: [
+      {code: '8480-6', value: sys, unit: 'mm[Hg]'},
+      {code: '8462-4', value: dia, unit: 'mm[Hg]'},
+    ],
   };
 }
 

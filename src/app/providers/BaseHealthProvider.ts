@@ -1,6 +1,6 @@
 /**
- * Health samples storage (Apple Health / HealthKit ingest). The provider stores; the manager
- * decides. Ownership is always a user_id the manager supplies — never a value from the body.
+ * Health samples storage — Observation-shaped projection for wearable PGHD.
+ * Ownership is always a user_id the manager supplies — never a value from the body.
  */
 
 export const HEALTH_SAMPLE_DEFAULT_LIMIT = 500;
@@ -11,17 +11,30 @@ export const HEALTH_SAMPLE_INSERT_BATCH = 250;
 
 export type HealthSeriesMode = 'points' | 'day' | 'daily-stats' | 'stages';
 
+export interface HealthComponentValue {
+  code: string;
+  display?: string;
+  value: number;
+  unit: string;
+}
+
 export interface HealthSampleRow {
   id: string;
   userId: string;
   externalUuid: string;
+  identifierSystem: string;
   hkType: string;
   metricType: string;
+  codeSystem: string;
+  code: string;
+  category: string;
+  subject: string;
   startTime: string;
   endTime: string;
   valueNum: number | null;
   unit: string;
   valueText: string;
+  components: string;
   correlationUuid: string;
   sourceName: string;
   sourceBundleId: string;
@@ -40,6 +53,7 @@ export interface HealthSyncStateRow {
 }
 
 export interface HealthSampleQuery {
+  codes: string[];
   metricTypes: string[];
   hkType: string;
   startAfter?: string;
@@ -50,6 +64,7 @@ export interface HealthSampleQuery {
 }
 
 export interface HealthSeriesQuery {
+  codes: string[];
   metricTypes: string[];
   hkType: string;
   startAfter?: string;
@@ -59,11 +74,15 @@ export interface HealthSeriesQuery {
 }
 
 export interface HealthMetricSummary {
+  code: string;
+  code_system: string;
+  category?: string;
   metric_type: string;
   hk_type: string;
   unit?: string;
   value_num?: number;
   value_text?: string;
+  components?: HealthComponentValue[];
   latest_at: string;
   earliest_at: string;
   sample_count: number;
@@ -84,6 +103,7 @@ export interface HealthStageNight { date: string; stages: Record<string, number>
 export interface HealthSeriesStats { min?: number; max?: number; avg?: number }
 
 export interface HealthSeries {
+  code?: string;
   metric_type?: string;
   hk_type?: string;
   unit?: string;
@@ -93,6 +113,7 @@ export interface HealthSeries {
   daily?: HealthDailyBucket[];
   nights?: HealthStageNight[];
   stats?: HealthSeriesStats;
+  components?: Record<string, HealthSeriesPoint[]>;
 }
 
 export abstract class BaseHealthProvider {
@@ -100,6 +121,7 @@ export abstract class BaseHealthProvider {
   /** Inserts, skipping (user_id, external_uuid) duplicates. Returns how many rows were actually written. */
   abstract insertSamples(userId: string, rows: HealthSampleRow[]): Promise<number>;
   abstract listSamples(userId: string, query: HealthSampleQuery): Promise<{ samples: HealthSampleRow[]; total: number }>;
+  abstract readSample(userId: string, id: string): Promise<HealthSampleRow | undefined>;
   abstract summarizeMetrics(userId: string): Promise<HealthMetricSummary[]>;
   abstract querySeries(userId: string, query: HealthSeriesQuery): Promise<HealthSeries>;
   abstract upsertSyncState(row: HealthSyncStateRow): Promise<void>;
