@@ -39,11 +39,19 @@ import {
   groupSummaries,
   isAsleepStageLabel,
   kgToWeightUnit,
+  LOINC_BP_DIA,
+  LOINC_BP_SYS,
   MetricDef,
   parseStoredWeightUnit,
   seriesMode,
+  SLEEP_AWAKE,
+  SLEEP_CORE,
+  SLEEP_DEEP,
+  SLEEP_IN_BED,
+  SLEEP_REM,
   SLEEP_STAGE_LABELS,
   SLEEP_STAGE_ORDER,
+  SLEEP_UNSPECIFIED,
   WEIGHT_UNIT_STORAGE_KEY,
   WEIGHT_UNITS,
   WeightUnit,
@@ -66,6 +74,12 @@ const INDIGO = 'rgb(102, 16, 242)';
 const INDIGO_FILL = 'rgba(102, 16, 242, 0.12)';
 const TEAL = 'rgb(13, 202, 240)';
 const SLEEP_COLORS: Record<string, string> = {
+  [SLEEP_AWAKE]: 'rgba(253, 126, 20, 0.85)',
+  [SLEEP_CORE]: 'rgba(13, 110, 253, 0.85)',
+  [SLEEP_DEEP]: 'rgba(102, 16, 242, 0.85)',
+  [SLEEP_REM]: 'rgba(111, 66, 193, 0.65)',
+  [SLEEP_UNSPECIFIED]: 'rgba(108, 117, 125, 0.7)',
+  [SLEEP_IN_BED]: 'rgba(173, 181, 189, 0.7)',
   awake: 'rgba(253, 126, 20, 0.85)',
   asleepCore: 'rgba(13, 110, 253, 0.85)',
   asleepDeep: 'rgba(102, 16, 242, 0.85)',
@@ -216,7 +230,7 @@ export class HealthComponent implements OnInit {
 
   get sourceLabel(): string {
     const summary = this.selected?.summaries[0];
-    return summary?.device_name || summary?.source_name || 'Apple Health';
+    return summary?.device_name || summary?.source_name || 'device';
   }
 
   selectMetric(id: string): void {
@@ -357,7 +371,7 @@ export class HealthComponent implements OnInit {
     if (window.startAfter) bounds.startAfter = window.startAfter;
     if (window.startBefore) bounds.startBefore = window.startBefore;
     return this.fastenApi.getHealthSeries({
-      metricTypes: query.metricTypes,
+      codes: query.codes,
       hkType: query.hkType,
       mode: query.mode,
       ...bounds,
@@ -375,7 +389,7 @@ export class HealthComponent implements OnInit {
     );
   }
 
-  private listAllSamplePages(query: {metricTypes?: string[], hkType?: string, startAfter?: string, startBefore?: string}): Observable<HealthSample[]> {
+  private listAllSamplePages(query: {codes?: string[], metricTypes?: string[], hkType?: string, startAfter?: string, startBefore?: string}): Observable<HealthSample[]> {
     const go = (offset: number, acc: HealthSample[]): Observable<HealthSample[]> => {
       const pageQuery: HealthSampleQuery = {
         ...query,
@@ -433,12 +447,14 @@ export class HealthComponent implements OnInit {
     const bounds = this.queryWindow();
     const mode = seriesMode(entry.def.viz);
     if (entry.def.viz === 'dual-line') {
-      forkJoin({
-        sys: this.fastenApi.getHealthSeries({metricTypes: ['blood_pressure_systolic'], mode, ...bounds}),
-        dia: this.fastenApi.getHealthSeries({metricTypes: ['blood_pressure_diastolic'], mode, ...bounds}),
-      }).pipe(catchError(() => of({sys: emptySeries(), dia: emptySeries()}))).subscribe({
-        next: ({sys, dia}) => {
-          this.applyDualSeries(sys, dia);
+      this.fastenApi.getHealthSeries({codes: entry.def.codes, mode, ...bounds}).pipe(
+        catchError(() => of(emptySeries())),
+      ).subscribe({
+        next: (series) => {
+          this.applyDualSeries(
+            {...series, points: series.components?.[LOINC_BP_SYS] || []},
+            {...series, points: series.components?.[LOINC_BP_DIA] || []},
+          );
           this.detailLoading = false;
         },
         error: () => { this.detailLoading = false; },
@@ -446,7 +462,7 @@ export class HealthComponent implements OnInit {
       return;
     }
     this.fastenApi.getHealthSeries({
-      metricTypes: entry.def.metricTypes.length ? entry.def.metricTypes : undefined,
+      codes: entry.def.codes.length ? entry.def.codes : undefined,
       hkType: entry.def.hkType,
       mode,
       ...bounds,
@@ -462,7 +478,7 @@ export class HealthComponent implements OnInit {
   private loadTable(entry: CatalogEntry): void {
     const bounds = this.queryWindow();
     this.fastenApi.listHealthSamples({
-      metricTypes: entry.def.metricTypes.length ? entry.def.metricTypes : undefined,
+      codes: entry.def.codes.length ? entry.def.codes : undefined,
       hkType: entry.def.hkType,
       startAfter: bounds.startAfter,
       startBefore: bounds.startBefore,
@@ -813,32 +829,18 @@ function convertStats(
 
 function toTableRows(def: MetricDef, samples: HealthSample[], weightUnit: WeightUnit = 'kg'): TableRow[] {
   if (def.viz === 'dual-line') {
-    const byCorr = new Map<string, {time: string, sys?: number, dia?: number, source: string}>();
-    const unpaired: TableRow[] = [];
-    for (const sample of samples) {
-      const source = sample.device_name || sample.source_name || '';
-      if (sample.correlation_uuid) {
-        const row = byCorr.get(sample.correlation_uuid) || {time: sample.start_time, source};
-        if (sample.metric_type === 'blood_pressure_systolic') row.sys = sample.value_num;
-        if (sample.metric_type === 'blood_pressure_diastolic') row.dia = sample.value_num;
-        if (Date.parse(sample.start_time) < Date.parse(row.time)) row.time = sample.start_time;
-        byCorr.set(sample.correlation_uuid, row);
-      } else {
-        unpaired.push({
-          time: sample.start_time,
-          value: sample.value_num != null ? String(Math.round(sample.value_num)) : (sample.value_text || ''),
-          unit: sample.unit || def.unit || '',
-          source,
-        });
-      }
-    }
-    const paired = Array.from(byCorr.values()).map((row) => ({
-      time: row.time,
-      value: `${row.sys != null ? Math.round(row.sys) : '—'} / ${row.dia != null ? Math.round(row.dia) : '—'}`,
-      unit: 'mmHg',
-      source: row.source,
-    }));
-    return [...paired, ...unpaired].sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+    return samples.map((sample) => {
+      const sys = sample.components?.find((c) => c.code === LOINC_BP_SYS)?.value
+        ?? (sample.metric_type === 'blood_pressure_systolic' ? sample.value_num : undefined);
+      const dia = sample.components?.find((c) => c.code === LOINC_BP_DIA)?.value
+        ?? (sample.metric_type === 'blood_pressure_diastolic' ? sample.value_num : undefined);
+      return {
+        time: sample.start_time,
+        value: `${sys != null ? Math.round(sys) : '—'} / ${dia != null ? Math.round(dia) : '—'}`,
+        unit: 'mmHg',
+        source: sample.device_name || sample.source_name || '',
+      };
+    }).sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
   }
   return samples.map((sample) => {
     if (def.id === 'body_mass' && sample.value_num != null) {

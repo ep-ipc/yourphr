@@ -15,33 +15,30 @@ import {
 
 describe('groupSummaries', () => {
   const hr: HealthMetricSummary = {
+    code: '8867-4',
     metric_type: 'heart_rate',
     hk_type: 'HKQuantityTypeIdentifierHeartRate',
-    unit: 'count/min',
+    unit: '/min',
     value_num: 72,
     latest_at: '2026-08-24T12:00:00Z',
     earliest_at: '2026-01-01T00:00:00Z',
     sample_count: 10,
   };
-  const sys: HealthMetricSummary = {
-    metric_type: 'blood_pressure_systolic',
-    hk_type: 'HKQuantityTypeIdentifierBloodPressureSystolic',
-    unit: 'mmHg',
-    value_num: 118,
+  const bp: HealthMetricSummary = {
+    code: '85354-9',
+    metric_type: 'blood_pressure',
+    hk_type: 'HKCorrelationTypeIdentifierBloodPressure',
+    unit: 'mm[Hg]',
     latest_at: '2026-08-24T08:00:00Z',
     earliest_at: '2026-01-01T00:00:00Z',
     sample_count: 4,
-  };
-  const dia: HealthMetricSummary = {
-    metric_type: 'blood_pressure_diastolic',
-    hk_type: 'HKQuantityTypeIdentifierBloodPressureDiastolic',
-    unit: 'mmHg',
-    value_num: 76,
-    latest_at: '2026-08-24T08:00:00Z',
-    earliest_at: '2026-01-01T00:00:00Z',
-    sample_count: 4,
+    components: [
+      {code: '8480-6', value: 118, unit: 'mm[Hg]'},
+      {code: '8462-4', value: 76, unit: 'mm[Hg]'},
+    ],
   };
   const unknown: HealthMetricSummary = {
+    code: '',
     metric_type: '',
     hk_type: 'HKQuantityTypeIdentifierRespiratoryRate',
     unit: 'count/min',
@@ -51,12 +48,12 @@ describe('groupSummaries', () => {
     sample_count: 2,
   };
 
-  it('merges systolic and diastolic into one blood pressure row', () => {
-    const entries = groupSummaries([hr, sys, dia]);
-    const bp = entries.find((e) => e.id === 'blood_pressure');
-    expect(bp).toBeTruthy();
-    expect(bp.def.viz).toBe('dual-line');
-    expect(bp.latestLabel).toBe('118/76 mmHg');
+  it('shows a blood pressure panel as one catalog row', () => {
+    const entries = groupSummaries([hr, bp]);
+    const bpEntry = entries.find((e) => e.id === 'blood_pressure');
+    expect(bpEntry).toBeTruthy();
+    expect(bpEntry.def.viz).toBe('dual-line');
+    expect(bpEntry.latestLabel).toBe('118/76 mmHg');
     expect(entries.find((e) => e.id === 'heart_rate').latestLabel).toBe('72 bpm');
   });
 
@@ -70,7 +67,7 @@ describe('groupSummaries', () => {
   });
 
   it('lists known metrics before unknown ones and in registry order', () => {
-    const entries = groupSummaries([unknown, dia, hr, sys]);
+    const entries = groupSummaries([unknown, bp, hr]);
     expect(entries.map((e) => e.id)).toEqual([
       'heart_rate',
       'blood_pressure',
@@ -101,9 +98,10 @@ describe('formatLatest', () => {
       id: def.id,
       def,
       summaries: [{
+        code: '8867-4',
         metric_type: 'heart_rate',
         hk_type: 'HKQuantityTypeIdentifierHeartRate',
-        unit: 'count/min',
+        unit: '/min',
         value_num: 72.4,
         latest_at: '2026-08-24T12:00:00Z',
         earliest_at: '2026-01-01T00:00:00Z',
@@ -117,6 +115,7 @@ describe('formatLatest', () => {
   it('converts weight using the selected unit', () => {
     const def = KNOWN_METRICS.find((m) => m.id === 'body_mass');
     const summaries = [{
+      code: '29463-7',
       metric_type: 'body_mass',
       hk_type: 'HKQuantityTypeIdentifierBodyMass',
       unit: 'kg',
@@ -133,6 +132,7 @@ describe('formatLatest', () => {
   it('renders HealthKit oxygen fractions as a percentage', () => {
     const def = KNOWN_METRICS.find((m) => m.id === 'oxygen_saturation');
     const summaries = [{
+      code: '2708-6',
       metric_type: 'oxygen_saturation',
       hk_type: 'HKQuantityTypeIdentifierOxygenSaturation',
       unit: '%',
@@ -185,12 +185,12 @@ describe('asPercent', () => {
 describe('asleepHours', () => {
   it('sums core, deep, REM, and unspecified, and ignores awake and in-bed', () => {
     expect(asleepHours({
-      asleepCore: 4.2,
-      asleepDeep: 1.5,
-      asleepREM: 1.8,
-      asleepUnspecified: 0.3,
-      awake: 0.4,
-      inBed: 8.5,
+      '248219008': 4.2,
+      '248220008': 1.5,
+      '248218000': 1.8,
+      '248171000': 0.3,
+      '248218006': 0.4,
+      '133877004': 8.5,
     })).toBeCloseTo(7.8, 5);
     expect(asleepHours({})).toBe(0);
   });

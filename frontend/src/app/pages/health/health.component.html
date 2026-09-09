@@ -6,25 +6,25 @@
         <div class="me-auto">
           <h2 class="health-title mb-1">Health</h2>
           <p class="health-subtitle mb-0">
-            Apple Health
-            <ng-container *ngIf="lastSyncedAt"> · iPhone last synced {{ lastSyncedAt | date:'medium' }}</ng-container>
-            <ng-container *ngIf="!lastSyncedAt && !loading"> · waiting for the companion app to sync</ng-container>
+            Vitals and activity from your devices
+            <ng-container *ngIf="lastSyncedAt"> · last synced {{ lastSyncedAt | date:'medium' }}</ng-container>
+            <ng-container *ngIf="!lastSyncedAt && !loading"> · waiting for a companion app to sync</ng-container>
           </p>
         </div>
         <button type="button" class="btn btn-outline-secondary"
                 [disabled]="entries.length === 0"
-                [title]="entries.length === 0 ? 'No Apple Health data to summarize' : 'Download a printable summary'"
+                [title]="entries.length === 0 ? 'No health data to summarize' : 'Download a printable summary'"
                 (click)="openVisitSummary()">
           Prepare visit summary
         </button>
       </div>
 
-      <app-loading-spinner *ngIf="loading" loadingTitle="Loading your Apple Health data..."></app-loading-spinner>
+      <app-loading-spinner *ngIf="loading" loadingTitle="Loading your health data..."></app-loading-spinner>
 
-      <div *ngIf="!loading && errored" class="alert alert-danger">Could not load your Apple Health data. Please try again.</div>
+      <div *ngIf="!loading && errored" class="alert alert-danger">Could not load your health data. Please try again.</div>
 
       <div *ngIf="!loading && !errored && entries.length === 0" class="alert alert-info">
-        No Apple Health data yet. Readings appear here after the iPhone companion app syncs.
+        No health data yet. Readings appear here after a companion app syncs.
       </div>
 
       <div class="health-layout" *ngIf="!loading && !errored && entries.length > 0">

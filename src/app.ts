@@ -193,7 +193,7 @@ const APP_MIGRATIONS: Migration[] = [
   },
   {
     id: '20260901150000',
-    description: 'health_samples + health_sync_states — Apple Health ingest, not FHIR Observations',
+    description: 'health_samples + health_sync_states — wearable PGHD projection (not the FHIR write path)',
     up: (db) => {
       db.exec(`CREATE TABLE IF NOT EXISTS health_samples (
         id TEXT PRIMARY KEY,
@@ -225,6 +225,23 @@ const APP_MIGRATIONS: Migration[] = [
         device_name TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (user_id, device_id, metric_type)
       )`);
+    },
+  },
+  {
+    id: '20260909120000',
+    description: 'health_samples Observation columns — LOINC/category/components projection',
+    up: (db) => {
+      const cols = (db.prepare('PRAGMA table_info(health_samples)').all() as { name: string }[]).map((c) => c.name);
+      const add = (name: string, sql: string) => {
+        if (!cols.includes(name)) db.exec(`ALTER TABLE health_samples ADD COLUMN ${sql}`);
+      };
+      add('identifier_system', "identifier_system TEXT NOT NULL DEFAULT ''");
+      add('code_system', "code_system TEXT NOT NULL DEFAULT ''");
+      add('code', "code TEXT NOT NULL DEFAULT ''");
+      add('category', "category TEXT NOT NULL DEFAULT ''");
+      add('subject', "subject TEXT NOT NULL DEFAULT ''");
+      add('components', "components TEXT NOT NULL DEFAULT ''");
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_health_sample_code ON health_samples(user_id, code, start_time)`);
     },
   },
 ];

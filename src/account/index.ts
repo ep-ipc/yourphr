@@ -84,10 +84,12 @@ export function accessCategoryFor(pathname: string): string | undefined {
     '/api/secure/health/metrics': 'Health',
     '/api/secure/health/series': 'Health',
     '/api/secure/health/samples': 'Health',
+    '/api/secure/health/bundle': 'Health',
     '/api/secure/health/sync-state': 'Health',
   };
   if (exact[pathname]) return exact[pathname];
   if (/^\/api\/secure\/resource\/fhir\/[^/]+\/[^/]+$/.test(pathname)) return 'Records (FHIR)';
+  if (/^\/api\/secure\/health\/observation\/[^/]+$/.test(pathname)) return 'Health';
   if (/^\/api\/secure\/source\/[^/]+\/export$/.test(pathname)) return 'Full export';
   return undefined;
 }

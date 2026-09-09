@@ -137,7 +137,9 @@ export class FastenApiService {
 
   getHealthSeries(query: HealthSeriesQuery): Observable<HealthSeries> {
     const params: Record<string, string> = {}
+    if (query.codes?.length) params['code'] = query.codes.join(',')
     if (query.metricTypes?.length) params['metric_type'] = query.metricTypes.join(',')
+    if (query.hkType) params['hk_type'] = query.hkType
     if (query.hkType) params['hk_type'] = query.hkType
     if (query.startAfter) params['start_after'] = query.startAfter
     if (query.startBefore) params['start_before'] = query.startBefore
@@ -150,6 +152,7 @@ export class FastenApiService {
 
   listHealthSamples(query: HealthSampleQuery): Observable<HealthSamplePage> {
     const params: Record<string, string> = {}
+    if (query.codes?.length) params['code'] = query.codes.join(',')
     if (query.metricTypes?.length) params['metric_type'] = query.metricTypes.join(',')
     if (query.hkType) params['hk_type'] = query.hkType
     if (query.startAfter) params['start_after'] = query.startAfter
