@@ -32,7 +32,7 @@ import {RecordsManager} from './app/managers/RecordsManager.js';
 import {SimpleRateLimiter} from './http/rate-limit.js';
 import {clientIp} from './framework/managers/SessionsManager.js';
 import {SqliteRecordsProvider} from './app/providers/SqliteRecordsProvider.js';
-import {serverDiscovery} from './app/discovery.js';
+import {requestAdvertisedOrigins, serverDiscovery} from './app/discovery.js';
 
 /**
  * The session cookie. HttpOnly throughout: the Angular app (yourphr#118 Phase 2b) never sees a
@@ -791,6 +791,7 @@ export function createYourPhrServer(options: ServerOptions) {
           hostPort: config.getString('yourphr.host.port'),
           hostIp: config.getString('yourphr.host.ip'),
           https: config.getBool('yourphr.web.secure-cookies'),
+          advertisedOrigins: requestAdvertisedOrigins(req.headers),
         })});
         return;
       }

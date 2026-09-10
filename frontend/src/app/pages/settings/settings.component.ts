@@ -120,7 +120,9 @@ export class SettingsComponent implements OnInit {
 
   getServerDiscovery(): void {
 
-    this.http.get<any>('/api/secure/sync/discovery').subscribe({
+    this.http.get<any>('/api/secure/sync/discovery', {
+      headers: { 'X-Client-Origin': globalThis.location.origin },
+    }).subscribe({
       next: (response) => {
         if (response.success) {
           this.serverInfo = response.data;
@@ -140,7 +142,7 @@ export class SettingsComponent implements OnInit {
 
     const qrData = {
       token: this.accessToken,
-      server_base_urls: this.serverInfo.server_base_urls,
+      server_base_urls: this.companionBaseUrls(this.serverInfo.server_base_urls),
       sync_endpoint: this.serverInfo.sync_endpoint,
     };
 
@@ -250,5 +252,30 @@ export class SettingsComponent implements OnInit {
   private setError(message: string): void {
     this.hasError = true;
     this.errorMessage = message;
+  }
+
+  /**
+   * The Angular proxy rewrites Host to localhost, so discovery may still miss the
+   * address bar. Prepend the page origin when it is a LAN/public host the phone can dial.
+   */
+  private companionBaseUrls(fromServer: string[] | undefined): string[] {
+    const urls = [...(fromServer ?? [])];
+    const origin = this.pageOriginForCompanion();
+    if (origin && !urls.includes(origin)) urls.unshift(origin);
+    return urls;
+  }
+
+  private pageOriginForCompanion(): string | null {
+    const origin = globalThis.location?.origin;
+    if (!origin) return null;
+    try {
+      const host = new URL(origin).hostname.toLowerCase();
+      if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost')) {
+        return null;
+      }
+      return origin;
+    } catch {
+      return null;
+    }
   }
 }
