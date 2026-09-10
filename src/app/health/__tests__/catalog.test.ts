@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allMetrics,
   codesForQuery,
+  componentOf,
   lookup,
   lookupByCode,
   lookupByMetricType,
@@ -28,6 +29,15 @@ describe('lookup', () => {
     expect(lookup('HKQuantityTypeIdentifierBloodPressureSystolic')?.code).toBe('85354-9');
     expect(lookup('BloodPressureRecord')?.kind).toBe('panel');
     expect(lookupByMetricType('blood_pressure_diastolic')?.code).toBe('85354-9');
+  });
+
+  it('resolves HealthKit and metric-type keys to blood-pressure components', () => {
+    const panel = lookup('BloodPressureRecord')!;
+    expect(componentOf(panel, 'HKQuantityTypeIdentifierBloodPressureSystolic')?.code).toBe('8480-6');
+    expect(componentOf(panel, 'HKQuantityTypeIdentifierBloodPressureDiastolic')?.code).toBe('8462-4');
+    expect(componentOf(panel, 'blood_pressure_systolic')?.code).toBe('8480-6');
+    expect(componentOf(panel, '8480-6')?.metricType).toBe('blood_pressure_systolic');
+    expect(componentOf(panel, 'BloodPressureRecord')).toBeUndefined();
   });
 
   it('reports unknown types as missing rather than throwing', () => {
@@ -83,6 +93,11 @@ describe('normalizeCodeableValue', () => {
     expect(normalizeCodeableValue(sleep, '0')).toBe('133877004');
     expect(normalizeCodeableValue(sleep, 'asleep')).toBe('248171000');
     expect(normalizeCodeableValue(sleep, 'HKCategoryValueSleepAnalysisAwake')).toBe('248218006');
+    expect(normalizeCodeableValue(sleep, 'STAGE_TYPE_SLEEPING_DEEP')).toBe('248220008');
+    expect(normalizeCodeableValue(sleep, 'STAGE_TYPE_SLEEPING_LIGHT')).toBe('248219008');
+    expect(normalizeCodeableValue(sleep, 'STAGE_TYPE_SLEEPING_REM')).toBe('248218000');
+    expect(normalizeCodeableValue(sleep, 'STAGE_TYPE_SLEEPING')).toBe('248171000');
+    expect(normalizeCodeableValue(sleep, 'STAGE_TYPE_AWAKE')).toBe('248218006');
   });
 
   it('rejects an unknown stage, an out-of-range enum, and the empty string', () => {

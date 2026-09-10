@@ -21,6 +21,8 @@ export interface ComponentDef {
   code: string;
   display: string;
   metricType: string;
+  /** HealthKit / Health Connect identifiers that resolve to this component. */
+  vendorKeys?: readonly string[];
 }
 
 export interface AllowedValue {
@@ -102,8 +104,18 @@ const CATALOG: CatalogMetric[] = [
     ],
     allowedValues: [],
     components: [
-      { code: '8480-6', display: 'Systolic blood pressure', metricType: 'blood_pressure_systolic' },
-      { code: '8462-4', display: 'Diastolic blood pressure', metricType: 'blood_pressure_diastolic' },
+      {
+        code: '8480-6',
+        display: 'Systolic blood pressure',
+        metricType: 'blood_pressure_systolic',
+        vendorKeys: ['HKQuantityTypeIdentifierBloodPressureSystolic'],
+      },
+      {
+        code: '8462-4',
+        display: 'Diastolic blood pressure',
+        metricType: 'blood_pressure_diastolic',
+        vendorKeys: ['HKQuantityTypeIdentifierBloodPressureDiastolic'],
+      },
     ],
     scaleFractionToPercent: false,
   },
@@ -169,12 +181,82 @@ const CATALOG: CatalogMetric[] = [
     metricType: 'sleep_stage',
     vendorKeys: ['HKCategoryTypeIdentifierSleepAnalysis', 'SleepSessionRecord'],
     allowedValues: [
-      { canonical: '248218006', display: 'Awake', aliases: ['awake', '2', 'HKCategoryValueSleepAnalysisAwake', '89129007'] },
-      { canonical: '248219008', display: 'Light sleep', aliases: ['asleepCore', '3', 'HKCategoryValueSleepAnalysisAsleepCore'] },
-      { canonical: '248220008', display: 'Deep sleep', aliases: ['asleepDeep', '4', 'HKCategoryValueSleepAnalysisAsleepDeep'] },
-      { canonical: '248218000', display: 'REM sleep', aliases: ['asleepREM', '5', 'HKCategoryValueSleepAnalysisAsleepREM'] },
-      { canonical: '248171000', display: 'Asleep', aliases: ['asleepUnspecified', 'asleep', '1', 'HKCategoryValueSleepAnalysisAsleepUnspecified'] },
-      { canonical: '133877004', display: 'In bed', aliases: ['inBed', '0', 'HKCategoryValueSleepAnalysisInBed'] },
+      {
+        canonical: '248218006',
+        display: 'Awake',
+        aliases: [
+          'awake',
+          '2',
+          'HKCategoryValueSleepAnalysisAwake',
+          '89129007',
+          'STAGE_TYPE_AWAKE',
+          'AWAKE',
+          'STAGE_TYPE_AWAKE_OUT_OF_BED',
+          'OUT_OF_BED',
+          'STAGE_TYPE_OUT_OF_BED',
+        ],
+      },
+      {
+        canonical: '248219008',
+        display: 'Light sleep',
+        aliases: [
+          'asleepCore',
+          '3',
+          'HKCategoryValueSleepAnalysisAsleepCore',
+          'STAGE_TYPE_SLEEPING_LIGHT',
+          'STAGE_TYPE_LIGHT',
+          'LIGHT',
+        ],
+      },
+      {
+        canonical: '248220008',
+        display: 'Deep sleep',
+        aliases: [
+          'asleepDeep',
+          '4',
+          'HKCategoryValueSleepAnalysisAsleepDeep',
+          'STAGE_TYPE_SLEEPING_DEEP',
+          'STAGE_TYPE_DEEP',
+          'DEEP',
+        ],
+      },
+      {
+        canonical: '248218000',
+        display: 'REM sleep',
+        aliases: [
+          'asleepREM',
+          '5',
+          'HKCategoryValueSleepAnalysisAsleepREM',
+          'STAGE_TYPE_SLEEPING_REM',
+          'STAGE_TYPE_REM',
+          'REM',
+        ],
+      },
+      {
+        canonical: '248171000',
+        display: 'Asleep',
+        aliases: [
+          'asleepUnspecified',
+          'asleep',
+          '1',
+          'HKCategoryValueSleepAnalysisAsleepUnspecified',
+          'STAGE_TYPE_SLEEPING',
+          'SLEEPING',
+          'STAGE_TYPE_UNKNOWN',
+          'UNKNOWN',
+        ],
+      },
+      {
+        canonical: '133877004',
+        display: 'In bed',
+        aliases: [
+          'inBed',
+          '0',
+          'HKCategoryValueSleepAnalysisInBed',
+          'STAGE_TYPE_AWAKE_IN_BED',
+          'AWAKE_IN_BED',
+        ],
+      },
     ],
     components: [],
     scaleFractionToPercent: false,
@@ -218,7 +300,11 @@ export function lookupByMetricType(metricType: string): CatalogMetric | undefine
 
 export function componentOf(metric: CatalogMetric, codeOrMetricType: string): ComponentDef | undefined {
   const wanted = codeOrMetricType.trim();
-  return metric.components.find((c) => c.code === wanted || c.metricType === wanted);
+  return metric.components.find((c) =>
+    c.code === wanted
+    || c.metricType === wanted
+    || (c.vendorKeys ?? []).includes(wanted)
+  );
 }
 
 export function normalizeUnit(metric: CatalogMetric, unit: string): string | undefined {
