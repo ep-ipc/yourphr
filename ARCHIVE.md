@@ -248,3 +248,139 @@ Note that `../.gitmodules` in the `ipc-health` superproject pinned this branch
 (`branch = feature/chat`, commit `0ebc7596c`). If that pin has since moved to `main`,
 this branch is referenced by nothing and will only be found by someone who knows to
 look for it — which is what this file is for.
+
+---
+
+## Appendix: the Go lineage, deleted 2026-09-11
+
+This chat feature had an earlier life on the **Go** stack, as a port of upstream
+`fastenhealth/fasten-onprem#594` backed by a Typesense sidecar. Three refs carried it:
+
+| ref | what | tip |
+|---|---|---|
+| `origin/feature/chat-search` | the squashed Go implementation | `1cdf802b9` |
+| `feature/chat-search` (local only) | the same squash replayed onto the TypeScript trunk — it **re-added the `backend/` directory that `main` had deleted**, which is why it was never usable | `1bae58fcd` |
+| `bb1408cc` | the 193-commit pre-squash history, reachable from **no ref** and surviving only until the next `gc` | `bb1408cc8` |
+
+All three were Go-based — `backend/`, `go.mod`, no `src/` — and the project is not
+returning to Go, so all three were deleted rather than archived. The branch this file
+lives on is the TypeScript rewrite that replaced them.
+
+Most of what that lineage learned is already carried in the code here: the
+first-document schema inference that "refused six records of the very first bundle"
+(see `LocalChatProvider.ts`), the browser holding the search engine's API key with no
+owner filter at all (see `BaseChatProvider.ts`), and the measured
+`max_bytes` of 57344 over the 28672 default (see `config/app-default-config.json`).
+
+**Two findings were NOT carried, and still apply to the current stack:**
+
+1. **`sort_title` was indexed before FHIRPath extraction populated it,** so every
+   resource was indexed with an empty title and keyword search never matched anything.
+   An ordering bug between extraction and indexing, not a search bug — and `main` still
+   has both an index and a `sort_title`.
+2. **An unhandled rejection inside an `APP_INITIALIZER` blocks Angular bootstrap
+   entirely.** `GET /settings` 404s on every fresh install, because the backend is in
+   standby until an encryption key is set and does not register the route — which left
+   first-run showing a permanent blank page instead of the setup wizard. The fix was to
+   catch and default to `{}`.
+
+The full commit message is reproduced below, since deleting the refs makes every SHA in
+it unresolvable. It is the most detailed record of that work that exists.
+
+> feat(search): AI-assisted search & chat, ported and hardened for yourphr
+>
+> Squashed history of the search/chat feature branch (previously feature/chat,
+> feature/chat-clean, feature/record-search, feature/conversation — ~250 commits
+> of iteration, merges, and reverts) into one commit for a clean history on
+> main. The pre-squash history is preserved at branch
+> backup/feature-chat-search-pre-squash and at the previous tip of
+> feature/chat-search (bb1408cc) if anything needs to be traced back.
+>
+> Ports AI-assisted search & chat from upstream fasten-onprem, originally
+> developed at TechStackApps/fasten-onprem#feature/chat-clean and proposed
+> upstream as fastenhealth/fasten-onprem#594
+> (https://github.com/fastenhealth/fasten-onprem/pull/594). Re-architected here
+> for yourphr's env/JSON config system (no config.yaml — removed in #470/#474),
+> Angular 20, and the current Go toolchain, rather than the PR's Angular 17 /
+> config.yaml baseline.
+>
+> - Typesense-backed full-text/vector search over imported FHIR resources
+>   (`/resource/summary`, the dashboard search box).
+> - An LLM chat page (`/chat`) backed by any vLLM/OpenAI-compatible endpoint
+>   (verified against a real remote Ollama instance).
+> - New `search.*` config keys (`backend/pkg/config/app-default-config.json`),
+>   off by default; `search.api_key` masked as a secret.
+> - `typesense` service added to `docker-compose.yml` / `docker-compose-prod.yml`.
+> - Both gated by `SearchFeatureGuard` / `ChatFeatureGuard` reading the new
+>   settings.
+>
+> - `sort_title` was indexed into Typesense BEFORE FHIRPath extraction
+>   populated it, so every resource indexed with an empty title and keyword
+>   search never matched anything.
+> - `GET /api/settings` read `cfg.Get("search")` — the parent key — which
+>   doesn't see env-var overrides on its children the way a direct leaf read
+>   (`cfg.GetBool("search.enabled")`) does, so the frontend always saw
+>   disabled/default values regardless of configuration.
+> - The reindex-on-migrate path logged "already indexed, skipping" but had no
+>   branch that actually skipped, re-indexing every resource on every restart.
+> - A logger call passed printf-style args to `Logger.Print`, which doesn't
+>   format them.
+> - Two independently-added `FastenApiService.searchResources()` methods
+>   (different signatures, different backends) collided under the same name;
+>   the Typesense one is renamed `searchTypesenseResources()`.
+> - ~36 components ported from the PR were missing `standalone: false`,
+>   defaulting to Angular 20's `standalone:true` and failing to compile inside
+>   the NgModules that declare them.
+> - The frontend's `TypesenseService` connects to Typesense DIRECTLY from the
+>   browser, which yourphr's stricter networking posture didn't account for:
+>   Typesense was `expose`-only (never reachable from the browser), and the
+>   backend's CSP `connect-src` was a static allowlist that never included it
+>   — so chat/search failed at the network/CSP layer even with everything else
+>   configured correctly. Fixed by publishing Typesense's port (matching
+>   upstream) and computing `connect-src` per-request from `search.uri`'s port
+>   plus the request's own host/scheme.
+> - `search.enabled=true` without also setting `search.chat.model.*` left
+>   `search.Client` nil (`validateConfig` fails, logged but not fatal) while the
+>   migration path still saw `search.enabled=true` and indexed into the nil
+>   client anyway, panicking with a raw SIGSEGV. Now skips indexing instead of
+>   proceeding into the nil client.
+> - `SettingsService.load()` runs inside an `APP_INITIALIZER`: an unhandled
+>   rejection there blocks Angular bootstrap entirely. `GET /settings` 404s on
+>   every fresh install (backend is in standby mode until an encryption key is
+>   set, and doesn't register the route), which left first-run showing a
+>   permanent blank page instead of the setup wizard. Now catches and defaults
+>   to `{}`.
+>
+> Known remaining issue, not fixed here: 3 of 72 imported resources
+> (ExplanationOfBenefit claims) fail to index — Typesense infers
+> `resource_raw.item.adjudication.amount.value` as an integer array from the
+> first document it sees, then rejects later documents with decimal values for
+> that field. Pre-existing dynamic-schema limitation in how the PR indexes
+> `resource_raw`, not introduced here.
+>
+> Added `docs/deployment/search-and-chat.md`: required `.env`, why Typesense's
+> port is published and the PHI-exposure tradeoff that comes with it, the CSP
+> mechanism, a model-id gotcha (`search.chat.model.id` is only created once —
+> changing `model.name`/`vllm_url` later without bumping it has no effect),
+> Ollama's lazy model loading (`ollama run <model>` needed before chat works,
+> pulling isn't enough), a tested-better `search.chat.model.max_bytes` value
+> (57344 vs the 28672 default), how to import test data, and how to verify
+> search/chat actually work. Linked from `docs/deployment/README.md`'s doc
+> table and configuration reference table, and from both compose files'
+> Typesense comments.
+>
+> Verified end-to-end by tearing down the stack completely (containers,
+> volumes, ./db), rebuilding from source, bringing it up with only the
+> documented `.env`, signing up fresh, importing a Synthea bundle via manual
+> upload, and confirming both search and chat work with zero console errors on
+> a clean browser tab.
+>
+> ## Also included
+>
+> - fix(frontend): make report-medical-history-editor standalone with its own
+>   imports. This dead, unreferenced, @deprecated component still failed
+>   Angular's full-program type-check (missing FormsModule/CommonModule for
+>   ngModel/keyvalue), breaking `docker compose build`. No behavior change;
+>   found while doing a from-scratch Docker rebuild to verify this branch.
+>
+> Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
