@@ -5,8 +5,8 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 ## 🔴 P0 — Security & Critical
 
 - [#741](https://github.com/jwilleke/yourphr/issues/741) — [security] smol-toml — DoS via malformed TOML (GHSA-7w5x-hrqm-74c2), dev-only via markdownlint-cli2
+- [#740](https://github.com/jwilleke/yourphr/issues/740) — [security] js-yaml — maxTotalMergeKeys CPU DoS (GHSA-2883-xcg3-v3hh), ships via fhirpath
 - [#739](https://github.com/jwilleke/yourphr/issues/739) — [security] src/upload C-CDA id scan — CodeQL js/incomplete-multi-character-sanitization (1 high, false positive in context)
-- [#734](https://github.com/jwilleke/yourphr/pull/734) — chore(deps-dev): bump js-yaml from 4.3.1 to 4.3.2 in the npm_and_yarn group across 1 directory *(PR · ready)* — likely [#740](https://github.com/jwilleke/yourphr/issues/740) — root lockfile only; the `/frontend` bump is still to come
 - [#707](https://github.com/jwilleke/yourphr/issues/707) — [security] image-size — both DoS advisories have no patched release (blocked upstream)
 - [#700](https://github.com/jwilleke/yourphr/issues/700) — [SECURITY] The shipped app still calls Fasten's Lighthouse — remove every runtime dependency on Fasten infrastructure
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
@@ -16,7 +16,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 ## 🟠 P1
 
 - [#743](https://github.com/jwilleke/yourphr/issues/743) — [security] csv-parse — prototype replacement via columns (GHSA-8cw4-87c7-c6xx), ships via fhirpath
-- [#729](https://github.com/jwilleke/yourphr/pull/729) — chore(deps): bump hono from 4.13.1 to 4.13.7 in /frontend in the npm_and_yarn group across 1 directory *(PR · ready)* — likely [#742](https://github.com/jwilleke/yourphr/issues/742)
 - [#719](https://github.com/jwilleke/yourphr/issues/719) — [BUG] Settings still offers device pairing for an app that does not exist — replace it with the agent-token minting screen
 - [#713](https://github.com/jwilleke/yourphr/issues/713) — [BUG] A fix to the search index reaches no record already stored — reindexAll() has no caller outside a test
 - [#708](https://github.com/jwilleke/yourphr/issues/708) — [ARCH] relay/main.go is the last Go module — port it to TypeScript or record that it stays Go
@@ -46,8 +45,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟡 P2
 
-- [#738](https://github.com/jwilleke/yourphr/pull/738) — chore(kit): sync to v1.13.0 *(PR · ready)* — no linked issue — required checks never ran on this bot-opened PR, so auto-merge cannot fire
-- [#730](https://github.com/jwilleke/yourphr/pull/730) — chore(ci): bump docker/setup-qemu-action from 3 to 4 *(PR · ready)* — refs [#336](https://github.com/jwilleke/yourphr/issues/336), refs [#333](https://github.com/jwilleke/yourphr/issues/333)
 - [#714](https://github.com/jwilleke/yourphr/issues/714) — [FEATURE] Maintenance mode — no way to say the instance is briefly not itself
 - [#709](https://github.com/jwilleke/yourphr/issues/709) — [FEATURE] Per-user settings have no store — Go's user_settings table got no successor, so preferences live in one browser
 - [#705](https://github.com/jwilleke/yourphr/issues/705) — [FEATURE] Reconnect an expired source through the catalog — re-authorize without disconnect + re-import
@@ -90,8 +87,10 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#343](https://github.com/jwilleke/yourphr/issues/343) — [FEATURE] Add patient/Observation.rs (+ lab/vital scopes) to the Cerner sandbox seed — no lab values import today
 - [#340](https://github.com/jwilleke/yourphr/issues/340) — [FEATURE] Provider logos on Connected Sources — minted UUID brand_id for seeded sandboxes, brand_logo_url override for custom entries
 - [#339](https://github.com/jwilleke/yourphr/issues/339) — [FEATURE] athenahealth sandbox — complete Developer-Portal onboarding (approval-gated)
+- [#336](https://github.com/jwilleke/yourphr/issues/336) — [FEATURE] Explore — Send to Email
 - [#335](https://github.com/jwilleke/yourphr/issues/335) — [FEATURE] Explore — Export to PDF
 - [#334](https://github.com/jwilleke/yourphr/issues/334) — [FEATURE] Explore — Save Report
+- [#333](https://github.com/jwilleke/yourphr/issues/333) — [EPIC] Explore — record export options (Save Report, PDF, Email)
 - [#314](https://github.com/jwilleke/yourphr/issues/314) — [FEATURE] Wearable Device Integration for Vitals, Activity & PGHD
 - [#307](https://github.com/jwilleke/yourphr/issues/307) — [FEATURE] Manual records — frontend: entry/edit/delete forms
 - [#305](https://github.com/jwilleke/yourphr/issues/305) — [FEATURE] Manual records — backend: store/edit/delete user-created records (FHIR-consistent)
@@ -108,7 +107,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-*None.*
+- [#742](https://github.com/jwilleke/yourphr/issues/742) — [security] hono — toSSG path escape, fragment query parsing, parseBody nesting (3 moderate, build tree)
 
 ## ⏸ Deferred
 
@@ -119,7 +118,3 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 ## ❓ Needs triage
 
 - [#737](https://github.com/jwilleke/yourphr/issues/737) — [BUG] PDF, DICOM and image uploads (v2's #255) are gone in v3
-- [#733](https://github.com/jwilleke/yourphr/pull/733) — chore(deps): bump @angular/language-service from 22.1.4 to 22.1.5 in /frontend *(PR · ready)* — no linked issue
-- [#732](https://github.com/jwilleke/yourphr/pull/732) — chore(deps): bump @ng-select/ng-select from 24.0.3 to 24.1.1 in /frontend *(PR · ready)* — no linked issue
-- [#731](https://github.com/jwilleke/yourphr/pull/731) — chore(deps): bump chart.js from 4.4.2 to 4.5.1 in /frontend *(PR · ready)* — no linked issue
-- [#726](https://github.com/jwilleke/yourphr/pull/726) — chore(deps): bump @types/fhir from 0.0.35 to 0.0.44 in /frontend *(PR · ready · stale 11d · 4 checks failing)* — no linked issue
