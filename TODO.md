@@ -118,8 +118,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#736](https://github.com/jwilleke/yourphr/issues/736) — [BUG] File upload 404s in v3 — no server route for POST /api/secure/source/manual
-- [#735](https://github.com/jwilleke/yourphr/issues/735) — [BUG] Cannot Upload CDA XMLs - Error uploading file: not found
+*None.*
 
 ## ⏸ Deferred
 
