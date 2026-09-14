@@ -11,7 +11,7 @@ import { LoadingSpinnerComponent } from '../loading-spinner/loading-spinner.comp
 import { DiagnosticReportModel, ObservationModel, ObservationValue } from 'src/lib/public-api';
 import { FastenApiService } from 'src/app/services/fasten-api.service';
 import { RecResourceRelatedDisplayModel } from 'src/lib/utils/resource_related_display_model';
-import { Bundle } from 'fhir/r4';
+import { Bundle, Observation } from 'fhir/r4';
 import { QuantityModel } from 'src/lib/models/datatypes/quantity-model';
 import { StringModel } from 'src/lib/models/datatypes/string-model';
 import { BooleanModel } from 'src/lib/models/datatypes/boolean-model';
@@ -73,10 +73,13 @@ export class MedicalRecordWizardEditLabResultsComponent implements OnInit {
     const returnData = []
     formData.entry.forEach((entry) => {
       if (entry.resource.resourceType !== 'Observation') return
+      // Typed as Observation once the check above has run: @types/fhir >= 0.0.44 no longer lets a
+      // bare Resource be read as one (#726).
+      const resource = entry.resource as Observation
 
-      const code = entry.resource.code
-      if (entry?.resource?.valueString) {
-        entry.resource.valueString = entry.resource.valueString.toString()
+      const code = resource.code
+      if (resource.valueString) {
+        resource.valueString = resource.valueString.toString()
       }
       
       this.observations.forEach((observation) => {

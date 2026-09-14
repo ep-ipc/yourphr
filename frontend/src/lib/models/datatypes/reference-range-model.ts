@@ -2,7 +2,7 @@ import _ from "lodash";
 import { ObservationValueCodeableConceptModel } from "./observation-value-codeable-concept-model";
 import { QuantityModel } from "./quantity-model";
 import { RangeModel } from "./range-model";
-import { CodeableConcept, ObservationReferenceRange, Quantity, Range, RatioRange } from "fhir/r4";
+import { CodeableConcept, ObservationReferenceRange, Quantity, Range } from "fhir/r4";
 
 // https://www.hl7.org/fhir/R4/observation-definitions.html#Observation.referenceRange
 // Must have high or low or text
