@@ -63,4 +63,5 @@ export class OutboundHttp {
 }
 
 export { REFUSAL, isBlockedHostname, isBlockedIp, validateUrl };
+export { InternalServiceHttp, type InternalServiceResponse, type InternalServiceLimits } from './internal-service.js';
 export type { GuardedResponse };

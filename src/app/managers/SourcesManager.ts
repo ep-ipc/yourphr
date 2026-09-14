@@ -19,11 +19,20 @@ import { ApiContext, ApiError } from '../../framework/ApiContext.js';
 import { backgroundJobShape, type JobRecord } from '../../framework/managers/JobsManager.js';
 import type { BaseSourcesProvider, ConnectedSource, DynamicClient, NewSource } from '../providers/BaseSourcesProvider.js';
 
-/** Go's platform_type for a source the patient fills in themselves, rather than one that syncs. */
+/**
+ * Go's platform_type for a source nobody syncs: the records the patient writes, and every file
+ * they upload (yourphr#736). Go gave both this name, so a migrated instance holds both kinds under
+ * it and the two are told apart by what they carry — see manualSource and uploadSourceFor.
+ */
 export const MANUAL_PLATFORM_TYPE = 'manual';
+/** The display of the ONE source holding what the patient wrote themselves (yourphr#683). */
+export const MANUAL_SOURCE_DISPLAY = 'Added by you';
 import type { BaseSourceClientProvider } from '../providers/BaseSourceClientProvider.js';
+import type { BaseDocumentConverterProvider, ConverterStatus } from '../providers/BaseDocumentConverterProvider.js';
 import type { EventBus } from '../../events/index.js';
 import { providerRequiresLegalConsent } from '../../account/index.js';
+import { emptySyncReport, storeEntries } from '../../sync/index.js';
+import { UploadFormatError, parseFhirUpload, patientOf } from '../../upload/index.js';
 
 declare module '../../framework/Engine.js' {
   interface ManagerRegistry {
@@ -55,6 +64,24 @@ export interface SourcesOptions {
   maxPages: number;
   log?: (line: string) => void;
   events?: EventBus;
+  /**
+   * Formats an upload is converted FROM before import (yourphr#735) — ngdpbase's ImportManager
+   * converter list. The first whose canHandle says yes converts; a file none claims is read as FHIR.
+   */
+  converters?: BaseDocumentConverterProvider[];
+}
+
+/** What an upload did (yourphr#736): the sync report's counts, so the page can say what happened. */
+export interface UploadReport {
+  /** The format converted from ('ccda'), or 'fhir' when the file was FHIR already. */
+  format: string;
+  received: number;
+  created: number;
+  updated: number;
+  /** Records another source already holds under the same id — refused, never merged. */
+  collisions: number;
+  /** Entries or lines that could not be read. */
+  skipped: number;
 }
 
 /**
@@ -80,6 +107,15 @@ export function sourceShape(source: ConnectedSource, latestJob: JobRecord | unde
     expires_at: source.expiresAt,
     ...(latestJob ? { latest_background_job: backgroundJobShape(latestJob, source.userId) } : {}),
   };
+}
+
+/**
+ * A filename fit to show as a source's name: the last path segment, no control characters, capped.
+ * Browsers send only the base name, but a hand-rolled client can send anything.
+ */
+export function cleanFilename(name: string): string {
+  const base = name.split(/[\\/]/).pop() ?? '';
+  return base.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120);
 }
 
 /** No access token and no refresh token: the source was disconnected, not merely expired. */
@@ -208,11 +244,14 @@ export class SourcesManager extends BaseManager {
    */
   async manualSource(ctx: ApiContext): Promise<ConnectedSource> {
     ctx.requireAuthenticated();
-    const existing = (await this.list(ctx)).find((s) => s.platformType === MANUAL_PLATFORM_TYPE);
+    // Matched EXACTLY, not "the first manual source" (yourphr#736): uploads are manual sources too,
+    // and a migrated instance carries Go's, so the first one could be an uploaded bundle — and a
+    // practitioner the patient typed in would then claim to have come from that file.
+    const existing = (await this.list(ctx)).find((s) => s.platformType === MANUAL_PLATFORM_TYPE && s.display === MANUAL_SOURCE_DISPLAY);
     if (existing) return existing;
     return this.add(ctx, {
       userId: ctx.username,
-      display: 'Added by you',
+      display: MANUAL_SOURCE_DISPLAY,
       fhirBaseUrl: '',
       tokenUrl: '',
       clientId: '',
@@ -224,6 +263,105 @@ export class SourcesManager extends BaseManager {
       platformType: MANUAL_PLATFORM_TYPE,
       environment: 'production',
     });
+  }
+
+  /** Whether the caller's source with this public id is one nobody syncs — theirs to write into. */
+  async isManual(ctx: ApiContext, publicId: string): Promise<boolean> {
+    return (await this.get(ctx, publicId))?.platformType === MANUAL_PLATFORM_TYPE;
+  }
+
+  // --- upload (yourphr#736, #735) ---------------------------------------------------------------
+
+  /** Whether an upload in this format would be converted — the Sources page asks before offering (yourphr#397). */
+  converterStatus(ctx: ApiContext, formatId: string): ConverterStatus {
+    ctx.requireAuthenticated();
+    const converter = (this.options.converters ?? []).find((c) => c.formatId === formatId);
+    return converter?.status() ?? { enabled: false, ready: false, setup_hint: `Import from ${formatId} is not part of this build.` };
+  }
+
+  /**
+   * The source an upload lands in: the caller's existing upload source for the same patient, or a
+   * new one.
+   *
+   * Reused, not one-per-file as Go had it, because this store refuses a cross-source id collision
+   * where Go's (source, type, id) key quietly duplicated. One-per-file here would make a re-upload
+   * an empty new source beside a list of refusals, and a second C-CDA document for the same person
+   * would lose its Patient (the converter mints the same deterministic id for both). Reusing the
+   * source makes a re-upload what a resync is: records updated in place. It also picks up a Go
+   * upload source carried over by the migration, which already holds those very records.
+   *
+   * Only a file that names its patient can be matched. One that names none gets a source of its
+   * own — a guess at which person a patientless file belongs to is exactly the guess not to make.
+   */
+  private async uploadSourceFor(ctx: ApiContext, patient: string, filename: string, now: number): Promise<ConnectedSource> {
+    if (patient !== '') {
+      const held = (await this.list(ctx)).find((s) => s.platformType === MANUAL_PLATFORM_TYPE && s.patient === patient && s.display !== MANUAL_SOURCE_DISPLAY);
+      if (held) return held;
+    }
+    const day = new Date(now * 1000).toISOString().slice(0, 10);
+    return this.add(ctx, {
+      userId: ctx.username,
+      display: filename === '' ? `Uploaded ${day}` : `Uploaded ${filename}`,
+      fhirBaseUrl: '',
+      tokenUrl: '',
+      clientId: '',
+      patient,
+      resourceTypes: [],
+      accessToken: '',
+      refreshToken: '',
+      expiresAt: 0,
+      platformType: MANUAL_PLATFORM_TYPE,
+      environment: 'production',
+    });
+  }
+
+  /**
+   * An uploaded file, imported (Go's CreateManualSource, yourphr#736). Converted first when a
+   * converter claims it (C-CDA, yourphr#735), then read as FHIR and written through the same
+   * `storeEntries` a sync page uses. The whole file is read BEFORE a source is created, so a file
+   * that cannot be read leaves nothing behind. A job is recorded either way, as for a sync.
+   */
+  async importUpload(ctx: ApiContext, upload: { filename: string; bytes: Buffer }, now = Math.floor(Date.now() / 1000)): Promise<{ source: Record<string, unknown>; data: UploadReport }> {
+    ctx.requireAuthenticated();
+    // Before any conversion work, not just at add(): the shared demo account may not bring outside data in (yourphr#496).
+    if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
+    const filename = cleanFilename(upload.filename);
+
+    let bytes = upload.bytes;
+    const converter = (this.options.converters ?? []).find((c) => c.canHandle(bytes, filename));
+    if (converter) bytes = await converter.convert(bytes);
+
+    let parsed;
+    try {
+      parsed = parseFhirUpload(bytes);
+    } catch (err) {
+      if (err instanceof UploadFormatError) throw new ApiError(400, `${filename || 'the file'} could not be imported: ${err.message}`, { error_code: 'upload_unreadable' });
+      throw err;
+    }
+    if (parsed.resources.length === 0) throw new ApiError(400, `${filename || 'the file'} holds no FHIR records`, { error_code: 'upload_empty' });
+
+    const source = await this.uploadSourceFor(ctx, patientOf(parsed.resources), filename, now);
+    const publicId = `source-${source.id}`;
+    const report = emptySyncReport();
+    report.skipped.push(...parsed.skipped);
+    this.options.events?.publish(source.userId, { event_type: 'source_sync', source_id: publicId });
+    let job: JobRecord;
+    try {
+      try {
+        await storeEntries(parsed.resources.map((resource) => ({ resource })), this.engine.managers.records.writer(ctx, publicId), report, new Set());
+        await this.provider.markSynced(source.id, now);
+        job = { sourceId: source.id, outcome: 'success', received: report.received, created: report.created, updated: report.updated, error: '', startedAt: now, finishedAt: now };
+      } catch (err) {
+        job = { sourceId: source.id, outcome: 'failure', received: report.received, created: report.created, updated: report.updated, error: (err as Error).message.slice(0, 512), startedAt: now, finishedAt: now };
+      }
+      job = await this.engine.managers.jobs.record(ctx, job);
+    } finally {
+      this.options.events?.publish(source.userId, { event_type: 'source_complete', source_id: publicId });
+    }
+    const data: UploadReport = { format: converter?.formatId ?? 'fhir', received: report.received, created: report.created, updated: report.updated, collisions: report.collisions.length, skipped: report.skipped.length };
+    this.log(`upload: source ${source.id} (${data.format}): received ${data.received}, created ${data.created}, updated ${data.updated}, collisions ${data.collisions}, skipped ${data.skipped}`);
+    if (job.outcome !== 'success') throw new ApiError(500, `the import stopped part-way: ${job.error}`, { error_code: 'upload_failed' });
+    return { source: sourceShape((await this.provider.byId(source.id)) ?? source, job), data };
   }
 
   /** Disconnect (Go's #437): the tokens go, the records stay; the worker skips it. */

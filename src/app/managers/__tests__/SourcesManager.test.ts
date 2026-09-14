@@ -4,7 +4,9 @@ import { Engine } from '../../../framework/Engine.js';
 import { ApiContext } from '../../../framework/ApiContext.js';
 import { RecordsManager } from '../RecordsManager.js';
 import { JobsManager } from '../../../framework/managers/JobsManager.js';
-import { SourcesManager, isDisconnected, sourceShape, type NewSource } from '../SourcesManager.js';
+import { MANUAL_PLATFORM_TYPE, MANUAL_SOURCE_DISPLAY, SourcesManager, cleanFilename, isDisconnected, sourceShape, type NewSource } from '../SourcesManager.js';
+import { BaseDocumentConverterProvider, type ConverterStatus } from '../../providers/BaseDocumentConverterProvider.js';
+import { ApiError } from '../../../framework/ApiContext.js';
 import { EventBus, type SourceEvent } from '../../../events/index.js';
 import { FakeRecordsProvider } from '../../providers/__tests__/FakeRecordsProvider.js';
 import { FakeJobsProvider } from '../../../framework/providers/__tests__/FakeJobsProvider.js';
@@ -45,6 +47,21 @@ class ScriptedClient extends BaseSourceClientProvider {
   }
 }
 
+/** A converter that claims anything starting "<CCD" and returns a fixed bundle — or fails, when told to. */
+class ScriptedConverter extends BaseDocumentConverterProvider {
+  readonly formatId = 'ccda';
+  readonly formatName = 'C-CDA';
+  converted: string[] = [];
+  fail?: ApiError;
+  canHandle(bytes: Buffer): boolean { return bytes.toString().startsWith('<CCD'); }
+  status(): ConverterStatus { return { enabled: true, ready: true, setup_hint: 'none needed' }; }
+  async convert(bytes: Buffer): Promise<Buffer> {
+    this.converted.push(bytes.toString());
+    if (this.fail) throw this.fail;
+    return Buffer.from(JSON.stringify({ resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id: 'cda-1' } }, { resource: { resourceType: 'AllergyIntolerance', id: 'al-1' } }] }));
+  }
+}
+
 const NOW = 1_000_000;
 const newSource = (userId: string, over: Partial<NewSource> = {}): NewSource => ({
   userId, display: `${userId}'s clinic`, fhirBaseUrl: 'https://fhir.example.org/r4', tokenUrl: 'https://fhir.example.org/token', clientId: 'cid',
@@ -66,6 +83,7 @@ let alice: ApiContext;
 let bob: ApiContext;
 let admin: ApiContext;
 let migration: ApiContext;
+let converter: ScriptedConverter;
 
 beforeEach(async () => {
   engine = new Engine();
@@ -77,7 +95,8 @@ beforeEach(async () => {
   lines = [];
   records = new RecordsManager(engine, recordsProvider);
   jobs = new JobsManager(engine, jobsProvider);
-  sources = new SourcesManager(engine, sourcesProvider, client, { maxPages: 5, events, log: (l) => lines.push(l) });
+  converter = new ScriptedConverter();
+  sources = new SourcesManager(engine, sourcesProvider, client, { maxPages: 5, events, log: (l) => lines.push(l), converters: [converter] });
   engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: {} }))
     .register('policy', new PolicyManager(engine));
   engine.register('records', records).register('jobs', jobs).register('sources', sources);
@@ -360,5 +379,98 @@ describe('SourcesManager — the operator and the migration tool', () => {
     expect(await jobs.backup()).toMatchObject({ manager: 'jobs' });
     await expect(sources.restore()).resolves.toBeUndefined();
     await expect(jobs.restore()).resolves.toBeUndefined();
+  });
+});
+
+describe('SourcesManager — upload (yourphr#736) and C-CDA (yourphr#735)', () => {
+  const bundle = (patient: string, ...ids: string[]) => Buffer.from(JSON.stringify({
+    resourceType: 'Bundle',
+    entry: [{ resource: { resourceType: 'Patient', id: patient } }, ...ids.map((id) => ({ resource: { resourceType: 'Condition', id } }))],
+  }));
+
+  it('imports a FHIR file as a manual source that names its patient, framed by the events, with a job', async () => {
+    const seen: SourceEvent[] = [];
+    events.subscribe('alice', (e) => seen.push(e));
+    const out = await sources.importUpload(alice, { filename: 'export.json', bytes: bundle('p-1', 'c-1', 'c-2') }, NOW);
+    expect(out.data).toEqual({ format: 'fhir', received: 3, created: 3, updated: 0, collisions: 0, skipped: 0 });
+    expect(out.source).toMatchObject({ platform_type: MANUAL_PLATFORM_TYPE, patient: 'p-1', display: 'Uploaded export.json', latest_background_job: { job_status: 'STATUS_DONE' } });
+    const id = String(out.source['id']);
+    expect([...recordsProvider.rows.values()].filter((r) => r.resourceType === 'Condition').map((r) => r.sourceId)).toEqual([id, id]);
+    expect(seen.map((e) => e.event_type)).toEqual(['source_sync', 'source_complete']);
+    expect(lines.some((l) => l.startsWith(`upload: source ${id.replace('source-', '')} (fhir): received 3, created 3`))).toBe(true);
+  });
+
+  it('a re-upload for the same patient lands in the same source and updates in place — no refusals, no second source', async () => {
+    const first = await sources.importUpload(alice, { filename: 'a.json', bytes: bundle('p-1', 'c-1') }, NOW);
+    const second = await sources.importUpload(alice, { filename: 'b.json', bytes: bundle('p-1', 'c-1', 'c-2') }, NOW + 60);
+    expect(second.source['id']).toBe(first.source['id']);
+    expect(second.data).toMatchObject({ created: 1, updated: 2, collisions: 0 });
+    expect(await sources.list(alice)).toHaveLength(1);
+  });
+
+  it('a different patient, or a file that names none, gets a source of its own — never a guess at whose it is', async () => {
+    await sources.importUpload(alice, { filename: 'a.json', bytes: bundle('p-1', 'c-1') }, NOW);
+    await sources.importUpload(alice, { filename: 'b.json', bytes: bundle('p-2', 'c-9') }, NOW);
+    const patientless = () => sources.importUpload(alice, { filename: '', bytes: Buffer.from('{"resourceType":"Observation","id":"o-1"}') }, NOW);
+    const x = await patientless();
+    const y = await patientless().catch((e: Error) => e);
+    expect(x.source).toMatchObject({ patient: '', display: 'Uploaded 1970-01-12' });
+    // The second patientless file gets its own source, and the store refuses its id that the first already holds.
+    expect(y).not.toBeInstanceOf(Error);
+    expect((y as Awaited<ReturnType<typeof patientless>>).data).toMatchObject({ created: 0, collisions: 1 });
+    expect((await sources.list(alice)).map((s) => s.patient)).toEqual(['p-1', 'p-2', '', '']);
+  });
+
+  it('an id another source already holds is refused and counted — never merged', async () => {
+    const synced = await sources.add(alice, newSource('alice'));
+    await records.writer(alice, `source-${synced.id}`).upsert({ resourceType: 'Condition', id: 'c-1' } as Resource);
+    const out = await sources.importUpload(alice, { filename: 'a.json', bytes: bundle('p-1', 'c-1', 'c-2') }, NOW);
+    expect(out.data).toMatchObject({ created: 2, collisions: 1 });
+    expect(recordsProvider.rows.get('alice|Condition|c-1')?.sourceId).toBe(`source-${synced.id}`);
+  });
+
+  it('a file that cannot be read is a 400 that leaves no source behind', async () => {
+    for (const bytes of [Buffer.from('%PDF-1.7'), Buffer.from('{"resourceType":"Bundle","entry":[]}')]) {
+      const err = await sources.importUpload(alice, { filename: 'x', bytes }, NOW).catch((e: ApiError) => e);
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as ApiError).status).toBe(400);
+    }
+    expect(await sources.list(alice)).toEqual([]);
+  });
+
+  it('a C-CDA document is converted first, then imported like any FHIR file', async () => {
+    const out = await sources.importUpload(alice, { filename: 'summary.xml', bytes: Buffer.from('<CCD/>') }, NOW);
+    expect(converter.converted).toEqual(['<CCD/>']);
+    expect(out.data).toMatchObject({ format: 'ccda', created: 2 });
+    expect(out.source).toMatchObject({ patient: 'cda-1' });
+  });
+
+  it('a conversion that fails surfaces its own error and creates nothing', async () => {
+    converter.fail = new ApiError(502, 'the converter did not answer', { error_code: 'cda_converter_unreachable' });
+    const err = await sources.importUpload(alice, { filename: 'summary.xml', bytes: Buffer.from('<CCD/>') }, NOW).catch((e: ApiError) => e);
+    expect(err).toBe(converter.fail);
+    expect(await sources.list(alice)).toEqual([]);
+  });
+
+  it('converter status is per format; an unknown format says it is not part of this build', () => {
+    expect(sources.converterStatus(alice, 'ccda')).toEqual({ enabled: true, ready: true, setup_hint: 'none needed' });
+    expect(sources.converterStatus(alice, 'pdf')).toMatchObject({ enabled: false, ready: false });
+  });
+
+  it('manualSource is the patient\'s own source EXACTLY — never an upload that happens to be manual too', async () => {
+    await sources.importUpload(alice, { filename: 'a.json', bytes: bundle('p-1', 'c-1') }, NOW);
+    // A Go-migrated manual source: no display, no patient.
+    await sources.add(alice, newSource('alice', { platformType: MANUAL_PLATFORM_TYPE, display: '', patient: '', fhirBaseUrl: '', accessToken: '', refreshToken: '' }));
+    const own = await sources.manualSource(alice);
+    expect(own.display).toBe(MANUAL_SOURCE_DISPLAY);
+    expect(await sources.manualSource(alice)).toEqual(own); // found, not re-created
+    expect(await sources.isManual(alice, `source-${own.id}`)).toBe(true);
+    expect(await sources.isManual(alice, 'source-999')).toBe(false);
+  });
+
+  it('cleans a filename down to something fit to name a source', () => {
+    expect(cleanFilename('C:\\Users\\me\\Downloads\\export.json')).toBe('export.json');
+    expect(cleanFilename('../../etc/x\u0000\u001b.xml')).toBe('x.xml');
+    expect(cleanFilename('a'.repeat(300))).toHaveLength(120);
   });
 });

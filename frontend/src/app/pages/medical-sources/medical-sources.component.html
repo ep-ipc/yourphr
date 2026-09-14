@@ -83,6 +83,12 @@
             </div>
           }
 
+          @if (uploadResultMsg) {
+            <div class="alert alert-success mt-3" role="status">
+              <strong>Imported.</strong> {{uploadResultMsg}}
+            </div>
+          }
+
           @if (uploadErrorMsg) {
             <div class="alert alert-danger mt-3" role="alert">
               <strong>Error:</strong> {{uploadErrorMsg}}
@@ -204,7 +210,7 @@
     @if (cdaConverterStatus && !cdaConverterStatus.ready) {
       <p>
         C-CDA conversion is <strong>not turned on for this server</strong>, so this file can't be
-        imported yet. It runs in a separate container that is off by default.
+        imported yet. It needs a separate converter service that this server has not been set up with.
       </p>
       <p class="mb-1">If you administer this server, enable it with:</p>
       <pre class="bg-light border rounded p-2 small mb-2" style="white-space:pre-wrap">{{ cdaConverterStatus.setup_hint }}</pre>

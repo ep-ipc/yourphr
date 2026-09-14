@@ -196,11 +196,7 @@ with an inert `null` alternative. The OAuth relay (`relay/`, deployed as
 `ghcr.io/jwilleke/yourphr-relay`) is store-and-poll for the auth code — the server does the token
 exchange and the relay never sees tokens.
 
-__Live relay-based sync is not a v3 capability yet__, and the stack says so rather than pretending:
-`GET /api/secure/source/relay-config` reports that none is configured. The gap to a proven
-production provider is [#408](https://github.com/jwilleke/yourphr/issues/408); Veradigm/FollowMyHealth
-([#53](https://github.com/jwilleke/yourphr/issues/53)) is blocked on vendor approval. Manual FHIR
-bundle upload and C-CDA remain the zero-setup import path.
+__Live relay-based sync is not a v3 capability yet__, and the stack says so rather than pretending: `GET /api/secure/source/relay-config` reports that none is configured. The gap to a proven production provider is [#408](https://github.com/jwilleke/yourphr/issues/408); Veradigm/FollowMyHealth ([#53](https://github.com/jwilleke/yourphr/issues/53)) is blocked on vendor approval. Manual FHIR bundle upload is the zero-setup import path ([#736](https://github.com/jwilleke/yourphr/issues/736) restored it after v3.4.0); C-CDA adds one step, running the converter service and setting its address ([#735](https://github.com/jwilleke/yourphr/issues/735), [`docs/import/c-cda.md`](docs/import/c-cda.md)).
 
 ### Frontend architecture (`frontend/src/app/`)
 

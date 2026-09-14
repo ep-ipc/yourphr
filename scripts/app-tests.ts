@@ -8,6 +8,7 @@
 import { startFakeProvider } from './lib/fake-provider.js';
 import { reporter } from './lib/scrub.js';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
@@ -753,6 +754,94 @@ async function main(): Promise<void> {
   const anon = await fetch(`${base}/api/secure/practitioners`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   check('and an unauthenticated caller cannot write one at all', anon.status === 401, `status ${anon.status}`);
 
+  // --- file upload and C-CDA import (yourphr#736, #735) ---
+  //
+  // Over HTTP for the same reason as the block above: from v3.0.0 to v3.4.0 the managers were not
+  // the problem — `/source/manual` was read as a source id by the /source/:id route and 404'd. Also
+  // after the practitioners, and on carol's token, for the same fixture reasons.
+  const upToken = carolToken;
+  const upload = (token: string, filename: string, content: string, type = 'application/json') => {
+    const form = new FormData();
+    form.append('file', new Blob([content], { type }), filename);
+    return fetch(`${base}/api/secure/source/manual`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
+  };
+  const upBundle = JSON.stringify({
+    resourceType: 'Bundle', type: 'transaction',
+    entry: [
+      { fullUrl: 'urn:uuid:11111111-1111-1111-1111-111111111111', resource: { resourceType: 'Patient', id: 'up-pat-1', name: [{ family: 'Upload', given: ['Una'] }] } },
+      { fullUrl: 'urn:uuid:22222222-2222-2222-2222-222222222222', resource: { resourceType: 'Condition', id: 'up-cond-1', code: { text: 'Synthetic upload condition' }, subject: { reference: 'urn:uuid:11111111-1111-1111-1111-111111111111' } } },
+    ],
+  });
+  const sourcesBefore = ((await (await fetch(`${base}/api/secure/source`, authed(upToken))).json()) as { data: unknown[] }).data.length;
+  const uploaded = await upload(upToken, 'export.json', upBundle);
+  const uploadedBody = (await uploaded.json()) as { success: boolean; data?: { created?: number; format?: string }; source?: { id?: string; platform_type?: string; patient?: string; display?: string }; error?: string };
+  check('POST /secure/source/manual imports a FHIR bundle as a manual source — the route v3 lost',
+    uploaded.status === 200 && uploadedBody.data?.created === 2 && uploadedBody.data?.format === 'fhir' && uploadedBody.source?.platform_type === 'manual' && uploadedBody.source?.patient === 'up-pat-1',
+    `status ${uploaded.status} ${JSON.stringify(uploadedBody)}`);
+
+  const upConditions = (await (await fetch(`${base}/api/secure/resource/fhir?sourceResourceType=Condition`, authed(upToken))).json()) as { data: { source_resource_id?: string; source_id?: string; resource_raw?: { subject?: { reference?: string } } }[] };
+  const upCondition = upConditions.data.find((c) => c.source_resource_id === 'up-cond-1');
+  check('the uploaded record is attributed to the upload source, its urn:uuid reference rewritten to Patient/id',
+    upCondition?.source_id === uploadedBody.source?.id && upCondition?.resource_raw?.subject?.reference === 'Patient/up-pat-1',
+    JSON.stringify(upCondition));
+
+  const again = (await (await upload(upToken, 'export.json', upBundle)).json()) as { data?: { created?: number; updated?: number; collisions?: number }; source?: { id?: string } };
+  const sourcesAfter = ((await (await fetch(`${base}/api/secure/source`, authed(upToken))).json()) as { data: unknown[] }).data.length;
+  check('re-uploading the same file updates in place: same source, no new records, no refusals',
+    again.source?.id === uploadedBody.source?.id && again.data?.created === 0 && again.data?.updated === 2 && again.data?.collisions === 0 && sourcesAfter === sourcesBefore + 1,
+    `${JSON.stringify(again)} sources ${sourcesBefore} -> ${sourcesAfter}`);
+
+  const notMultipart = await fetch(`${base}/api/secure/source/manual`, { method: 'POST', headers: { authorization: `Bearer ${upToken}`, 'content-type': 'application/json' }, body: upBundle });
+  const pdf = await upload(upToken, 'scan.pdf', '%PDF-1.7 not really', 'application/pdf');
+  const anonUpload = await fetch(`${base}/api/secure/source/manual`, { method: 'POST', body: new FormData() });
+  const sourcesAfterRefusals = ((await (await fetch(`${base}/api/secure/source`, authed(upToken))).json()) as { data: unknown[] }).data.length;
+  check('refusals: not multipart 400, a PDF 400, no session 401 — and a refused file leaves no source behind',
+    notMultipart.status === 400 && pdf.status === 400 && anonUpload.status === 401 && sourcesAfterRefusals === sourcesAfter,
+    `multipart ${notMultipart.status} pdf ${pdf.status} anon ${anonUpload.status} sources ${sourcesAfter} -> ${sourcesAfterRefusals}`);
+
+  // C-CDA: unconfigured first — the page must be able to say so BEFORE anyone uploads (yourphr#397, #686).
+  const ccd = '<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3"><recordTarget><patientRole><id root="2.16.840.1.113883.19.5" extension="996-756-495"/><patient><name><given>Una</given></name></patient></patientRole></recordTarget></ClinicalDocument>';
+  const statusUnset = (await (await fetch(`${base}/api/secure/source/cda-converter/status`, authed(upToken))).json()) as { data?: { enabled?: boolean; ready?: boolean; setup_hint?: string } };
+  const ccdUnset = await upload(upToken, 'summary.xml', ccd, 'text/xml');
+  const ccdUnsetBody = (await ccdUnset.json()) as { error_code?: string; error?: string };
+  check('cda-converter/status reports not-ready with setup steps, and a C-CDA upload says why rather than 404ing',
+    statusUnset.data?.enabled === true && statusUnset.data?.ready === false && String(statusUnset.data?.setup_hint).includes('yourphr.cda-converter.url') &&
+      ccdUnset.status === 400 && ccdUnsetBody.error_code === 'cda_converter_not_configured',
+    `${JSON.stringify(statusUnset.data)} upload ${ccdUnset.status} ${ccdUnsetBody.error_code}`);
+
+  // Then a stand-in converter on loopback, set on Admin -> Configuration with no restart. It
+  // answers the way the Metriport fhir-converter does: the Bundle wrapped in fhirResource, the
+  // Patient id being the patientId it was handed.
+  const converterCalls: { path: string; body: string; type: string }[] = [];
+  const converter = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('end', () => {
+      const path = req.url ?? '';
+      converterCalls.push({ path, body: Buffer.concat(chunks).toString('utf8'), type: String(req.headers['content-type']) });
+      const patientId = new URL(path, 'http://x').searchParams.get('patientId') ?? '';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ fhirResource: { resourceType: 'Bundle', type: 'batch', entry: [
+        { fullUrl: `urn:uuid:${patientId}`, resource: { resourceType: 'Patient', id: patientId } },
+        { resource: { resourceType: 'AllergyIntolerance', id: 'ccd-allergy-1', code: { text: 'Synthetic allergy' }, patient: { reference: `urn:uuid:${patientId}` } } },
+      ] } }));
+    });
+  });
+  const converterBase = await new Promise<string>((resolve) => converter.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(converter.address() as { port: number }).port}`)));
+  const setUrl = await fetch(`${base}/api/secure/admin/config`, { method: 'PUT', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ key: 'yourphr.cda-converter.url', value: converterBase }) });
+  const statusSet = (await (await fetch(`${base}/api/secure/source/cda-converter/status`, authed(upToken))).json()) as { data?: { ready?: boolean } };
+  const ccdUp = await upload(upToken, 'summary.xml', ccd, 'text/xml');
+  const ccdUpBody = (await ccdUp.json()) as { data?: { format?: string; created?: number }; source?: { patient?: string } };
+  const call = converterCalls[0];
+  check('with the address set (no restart), a C-CDA upload is converted by the sidecar and imported',
+    setUrl.status === 200 && statusSet.data?.ready === true && ccdUp.status === 200 && ccdUpBody.data?.format === 'ccda' && ccdUpBody.data?.created === 2 &&
+      call?.path.startsWith('/api/convert/cda/ccd.hbs?patientId=cda-') === true && call?.type === 'text/plain' && call?.body === ccd,
+    `set ${setUrl.status} ready ${statusSet.data?.ready} upload ${ccdUp.status} ${JSON.stringify(ccdUpBody)} call ${call?.path}`);
+  const again2 = (await (await upload(upToken, 'summary-copy.xml', ccd, 'text/xml')).json()) as { data?: { created?: number; updated?: number }; source?: { id?: string; patient?: string } };
+  check('the same C-CDA again lands on the same Patient and source — the derived id is stable',
+    again2.source?.patient === ccdUpBody.source?.patient && again2.data?.created === 0 && again2.data?.updated === 2,
+    JSON.stringify(again2));
+  converter.close();
 
   fake.close();
   await app.close();

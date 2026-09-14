@@ -2,81 +2,48 @@
 
 Many patient portals — Epic MyChart in particular — export a __C-CDA__ (Consolidated Clinical Document Architecture) XML document rather than a FHIR JSON bundle. YourPHR imports FHIR natively; C-CDA has to be converted first.
 
-Conversion runs __entirely on your own server__, in a separate container. The raw document is PHI and is never sent to a third party.
+Conversion runs __entirely on your own network__, in a separate converter service. The raw document is a whole medical record in the clear, so the converter must stay internal and is never a third party.
 
-## It works out of the box
+> __Upgrading from v2 (Go)?__ The v2 settings — `cda_converter.*` in `config.yaml`, and the `YOURPHR_CDA_CONVERTER_*` / `CDA_CONVERTER_ENABLED` environment variables — are __not read by v3__. Set the two settings below instead. C-CDA import was missing entirely from v3.0.0 through v3.4.0 ([#735](https://github.com/jwilleke/yourphr/issues/735)); it came back after v3.4.0.
 
-Since __v1.15.0__ ([#404](https://github.com/jwilleke/yourphr/issues/404)) the shipped compose files start the converter automatically and `config.yaml` points the app at it. A stock install imports an Epic C-CDA export with no extra steps:
+## Setting it up
 
-```bash
-docker compose up -d
-```
+Two steps: run the converter next to YourPHR, then tell YourPHR where it is.
 
-Then upload the XML. Nothing to enable, no second command.
+### 1. Run the converter
 
-Earlier releases required starting a separate profile and setting two variables — see [Upgrading from before v1.15.0](#upgrading-from-before-v1150).
+The image is `ghcr.io/jwilleke/yourphr-cda-converter:main` (public, amd64 and arm64). It listens on port 8080 and stores nothing.
 
-## Turning it OFF
-
-The converter is an extra container. If you only ever import FHIR JSON and would rather not run it:
+__Docker.__ Put the converter and YourPHR on the same user-defined network so YourPHR can reach it by name, and __do not publish its port__:
 
 ```bash
-YOURPHR_CDA_CONVERTER_ENABLED=false
+docker network create yourphr
+docker run -d --name yourphr-cda-converter --network yourphr --restart unless-stopped \
+  ghcr.io/jwilleke/yourphr-cda-converter:main
+docker network connect yourphr <your-yourphr-container>
 ```
 
-…or `docker compose up -d --scale cda-converter=0`. It is stateless and stores nothing, so removing it loses no data.
+The default `bridge` network does not resolve container names, which is why a named network is needed.
 
-## Running without the shipped compose files
+__Kubernetes.__ See [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml): a Deployment and a ClusterIP Service, with no Ingress.
 
-If you deploy the app by hand (a bare k8s Deployment, your own manifests), the sidecar will __not__ exist just because the app expects it. Either:
+### 2. Point YourPHR at it
 
-- deploy it — see [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml) — and set `YOURPHR_CDA_CONVERTER_URL` to its in-cluster address, or
-- set `YOURPHR_CDA_CONVERTER_ENABLED=false`.
+Signed in as an admin, open __Admin → Configuration__ and set:
 
-Uploading XML with no reachable converter fails with an error naming the address it tried and all three ways out. Nothing else is affected.
-
-## Upgrading from before v1.15.0
-
-If you already set `YOURPHR_CDA_CONVERTER_ENABLED` / `_URL`, they still work and continue to override the defaults — nothing to undo. If you were using `--profile cda`, the profile is gone: the service now starts with a plain `up`.
-
-> __Using a `docker-compose.yml` from before v1.13.4?__ Update it, or these variables will be ignored ([#397](https://github.com/jwilleke/yourphr/issues/397)). Compose reads `.env` only to substitute `${...}` __inside the compose file__ — it does not forward those values into the container. Earlier compose files passed through only `HOST_IP`/`HOST_PORT`, so `YOURPHR_*` settings in `.env` silently never reached the app. The current file fixes this with:
->
-> ```yaml
->     env_file:
->       - path: .env
->         required: false
->       - path: .env_custom
->         required: false
-> ```
->
-> Confirm what Compose will actually pass with `docker compose config | grep YOURPHR_`. If your variables do not appear there, the app will not see them.
-
-## Configuration reference
-
-The Convert dialog only offers a __Convert__ button when the server reports the converter is ready, so if it shows setup steps instead, something below is wrong.
-
-### Watch the variable names
-
-This is the single most common failure ([#397](https://github.com/jwilleke/yourphr/issues/397)). The __config keys__ are `cda_converter.enabled` and `cda_converter.url`. The __environment variables__ are those keys upper-cased with a `YOURPHR_` prefix and `.` replaced by `_`:
-
-| Config key | Environment variable |
+| Setting | Value |
 |---|---|
-| `cda_converter.enabled` | `YOURPHR_CDA_CONVERTER_ENABLED` |
-| `cda_converter.url` | `YOURPHR_CDA_CONVERTER_URL` |
-| `cda_converter.timeout_seconds` | `YOURPHR_CDA_CONVERTER_TIMEOUT_SECONDS` |
+| `yourphr.cda-converter.url` | the converter as YourPHR reaches it, e.g. `http://yourphr-cda-converter:8080` |
+| `yourphr.cda-converter.enabled` | `true` (the default) |
+| `yourphr.cda-converter.timeout-seconds` | `60` (the default); raise it for very large exports |
 
-`FASTEN_CDA_CONVERTER_ENABLED` and a bare `CDA_CONVERTER_ENABLED` are __silently ignored__ — the prefix is `YOURPHR_`, and an unrecognized variable produces no warning.
+No restart is needed: the settings are read on every upload. They are ordinary settings, not environment variables ([#472](https://github.com/jwilleke/yourphr/issues/472)). An operator who wants the value in `.env` can still write `"${SOME_VAR}"` as the setting's value in `app-custom-config.json`.
 
-You can also set these in `config.yaml` instead of the environment:
+To turn C-CDA import off, set `yourphr.cda-converter.enabled` to `false`. The Sources page then says it is off instead of offering a conversion.
 
-```yaml
-cda_converter:
-  enabled: true
-  url: http://cda-converter:8080
-  timeout_seconds: 60
-```
+## Checking what the server sees
 
-## Checking what the server actually sees
+The Sources page asks this before it offers to convert a file, and shows the setup steps when the answer is no:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
@@ -84,24 +51,27 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 # {"success":true,"data":{"enabled":true,"ready":true,"setup_hint":"..."}}
 ```
 
-- `enabled` — the opt-in flag alone.
-- `ready` — the flag __and__ a converter address are both set. Only `ready: true` will convert.
+- `enabled` — the on/off switch alone.
+- `ready` — switched on __and__ an address is set. Only `ready: true` converts.
 
-If `enabled` is `true` but `ready` is `false`, the URL is missing — that half-configured state is easy to miss.
+`ready` does not prove the converter is running; an upload does. If it is not, the upload says so (see Troubleshooting).
 
-## Kubernetes
+## What happens to the document
 
-An example manifest is in [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml). Set `cda_converter.url` to the in-cluster service address (e.g. `http://yourphr-cda-converter:8080`) and keep the service internal — do not expose it publicly.
+YourPHR posts the raw document to the converter (the open-source [Metriport fhir-converter](https://github.com/metriport/metriport/tree/master/packages/fhir-converter)), receives a FHIR R4 bundle, and imports it like any uploaded FHIR file.
 
-## What the converter does
-
-The sidecar is the open-source [Metriport fhir-converter](https://github.com/metriport/metriport/tree/master/packages/fhir-converter). YourPHR posts the raw document, receives a FHIR R4 bundle, and feeds it through the normal import pipeline. The patient id is derived deterministically from the document's `recordTarget/patientRole/id`, so re-importing the same person's documents does not create duplicate patients.
+- The patient id is derived deterministically from the document's `recordTarget/patientRole/id`, the same way v2 derived it. Re-importing the same person's documents lands on the same Patient rather than creating another, and on a migrated instance it matches the Patients v2 created.
+- Uploads for the same patient go into the same source, so a re-upload updates records in place. A record another connected source already holds under the same id is left out and counted, never merged. The page says how many.
+- YourPHR can reach the converter's address and nothing else through this path. It follows no redirects, and the address never appears in the patient's browser ([`src/http/internal-service.ts`](../../src/http/internal-service.ts)).
 
 ## Troubleshooting
 
-| Symptom | Cause |
+| Message | Meaning |
 |---|---|
-| `C-CDA import is not enabled on this server` | it was explicitly disabled — `YOURPHR_CDA_CONVERTER_ENABLED=false`, or an older config. On v1.15.0+ it is on by default |
-| `no converter address is configured` | `YOURPHR_CDA_CONVERTER_URL` unset — the flag alone is not enough |
-| `C-CDA conversion service unreachable at ...` | the sidecar is not running or not reachable at that address. With the shipped compose files it starts automatically (`docker compose up -d`); deploying by hand, see [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml), or set `YOURPHR_CDA_CONVERTER_ENABLED=false` |
-| Conversion times out on a large export | raise `YOURPHR_CDA_CONVERTER_TIMEOUT_SECONDS` |
+| `C-CDA import is turned off on this server` | `yourphr.cda-converter.enabled` is `false` |
+| `C-CDA import is enabled but no converter address is configured` | `yourphr.cda-converter.url` is empty — the most common case on a fresh install |
+| `The converter address yourphr.cda-converter.url is not usable` | the value is not an `http://` or `https://` address, or it carries a username/password |
+| `The C-CDA converter did not answer at the configured address (ECONNREFUSED)` | the converter is not running, or YourPHR cannot reach it by that name — check both containers are on the same network |
+| `(ENOTFOUND)` in the same message | the host name does not resolve — on Docker, usually the default `bridge` network |
+| `no answer within 60s` | a very large export; raise `yourphr.cda-converter.timeout-seconds` |
+| `The C-CDA converter could not convert this document (HTTP 4xx/5xx)` | the converter rejected the document; the text after the status is the converter's own |

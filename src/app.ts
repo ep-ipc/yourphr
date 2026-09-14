@@ -335,10 +335,19 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('jobs', new JobsManager(engine, new SqliteJobsProvider(db)));
   const sourceClient = await sourceClientFor(config.getString('yourphr.sources.client.provider'), env);
   const allowInternal = env['SPIKE_TEST_ALLOW_INTERNAL'] === '1';
+  // Upload converters (yourphr#735): C-CDA through the fhir-converter sidecar. Its settings are
+  // read per call, so an operator setting the address on Admin -> Configuration needs no restart.
+  const { CdaSidecarConverterProvider, CDA_SETTING_KEYS } = await import('./app/providers/CdaSidecarConverterProvider.js');
+  const cdaConverter = new CdaSidecarConverterProvider(() => ({
+    enabled: config.getBool(CDA_SETTING_KEYS.enabled),
+    url: config.getString(CDA_SETTING_KEYS.url),
+    timeoutSeconds: config.getInt(CDA_SETTING_KEYS.timeoutSeconds),
+  }));
   engine.register('sources', new SourcesManager(engine, new SqliteSourcesProvider(db), sourceClient, {
     maxPages: config.getInt('yourphr.sync.max-pages'),
     events,
     log: (line) => appLog.info(line),
+    converters: [cdaConverter],
   }));
   // 8. Catalog (yourphr#613): what the instance can connect to; connects through Sources and the same client.
   // The SMART OAuth relay (yourphr#700): derives redirect_uri and polls the authorization code

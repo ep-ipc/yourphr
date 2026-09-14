@@ -43,6 +43,7 @@ import {LegalDocument} from '../models/fasten/legal-document';
 import {LegalConsentStatus} from '../models/fasten/legal-consent';
 import {AdminMetrics} from '../models/fasten/admin-metrics';
 import {CDAConverterStatus} from '../models/fasten/cda-converter-status';
+import {UploadResult} from '../models/fasten/upload-result';
 import {ConnectableProvider, ProviderCatalogEntry, ProviderCatalogEntryRequest} from '../models/fasten/provider-catalog';
 import {
   List
@@ -582,7 +583,9 @@ export class FastenApiService {
     return this._httpClient.delete<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/provider-catalog/${encodeURIComponent(id)}`);
   }
 
-  createManualSource(file: File): Observable<Source> {
+  // Imports an uploaded FHIR or C-CDA file (#736, #735). Answers with what the import did — the
+  // counts, including what was left out — rather than the source, so the page can say it.
+  createManualSource(file: File): Observable<UploadResult> {
 
     const formData = new FormData();
     formData.append('file', file);
@@ -590,7 +593,7 @@ export class FastenApiService {
     return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/source/manual`, formData)
       .pipe(
         map((response: ResponseWrapper) => {
-          return response.data as Source
+          return response.data as UploadResult
         })
       );
   }

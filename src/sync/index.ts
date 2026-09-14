@@ -101,16 +101,7 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
   // A repository-bound writer is built here for the harnesses that hand a repository in directly.
   const writer = options.writer ?? repositoryWriter(options.repo!, options.sourceId ?? '');
 
-  const report: SyncReport = {
-    pages: 0,
-    collisions: [],
-    received: 0,
-    created: 0,
-    updated: 0,
-    duplicatesWithinRun: 0,
-    byType: {},
-    skipped: [],
-  };
+  const report = emptySyncReport();
   const seenThisRun = new Set<string>();
 
   let url: string | undefined = startUrl;
@@ -138,48 +129,7 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
       }
 
       report.pages++;
-
-      for (const entry of (bundle.entry ?? []) as BundleEntry[]) {
-        const resource = entry.resource as Resource | undefined;
-        if (!resource?.resourceType) {
-          report.skipped.push({ reason: 'entry carried no resource', detail: JSON.stringify(entry).slice(0, 120) });
-          continue;
-        }
-        if (!resource.id) {
-          // Without an id there is no way to recognise this record on the next sync, so storing it
-          // would guarantee a duplicate later. Refusing is the honest outcome.
-          report.skipped.push({ reason: 'resource had no id', detail: resource.resourceType });
-          continue;
-        }
-
-        report.received++;
-        const key = `${resource.resourceType}/${resource.id}`;
-        if (seenThisRun.has(key)) {
-          report.duplicatesWithinRun++;
-        }
-        seenThisRun.add(key);
-
-        let outcome: 'created' | 'updated';
-        try {
-          outcome = await writer.upsert(resource);
-        } catch (err) {
-          const message = (err as Error).message;
-          if (message.includes('cross-source id collision')) {
-            // Reported and skipped rather than aborting the run: one contested id must not cost the
-            // patient the other 20,000 records in the sync.
-            report.collisions.push({ resource: key, detail: message });
-            continue;
-          }
-          throw err;
-        }
-        if (outcome === 'updated') {
-          report.updated++;
-        } else {
-          report.created++;
-          report.byType[resource.resourceType] = (report.byType[resource.resourceType] ?? 0) + 1;
-        }
-      }
-
+      await storeEntries((bundle.entry ?? []) as BundleEntry[], writer, report, seenThisRun);
       url = nextPageUrl(bundle, url);
     }
   } finally {
@@ -187,6 +137,58 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
   }
 
   return report;
+}
+
+export function emptySyncReport(): SyncReport {
+  return { pages: 0, collisions: [], received: 0, created: 0, updated: 0, duplicatesWithinRun: 0, byType: {}, skipped: [] };
+}
+
+/**
+ * Writes one batch of entries through the door and accounts for them in `report`. A sync page and
+ * an uploaded file (yourphr#736) both come through here, so a re-upload is exactly as idempotent as
+ * a resync, and a contested id is refused the same way whichever path brought it.
+ */
+export async function storeEntries(entries: { resource?: Resource }[], writer: RecordsWriter, report: SyncReport, seenThisRun: Set<string>): Promise<void> {
+  for (const entry of entries) {
+    const resource = entry.resource;
+    if (!resource?.resourceType) {
+      report.skipped.push({ reason: 'entry carried no resource', detail: JSON.stringify(entry).slice(0, 120) });
+      continue;
+    }
+    if (!resource.id) {
+      // Without an id there is no way to recognise this record on the next sync, so storing it
+      // would guarantee a duplicate later. Refusing is the honest outcome.
+      report.skipped.push({ reason: 'resource had no id', detail: resource.resourceType });
+      continue;
+    }
+
+    report.received++;
+    const key = `${resource.resourceType}/${resource.id}`;
+    if (seenThisRun.has(key)) {
+      report.duplicatesWithinRun++;
+    }
+    seenThisRun.add(key);
+
+    let outcome: 'created' | 'updated';
+    try {
+      outcome = await writer.upsert(resource);
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message.includes('cross-source id collision')) {
+        // Reported and skipped rather than aborting the run: one contested id must not cost the
+        // patient the other 20,000 records in the sync.
+        report.collisions.push({ resource: key, detail: message });
+        continue;
+      }
+      throw err;
+    }
+    if (outcome === 'updated') {
+      report.updated++;
+    } else {
+      report.created++;
+      report.byType[resource.resourceType] = (report.byType[resource.resourceType] ?? 0) + 1;
+    }
+  }
 }
 
 /** A writer over a repository handle, attributing every write to one source and restoring afterwards. */

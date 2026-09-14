@@ -372,8 +372,16 @@ export class RecordsManager extends BaseManager {
     const id = (resource as { id?: unknown }).id;
     if (typeof id !== 'string' || id.trim() === '') throw new ApiError(400, 'the resource needs an id');
 
-    const source = await this.engine.managers.sources.manualSource(ctx);
-    const outcome = await this.writer(ctx, `source-${source.id}`).upsert(resource);
+    // An edit lands where the record already lives when that is one of the caller's OWN manual
+    // sources (yourphr#736). Before manualSource matched exactly, a migrated instance could file a
+    // hand-entered record under an older manual source; sending its edit to "Added by you" instead
+    // would be refused as a cross-source collision and the patient could never correct it. A record
+    // held by a synced provider is not theirs to overwrite, and still goes to their own source —
+    // where the store refuses the collision, as it should.
+    const sources = this.engine.managers.sources;
+    const held = await this.provider.read(this.who(ctx), type, id);
+    const target = held && held.sourceId !== '' && (await sources.isManual(ctx, held.sourceId)) ? held.sourceId : `source-${(await sources.manualSource(ctx)).id}`;
+    const outcome = await this.writer(ctx, target).upsert(resource);
     return { id, outcome };
   }
 

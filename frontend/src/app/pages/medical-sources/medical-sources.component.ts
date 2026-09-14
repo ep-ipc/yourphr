@@ -16,6 +16,7 @@ import {SmartAuthorizeResponse} from '../../models/fasten/smart-authorize';
 import {LegalConsentStatus} from '../../models/fasten/legal-consent';
 import {AttributionNotice, attributionsForContext} from '../../models/fasten/attributions';
 import {PreConnectCopy, preConnectCopyForProfile} from '../../models/fasten/pre-connect-copy';
+import {uploadResultMessage} from '../../models/fasten/upload-result';
 
 // Max time to wait for the patient to finish logging in at the provider (relay-poll phase, across
 // retries). A first login can be slow (read consent, pick account, authorize) — allow several
@@ -46,6 +47,8 @@ export class MedicalSourcesComponent implements OnInit {
 
   uploadedFile: File[] = []
   uploadErrorMsg = ""
+  // What the last upload did, in plain language (#736) — set on success, cleared on the next attempt.
+  uploadResultMsg = ""
   // true from the moment the bundle is sent until the server has accepted it and queued the import
   // (the import itself then runs in the background — progress shows on the Connected Sources list).
   uploadInProgress = false
@@ -300,6 +303,7 @@ export class MedicalSourcesComponent implements OnInit {
 
   public async uploadSourceBundleHandler(files: File[]) {
     this.uploadErrorMsg = ""
+    this.uploadResultMsg = ""
     let processingFile = files[0] as File
     this.uploadedFile = [processingFile]
 
@@ -324,7 +328,8 @@ export class MedicalSourcesComponent implements OnInit {
     //TODO: handle manual bundles.
     this.uploadInProgress = true
     this.fastenApi.createManualSource(processingFile).subscribe(
-      (respData) => {
+      (result) => {
+        this.uploadResultMsg = result ? uploadResultMessage(result) : ""
       },
       (err) => {
         console.log(err)

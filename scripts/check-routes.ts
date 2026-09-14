@@ -41,7 +41,6 @@ const KNOWN_MISSING: Record<string, string> = {
   '/api/secure/resource/related': 'yourphr#684',
   '/api/secure/encounter/:p/related/:p/:p': 'yourphr#684',
   '/api/secure/jobs/error': 'yourphr#685',
-  '/api/secure/source/cda-converter/status': 'yourphr#686',
   '/api/secure/summary/ips/email': 'yourphr#687',
   // "Add record" — a primary button in three places — opens a form that cannot save.
   '/api/secure/resource/patient-entry': 'yourphr#696',
@@ -70,7 +69,6 @@ const KNOWN_MISSING: Record<string, string> = {
 const KNOWN_SWALLOWED: Record<string, string> = {
   '/api/secure/source/authorize': 'yourphr#413',
   '/api/secure/source/connect': 'yourphr#407',
-  '/api/secure/source/manual': 'yourphr#407',
 };
 
 /** Every `.ts` under the Angular app, specs excluded. */

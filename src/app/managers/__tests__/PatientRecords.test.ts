@@ -89,6 +89,30 @@ describe('patient-authored records', () => {
     });
   });
 
+  it('an upload source does not become "Added by you" — a typed-in record never claims to come from a file (yourphr#736)', async () => {
+    await withStores(async (s, ctxOf) => {
+      const ctx = ctxOf('jim');
+      const upload = await s.sources.importUpload(ctx, { filename: 'export.json', bytes: Buffer.from(JSON.stringify({ resourceType: 'Bundle', entry: [{ resource: { resourceType: 'Patient', id: 'pt-1' } }] })) });
+      await s.records.savePatientRecord(ctx, practitioner('p-8', 'Typed') as never);
+      const stored = await s.recordsProvider.read('jim', 'Practitioner', 'p-8');
+      expect(stored?.sourceId).not.toBe(upload.source['id']);
+      expect((await s.sources.list(ctx)).find((x) => `source-${x.id}` === stored?.sourceId)?.display).toBe('Added by you');
+    });
+  });
+
+  it('an edit lands where the record already lives when that is one of the account\'s own manual sources — a migrated instance can still correct it', async () => {
+    await withStores(async (s, ctxOf) => {
+      const ctx = ctxOf('jim');
+      // A Go-migrated manual source (Go wrote practitioners into one with no display), holding a practitioner.
+      const legacy = await s.sources.add(ctx, { userId: 'jim', display: '', fhirBaseUrl: '', tokenUrl: '', clientId: '', patient: '', resourceTypes: [], accessToken: '', refreshToken: '', expiresAt: 0, platformType: MANUAL_PLATFORM_TYPE, environment: '' });
+      await s.records.writer(ctx, `source-${legacy.id}`).upsert(practitioner('p-9', 'Legacy') as never);
+
+      const edited = await s.records.savePatientRecord(ctx, practitioner('p-9', 'Legacy-Corrected') as never);
+      expect(edited).toEqual({ id: 'p-9', outcome: 'updated' });
+      expect((await s.recordsProvider.read('jim', 'Practitioner', 'p-9'))?.sourceId).toBe(`source-${legacy.id}`);
+    });
+  });
+
   it('refuses a resource with no id or no resourceType rather than inventing one', async () => {
     await withStores(async (s, ctxOf) => {
       const ctx = ctxOf('jim');

@@ -250,6 +250,39 @@ function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown> | u
   });
 }
 
+/**
+ * The `file` part of a multipart upload (yourphr#736) — what the Sources page's upload sends.
+ *
+ * Parsed by the runtime's own `Request.formData()` rather than a hand-rolled boundary scanner or a
+ * new dependency; it is a body parser here, not a network call. Capped: an over-size body is
+ * drained and refused, never held in memory past the cap.
+ */
+async function readUpload(req: IncomingMessage, maxBytes: number): Promise<{ file: { filename: string; bytes: Buffer } } | { status: number; error: string }> {
+  const type = req.headers['content-type'] ?? '';
+  if (!/^multipart\/form-data/i.test(type)) return { status: 400, error: 'send the file as multipart/form-data, in a field named "file"' };
+  const tooLarge = { status: 413, error: `the file is larger than this instance accepts (${Math.floor(maxBytes / (1024 * 1024))} MB — yourphr.sources.upload.max-bytes)` };
+  const chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    for await (const chunk of req) {
+      size += (chunk as Buffer).length;
+      if (size <= maxBytes) chunks.push(chunk as Buffer);
+    }
+  } catch {
+    return { status: 400, error: 'the upload was interrupted' };
+  }
+  if (size > maxBytes) return tooLarge;
+  let form: FormData;
+  try {
+    form = await new Request('http://upload.invalid/', { method: 'POST', headers: { 'content-type': type }, body: Buffer.concat(chunks) }).formData();
+  } catch {
+    return { status: 400, error: 'the upload is not valid multipart/form-data' };
+  }
+  const file = form.get('file');
+  if (!file || typeof file === 'string') return { status: 400, error: 'the upload carried no file in the "file" field' };
+  return { file: { filename: file.name, bytes: Buffer.from(await file.arrayBuffer()) } };
+}
+
 export function createYourPhrServer(options: ServerOptions) {
   const auth = options.auth;
   // The engine: the assembled one, or — for the contract harnesses that hand a repository in — a
@@ -830,6 +863,23 @@ export function createYourPhrServer(options: ServerOptions) {
           const close = (): void => { clearInterval(keepAlive); unsubscribe(); res.end(); };
           req.on('close', close);
           res.on('error', close);
+          return;
+        }
+        // Both BEFORE the /source/:id match below, which would otherwise read "manual" and
+        // "cda-converter" as source ids — how the upload 404'd from v3.0.0 to v3.4.0 (yourphr#736).
+        if (url.pathname === '/api/secure/source/cda-converter/status' && req.method === 'GET') {
+          send(res, 200, {success: true, data: src.converterStatus(ctx, 'ccda')});
+          return;
+        }
+        if (url.pathname === '/api/secure/source/manual' && req.method === 'POST') {
+          const maxBytes = engine.has('configuration') ? engine.managers.configuration.getInt('yourphr.sources.upload.max-bytes') : 100 * 1024 * 1024;
+          const upload = await readUpload(req, maxBytes > 0 ? maxBytes : 100 * 1024 * 1024);
+          if (!('file' in upload)) {
+            send(res, upload.status, {success: false, error: upload.error});
+            return;
+          }
+          const result = await src.importUpload(ctx, upload.file); // ApiError -> the error boundary
+          send(res, 200, {success: true, data: result.data, source: result.source});
           return;
         }
         const sourceMatch = url.pathname.match(/^\/api\/secure\/source\/([^/]+)(?:\/(summary|sync|disconnect|remove-data|export))?$/);
