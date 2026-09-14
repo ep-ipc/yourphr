@@ -21,9 +21,9 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 - [#707](https://github.com/jwilleke/yourphr/issues/707) — [security] image-size — both DoS advisories have no patched release (blocked upstream)
 - [#700](https://github.com/jwilleke/yourphr/issues/700) — [SECURITY] The shipped app still calls Fasten's Lighthouse — remove every runtime dependency on Fasten infrastructure
+- [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#363](https://github.com/jwilleke/yourphr/issues/363) — [FEATURE] Database at-rest encryption: enable/migrate (guarded) + decrypt
-- [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟠 P1
 
@@ -65,7 +65,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#697](https://github.com/jwilleke/yourphr/issues/697) — [ARCH] ngdpbase is already the framework — decide what YourPHR is relative to it
 - [#693](https://github.com/jwilleke/yourphr/issues/693) — [BUG] IdP callback posts to a route that does not exist
 - [#687](https://github.com/jwilleke/yourphr/issues/687) — [BUG] "Email this summary" calls an endpoint that does not exist
-- [#686](https://github.com/jwilleke/yourphr/issues/686) — [BUG] The sources page cannot tell you whether C-CDA import will work
 - [#674](https://github.com/jwilleke/yourphr/issues/674) — [BUG] A display label is used as a feature flag — "sandbox mode" keys off the instance's name
 - [#639](https://github.com/jwilleke/yourphr/issues/639) — [SPIKE] Remove the SOPS Secret — .env on the volume supersedes it
 - [#552](https://github.com/jwilleke/yourphr/issues/552) — [CHORE] Port the DICOM viewer to dwv 0.36 — removed APIs and a build path that no longer exists
@@ -119,7 +118,8 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-*None.*
+- [#736](https://github.com/jwilleke/yourphr/issues/736) — [BUG] File upload 404s in v3 — no server route for POST /api/secure/source/manual
+- [#735](https://github.com/jwilleke/yourphr/issues/735) — [BUG] Cannot Upload CDA XMLs - Error uploading file: not found
 
 ## ⏸ Deferred
 
@@ -129,4 +129,12 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## ❓ Needs triage
 
+- [#737](https://github.com/jwilleke/yourphr/issues/737) — [BUG] PDF, DICOM and image uploads (v2's #255) are gone in v3
+- [#738](https://github.com/jwilleke/yourphr/pull/738) — chore(kit): sync to v1.13.0 *(PR · ready — checks green)* — no linked issue
+- [#734](https://github.com/jwilleke/yourphr/pull/734) — chore(deps-dev): bump js-yaml from 4.3.1 to 4.3.2 in the npm_and_yarn group across 1 directory *(PR · ready — checks green)* — no linked issue
+- [#733](https://github.com/jwilleke/yourphr/pull/733) — chore(deps): bump @angular/language-service from 22.1.4 to 22.1.5 in /frontend *(PR · ready — checks green)* — no linked issue
+- [#732](https://github.com/jwilleke/yourphr/pull/732) — chore(deps): bump @ng-select/ng-select from 24.0.3 to 24.1.1 in /frontend *(PR · ready — checks green)* — no linked issue
+- [#731](https://github.com/jwilleke/yourphr/pull/731) — chore(deps): bump chart.js from 4.4.2 to 4.5.1 in /frontend *(PR · ready — checks green)* — no linked issue
+- [#730](https://github.com/jwilleke/yourphr/pull/730) — chore(ci): bump docker/setup-qemu-action from 3 to 4 *(PR · ready — checks green)* — no linked issue
+- [#729](https://github.com/jwilleke/yourphr/pull/729) — chore(deps): bump hono from 4.13.1 to 4.13.7 in /frontend in the npm_and_yarn group across 1 directory *(PR · ready — checks green)* — no linked issue
 - [#726](https://github.com/jwilleke/yourphr/pull/726) — chore(deps): bump @types/fhir from 0.0.35 to 0.0.44 in /frontend *(PR · ready — 4 checks failing)* — no linked issue
