@@ -83,6 +83,46 @@ async function mint(base: string, session: string, scopes: string[], name = 'Cla
   return { token: data.token ?? '', id: data.record?.id ?? '' };
 }
 
+/** A companion device token — the credential the phone holds, and the only way samples get in. */
+async function pairDevice(base: string, session: string, name: string): Promise<string> {
+  const res = await fetch(`${base}/api/secure/access/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${session}` },
+    body: JSON.stringify({ name }),
+  });
+  return ((await res.json()) as { data?: string }).data ?? '';
+}
+
+/**
+ * Wearable samples for one account, pushed through the REAL ingest route.
+ *
+ * Not written straight to the table, because what is being tested is what an agent can reach, and
+ * a row inserted behind the manager is a row whose code, category and unit were never normalized —
+ * the bridge would then be reading a shape the phone never produces.
+ */
+async function seedHealth(base: string, deviceToken: string, deviceId: string, restingHr: number): Promise<void> {
+  // Dated from NOW, not from a fixed calendar date: read_health_metric clamps its window to 365
+  // days, so a sample hard-coded to 2024 falls out of every query the moment the year turns and
+  // the harness starts reporting "no samples recorded" as a pass.
+  const samples = [0, 1, 2].map((day) => {
+    const start = new Date(Date.now() - (day + 1) * 86_400_000).toISOString();
+    return {
+      uuid: `${deviceId}-rhr-${day}`,
+      type: 'HKQuantityTypeIdentifierRestingHeartRate',
+      start, end: start,
+      value: restingHr + (2 - day),
+      unit: 'count/min',
+      source_name: 'Harness Health',
+      device_name: 'Harness iPhone',
+    };
+  });
+  await fetch(`${base}/api/secure/health/samples`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${deviceToken}` },
+    body: JSON.stringify({ device: { device_id: deviceId, name: 'Harness iPhone' }, samples }),
+  });
+}
+
 /** Records for one account, written the way the app writes them, so the search index is real. */
 async function seed(file: string, userId: string, sourceId: string, extra: Resource): Promise<void> {
   const repo = new SqliteFhirRepository({ file, userId, sourceId });
@@ -161,8 +201,14 @@ async function main(): Promise<void> {
     check('the bridge completes the MCP handshake',
       (init?.result?.['protocolVersion'] ?? '') === '2025-06-18');
     const tools = (hello.find((r) => r.id === 2)?.result?.['tools'] ?? []) as { name: string }[];
-    check('it offers exactly one tool, and it is search_records',
-      tools.length === 1 && tools[0]?.name === 'search_records', tools.map((t) => t.name).join(','));
+    // Two, because the record and the wearable are two different stores reached by two different
+    // routes: search_records runs over the FHIR resources a provider sent, and health_samples is a
+    // separate projection search cannot see. One tool over both would be a tool that quietly
+    // answers "no sleep data" to a patient whose phone has recorded it every night.
+    const toolNames = tools.map((t) => t.name).sort();
+    check('it offers exactly two tools: search_records and read_health_metric',
+      toolNames.length === 2 && toolNames[0] === 'read_health_metric' && toolNames[1] === 'search_records',
+      toolNames.join(','));
     check('TOOTH: no write tool is offered — none exists to offer',
       !tools.some((t) => /create|update|delete|write|add/i.test(t.name)));
 
@@ -247,6 +293,61 @@ async function main(): Promise<void> {
     })).json()) as { data: { actor_username: string; category: string }[] };
     check('a resource read is logged under the agent\'s name, like every other read',
       afterRead.data.some((e) => e.actor_username === 'Attachment client' && e.category === 'Medications'));
+
+    // --- wearable metrics (sat-apple-health) ---
+    // The reason this is here at all: a patient asking "how has my sleep been" against the first
+    // slice got "your record does not contain sleep data", which was true of the FHIR resources and
+    // false of the instance. The samples were in health_samples the whole time, behind a route the
+    // bridge did not publish.
+    const jimDevice = await pairDevice(h.base, jimSession, 'Jim phone');
+    check('a patient can pair a companion device', jimDevice.startsWith('yphr_dt_'), jimDevice.slice(0, 12));
+    await seedHealth(h.base, jimDevice, 'jim-phone', 52);
+
+    const danaSession = await signIn(h.base, 'dana');
+    await seedHealth(h.base, await pairDevice(h.base, danaSession, 'Dana phone'), 'dana-phone', 71);
+
+    const health = await mint(h.base, jimSession, ['Health'], 'Health client');
+    const healthTalk = await speak(h.base, health.token, [
+      HELLO,
+      { jsonrpc: '2.0', id: 2, method: 'resources/read', params: { uri: 'yourphr://health' } },
+      { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'read_health_metric', arguments: { metric_type: 'resting_heart_rate', days: 30 } } },
+    ], 3);
+
+    const catalogText = ((healthTalk.find((r) => r.id === 2)?.result?.['contents'] ?? []) as { text?: string }[])[0]?.text ?? '';
+    check('the health catalog resource lists what the phone actually records',
+      catalogText.includes('resting_heart_rate'), catalogText.slice(0, 60));
+
+    const metric = toolText(healthTalk.find((r) => r.id === 3));
+    check('the agent reads a wearable metric the token was scoped to',
+      metric.includes('resting_heart_rate') && metric.includes('52'), metric.split('\n')[0] ?? '');
+    check('and the series carries the window statistics, not just a wall of samples',
+      /min 52.*max 54/.test(metric), metric.split('\n')[0] ?? '');
+
+    // THE TOOTH, the same one the search half is built around: both phones pushed resting heart
+    // rate, and Dana's is a range Jim's never reaches. If the owner seam stops holding here, it
+    // holds nowhere, because these rows never pass through the FHIR repository that enforces it.
+    check("TOOTH: user A's token never returns user B's metrics",
+      !metric.includes('71') && !metric.includes('72') && !metric.includes('73'), metric.slice(0, 80));
+
+    const noHealth = toolText((await speak(h.base, meds.token, [
+      HELLO, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'read_health_metric', arguments: { metric_type: 'resting_heart_rate' } } },
+    ], 2)).find((r) => r.id === 2));
+    check('TOOTH: a token without Health is refused, and told which scope it needs',
+      noHealth.includes('Health'), noHealth.split('\n')[0] ?? '');
+
+    // A metric the instance has never recorded must not read as "you have none of this": the
+    // patient should be told the name was not recognised, and where to find the real ones.
+    const unknown = toolText((await speak(h.base, health.token, [
+      HELLO, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'read_health_metric', arguments: { metric_type: 'not_a_metric' } } },
+    ], 2)).find((r) => r.id === 2));
+    check('an unknown metric names itself and points at the catalog, rather than reporting no data',
+      unknown.includes('not_a_metric') && unknown.includes('yourphr://health'), unknown.split('\n')[0] ?? '');
+
+    const healthLog = (await (await fetch(`${h.base}/api/secure/account/access-log`, {
+      headers: { authorization: `Bearer ${jimSession}` },
+    })).json()) as { data: { actor_username: string; category: string }[] };
+    check('a wearable read is logged under the agent\'s name, like every other read',
+      healthLog.data.some((e) => e.actor_username === 'Health client' && e.category === 'Health'));
 
     // --- revocation, the property the whole design rests on ---
     await fetch(`${h.base}/api/secure/account/agent-tokens/${jim.id}/revoke`, {
