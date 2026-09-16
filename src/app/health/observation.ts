@@ -50,6 +50,8 @@ export function serializeComponents(components: ObservationComponentValue[]): st
 
 export function toObservation(row: HealthSampleRow, subject?: string): Observation {
   const metric = lookupByCode(row.code);
+  const codeSystem = row.codeSystem || (row.code ? LOINC : HK_TYPE_SYSTEM);
+  const codeValue = row.code || row.hkType;
   const observation: Observation = {
     resourceType: 'Observation',
     id: row.id,
@@ -57,6 +59,16 @@ export function toObservation(row: HealthSampleRow, subject?: string): Observati
     identifier: row.externalUuid
       ? [{ system: row.identifierSystem || 'urn:uuid', value: row.externalUuid }]
       : undefined,
+    // FHIR Observation.code is 1..1; unknown metrics still store a CodeableConcept.
+    code: codeValue
+      ? {
+          coding: [{
+            system: codeSystem,
+            code: codeValue,
+            ...(metric?.display ? { display: metric.display } : {}),
+          }],
+        }
+      : { text: row.metricType || 'unknown' },
   };
 
   const category = row.category || metric?.category;
@@ -64,18 +76,6 @@ export function toObservation(row: HealthSampleRow, subject?: string): Observati
     observation.category = [{
       coding: [{ system: OBS_CATEGORY, code: category }],
     }];
-  }
-
-  const codeSystem = row.codeSystem || (row.code ? LOINC : HK_TYPE_SYSTEM);
-  const codeValue = row.code || row.hkType;
-  if (codeValue) {
-    observation.code = {
-      coding: [{
-        system: codeSystem,
-        code: codeValue,
-        ...(metric?.display ? { display: metric.display } : {}),
-      }],
-    };
   }
 
   const subjectRef = subject || row.subject;

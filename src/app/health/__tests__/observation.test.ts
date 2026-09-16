@@ -61,6 +61,16 @@ describe('toObservation', () => {
     expect(obs.component?.[1]?.code?.coding?.[0]?.code).toBe('8462-4');
   });
 
+  it('still emits Observation.code when the metric is unknown', () => {
+    const obs = toObservation(row({
+      code: '',
+      codeSystem: '',
+      hkType: '',
+      metricType: 'future_metric',
+    }));
+    expect(obs.code).toEqual({ text: 'future_metric' });
+  });
+
   it('encodes sleep as a period and a SNOMED value', () => {
     const obs = toObservation(row({
       id: 'sleep-1',
