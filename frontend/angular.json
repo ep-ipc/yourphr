@@ -37,22 +37,17 @@
                 "output": "/assets/dwv/decoders/"
               },
               {
-                "glob": "**/*.js",
+                "glob": "lhc-forms.js",
                 "input": "./node_modules/lforms/dist/lforms/webcomponent/",
                 "output": "/assets/js/lforms/"
               },
               {
-                "glob": "**/*.js.map",
+                "glob": "assets/lib/zone.min.js",
                 "input": "./node_modules/lforms/dist/lforms/webcomponent/",
                 "output": "/assets/js/lforms/"
               },
               {
-                "glob": "**/*.js",
-                "input": "./node_modules/lforms/dist/lforms/fhir/",
-                "output": "/assets/js/lforms/fhir/"
-              },
-              {
-                "glob": "**/*.js.map",
+                "glob": "lformsFHIRAll.min.js",
                 "input": "./node_modules/lforms/dist/lforms/fhir/",
                 "output": "/assets/js/lforms/fhir/"
               },
@@ -102,7 +97,7 @@
               ],
               "optimization": true,
               "outputHashing": "all",
-              "sourceMap": true,
+              "sourceMap": false,
               "namedChunks": false,
               "extractLicenses": true,
               "vendorChunk": false,
