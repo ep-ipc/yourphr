@@ -297,6 +297,12 @@ async function readUpload(req: IncomingMessage, maxBytes: number): Promise<{ fil
   return { file: { filename: file.name, bytes: Buffer.from(await file.arrayBuffer()) } };
 }
 
+function csvQuery(url: URL, name: string): string[] {
+  const raw = url.searchParams.get(name);
+  if (!raw) return [];
+  return raw.split(',').map((s) => s.trim()).filter((s) => s !== '');
+}
+
 export function createYourPhrServer(options: ServerOptions) {
   const auth = options.auth;
   // The engine: the assembled one, or — for the contract harnesses that hand a repository in — a
