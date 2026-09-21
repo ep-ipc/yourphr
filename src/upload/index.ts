@@ -81,9 +81,12 @@ export function cdaPatientId(xml: string): string {
 function elementsAt(xml: string, path: string[]): string[] {
   const out: string[] = [];
   const stack: string[] = [];
-  const text = xml.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>/g, '');
-  for (const m of text.matchAll(/<(\/?)(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g)) {
-    const [whole, closing, name, , selfClosing] = m as unknown as [string, string, string, string, string];
+  // Comments, CDATA, processing instructions and a DOCTYPE are alternatives in the SAME pattern,
+  // listed first, so each is consumed whole and a tag written inside one is never read as a tag.
+  // They are skipped here rather than deleted beforehand (yourphr#739).
+  for (const m of xml.matchAll(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<(\/?)(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g)) {
+    const [whole, closing, name, , selfClosing] = m as unknown as [string, string, string | undefined, string, string];
+    if (name === undefined) continue;
     if (closing) {
       stack.pop();
       continue;

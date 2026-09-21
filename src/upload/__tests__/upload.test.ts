@@ -94,6 +94,12 @@ describe('cdaPatientId — identical to Go\'s cdaPatientID', () => {
     ['no recordTarget: the whole document', '<ClinicalDocument><title>No target here</title></ClinicalDocument>\n', 'cda-f0d5a0a64274b53f'],
     ['only a nested patient id: the whole document', '<ClinicalDocument><recordTarget><patientRole><patient><id root="nested-only"/></patient></patientRole></recordTarget></ClinicalDocument>\n', 'cda-8d73ebc04a7cd657'],
     ['a recordTarget below the root level ignored', '<ClinicalDocument><component><recordTarget><patientRole><id root="deep"/></patientRole></recordTarget></component><recordTarget><patientRole><id root="top" extension="x"/></patientRole></recordTarget></ClinicalDocument>\n', 'cda-56594fc087960dc0'],
+    // Markup that is not an element must be stepped over whole, or a tag written inside it is read
+    // as one (yourphr#739). Expected ids computed by Go's cdaPatientID from v2.10.3.
+    ['a recordTarget inside CDATA ignored', '<ClinicalDocument><![CDATA[<recordTarget><patientRole><id root="in-cdata"/></patientRole></recordTarget>]]><recordTarget><patientRole><id root="real" extension="after-cdata"/></patientRole></recordTarget></ClinicalDocument>\n', 'cda-a1eb7a4754ddca9f'],
+    ['a recordTarget inside a processing instruction ignored', '<?xml version="1.0"?><ClinicalDocument><?pi <recordTarget><patientRole><id root="in-pi"/></patientRole></recordTarget> ?><recordTarget><patientRole><id root="real" extension="after-pi"/></patientRole></recordTarget></ClinicalDocument>\n', 'cda-9570fc8306c98dc8'],
+    ['a DOCTYPE stepped over', '<?xml version="1.0"?><!DOCTYPE ClinicalDocument><ClinicalDocument><recordTarget><patientRole><id root="real" extension="after-doctype"/></patientRole></recordTarget></ClinicalDocument>\n', 'cda-6f571db84cff4656'],
+    ['a comment inside patientRole ignored', '<ClinicalDocument><recordTarget><patientRole><!-- <id root="commented-in-role"/> --><id root="real" extension="after-inner-comment"/></patientRole></recordTarget></ClinicalDocument>\n', 'cda-ec571ad15041d484'],
   ])('%s', (_, xml, expected) => {
     expect(cdaPatientId(xml)).toBe(expected);
   });
