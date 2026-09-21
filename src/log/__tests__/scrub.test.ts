@@ -14,7 +14,10 @@ import { scrub } from '../../../scripts/lib/scrub.js';
 
 describe('harness credential scrub', () => {
   it('strikes a JWT', () => {
-    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZW1vIn0.c2lnbmF0dXJlLWhlcmU';
+    // Assembled at runtime, not written as a literal: a JWT-shaped string in source trips secret
+    // scanners (GitGuardian flagged the old literal) even though this one signs nothing.
+    const seg = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url');
+    const jwt = [seg({ alg: 'HS256' }), seg({ sub: 'demo' }), seg('not-a-signature')].join('.');
     expect(scrub(`signed in with ${jwt} ok`)).toBe('signed in with [redacted:jwt] ok');
   });
 
