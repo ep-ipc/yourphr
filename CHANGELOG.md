@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.5.1](https://github.com/jwilleke/yourphr/compare/v3.5.0...v3.5.1) (2026-09-21)
+
+### Bug Fixes
+
+- __A relay on the operator's own network can be polled again__ ([#749](https://github.com/jwilleke/yourphr/issues/749)) — an operator-set relay (`yourphr.relay.url` / `yourphr.relay.public-url`) is polled even when it resolves to a private address (e.g. split DNS to 192.168.x). Bound to that one origin, no redirects, 10s timeout, 64 KiB cap; the SSRF guard is unchanged for every other outbound call, including the project's default relay
+- Frontend compiles against `@types/fhir` 0.0.44 ([#726](https://github.com/jwilleke/yourphr/issues/726))
+- Dependency bumps: hono, js-yaml, chart.js, @ng-select/ng-select, @angular/language-service, docker/setup-qemu-action
+
 ## [3.3.0](https://github.com/jwilleke/yourphr/compare/v3.2.0...v3.3.0) (2026-08-30)
 
 __No Fasten host is called by anything this release ships.__ The Lighthouse connect gateway — dead since the fork, but still compiled into every bundle and still one click away on the Reconnect button — is gone ([#700](https://github.com/jwilleke/yourphr/issues/700)). Nothing a patient or operator could actually use has been removed: provider connection has been catalog-only since it existed, and the one Lighthouse button left was broken. This is a minor release on purpose.
