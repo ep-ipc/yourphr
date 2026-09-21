@@ -131,9 +131,17 @@ export class SettingsManager extends BaseManager {
     };
   }
 
-  /** GET /admin/config in Go's AdminConfigResponse shape (yourphr#602). */
+  /**
+   * GET /admin/config in Go's AdminConfigResponse shape (yourphr#602).
+   *
+   * `admin-system` to VIEW, not only to change (yourphr#751; ngdpbase security-posture D18). The
+   * snapshot is how this instance defends itself — sign-in throttle, rate limits, session lifetimes,
+   * trusted proxies — and none of that is secret, so the masking below cannot cover it. `admin-read`
+   * alone is held by the public demo's read-only tour (#644), which would otherwise publish those
+   * values to any visitor. A real admin holds both, so nothing changes for an operator.
+   */
   configSnapshot(ctx: ApiContext): { entries: ConfigEntry[]; custom_config_path: string; warnings: string[] } {
-    ctx.require('admin-read');
+    ctx.require('admin-system');
     const config = this.configuration;
     return {
       entries: config.snapshot().map((row) => {

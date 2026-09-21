@@ -29,6 +29,8 @@ export class AdminConfigComponent implements OnInit {
   config: AdminConfig | null = null;
   loading = true;
   error = '';
+  // True when the server refused with 403: a read-only admin (#751), not a failure to report.
+  restricted = false;
 
   activeTab: TabId = 'current';
   filter = '';
@@ -57,7 +59,8 @@ export class AdminConfigComponent implements OnInit {
         this.loading = false;
       },
       error: (err) => {
-        this.error = err?.error?.error || 'Could not load the configuration.';
+        if (err?.status === 403) this.restricted = true;
+        else this.error = err?.error?.error || 'Could not load the configuration.';
         this.loading = false;
       },
     });

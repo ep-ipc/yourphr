@@ -68,6 +68,24 @@ describe('AdminConfigComponent', () => {
     expect(text).toContain('/opt/yourphr/data/config/app-custom-config.json');
   });
 
+  // A read-only admin (the demo tour) is refused the snapshot by design (#751): the page explains
+  // that, rather than reporting a failure.
+  it('explains a 403 instead of showing it as an error', () => {
+    apiSpy.getAdminConfig.and.returnValue(throwError(() => ({status: 403, error: {success: false, error: 'forbidden'}})));
+    fixture.detectChanges();
+    expect(component.restricted).toBeTrue();
+    expect(component.error).toBe('');
+    expect(fixture.nativeElement.querySelector('.alert-danger')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('needs full administrator access');
+  });
+
+  it('still reports a real failure as an error', () => {
+    apiSpy.getAdminConfig.and.returnValue(throwError(() => ({status: 500, error: {success: false, error: 'boom'}})));
+    fixture.detectChanges();
+    expect(component.restricted).toBeFalse();
+    expect(component.error).toBe('boom');
+  });
+
   // The masked placeholder is what the server sent — the real value is not in the page until the
   // eye is clicked, which is the whole point of reveal-on-demand.
   it('does not have the real value before revealing', () => {

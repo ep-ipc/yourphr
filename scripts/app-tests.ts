@@ -283,7 +283,11 @@ async function main(): Promise<void> {
   const tourSeesConfig = await fetch(`${base}/api/secure/admin/config`, authed(tourToken));
   const tourSeesLogs = await fetch(`${base}/api/secure/admin/logs`, authed(tourToken));
   check('it can SEE the operator screens, and says so to the UI banner (demo.admin.session)',
-    tourSeesConfig.status === 200 && tourSeesLogs.status === 200 && tourInstance.data['demo.admin.session'] === true);
+    tourSeesLogs.status === 200 && tourInstance.data['demo.admin.session'] === true);
+  // …except Configuration, which needs admin-system to VIEW (yourphr#751, ngdpbase D18): it is how
+  // the instance defends itself, and a public tour would otherwise publish the sign-in throttle.
+  check('it can NOT see Configuration — the posture is not part of a public tour (yourphr#751)',
+    tourSeesConfig.status === 403, `status ${tourSeesConfig.status}`);
 
   // Default-deny by METHOD: the writes are refused without anyone listing them route by route.
   const tourWrites = await Promise.all([

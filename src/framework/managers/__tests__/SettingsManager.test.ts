@@ -69,6 +69,16 @@ describe('SettingsManager — what the instance says about itself, with the call
     }
   });
 
+  it('the snapshot needs admin-system to VIEW: a read-only admin (the demo tour) gets 403 (yourphr#751)', async () => {
+    const { settings, engine, admin } = await boot();
+    const tour = ApiContext.from({ username: 'demoadmin', role: 'demo-admin' }, engine);
+    expect(tour.can('admin-read')).toBe(true); // the tour can see the operator screens…
+    let status = 0;
+    try { settings.configSnapshot(tour); } catch (err) { status = (err as ApiError).status; }
+    expect(status).toBe(403); // …but not how the instance defends itself
+    expect(settings.configSnapshot(admin).entries.length).toBeGreaterThan(0);
+  });
+
   it('snapshot: Go\'s row shape — secrets masked, env-pinned marked, public keys named', async () => {
     const { settings, admin } = await boot({ YOURPHR_BACKUP_ENCRYPTION_KEY: 'from-env' });
     const snap = settings.configSnapshot(admin);

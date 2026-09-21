@@ -16,6 +16,14 @@
       <div class="alert alert-danger">{{ error }}</div>
     }
 
+    <!-- A read-only admin (the public demo's tour, #644) is refused here by design (#751): the
+    configuration is how the instance defends itself, so viewing it needs full admin rights. -->
+    @if (restricted) {
+      <div class="alert alert-info">
+        <i class="fas fa-lock"></i>&nbsp; Configuration needs full administrator access. It shows how this instance protects itself — sign-in limits, session rules, network settings — so a read-only admin, including the demo tour, cannot open it.
+      </div>
+    }
+
     <!-- Keys this instance publishes beyond the shipped set. Surfaced here because the startup log
     line is read approximately never, and once widening is allowed this is the only protection
     left. -->
