@@ -13,7 +13,7 @@ let seen: { path: string; token: string | undefined }[];
 let server: Server;
 let base: string;
 
-async function boot(custom: Record<string, string> = {}, env: Record<string, string> = {}): Promise<RelayProvider> {
+async function boot(custom: Record<string, string> = {}, env: Record<string, string> = {}, http = new OutboundHttp()): Promise<RelayProvider> {
   // The secret is env-owned (yourphr.config.env-keys), so it arrives as YOURPHR_RELAY_SECRET —
   // custom config cannot set it, by design.
   if (custom['yourphr.relay.secret'] !== undefined) {
@@ -23,8 +23,9 @@ async function boot(custom: Record<string, string> = {}, env: Record<string, str
   const engine = new Engine();
   engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(custom), { env })).register('policy', new PolicyManager(engine));
   await engine.initialize();
-  // allowInternal: the fake relay is a loopback server, exactly the escape hatch's purpose.
-  return new RelayProvider(engine, new OutboundHttp({ allowInternal: true }), { sleep: async () => undefined });
+  // The SSRF guard is ON (no allowInternal). The fake relay is a loopback server, so every spec that
+  // reaches it proves an operator-set relay on a private address is polled (yourphr#749).
+  return new RelayProvider(engine, http, { sleep: async () => undefined });
 }
 
 beforeEach(async () => {
@@ -111,5 +112,43 @@ describe('RelayProvider — fetchCode (the product\'s #406 contract)', () => {
     const relay = await boot({ 'yourphr.relay.url': base, 'yourphr.relay.secret': 's' });
     // pollSeconds 0: the deadline is already past after the first 404.
     await expect(relay.fetchCode('st', 0)).rejects.toMatchObject({ status: 504, extra: { error_code: 'relay_poll_timeout' } });
+  });
+});
+
+describe('RelayProvider — which door the poll uses (yourphr#749)', () => {
+  it('an operator-set relay on a private address is reached with the SSRF guard on', async () => {
+    answers = [{ status: 200, body: '{"code":"lan-code"}' }];
+    const relay = await boot({ 'yourphr.relay.url': base, 'yourphr.relay.secret': 's' });
+    expect(await relay.fetchCode('st')).toBe('lan-code');
+  });
+
+  it('a public-url alone counts as operator-set: the poll inherits it and is trusted too', async () => {
+    answers = [{ status: 200, body: '{"code":"inherited"}' }];
+    const relay = await boot({ 'yourphr.relay.public-url': base, 'yourphr.relay.secret': 's' });
+    expect(await relay.fetchCode('st')).toBe('inherited');
+  });
+
+  it('does not follow a redirect from the configured relay — the secret never goes anywhere else', async () => {
+    answers = [{ status: 302 }];
+    const relay = await boot({ 'yourphr.relay.url': base, 'yourphr.relay.secret': 's' });
+    await expect(relay.fetchCode('st')).rejects.toMatchObject({ status: 502, extra: { error_code: 'relay_poll_failed' } });
+    expect(seen).toHaveLength(1);
+  });
+
+  it('an unusable configured address is relay_poll_failed, not a crash', async () => {
+    const relay = await boot({ 'yourphr.relay.url': 'relay:8080', 'yourphr.relay.secret': 's' });
+    await expect(relay.fetchCode('st')).rejects.toMatchObject({ status: 502, extra: { error_code: 'relay_poll_failed' } });
+  });
+
+  it('the project default relay still goes through the guarded client', async () => {
+    const calls: string[] = [];
+    const guarded = new OutboundHttp();
+    guarded.get = async (url: string) => {
+      calls.push(url);
+      return { status: 200, body: Buffer.from('{"code":"default-code"}'), headers: {}, url } as never;
+    };
+    const relay = await boot({ 'yourphr.relay.secret': 's' }, {}, guarded);
+    expect(await relay.fetchCode('st')).toBe('default-code');
+    expect(calls).toEqual([`${DEFAULT_PUBLIC_RELAY}/pending?state=st`]);
   });
 });

@@ -1,6 +1,7 @@
 /**
  * A capability to reach ONE operator-configured internal service (yourphr#735) — the C-CDA
- * converter sidecar, and nothing else today.
+ * converter sidecar, and the operator's own SMART relay when it sits on their network
+ * (yourphr#749).
  *
  * Why this exists beside the guarded client rather than as an option on it. The guard refuses
  * internal addresses, and the converter MUST be internal: it receives raw C-CDA documents, which
@@ -16,7 +17,8 @@
  *     request — an uploaded file, a provider response — can choose the destination.
  *   - Redirects are NOT followed. A 3xx is returned as a status like any other, so the service
  *     cannot bounce the document to a host the operator never named.
- *   - POST with a body, a timeout and a response cap. No agent pooling tricks, no DNS rewriting.
+ *   - POST with a body or a plain GET, a timeout and a response cap. No agent pooling tricks, no
+ *     DNS rewriting.
  *
  * It lives in src/http because this directory is the network's single door
  * (scripts/check-http-boundary.sh). A second way out of the process belongs where the first one
@@ -62,6 +64,15 @@ export class InternalServiceHttp {
 
   /** `path` is appended to the configured address (its query string included) and must stay on its origin. */
   async post(path: string, body: Buffer, headers: Record<string, string> = {}): Promise<InternalServiceResponse> {
+    return this.send('POST', path, body, headers);
+  }
+
+  /** As post(), with no body. */
+  async get(path: string, headers: Record<string, string> = {}): Promise<InternalServiceResponse> {
+    return this.send('GET', path, undefined, headers);
+  }
+
+  private async send(method: 'GET' | 'POST', path: string, body: Buffer | undefined, headers: Record<string, string>): Promise<InternalServiceResponse> {
     const target = new URL(this.basePath + (path.startsWith('/') ? path : `/${path}`), this.origin);
     if (target.origin !== this.origin) {
       // No addresses in this or any other message raised here: a caller may forward them to a
@@ -70,7 +81,7 @@ export class InternalServiceHttp {
     }
     const timeoutMs = this.limits.timeoutMs ?? DEFAULTS.timeoutMs;
     const maxBytes = this.limits.maxBytes ?? DEFAULTS.maxBytes;
-    const send = target.protocol === 'https:' ? httpsRequest : httpRequest;
+    const request = target.protocol === 'https:' ? httpsRequest : httpRequest;
 
     return new Promise((resolve, reject) => {
       // Settled once, by whichever comes first. Destroying a request mid-response does not reject
@@ -82,7 +93,7 @@ export class InternalServiceHttp {
         req.destroy();
         reject(err);
       };
-      const req = send(target, { method: 'POST', headers: { ...headers, 'content-length': String(body.length) } }, (res) => {
+      const req = request(target, { method, headers: body ? { ...headers, 'content-length': String(body.length) } : headers }, (res) => {
         const chunks: Buffer[] = [];
         let size = 0;
         res.on('data', (chunk: Buffer) => {

@@ -17,12 +17,20 @@
  * With neither URL set, the project's dev/demo relay is used — the same default the Go stack had,
  * and an honest `source: 'default'` in the admin card so nobody mistakes it for their own.
  *
- * The SSRF guard stays ON for the poll. That means a cluster-internal poll URL
- * (`http://…svc.cluster.local`) is refused — poll the relay's public https origin instead. The Go
- * stack allowed internal polling; this one prefers one guard with no deployment-shaped holes.
+ * Which door the poll goes through depends on who chose the address (yourphr#749):
+ *
+ *   - An operator-set relay (either URL configured) is polled through InternalServiceHttp, bound to
+ *     that one origin. It may be internal: a relay beside the app on a home LAN, a split-DNS name
+ *     that resolves to 192.168.x, or a cluster-internal service. The admin typed that address, as
+ *     they typed the C-CDA converter's; nothing a provider or a request supplies can change it, no
+ *     redirect is followed, and nothing else is widened.
+ *   - The project's default relay goes through the guarded client like every other outbound call.
+ *
+ * v3.0–3.5 polled every relay through the SSRF guard, which refused any operator whose relay
+ * resolved to a private address — including one polling its own public name behind split DNS.
  */
 import { ApiError } from '../../framework/ApiContext.js';
-import { OutboundHttp } from '../../http/index.js';
+import { InternalServiceHttp, OutboundHttp } from '../../http/index.js';
 import type { Engine } from '../../framework/Engine.js';
 
 /** The project dev/demo relay — the default when the operator configures nothing. */
@@ -37,6 +45,9 @@ export const RELAY_POLL_SECONDS = 55;
 /** How long the frontend should keep retrying poll timeouts while the patient signs in. */
 export const LOGIN_WAIT_SECONDS = 240;
 const POLL_INTERVAL_MS = 2_000;
+const POLL_TIMEOUT_MS = 10_000;
+/** /pending answers `{"code":"…"}` — anything near this size is not a relay talking. */
+const POLL_MAX_BYTES = 64 * 1024;
 
 /** One resolved value plus where it came from — the admin card's whole point (the product's #402). */
 export interface ResolvedValue {
@@ -118,8 +129,11 @@ export class RelayProvider {
     if (secret === '') {
       throw new ApiError(501, 'no relay shared secret is configured (YOURPHR_RELAY_SECRET / yourphr.relay.secret), so live provider connect cannot complete', { error_code: 'relay_not_configured' });
     }
-    const base = this.resolved().poll_url.value.replace(/\/+$/, '');
-    const target = `${base}/pending?state=${encodeURIComponent(state)}`;
+    const pollUrl = this.resolved().poll_url;
+    const base = pollUrl.value.replace(/\/+$/, '');
+    const path = `/pending?state=${encodeURIComponent(state)}`;
+    const headers = { 'X-Yourphr-Token': secret };
+    const get = this.pollGetter(base, pollUrl.source !== 'default');
     const now = this.options.now ?? Date.now;
     const sleep = this.options.sleep ?? ((ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)));
     const deadline = now() + pollSeconds * 1000;
@@ -127,7 +141,7 @@ export class RelayProvider {
     for (;;) {
       let response;
       try {
-        response = await this.http.get(target, { headers: { 'X-Yourphr-Token': secret }, timeoutMs: 10_000 });
+        response = await get(path, headers);
       } catch (err) {
         throw new ApiError(502, `could not reach the relay at ${base}: ${(err as Error).message}`, { error_code: 'relay_poll_failed' });
       }
@@ -148,5 +162,22 @@ export class RelayProvider {
       }
       await sleep(POLL_INTERVAL_MS);
     }
+  }
+
+  /**
+   * The door for one poll. An operator-set relay is trusted at its configured origin only; the
+   * project default gets the guarded client. See the header for why.
+   */
+  private pollGetter(base: string, operatorSet: boolean): (path: string, headers: Record<string, string>) => Promise<{ status: number; body: Buffer }> {
+    if (!operatorSet) {
+      return (path, headers) => this.http.get(`${base}${path}`, { headers, timeoutMs: POLL_TIMEOUT_MS });
+    }
+    let service: InternalServiceHttp;
+    try {
+      service = new InternalServiceHttp(base, { timeoutMs: POLL_TIMEOUT_MS, maxBytes: POLL_MAX_BYTES });
+    } catch (err) {
+      throw new ApiError(502, `the configured relay address is not usable: ${(err as Error).message}`, { error_code: 'relay_poll_failed' });
+    }
+    return (path, headers) => service.get(path, headers);
   }
 }

@@ -39,6 +39,17 @@ describe('InternalServiceHttp', () => {
     expect(seen).toEqual([{ method: 'POST', url: '/prefix/api/convert?patientId=a%20b', body: '<doc/>', type: 'text/plain' }]);
   });
 
+  it('GETs from the configured address with the given headers and no body', async () => {
+    const res = await new InternalServiceHttp(`${base}/`).get('/pending?state=s1', { 'x-token': 't' });
+    expect(res.status).toBe(200);
+    expect(seen).toEqual([{ method: 'GET', url: '/pending?state=s1', body: '', type: 'undefined' }]);
+  });
+
+  it('GET refuses a path that resolves to another origin', async () => {
+    await expect(new InternalServiceHttp(base).get('//169.254.169.254/latest/meta-data')).rejects.toThrow(/leaves the configured service/);
+    expect(seen).toEqual([]);
+  });
+
   it('refuses a path that resolves to another origin', async () => {
     const http = new InternalServiceHttp(base);
     await expect(http.post('//169.254.169.254/latest/meta-data', Buffer.alloc(0))).rejects.toThrow(/leaves the configured service/);
