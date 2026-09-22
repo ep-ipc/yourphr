@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.5.2](https://github.com/jwilleke/yourphr/compare/v3.5.1...v3.5.2) (2026-09-22)
+
+### Bug Fixes
+
+- __A connected provider imports its records again when it refuses some of them__ ([#753](https://github.com/jwilleke/yourphr/issues/753)) — reported against the Epic sandbox: the source connected but nothing was imported. The patient is now read by id (`GET Patient/{id}`) instead of searched with a parameter Patient does not have, and a record type the provider refuses (Epic's 403 for an ungranted type, 400 for a search it wants a category for) is skipped and named in the job instead of abandoning every type after it. Only a refused token (401) stops a sync. Every sync now writes one log line with its counts and what was skipped, and a source whose scopes name no record type fails with a reason instead of "succeeding" with nothing. Restores what v2 did.
+- __The public demo's read-only admin tour can no longer read Admin → Configuration__ ([#751](https://github.com/jwilleke/yourphr/issues/751)) — viewing Configuration now needs `admin-system`, so sign-in throttle, rate-limit and session settings are not shown to visitors. Nothing changes for a real administrator.
+- The C-CDA patient-id scan steps over comments, CDATA and processing instructions while tokenizing instead of deleting them first; ids unchanged, and the last open code-scanning alert is closed ([#739](https://github.com/jwilleke/yourphr/issues/739))
+- Open Dependabot alerts cleared — js-yaml, smol-toml, csv-parse ([#740](https://github.com/jwilleke/yourphr/issues/740), [#741](https://github.com/jwilleke/yourphr/issues/741), [#743](https://github.com/jwilleke/yourphr/issues/743)); Angular framework moved to 22.1.7 in lockstep; jose, react, angular-eslint bumps
+
 ## [3.5.1](https://github.com/jwilleke/yourphr/compare/v3.5.0...v3.5.1) (2026-09-21)
 
 ### Bug Fixes
