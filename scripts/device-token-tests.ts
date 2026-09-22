@@ -5,7 +5,9 @@
  *
  * DeviceTokensManager's unit tests prove mint/hash/revoke. This harness proves the HTTP edge:
  * a device token authenticates as the owner and may POST HealthKit samples; an agent token
- * presenting the same route is refused by the default-deny write gate.
+ * presenting the same route is refused by the default-deny write gate. POST /api/auth/companion-session
+ * trades that device token for the HttpOnly session cookie the WebView uses, and the token itself
+ * stays out of the JSON body.
  *
  * scripts/ is the exempt place for loopback drivers (`check:boundary` refuses fetch under src/).
  */
@@ -139,10 +141,58 @@ async function main(): Promise<void> {
     });
     check('TOOTH: a companion token is never accepted from a COOKIE', viaCookie.status === 401);
 
+    const deviceList = await asBearer(device, '/api/secure/access/token');
+    check('TOOTH: the device token itself cannot list device tokens', deviceList.status === 403, `status=${deviceList.status}`);
+
+    const exchanged = await fetch(`${h.base}/api/auth/companion-session`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${device}` },
+    });
+    const exchangeBody = await exchanged.text();
+    const setCookie = exchanged.headers.getSetCookie?.().join('; ') || exchanged.headers.get('set-cookie') || '';
+    const sessionToken = setCookie.match(/yourphr_session=([^;]+)/)?.[1] ?? '';
+    check('exchange sets an HttpOnly session cookie',
+      exchanged.status === 200 && /HttpOnly/i.test(setCookie) && sessionToken !== '', `status=${exchanged.status}`);
+    check('exchange body is success only — the session JWT is not in the JSON',
+      exchangeBody.includes('"success":true') && !exchangeBody.includes(sessionToken) && !/"data"\s*:/.test(exchangeBody));
+
+    const asHuman = await fetch(`${h.base}/api/secure/access/token`, {
+      headers: { cookie: `yourphr_session=${sessionToken}` },
+    });
+    const humanList = (await asHuman.json()) as { data?: { name?: string }[] };
+    check('the exchanged cookie is a human session and can list device tokens',
+      asHuman.status === 200 && humanList.data?.[0]?.name === 'iPhone', `status=${asHuman.status}`);
+
+    const noBearer = await fetch(`${h.base}/api/auth/companion-session`, { method: 'POST' });
+    check('exchange without a bearer device token is refused', noBearer.status === 401);
+
+    const deviceAsCookie = await fetch(`${h.base}/api/auth/companion-session`, {
+      method: 'POST',
+      headers: { cookie: `yourphr_session=${device}` },
+    });
+    check('TOOTH: a device token presented as a cookie cannot mint a session', deviceAsCookie.status === 401);
+
+    const agentExchange = await fetch(`${h.base}/api/auth/companion-session`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${agent}` },
+    });
+    check('TOOTH: an agent token cannot mint a session', agentExchange.status === 401, `status=${agentExchange.status}`);
+
+    const sessionExchange = await fetch(`${h.base}/api/auth/companion-session`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${session}` },
+    });
+    check('a browser session token cannot be exchanged again', sessionExchange.status === 401);
+
     const tokenId = listBody.data?.[0]?.token_id ?? '';
     await asBearer(session, '/api/secure/access/token', 'DELETE', { token_id: tokenId });
     check('a revoked companion token stops working on the next request',
       (await asBearer(device, '/api/secure/account/me')).status === 401);
+    const revokedExchange = await fetch(`${h.base}/api/auth/companion-session`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${device}` },
+    });
+    check('a revoked device token cannot mint a session', revokedExchange.status === 401);
   } finally {
     await h.close();
   }

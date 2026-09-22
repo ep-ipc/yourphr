@@ -501,6 +501,43 @@ export function createYourPhrServer(options: ServerOptions) {
         return;
       }
 
+      // POST /api/auth/companion-session — a paired phone trades its device token for the HttpOnly
+      // session cookie the Angular app already uses. The device token stays in the Keychain for
+      // HealthKit sync and is never handed to the WebView: a page that held it would be a device
+      // principal, and a device principal is refused from managing tokens. The cookie this mints is
+      // an ordinary human session, so the phone is the same caller as the website.
+      //
+      // Bearer only. A cookie is ignored on purpose — accepting the device token from a cookie
+      // would make it usable by a browser page, which is the thing the secure gate refuses.
+      // The body is `{success: true}` and nothing else: the session JWT rides in the cookie, the
+      // same way it must not land in JavaScript.
+      if (auth && url.pathname === '/api/auth/companion-session' && req.method === 'POST') {
+        if (!withinRateLimit()) return;
+        if (!engine.has('deviceTokens')) {
+          send(res, 404, {success: false, error: 'not found'});
+          return;
+        }
+        const header = req.headers['authorization'] ?? '';
+        const bearer = typeof header === 'string' && header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+        if (bearer === '') {
+          send(res, 401, {success: false, error: 'unauthorized'});
+          return;
+        }
+        const device = await engine.managers.deviceTokens.verify(bearer);
+        if (!device) {
+          send(res, 401, {success: false, error: 'unauthorized'});
+          return;
+        }
+        const token = await engine.managers.sessions.issueFor(device.owner);
+        if (!token) {
+          send(res, 401, {success: false, error: 'unauthorized'});
+          return;
+        }
+        res.setHeader('Set-Cookie', sessionCookie(token, auth.cookieMaxAgeSeconds ?? 12 * 60 * 60, auth.secureCookies ?? false));
+        send(res, 200, {success: true});
+        return;
+      }
+
       // The session gate: with auth wired, every /api/secure/* request proves who it is, and is
       // served by THAT user's repository. 401 for no token, a tampered token, an expired one, or a
       // token whose generation the account has moved past (a password change ends it mid-flight).

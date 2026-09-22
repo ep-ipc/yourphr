@@ -104,7 +104,11 @@
               <a routerLink="/admin" class="dropdown-item cursor-pointer"><i style="font-size: medium;" class="fas fa-cogs"></i> Admin Dashboard</a>
             }
             <a routerLink="/account-profile" class="dropdown-item cursor-pointer"><i style="font-size: medium;" class="fas fa-user-cog"></i> Account Profile</a>
-            <a (click)="signOut($event)" class="dropdown-item  cursor-pointer"><i style="font-size: medium;" class="fas fa-power-off"></i> Sign Out</a>
+            @if (isCompanionApp) {
+              <span class="dropdown-item text-muted">Disconnect this phone from the app’s sync menu.</span>
+            } @else {
+              <a (click)="signOut($event)" class="dropdown-item  cursor-pointer"><i style="font-size: medium;" class="fas fa-power-off"></i> Sign Out</a>
+            }
           </div><!-- dropdown-menu -->
         </div>
       </div><!-- az-header-right -->
