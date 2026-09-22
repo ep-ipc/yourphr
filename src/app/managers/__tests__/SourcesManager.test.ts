@@ -15,6 +15,7 @@ import { BaseSourceClientProvider, NullSourceClientProvider, type AuthorizationR
 import type { ConnectedSource } from '../../providers/BaseSourcesProvider.js';
 import type { RecordsWriter } from '../../providers/BaseRecordsProvider.js';
 import { ConfigurationManager } from '../../../framework/ConfigurationManager.js';
+import { FhirHttpError } from '../../../sync/index.js';
 import { PolicyManager } from '../../../framework/managers/PolicyManager.js';
 import { FakeConfigProvider } from '../../../framework/providers/__tests__/FakeConfigProvider.js';
 
@@ -25,6 +26,8 @@ class ScriptedClient extends BaseSourceClientProvider {
   fetches: string[] = [];
   failRefresh = false;
   failFetch = false;
+  /** Per-type failures, as a real server gives them (yourphr#753). */
+  failTypes = new Map<string, Error>();
   perType = 2;
   async beginAuthorization(): Promise<AuthorizationStart> { throw new Error('not in this spec'); }
   async completeAuthorization(): Promise<AuthorizationResult> { throw new Error('not in this spec'); }
@@ -36,6 +39,8 @@ class ScriptedClient extends BaseSourceClientProvider {
   async fetchPages(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter): Promise<FetchReport> {
     this.fetches.push(`${source.id}:${resourceType}:${accessToken}`);
     if (this.failFetch) throw new Error('FHIR HTTP 500');
+    const refusal = this.failTypes.get(resourceType);
+    if (refusal) throw refusal;
     let created = 0;
     let updated = 0;
     for (let i = 1; i <= this.perType; i++) {
@@ -231,7 +236,47 @@ describe('SourcesManager — the pass (what src/worker was)', () => {
     expect(await sources.pass(NOW)).toMatchObject({ synced: 0, failed: 2 });
     client.failFetch = false;
     expect(await sources.pass(NOW + 1)).toMatchObject({ synced: 2, failed: 0 });
-    expect((await jobs.history(2)).map((j) => [j.outcome, j.error])).toEqual([['failure', 'FHIR HTTP 500'], ['success', '']]);
+    expect((await jobs.history(2)).map((j) => [j.outcome, j.error])).toEqual([['failure', 'skipped 2 of 2 types: Condition: FHIR HTTP 500; Observation: FHIR HTTP 500'], ['success', '']]);
+  });
+
+  // yourphr#753: Epic refuses some types routinely (403 not granted, 400 needs a category). One
+  // refusal used to abandon every later type and import nothing.
+  it('a type the server refuses is skipped and named; the other types still import (Go parity)', async () => {
+    const s = await sources.add(alice, newSource('alice', { resourceTypes: ['Patient', 'Condition', 'Observation', 'AdverseEvent'] }));
+    client.failTypes.set('Observation', new FhirHttpError(400, 'HTTP 400 fetching …/Observation?patient=p-alice: this resource requires a category for searching'));
+    client.failTypes.set('AdverseEvent', new FhirHttpError(403, 'HTTP 403 fetching …/AdverseEvent?patient=p-alice'));
+    expect(await sources.pass(NOW)).toMatchObject({ synced: 1, failed: 0 });
+    const job = await jobs.latest(s.id);
+    expect(job).toMatchObject({ outcome: 'success', received: 4, created: 4 });
+    expect(job?.error).toMatch(/^skipped 2 of 4 types: Observation: HTTP 400 .*category.*; AdverseEvent: HTTP 403/);
+    expect(await records.countsByType(alice)).toEqual(expect.arrayContaining([{ resource_type: 'Patient', count: 2 }, { resource_type: 'Condition', count: 2 }]));
+    expect((await sources.owned(alice, s.id))?.lastSyncAt).toBe(NOW);
+    expect(lines.some((l) => l.startsWith(`sync: source ${s.id} (alice's clinic): success, 4 received (4 new, 0 updated) — skipped 2 of 4 types`))).toBe(true);
+  });
+
+  it('a 401 ends the sync: the token itself was refused, so every later type would be too', async () => {
+    const s = await sources.add(alice, newSource('alice', { resourceTypes: ['Patient', 'Condition', 'Observation'] }));
+    client.failTypes.set('Condition', new FhirHttpError(401, 'HTTP 401 fetching …/Condition?patient=p-alice'));
+    expect(await sources.pass(NOW)).toMatchObject({ synced: 0, failed: 1 });
+    expect(client.fetches).toEqual(['1:Patient:tok', '1:Condition:tok']); // Observation never attempted
+    const job = await jobs.latest(s.id);
+    expect(job).toMatchObject({ outcome: 'failure', received: 2 });
+    expect(job?.error).toContain('reconnect the source');
+    expect((await sources.owned(alice, s.id))?.lastSyncAt).toBe(0);
+  });
+
+  it('a connected source whose scopes name no type is a failure that says why, not a silent success with nothing', async () => {
+    const s = await sources.add(alice, newSource('alice', { resourceTypes: [] }));
+    expect(await sources.pass(NOW)).toMatchObject({ synced: 0, failed: 1 });
+    expect(client.fetches).toEqual([]);
+    expect((await jobs.latest(s.id))?.error).toContain('scopes name no patient/<Type> read scope');
+    expect(lines.some((l) => l.startsWith(`sync: source ${s.id}`) && l.includes('failure'))).toBe(true);
+  });
+
+  it('every sync writes one log line, success included', async () => {
+    const s = await sources.add(alice, newSource('alice'));
+    await sources.pass(NOW);
+    expect(lines).toContain(`sync: source ${s.id} (alice's clinic): success, 4 received (4 new, 0 updated)`);
   });
 
   it('the worker acts for each owner: records land under the source\'s owner, never anyone else', async () => {
@@ -258,7 +303,7 @@ describe('SourcesManager — sync now, disconnect, remove, export', () => {
   it('a failed sync now is an error the route can say, and the completion event still fires', async () => {
     await sources.add(alice, newSource('alice'));
     client.failFetch = true;
-    await expect(sources.syncNow(alice, 'source-1', NOW)).rejects.toMatchObject({ status: 502, message: 'FHIR HTTP 500' });
+    await expect(sources.syncNow(alice, 'source-1', NOW)).rejects.toMatchObject({ status: 502, message: expect.stringContaining('Condition: FHIR HTTP 500') });
     expect(seen.map((e) => e.event_type)).toEqual(['source_sync', 'source_complete']);
   });
 
@@ -343,7 +388,7 @@ describe('SourcesManager — the operator and the migration tool', () => {
     expect(metrics).toMatchObject({ scrape_enabled: false, process: { jobs_total: { 'success|ehr|sandbox': 1, 'success|unknown|unknown': 1, 'failed|ehr|sandbox': 1, 'failed|unknown|unknown': 1 }, duration_count: 4 } });
     const recent = metrics['recent_jobs'] as { id: string; job_status: string }[];
     expect(recent.map((j) => j.id)).toEqual(['4', '3', '2', '1']);
-    expect(recent[0]).toMatchObject({ job_status: 'STATUS_FAILED', summary: { error_message: 'FHIR HTTP 500' } });
+    expect(recent[0]).toMatchObject({ job_status: 'STATUS_FAILED', summary: { error_message: expect.stringContaining('FHIR HTTP 500') } });
   });
 
   it('legacy import is the migration principal\'s alone, one-way, keyed by the legacy id, reporting what needs a reconnect', async () => {

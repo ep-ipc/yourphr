@@ -1,7 +1,7 @@
 /** The SMART on FHIR source client (yourphr#612, #613) over src/smart (authorize, exchange, refresh) and src/sync (paging). */
 import { randomUUID } from 'node:crypto';
 import { SmartClient, generateVerifier, type Endpoints } from '../../smart/index.js';
-import { syncFrom } from '../../sync/index.js';
+import { syncFrom, syncResource } from '../../sync/index.js';
 import { BaseSourceClientProvider, SourceClientError, type AuthorizationResult, type AuthorizationStart, type FetchReport, type RefreshedTokens, type SmartApp } from './BaseSourceClientProvider.js';
 import type { ConnectedSource } from './BaseSourcesProvider.js';
 import type { RecordsWriter } from './BaseRecordsProvider.js';
@@ -64,7 +64,12 @@ export class SmartSourceClientProvider extends BaseSourceClientProvider {
   }
 
   async fetchPages(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport> {
-    const r = await syncFrom(`${source.fhirBaseUrl}/${resourceType}?patient=${source.patient}&_count=100`, { writer, accessToken, maxPages, allowInternal: this.options.allowInternal });
+    const patient = encodeURIComponent(source.patient);
+    // Patient is READ by id, never searched: `Patient?patient=` names a parameter Patient does not
+    // have, and Epic refuses it (yourphr#753; Go read it by id too).
+    const r = resourceType === 'Patient'
+      ? await syncResource(`${source.fhirBaseUrl}/Patient/${patient}`, { writer, accessToken, allowInternal: this.options.allowInternal })
+      : await syncFrom(`${source.fhirBaseUrl}/${resourceType}?patient=${patient}&_count=100`, { writer, accessToken, maxPages, allowInternal: this.options.allowInternal });
     return { received: r.received, created: r.created, updated: r.updated };
   }
 }

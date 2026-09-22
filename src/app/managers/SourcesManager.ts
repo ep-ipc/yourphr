@@ -31,7 +31,7 @@ import type { BaseSourceClientProvider } from '../providers/BaseSourceClientProv
 import type { BaseDocumentConverterProvider, ConverterStatus } from '../providers/BaseDocumentConverterProvider.js';
 import type { EventBus } from '../../events/index.js';
 import { providerRequiresLegalConsent } from '../../account/index.js';
-import { emptySyncReport, storeEntries } from '../../sync/index.js';
+import { FhirHttpError, emptySyncReport, storeEntries } from '../../sync/index.js';
 import { UploadFormatError, parseFhirUpload, patientOf } from '../../upload/index.js';
 
 declare module '../../framework/Engine.js' {
@@ -521,18 +521,40 @@ export class SourcesManager extends BaseManager {
       let created = 0;
       let updated = 0;
       let job: JobRecord;
-      try {
-        for (const resourceType of source.resourceTypes) {
+      // Each type is fetched on its own (yourphr#753, Go parity). A real server refuses some types
+      // routinely — Epic answers 403 for a type the app was not granted and 400 for a search it
+      // will not run without a category — and one refusal used to abandon every type after it,
+      // importing nothing. Now a refused type is skipped and NAMED in the job; only a 401 ends the
+      // sync, because every later request would carry the same refused token.
+      const skipped: string[] = [];
+      let fatal = '';
+      let succeeded = 0;
+      if (source.resourceTypes.length === 0 && source.platformType !== MANUAL_PLATFORM_TYPE) {
+        fatal = 'nothing to sync: the catalog entry\'s scopes name no patient/<Type> read scope (e.g. patient/*.read)';
+      }
+      for (const resourceType of fatal ? [] : source.resourceTypes) {
+        try {
           const r = await this.client.fetchPages(source, resourceType, accessToken, writer, this.options.maxPages);
           received += r.received;
           created += r.created;
           updated += r.updated;
+          succeeded++;
+        } catch (err) {
+          const message = `${resourceType}: ${(err as Error).message}`;
+          if (err instanceof FhirHttpError && err.status === 401) {
+            fatal = `${message} — the provider refused the access token; reconnect the source`;
+            break;
+          }
+          skipped.push(message);
         }
-        await this.provider.markSynced(source.id, now);
-        job = { sourceId: source.id, outcome: 'success', received, created, updated, error: '', startedAt: now, finishedAt: now };
-      } catch (err) {
-        job = { sourceId: source.id, outcome: 'failure', received, created, updated, error: (err as Error).message.slice(0, 512), startedAt: now, finishedAt: now };
       }
+      const ok = !fatal && (succeeded > 0 || source.resourceTypes.length === 0);
+      const detail = [fatal, ...(skipped.length ? [`skipped ${skipped.length} of ${source.resourceTypes.length} types: ${skipped.join('; ')}`] : [])].filter(Boolean).join('; ');
+      if (ok) await this.provider.markSynced(source.id, now);
+      job = { sourceId: source.id, outcome: ok ? 'success' : 'failure', received, created, updated, error: detail.slice(0, 512), startedAt: now, finishedAt: now };
+      // One line per sync, success or not: the job row alone was the only trace, and the container
+      // log said nothing when an import came back empty.
+      this.log(`sync: source ${source.id} (${source.display}): ${job.outcome}, ${received} received (${created} new, ${updated} updated)${detail ? ` — ${detail.slice(0, 1024)}` : ''}`);
       return await this.engine.managers.jobs.record(ctx, job);
     } finally {
       this.options.events?.publish(source.userId, { event_type: 'source_complete', source_id: publicId });

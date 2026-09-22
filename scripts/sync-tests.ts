@@ -16,7 +16,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Bundle } from '@medplum/fhirtypes';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
-import { syncFrom, nextPageUrl } from '../src/sync/index.js';
+import { FhirHttpError, repositoryWriter, syncFrom, nextPageUrl } from '../src/sync/index.js';
+import { SmartSourceClientProvider } from '../src/app/providers/SmartSourceClientProvider.js';
+import type { ConnectedSource } from '../src/app/providers/BaseSourcesProvider.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -229,6 +231,38 @@ async function main(): Promise<void> {
 
   // Attribution must not leak past the run that set it.
   check('the source is not left attributed after a sync', repo.sourceId === undefined, String(repo.sourceId));
+
+  // --- an Epic-shaped server (yourphr#753) ---
+  // Epic refuses `Patient?patient=` (Patient has no such search parameter) and an Observation
+  // search without a category. The client must READ the patient by id, and a per-type refusal must
+  // surface as a FhirHttpError carrying its status, so the manager can skip that type alone.
+  const epicSeen: string[] = [];
+  const epic = createServer((req, res) => {
+    epicSeen.push(req.url ?? '');
+    const json = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/fhir+json' }); res.end(JSON.stringify(body)); };
+    const outcome = (text: string) => ({ resourceType: 'OperationOutcome', issue: [{ severity: 'error', code: 'invalid', diagnostics: text }] });
+    const url = req.url ?? '';
+    if (url.startsWith('/Patient?')) return json(400, outcome('patient is not a valid search parameter for Patient'));
+    if (url === '/Patient/epic-pt%2B1') return json(200, { resourceType: 'Patient', id: 'epic-pt+1', name: [{ family: 'Lin' }] });
+    if (url.startsWith('/Condition?patient=epic-pt%2B1&')) return json(200, { resourceType: 'Bundle', type: 'searchset', entry: [{ resource: { ...condition('epic-c1', 'Asthma'), subject: { reference: 'Patient/epic-pt+1' } } }] });
+    if (url.startsWith('/Observation?')) return json(400, outcome('This resource requires a category for searching'));
+    json(404, outcome('not found'));
+  });
+  await new Promise<void>((resolve) => epic.listen(0, '127.0.0.1', resolve));
+  const epicBase = `http://127.0.0.1:${(epic.address() as AddressInfo).port}`;
+  const epicClient = new SmartSourceClientProvider({ allowInternal: true });
+  const epicSource = { id: 9, userId: 'default', display: 'Epic sandbox', fhirBaseUrl: epicBase, tokenUrl: '', clientId: 'cid', patient: 'epic-pt+1', resourceTypes: ['Patient', 'Condition', 'Observation'], accessToken: 'tok', refreshToken: '', expiresAt: 0, lastSyncAt: 0, platformType: 'ehr', environment: 'sandbox' } as unknown as ConnectedSource;
+  const epicWriter = repositoryWriter(repo, 'source-9');
+
+  const epicPatient = await epicClient.fetchPages(epicSource, 'Patient', 'tok', epicWriter, 5);
+  check('Epic: the patient is READ by id, never searched with ?patient=', epicPatient.created === 1 && epicSeen.includes('/Patient/epic-pt%2B1') && !epicSeen.some((u) => u.startsWith('/Patient?')), epicSeen.join(' '));
+  const epicConditions = await epicClient.fetchPages(epicSource, 'Condition', 'tok', epicWriter, 5);
+  check('Epic: the patient id is URL-encoded in a search', epicConditions.created === 1 && epicSeen.some((u) => u.startsWith('/Condition?patient=epic-pt%2B1&')));
+  let refusal: unknown;
+  try { await epicClient.fetchPages(epicSource, 'Observation', 'tok', epicWriter, 5); } catch (err) { refusal = err; }
+  check('Epic: a refused search is a FhirHttpError that carries its status, so only that type is skipped',
+    refusal instanceof FhirHttpError && refusal.status === 400 && refusal.message.includes('requires a category'), String(refusal));
+  epic.close();
 
   repo.db.close();
   rmSync(dir, { recursive: true, force: true });

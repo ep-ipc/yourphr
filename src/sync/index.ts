@@ -56,6 +56,19 @@ export interface SyncReport {
 const DEFAULT_MAX_PAGES = 500;
 
 /**
+ * A FHIR server answered with something other than 200. Carries the status so a caller can tell
+ * the one answer that ends a sync — 401, the token itself refused — from the per-type refusals a
+ * real server gives routinely: Epic answers 403 for a type the app was not granted and 400 for a
+ * search it will not run without a `category` (yourphr#753).
+ */
+export class FhirHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = 'FhirHttpError';
+  }
+}
+
+/**
  * The next page URL, or undefined when the bundle is the last one.
  *
  * A `next` link is a provider-supplied URL that this client will follow while holding an access
@@ -115,7 +128,7 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
           headers: accessToken ? { authorization: `Bearer ${accessToken}` } : {},
         });
       if (response.status !== 200) {
-        throw new Error(`HTTP ${response.status} fetching ${url}: ${response.body.toString('utf8').slice(0, 256)}`);
+        throw new FhirHttpError(response.status, `HTTP ${response.status} fetching ${url}: ${response.body.toString('utf8').slice(0, 256)}`);
       }
 
       let bundle: Bundle;
@@ -136,6 +149,34 @@ export async function syncFrom(startUrl: string, options: SyncOptions): Promise<
     // nothing to restore: the writer carries its own source attribution
   }
 
+  return report;
+}
+
+/**
+ * Reads ONE resource by URL and stores it — the patient, read as `GET Patient/{id}`.
+ *
+ * Searching Patient with `?patient=` asks for a parameter Patient does not have, and Epic refuses
+ * it; that one request used to be the first of every sync and took the whole import down with it
+ * (yourphr#753). Go read the patient by id (v2.10.3 capability_fetch.go, fetchOneResource), and so
+ * does this. A server that answers a read with a Bundle anyway is accepted as one.
+ */
+export async function syncResource(url: string, options: SyncOptions): Promise<SyncReport> {
+  const http = new OutboundHttp({ allowInternal: options.allowInternal });
+  const writer = options.writer ?? repositoryWriter(options.repo!, options.sourceId ?? '');
+  const response = await http.get(url, { headers: options.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {} });
+  if (response.status !== 200) {
+    throw new FhirHttpError(response.status, `HTTP ${response.status} fetching ${url}: ${response.body.toString('utf8').slice(0, 256)}`);
+  }
+  let resource: Resource;
+  try {
+    resource = JSON.parse(response.body.toString('utf8')) as Resource;
+  } catch (err) {
+    throw new Error(`decoding the resource from ${url}: ${(err as Error).message}`);
+  }
+  const report = emptySyncReport();
+  report.pages = 1;
+  const entries = resource.resourceType === 'Bundle' ? ((resource as Bundle).entry ?? []) : [{ resource }];
+  await storeEntries(entries as { resource?: Resource }[], writer, report, new Set());
   return report;
 }
 
