@@ -2,22 +2,9 @@
   <div class="container-fluid px-3 px-lg-4 health-page">
     <div class="az-content-body">
 
-      <div class="d-flex flex-wrap align-items-center gap-3 health-header">
-        <div class="me-auto">
-          <h2 class="health-title mb-1">Health</h2>
-          <p class="health-subtitle mb-0">
-            Vitals and activity from your devices
-            <ng-container *ngIf="lastSyncedAt"> · last synced {{ lastSyncedAt | date:'medium' }}</ng-container>
-            <ng-container *ngIf="!lastSyncedAt && !loading"> · waiting for a companion app to sync</ng-container>
-          </p>
-        </div>
-        <button type="button" class="btn btn-outline-secondary"
-                [disabled]="entries.length === 0"
-                [title]="entries.length === 0 ? 'No health data to summarize' : 'Download a printable summary'"
-                (click)="openVisitSummary()">
-          Prepare visit summary
-        </button>
-      </div>
+      <ng-container *ngIf="loading || errored || entries.length === 0">
+        <ng-container *ngTemplateOutlet="pageHeader"></ng-container>
+      </ng-container>
 
       <app-loading-spinner *ngIf="loading" loadingTitle="Loading your health data..."></app-loading-spinner>
 
@@ -27,23 +14,35 @@
         No health data yet. Readings appear here after a companion app syncs.
       </div>
 
-      <div class="health-layout" *ngIf="!loading && !errored && entries.length > 0">
-        <aside class="health-catalog card">
-          <div class="card-header">Metrics with samples</div>
-          <div class="list-group list-group-flush">
-            <button type="button"
-                    class="list-group-item list-group-item-action health-metric"
-                    *ngFor="let entry of entries"
-                    [class.active]="entry.id === selectedId"
-                    [attr.aria-current]="entry.id === selectedId ? 'true' : null"
-                    (click)="selectMetric(entry.id)">
-              <span class="health-metric-label">{{ entry.def.label }}</span>
-              <span class="health-metric-value">{{ entry.latestLabel }}</span>
-            </button>
+      <div class="health-layout" *ngIf="!loading && !errored && entries.length > 0" [class.show-detail]="narrow && detailOpen">
+        <div class="health-track">
+          <div class="health-slide health-slide-list" [attr.inert]="narrow && detailOpen ? '' : null">
+            <ng-container *ngTemplateOutlet="pageHeader"></ng-container>
+            <aside class="health-catalog card">
+              <div class="card-header">Metrics with samples</div>
+              <div class="list-group list-group-flush">
+                <button type="button"
+                        class="list-group-item list-group-item-action health-metric"
+                        *ngFor="let entry of entries"
+                        [class.active]="!narrow && entry.id === selectedId"
+                        [attr.aria-current]="!narrow && entry.id === selectedId ? 'true' : null"
+                        (click)="selectMetric(entry.id)">
+                  <span class="health-metric-text">
+                    <span class="health-metric-label">{{ entry.def.label }}</span>
+                    <span class="health-metric-value">{{ entry.latestLabel }}</span>
+                  </span>
+                  <i class="fa-solid fa-chevron-right health-metric-chevron" aria-hidden="true"></i>
+                </button>
+              </div>
+            </aside>
           </div>
-        </aside>
 
-        <section class="health-detail card" *ngIf="selected">
+          <div class="health-slide health-slide-detail" [attr.inert]="narrow && !detailOpen ? '' : null">
+            <button type="button" class="health-back" (click)="closeDetail()">
+              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+              Health
+            </button>
+            <section class="health-detail card" *ngIf="selected">
           <div class="card-body">
             <div class="d-flex flex-wrap align-items-end gap-3 mg-b-3">
               <div class="me-auto">
@@ -137,11 +136,32 @@
             </div>
           </div>
         </section>
+          </div>
+        </div>
       </div>
 
     </div>
   </div>
 </div>
+
+<ng-template #pageHeader>
+  <div class="d-flex flex-wrap align-items-center gap-3 health-header">
+    <div class="me-auto">
+      <h2 class="health-title mb-1">Health</h2>
+      <p class="health-subtitle mb-0">
+        Vitals and activity from your devices
+        <ng-container *ngIf="lastSyncedAt"> · last synced {{ lastSyncedAt | date:'medium' }}</ng-container>
+        <ng-container *ngIf="!lastSyncedAt && !loading"> · waiting for a companion app to sync</ng-container>
+      </p>
+    </div>
+    <button type="button" class="btn btn-outline-secondary"
+            [disabled]="entries.length === 0"
+            [title]="entries.length === 0 ? 'No health data to summarize' : 'Download a printable summary'"
+            (click)="openVisitSummary()">
+      Prepare visit summary
+    </button>
+  </div>
+</ng-template>
 
 <ng-template #visitSummaryDialog let-modal>
   <div class="modal-header">

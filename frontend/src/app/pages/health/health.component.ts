@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, OnInit, TemplateRef, ViewChild} from '@angular/core';
+import {ChangeDetectionStrategy, Component, HostListener, NgZone, OnDestroy, OnInit, TemplateRef, ViewChild} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {FormsModule} from '@angular/forms';
 import {forkJoin, Observable, of} from 'rxjs';
@@ -61,6 +61,9 @@ import {
 export type RangePreset = '24h' | '5d' | '30d' | '90d' | 'all';
 export type ViewMode = 'chart' | 'table';
 
+/** Phone portrait and other narrow windows. Wider viewports keep the side-by-side catalog. */
+export const NARROW_HEALTH_QUERY = '(max-width: 768px)';
+
 export const RANGE_MS: Record<Exclude<RangePreset, 'all'>, number> = {
   '24h': 24 * 60 * 60 * 1000,
   '5d': 5 * 24 * 60 * 60 * 1000,
@@ -103,13 +106,25 @@ export interface TableRow {
   styleUrls: ['./health.component.scss'],
   changeDetection: ChangeDetectionStrategy.Eager,
 })
-export class HealthComponent implements OnInit {
+export class HealthComponent implements OnInit, OnDestroy {
   loading = true;
   errored = false;
   detailLoading = false;
 
   entries: CatalogEntry[] = [];
   selectedId = '';
+  /** True when the viewport is at or below the side-by-side breakpoint. */
+  narrow = false;
+  /** True when the narrow menu has slid to a metric. Ignored while the viewport is wide. */
+  detailOpen = false;
+  /** Set only by a tap on the narrow menu, so a later return to portrait restores that metric. */
+  private drilledIn = false;
+  private detailHistory = false;
+  private closingDetail = false;
+  private narrowQuery: MediaQueryList | null = null;
+  private readonly onNarrowMedia = (event: MediaQueryListEvent) => {
+    this.zone.run(() => this.applyNarrow(event.matches));
+  };
   lastSyncedAt: string | null = null;
 
   view: ViewMode = 'chart';
@@ -122,6 +137,8 @@ export class HealthComponent implements OnInit {
     {id: 'all', label: 'All'},
   ];
   windowEnd = new Date();
+  /** Latest moment the time slider may reach. Kept stable during a render so the max binding does not change mid-check. */
+  private sliderNow = this.windowEnd.getTime();
 
   chartType: 'line' | 'bar' = 'line';
   chartData: ChartData = {labels: [], datasets: []};
@@ -153,17 +170,25 @@ export class HealthComponent implements OnInit {
   summaryError = '';
   private summaryModal: NgbModalRef | null = null;
 
-  constructor(private fastenApi: FastenApiService, private modalService: NgbModal) {}
+  constructor(private fastenApi: FastenApiService, private modalService: NgbModal, private zone: NgZone) {}
+
+  ngOnDestroy(): void {
+    this.narrowQuery?.removeEventListener('change', this.onNarrowMedia);
+  }
 
   ngOnInit(): void {
+    this.narrowQuery = window.matchMedia(NARROW_HEALTH_QUERY);
+    this.narrow = this.narrowQuery.matches;
+    this.narrowQuery.addEventListener('change', this.onNarrowMedia);
     this.weightUnit = parseStoredWeightUnit(safeLocalStorageGet(WEIGHT_UNIT_STORAGE_KEY));
     this.fastenApi.getHealthMetrics().subscribe({
       next: (catalog) => {
         this.entries = groupSummaries(catalog.metrics || []);
         this.applyWeightLabels();
         this.lastSyncedAt = catalog.last_synced_at || null;
-        this.selectedId = this.entries[0]?.id || '';
         this.loading = false;
+        if (this.narrow) return;
+        this.selectedId = this.entries[0]?.id || '';
         if (this.selectedId) this.loadDetail();
       },
       error: () => {
@@ -210,7 +235,7 @@ export class HealthComponent implements OnInit {
     if (this.range === 'all') return 0;
     const duration = RANGE_MS[this.range];
     const earliest = this.selected ? earliestOf(this.selected) : null;
-    const latestStart = Date.now() - duration;
+    const latestStart = this.sliderNow - duration;
     if (earliest && earliest.getTime() > latestStart) return earliest.getTime();
     return latestStart;
   }
@@ -234,12 +259,64 @@ export class HealthComponent implements OnInit {
   }
 
   selectMetric(id: string): void {
-    if (id === this.selectedId) return;
-    this.selectedId = id;
-    this.tableOffset = 0;
-    const entry = this.entries.find((e) => e.id === id);
-    if (entry?.def.viz === 'table') this.view = 'table';
-    this.loadDetail();
+    const same = id === this.selectedId;
+    if (!same) {
+      this.selectedId = id;
+      this.tableOffset = 0;
+      const entry = this.entries.find((e) => e.id === id);
+      if (entry?.def.viz === 'table') this.view = 'table';
+      this.loadDetail();
+    } else if (!this.narrow || this.detailOpen) {
+      return;
+    }
+    if (!this.narrow) return;
+    this.openNarrowDetail();
+  }
+
+  closeDetail(): void {
+    if (this.closingDetail || !this.detailOpen) return;
+    if (this.detailHistory) {
+      this.closingDetail = true;
+      history.back();
+      return;
+    }
+    this.finishCloseDetail();
+  }
+
+  @HostListener('window:popstate')
+  onPopState(): void {
+    if (!this.detailHistory && !this.closingDetail) return;
+    this.detailHistory = false;
+    this.closingDetail = false;
+    this.finishCloseDetail();
+  }
+
+  private openNarrowDetail(): void {
+    this.drilledIn = true;
+    this.detailOpen = true;
+    if (this.detailHistory) return;
+    // Same URL, so the companion WebView edge swipe returns to the menu instead of leaving Health.
+    history.pushState({healthDetail: true}, '');
+    this.detailHistory = true;
+  }
+
+  private finishCloseDetail(): void {
+    this.detailOpen = false;
+    this.drilledIn = false;
+  }
+
+  private applyNarrow(matches: boolean): void {
+    const wasNarrow = this.narrow;
+    this.narrow = matches;
+    if (!matches) {
+      if (!this.selectedId && this.entries.length && !this.loading) {
+        this.selectedId = this.entries[0].id;
+        this.loadDetail();
+      }
+      return;
+    }
+    if (wasNarrow) return;
+    this.detailOpen = this.drilledIn;
   }
 
   setView(view: ViewMode): void {
@@ -252,6 +329,7 @@ export class HealthComponent implements OnInit {
   setRange(range: RangePreset): void {
     this.range = range;
     this.windowEnd = new Date();
+    this.sliderNow = this.windowEnd.getTime();
     this.tableOffset = 0;
     this.loadDetail();
   }
@@ -261,6 +339,7 @@ export class HealthComponent implements OnInit {
     const duration = RANGE_MS[this.range];
     const next = new Date(this.windowEnd.getTime() + direction * duration);
     const now = new Date();
+    this.sliderNow = now.getTime();
     if (direction > 0 && next.getTime() > now.getTime()) {
       this.windowEnd = now;
     } else {
@@ -274,6 +353,7 @@ export class HealthComponent implements OnInit {
     if (this.range === 'all') return;
     const start = Number(raw);
     if (!Number.isFinite(start)) return;
+    this.sliderNow = Date.now();
     this.windowEnd = new Date(start + RANGE_MS[this.range]);
     this.tableOffset = 0;
     this.loadDetail();

@@ -1,4 +1,5 @@
 import {ComponentFixture, fakeAsync, TestBed, tick} from '@angular/core/testing';
+import {provideZoneChangeDetection} from '@angular/core';
 import {of, throwError} from 'rxjs';
 import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {buildTimeTicks, HealthComponent, RANGE_MS, sleepAsleepTotal, timeAxisBounds, toDayPoints, toTimePoints, utcDayMs} from './health.component';
@@ -9,6 +10,7 @@ describe('HealthComponent', () => {
   let component: HealthComponent;
   let fixture: ComponentFixture<HealthComponent>;
   let mockApi: jasmine.SpyObj<FastenApiService>;
+  let viewport: HealthViewport;
 
   const hr: HealthMetricSummary = {
     code: '8867-4',
@@ -37,6 +39,7 @@ describe('HealthComponent', () => {
 
   beforeEach(async () => {
     localStorage.removeItem('yourphr.health.weightUnit');
+    viewport = installHealthViewport(false);
     mockApi = jasmine.createSpyObj('FastenApiService', ['getHealthMetrics', 'getHealthSeries', 'listHealthSamples', 'getResources']);
     mockApi.getHealthMetrics.and.returnValue(of({
       last_synced_at: '2026-08-24T12:10:00Z',
@@ -73,7 +76,10 @@ describe('HealthComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [HealthComponent],
-      providers: [{provide: FastenApiService, useValue: mockApi}],
+      providers: [
+        provideZoneChangeDetection(),
+        {provide: FastenApiService, useValue: mockApi},
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(HealthComponent);
@@ -87,11 +93,104 @@ describe('HealthComponent', () => {
     expect(component.range).toBe('5d');
     expect(component.view).toBe('chart');
     expect(component.hasChartData).toBeTrue();
+    expect(component.narrow).toBeFalse();
+    expect(component.detailOpen).toBeFalse();
     expect(mockApi.getHealthSeries).toHaveBeenCalled();
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('Heart Rate');
     expect(el.textContent).toContain('Blood Pressure');
     expect(el.textContent).toContain('118/76 mmHg');
+  });
+
+  it('keeps wide selection in place without a history entry', () => {
+    spyOn(history, 'pushState');
+    component.selectMetric('blood_pressure');
+    expect(component.selectedId).toBe('blood_pressure');
+    expect(component.detailOpen).toBeFalse();
+    expect(history.pushState).not.toHaveBeenCalled();
+    expect(layoutOf(fixture).classList.contains('show-detail')).toBeFalse();
+  });
+
+  it('shows only the metric menu on a narrow screen until a row is tapped', () => {
+    remountNarrow();
+    expect(component.narrow).toBeTrue();
+    expect(component.selectedId).toBe('');
+    expect(component.detailOpen).toBeFalse();
+    expect(mockApi.getHealthSeries).not.toHaveBeenCalled();
+    expect(layoutOf(fixture).classList.contains('show-detail')).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.health-metric-chevron')).toBeTruthy();
+    expect(fixture.nativeElement.textContent).toContain('Heart Rate');
+    expect(fixture.nativeElement.querySelector('.health-detail')).toBeNull();
+  });
+
+  it('slides to a metric and returns to the menu on back, including the same metric', () => {
+    remountNarrow();
+    spyOn(history, 'pushState').and.stub();
+    spyOn(history, 'back').and.callFake(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    component.selectMetric('heart_rate');
+    fixture.detectChanges();
+    expect(component.detailOpen).toBeTrue();
+    expect(component.selectedId).toBe('heart_rate');
+    expect(history.pushState).toHaveBeenCalledTimes(1);
+    expect(mockApi.getHealthSeries).toHaveBeenCalled();
+    expect(layoutOf(fixture).classList.contains('show-detail')).toBeTrue();
+    expect(fixture.nativeElement.querySelector('.health-back')).toBeTruthy();
+
+    const seriesCalls = mockApi.getHealthSeries.calls.count();
+    component.closeDetail();
+    fixture.detectChanges();
+    expect(history.back).toHaveBeenCalled();
+    expect(component.detailOpen).toBeFalse();
+    expect(layoutOf(fixture).classList.contains('show-detail')).toBeFalse();
+
+    component.selectMetric('heart_rate');
+    fixture.detectChanges();
+    expect(component.detailOpen).toBeTrue();
+    expect(history.pushState).toHaveBeenCalledTimes(2);
+    expect(mockApi.getHealthSeries.calls.count()).toBe(seriesCalls);
+  });
+
+  it('returns to the menu when a wide layout becomes narrow, and restores a drilled-in metric', () => {
+    viewport.emit(true);
+    fixture.detectChanges();
+    expect(component.narrow).toBeTrue();
+    expect(component.detailOpen).toBeFalse();
+    expect(component.selectedId).toBe('heart_rate');
+
+    viewport.emit(false);
+    fixture.detectChanges();
+    expect(component.narrow).toBeFalse();
+    expect(layoutOf(fixture).classList.contains('show-detail')).toBeFalse();
+
+    remountNarrow();
+    spyOn(history, 'pushState').and.stub();
+    component.selectMetric('blood_pressure');
+    viewport.emit(false);
+    fixture.detectChanges();
+    expect(component.narrow).toBeFalse();
+    expect(component.selectedId).toBe('blood_pressure');
+    expect(layoutOf(fixture).classList.contains('show-detail')).toBeFalse();
+
+    viewport.emit(true);
+    fixture.detectChanges();
+    expect(component.narrow).toBeTrue();
+    expect(component.detailOpen).toBeTrue();
+    expect(component.selectedId).toBe('blood_pressure');
+    expect(layoutOf(fixture).classList.contains('show-detail')).toBeTrue();
+  });
+
+  it('charts the first metric when a narrow menu is widened before a row is tapped', () => {
+    remountNarrow();
+    expect(mockApi.getHealthSeries).not.toHaveBeenCalled();
+    viewport.emit(false);
+    fixture.detectChanges();
+    expect(component.narrow).toBeFalse();
+    expect(component.selectedId).toBe('heart_rate');
+    expect(mockApi.getHealthSeries).toHaveBeenCalled();
+    expect(component.detailOpen).toBeFalse();
   });
 
   it('enables Prepare visit summary when metrics exist', () => {
@@ -110,7 +209,7 @@ describe('HealthComponent', () => {
   });
 
   it('opens the visit summary with all metrics checked and a 30-day range', () => {
-    const modal = TestBed.inject(NgbModal);
+    const modal = fixture.componentRef.injector.get(NgbModal);
     spyOn(modal, 'open');
     component.openVisitSummary();
     expect(modal.open).toHaveBeenCalled();
@@ -385,6 +484,15 @@ describe('HealthComponent', () => {
     expect(data[1].x).toBe(utcDayMs('2026-08-25'));
     expect(data[1].x - data[0].x).toBe(4 * 24 * 60 * 60 * 1000);
   });
+
+  function remountNarrow(): void {
+    fixture.destroy();
+    viewport.setMatches(true);
+    mockApi.getHealthSeries.calls.reset();
+    fixture = TestBed.createComponent(HealthComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
 });
 
 describe('health chart time helpers', () => {
@@ -440,6 +548,41 @@ describe('health chart time helpers', () => {
     }])).toBeCloseTo(7.5, 5);
   });
 });
+
+interface HealthViewport {
+  setMatches(matches: boolean): void
+  emit(matches: boolean): void
+}
+
+function installHealthViewport(matches: boolean): HealthViewport {
+  let current = matches;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const query = {
+    get matches() { return current; },
+    set matches(value: boolean) { current = value; },
+    media: '(max-width: 768px)',
+    addEventListener: (_type: string, cb: (event: MediaQueryListEvent) => void) => { listeners.add(cb); },
+    removeEventListener: (_type: string, cb: (event: MediaQueryListEvent) => void) => { listeners.delete(cb); },
+    dispatchEvent: () => true,
+    onchange: null,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+  };
+  spyOn(window, 'matchMedia').and.returnValue(query as unknown as MediaQueryList);
+  return {
+    setMatches(next: boolean) { current = next; },
+    emit(next: boolean) {
+      current = next;
+      for (const cb of listeners) cb({matches: next, media: query.media} as MediaQueryListEvent);
+    },
+  };
+}
+
+function layoutOf(fixture: ComponentFixture<HealthComponent>): HTMLElement {
+  const layout = (fixture.nativeElement as HTMLElement).querySelector('.health-layout');
+  if (!layout) throw new Error('missing health layout');
+  return layout as HTMLElement;
+}
 
 function prepareButton(fixture: ComponentFixture<HealthComponent>): HTMLButtonElement {
   const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')) as HTMLButtonElement[];
