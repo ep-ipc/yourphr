@@ -5,6 +5,7 @@
       <a href="#" id="azMenuShow" (click)="toggleHeaderMenu($event)" class="az-header-menu-icon d-lg-none"><span></span></a>
     </div><!-- az-header-left -->
     <div class="az-header-menu">
+      <div class="az-header-menu-scroll">
       <div class="az-header-menu-header">
         <a routerLink="/" class="az-logo"><span></span> YourPHR</a>
         <a href="#" (click)="toggleHeaderMenu($event)" class="btn-close" aria-label="Close"></a>
@@ -42,6 +43,7 @@
         </li>
 
       </ul>
+      </div><!-- az-header-menu-scroll -->
     </div><!-- az-header-menu -->
     <div class="az-header-right">
       <a style="display:none;" ngbTooltip="not yet implemented" class="az-header-search-link"><i class="fas fa-search"></i></a>
