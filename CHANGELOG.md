@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.7.2](https://github.com/jwilleke/yourphr/compare/v3.7.1...v3.7.2) (2026-09-26)
+
+__Opening the admin pages no longer stops the instance.__ Every visit to Admin froze the whole server for minutes, for everyone in the household, and on a large database it got the server restarted. The rest of this release is buttons that looked like they worked and did not.
+
+### Bug Fixes
+
+- __Opening Admin no longer freezes the instance__ ([#780](https://github.com/jwilleke/yourphr/issues/780)): the Database card ran a full integrity scan of the records file on every page load. On an 8.4 GB database that took minutes, the server answered nothing else in the meantime, and every button on the page appeared dead. The card now says "Not checked" and explains why. It no longer claims an OK it did not verify.
+- __Deleting a practitioner deletes it__ ([#771](https://github.com/jwilleke/yourphr/issues/771)): the Address book's delete button called a route nothing answered, and said nothing. A record you entered yourself can now be deleted. A record a provider sent cannot, and you are told so.
+- __A failed provider connection is written down where you will see it__ ([#685](https://github.com/jwilleke/yourphr/issues/685)): connection errors were posted to a route that did not exist, so a connection that failed left no trace in Background jobs.
+- __"Save Report" and "Export to PDF" produce the file they name__ ([#687](https://github.com/jwilleke/yourphr/issues/687)): both wrote the server's raw JSON reply into a file called `.html` or `.pdf`. "Send to Email" called a route that did not exist; email is now yours to send from your own mail program.
+- __The review queue says "Allergy", not "AllergyIntolerance"__ ([#262](https://github.com/jwilleke/yourphr/issues/262)): the one screen still printing the raw FHIR type now uses the same plain names as the rest of the app.
+- __Settings offers the screen that exists, not one for an app that does not__ ([#719](https://github.com/jwilleke/yourphr/issues/719)): the pairing screen for a companion mobile app (no such app exists) is replaced by the screen for minting a key an AI client of your choice can use to read the record categories you tick, until it expires.
+- __The visit wizard is gone__ ([#684](https://github.com/jwilleke/yourphr/issues/684), [#773](https://github.com/jwilleke/yourphr/issues/773)): it could not save a visit or link records to one, so its entry points were removed and then its code. Adding a measurement, allergy or medication at Add record is unaffected.
+- __An icon that would have silently disappeared under Font Awesome 7__ now uses the current class name.
+
+### Internal
+
+- Sync and the summary builder reach stored records only through the records manager, and neither is exempt from the store-boundary check any more ([#608](https://github.com/jwilleke/yourphr/issues/608)).
+- Leftover frontend code for connection and theme features the server never served is removed.
+- Dependency updates: ESLint 10 ([#767](https://github.com/jwilleke/yourphr/issues/767)), typescript-eslint, Font Awesome, Karma reporter.
+
 ## [3.7.1](https://github.com/jwilleke/yourphr/compare/v3.7.0...v3.7.1) (2026-09-24)
 
 ### Bug Fixes
