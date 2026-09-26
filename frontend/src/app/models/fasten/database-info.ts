@@ -26,7 +26,9 @@ export interface DatabaseInfo {
   size_bytes: number;
   users: number;
   sources: number;
-  integrity_ok: boolean;
+  // null = not checked on this request. The check reads the whole records file, so it is not run on
+  // page load; see the note in src/server.ts.
+  integrity_ok: boolean | null;
   backup_destination: string;     // resolved folder backups are written to
   backups: BackupFile[];          // backups present there, newest first
   schedule: BackupSettings;       // settable auto-backup settings

@@ -619,8 +619,10 @@ async function main(): Promise<void> {
       && metrics.body.data['recent_jobs'][0]['job_status'] === 'STATUS_DONE' && typeof metrics.body.data['recent_jobs'][0]['summary']['total_resources'] === 'number');
 
   const dbInfo = await adminJson('/api/secure/admin/database');
-  check('the Database card: both files, counts, integrity, encryption, destination, schedule, health — Go\'s shape',
-    dbInfo.body.data['encryption_enabled'] === true && dbInfo.body.data['integrity_ok'] === true && dbInfo.body.data['users'] >= 3 && dbInfo.body.data['sources'] >= 1
+  // integrity_ok is null: the records check reads the whole file synchronously and froze a live
+  // instance on every admin page load, so the card no longer runs it.
+  check('the Database card: both files, counts, encryption, destination, schedule, health, and no integrity scan on load',
+    dbInfo.body.data['encryption_enabled'] === true && dbInfo.body.data['integrity_ok'] === null && dbInfo.body.data['users'] >= 3 && dbInfo.body.data['sources'] >= 1
       && dbInfo.body.data['size_bytes'] > 0 && dbInfo.body.data['backups_unavailable'] === '' && dbInfo.body.data['schedule']['days'] === 'daily' && dbInfo.body.data['backup_health']['schedule_enabled'] === false
       && Array.isArray(dbInfo.body.data['backups']));
   const took = await adminJson('/api/secure/admin/database/backup', { method: 'POST' });

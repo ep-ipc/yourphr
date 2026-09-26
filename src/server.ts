@@ -1173,7 +1173,12 @@ export function createYourPhrServer(options: ServerOptions) {
             size_bytes: app.sizeBytes + phi.sizeBytes,
             users: await engine.managers.users.count(ctx),
             sources: engine.has('sources') ? await engine.managers.sources.count() : 0,
-            integrity_ok: (await engine.managers.database.integrityOk()) && (await engine.managers.records.integrityOk()),
+            // Not checked here, deliberately. quick_check reads every page of the records file, and
+            // better-sqlite3 runs it synchronously: on a live 8.4 GB database it froze the whole server
+            // for minutes on every admin page load, long enough to fail the liveness probe and get the
+            // pod killed (2026-09-26). The app database is still checked at boot (DatabaseManager). A
+            // records check needs to run off the request path; until then the card says so, not 'OK'.
+            integrity_ok: null,
             backup_destination: backups?.destination() ?? '',
             backups: backups ? (await backups.list(ctx)).map((b) => ({name: b.name, size_bytes: b.sizeBytes, modified: b.modified})) : [],
             schedule: backups?.schedule(),
