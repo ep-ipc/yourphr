@@ -285,7 +285,7 @@ describe('SourcesManager — the pass (what src/worker was)', () => {
     expect(job?.error).toMatch(/^skipped 2 of 4 types: Observation: HTTP 400 .*category.*; AdverseEvent: HTTP 403/);
     expect(await records.countsByType(alice)).toEqual(expect.arrayContaining([{ resource_type: 'Patient', count: 2 }, { resource_type: 'Condition', count: 2 }]));
     expect((await sources.owned(alice, s.id))?.lastSyncAt).toBe(NOW);
-    expect(lines.some((l) => l.startsWith(`sync: source ${s.id} (alice's clinic): success, 4 received (4 new, 0 updated) — skipped 2 of 4 types`))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`sync: source ${s.id} (alice's clinic): success, 4 received (4 new, 0 updated, 0 unchanged) — skipped 2 of 4 types`))).toBe(true);
   });
 
   it('a 401 ends the sync: the token itself was refused, so every later type would be too', async () => {
@@ -311,7 +311,7 @@ describe('SourcesManager — the pass (what src/worker was)', () => {
     client.capability = { readAt: NOW, types: { Condition: ['patient'], Observation: ['patient', 'category'] }, everything: false, fhirVersion: '4.0.1' };
     const s = await sources.add(alice, newSource('alice'));
     await sources.pass(NOW);
-    expect(lines).toContain(`sync: source ${s.id} (alice's clinic): success, 4 received (4 new, 0 updated)`);
+    expect(lines).toContain(`sync: source ${s.id} (alice's clinic): success, 4 received (4 new, 0 updated, 0 unchanged)`);
   });
 
   // yourphr#756: the server's own statement decides what is worth asking for.
@@ -603,7 +603,7 @@ describe('SourcesManager — upload (yourphr#736) and C-CDA (yourphr#735)', () =
     const seen: SourceEvent[] = [];
     events.subscribe('alice', (e) => seen.push(e));
     const out = await sources.importUpload(alice, { filename: 'export.json', bytes: bundle('p-1', 'c-1', 'c-2') }, NOW);
-    expect(out.data).toEqual({ format: 'fhir', received: 3, created: 3, updated: 0, collisions: 0, skipped: 0 });
+    expect(out.data).toEqual({ format: 'fhir', received: 3, created: 3, updated: 0, unchanged: 0, collisions: 0, skipped: 0 });
     expect(out.source).toMatchObject({ platform_type: MANUAL_PLATFORM_TYPE, patient: 'p-1', display: 'Uploaded export.json', latest_background_job: { job_status: 'STATUS_DONE' } });
     const id = String(out.source['id']);
     expect([...recordsProvider.rows.values()].filter((r) => r.resourceType === 'Condition').map((r) => r.sourceId)).toEqual([id, id]);
@@ -611,11 +611,11 @@ describe('SourcesManager — upload (yourphr#736) and C-CDA (yourphr#735)', () =
     expect(lines.some((l) => l.startsWith(`upload: source ${id.replace('source-', '')} (fhir): received 3, created 3`))).toBe(true);
   });
 
-  it('a re-upload for the same patient lands in the same source and updates in place — no refusals, no second source', async () => {
+  it('a re-upload for the same patient lands in the same source; identical records are unchanged, not rewritten (yourphr#781)', async () => {
     const first = await sources.importUpload(alice, { filename: 'a.json', bytes: bundle('p-1', 'c-1') }, NOW);
     const second = await sources.importUpload(alice, { filename: 'b.json', bytes: bundle('p-1', 'c-1', 'c-2') }, NOW + 60);
     expect(second.source['id']).toBe(first.source['id']);
-    expect(second.data).toMatchObject({ created: 1, updated: 2, collisions: 0 });
+    expect(second.data).toMatchObject({ created: 1, updated: 0, unchanged: 2, collisions: 0 });
     expect(await sources.list(alice)).toHaveLength(1);
   });
 

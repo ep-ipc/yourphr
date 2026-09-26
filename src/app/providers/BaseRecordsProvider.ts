@@ -26,8 +26,11 @@ export interface IndexCondition {
 }
 
 export interface RecordsWriter {
-  /** Upsert one resource for the bound account and source. Throws on a cross-source id collision. */
-  upsert(resource: Resource): Promise<'created' | 'updated'>;
+  /**
+   * Upsert one resource for the bound account and source. Throws on a cross-source id collision.
+   * 'unchanged' when the stored copy already says the same thing and nothing was written (yourphr#781).
+   */
+  upsert(resource: Resource): Promise<'created' | 'updated' | 'unchanged'>;
   exists(resourceType: string, id: string): Promise<boolean>;
 }
 

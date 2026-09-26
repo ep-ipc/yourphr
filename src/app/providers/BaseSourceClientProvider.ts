@@ -20,6 +20,8 @@ export interface FetchReport {
   received: number;
   created: number;
   updated: number;
+  /** Already held and identical, so not written (yourphr#781). Optional: a client may not know. */
+  unchanged?: number;
   /** Pages fetched for this type, so a sync can budget across types (yourphr#759). */
   pages?: number;
   /** The per-type page budget ran out before the provider did; what arrived is kept. */

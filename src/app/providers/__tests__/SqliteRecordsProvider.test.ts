@@ -47,6 +47,25 @@ describe('SqliteRecordsProvider — PHI storage over SQLCipher, scoped per accou
     await expect(provider.writer('alice', 'source-2').upsert(obs('o1', '718-7', '2024-01-12'))).rejects.toThrow(/collision/);
   });
 
+  it('a re-sync of an identical record writes nothing: no new version, no history row (yourphr#781)', async () => {
+    const w = provider.writer('alice', 'source-1');
+    const before = await provider.history('alice', 'Observation', 'o1');
+    // What every 15-minute sync pass does: the provider sends the same record again.
+    expect(await w.upsert(obs('o1', '718-7', '2024-01-10'))).toBe('unchanged');
+    expect(await w.upsert(obs('o1', '718-7', '2024-01-10'))).toBe('unchanged');
+    expect((await provider.history('alice', 'Observation', 'o1')).versions).toBe(before.versions);
+    // Key order and the provider's own meta stamps are not content.
+    const reordered = { effectiveDateTime: '2024-01-10', code: { coding: [{ display: '718-7', code: '718-7', system: 'http://loinc.org' }] }, status: 'final', id: 'o1', resourceType: 'Observation', meta: { versionId: 'provider-v9', lastUpdated: '2030-01-01T00:00:00Z' } } as Resource;
+    expect(await w.upsert(reordered)).toBe('unchanged');
+    // A real change is one new version, exactly.
+    expect(await w.upsert(obs('o1', '718-7', '2024-01-11'))).toBe('updated');
+    expect((await provider.history('alice', 'Observation', 'o1')).versions).toBe(before.versions + 1);
+  });
+
+  it('an identical record from ANOTHER source is still a collision, not quietly unchanged', async () => {
+    await expect(provider.writer('alice', 'source-2').upsert(obs('o1', '718-7', '2024-01-10'))).rejects.toThrow(/collision/);
+  });
+
   it('indexed search: exact token, system|code, system-only prefix, OR within a parameter, AND across; grouped values', async () => {
     const ids = async (where: Parameters<SqliteRecordsProvider['indexedSearch']>[2]) => (await provider.indexedSearch('alice', 'Observation', where)).map((r) => r.id).sort();
     expect(await ids([{ param: 'code', alternatives: ['718-7'] }])).toEqual(['o1', 'o2']);

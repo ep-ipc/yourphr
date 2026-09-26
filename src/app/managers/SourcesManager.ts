@@ -96,6 +96,8 @@ export interface UploadReport {
   received: number;
   created: number;
   updated: number;
+  /** Already held and identical, so nothing was written (yourphr#781). */
+  unchanged: number;
   /** Records another source already holds under the same id — refused, never merged. */
   collisions: number;
   /** Entries or lines that could not be read. */
@@ -381,8 +383,8 @@ export class SourcesManager extends BaseManager {
     } finally {
       this.options.events?.publish(source.userId, { event_type: 'source_complete', source_id: publicId });
     }
-    const data: UploadReport = { format: converter?.formatId ?? 'fhir', received: report.received, created: report.created, updated: report.updated, collisions: report.collisions.length, skipped: report.skipped.length };
-    this.log(`upload: source ${source.id} (${data.format}): received ${data.received}, created ${data.created}, updated ${data.updated}, collisions ${data.collisions}, skipped ${data.skipped}`);
+    const data: UploadReport = { format: converter?.formatId ?? 'fhir', received: report.received, created: report.created, updated: report.updated, unchanged: report.unchanged, collisions: report.collisions.length, skipped: report.skipped.length };
+    this.log(`upload: source ${source.id} (${data.format}): received ${data.received}, created ${data.created}, updated ${data.updated}, unchanged ${data.unchanged}, collisions ${data.collisions}, skipped ${data.skipped}`);
     if (job.outcome !== 'success') throw new ApiError(500, `the import stopped part-way: ${job.error}`, { error_code: 'upload_failed' });
     return { source: sourceShape((await this.provider.byId(source.id)) ?? source, job), data };
   }
@@ -551,7 +553,7 @@ export class SourcesManager extends BaseManager {
     ctx: ApiContext,
     source: ConnectedSource,
     now: number,
-    outcome: { received: number; created: number; updated: number; detail: string; failed?: boolean }
+    outcome: { received: number; created: number; updated: number; unchanged?: number; detail: string; failed?: boolean }
   ): Promise<JobRecord> {
     const ok = !outcome.failed;
     if (ok) await this.provider.markSynced(source.id, now);
@@ -560,7 +562,7 @@ export class SourcesManager extends BaseManager {
       received: outcome.received, created: outcome.created, updated: outcome.updated,
       error: outcome.detail.slice(0, 512), startedAt: now, finishedAt: now,
     };
-    this.log(`sync: source ${source.id} (${source.display}): ${job.outcome}, ${outcome.received} received (${outcome.created} new, ${outcome.updated} updated)${outcome.detail ? ` — ${outcome.detail.slice(0, 1024)}` : ''}`);
+    this.log(`sync: source ${source.id} (${source.display}): ${job.outcome}, ${outcome.received} received (${outcome.created} new, ${outcome.updated} updated${outcome.unchanged !== undefined ? `, ${outcome.unchanged} unchanged` : ''})${outcome.detail ? ` — ${outcome.detail.slice(0, 1024)}` : ''}`);
     return this.engine.managers.jobs.record(ctx, job);
   }
 
@@ -598,6 +600,7 @@ export class SourcesManager extends BaseManager {
       let received = 0;
       let created = 0;
       let updated = 0;
+      let unchanged = 0;
       // Each type is fetched on its own (yourphr#753, Go parity). A real server refuses some types
       // routinely — Epic answers 403 for a type the app was not granted and 400 for a search it
       // will not run without a category — and one refusal used to abandon every type after it,
@@ -629,7 +632,7 @@ export class SourcesManager extends BaseManager {
         try {
           const all = await this.client.fetchEverything(source, accessToken, writer, Math.min(this.options.maxPages, pagesLeft));
           const job = await this.recordJob(ctx, source, now, {
-            received: all.received, created: all.created, updated: all.updated,
+            received: all.received, created: all.created, updated: all.updated, unchanged: all.unchanged,
             detail: `fetched through Patient/$everything${all.truncated ? ' — stopped at the page cap, this provider has more than the budget allows' : ''}`,
           });
           return job;
@@ -651,6 +654,7 @@ export class SourcesManager extends BaseManager {
           received += r.received;
           created += r.created;
           updated += r.updated;
+          unchanged += r.unchanged ?? 0;
           pagesLeft -= r.pages ?? 0;
           if (r.truncated) notes.push(`${resourceType}: stopped at the page cap — this provider has more than the budget allows`);
           if (r.detail) notes.push(`${resourceType}: ${r.detail}`);
@@ -669,7 +673,7 @@ export class SourcesManager extends BaseManager {
       const detail = [fatal, ...(skipped.length ? [`skipped ${skipped.length} of ${types.length} types: ${skipped.join('; ')}`] : []), ...notes].filter(Boolean).join('; ');
       // One line per sync, success or not: the job row alone was the only trace, and the container
       // log said nothing when an import came back empty.
-      return await this.recordJob(ctx, source, now, { received, created, updated, detail, failed: !ok });
+      return await this.recordJob(ctx, source, now, { received, created, updated, unchanged, detail, failed: !ok });
     } finally {
       this.options.events?.publish(source.userId, { event_type: 'source_complete', source_id: publicId });
     }

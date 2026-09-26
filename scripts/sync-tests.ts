@@ -136,7 +136,8 @@ async function main(): Promise<void> {
   console.log('\nresync — the gate\n');
   const second = await syncFrom(`${base}/Everything`, { writer: writerFor(), accessToken: 'at-1', allowInternal: true });
   check('a resync creates nothing new', second.created === 0, `${second.created} created`);
-  check('a resync updates what it already had', second.updated === 4, `${second.updated} updated`);
+  // yourphr#781: identical records are confirmed, not rewritten — no new version, no history copy.
+  check('a resync of identical records writes nothing: all unchanged, none updated', second.unchanged === 4 && second.updated === 0, `${second.updated} updated, ${second.unchanged} unchanged`);
 
   const afterSecond = await repo.search({ resourceType: 'Condition', count: 100, total: 'accurate' });
   check('the record count is unchanged after a resync', afterSecond.total === 3, `${afterSecond.total} (was ${afterFirst.total})`);

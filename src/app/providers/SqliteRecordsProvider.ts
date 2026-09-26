@@ -193,12 +193,13 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
         // attributed would silently change what every later write means.
         const previous = repo.sourceId;
         repo.sourceId = sourceId;
+        let changed: boolean;
         try {
-          await repo.updateResource(resource);
+          ({ changed } = await repo.upsertIfChanged(resource));
         } finally {
           repo.sourceId = previous;
         }
-        return existed ? 'updated' : 'created';
+        return !existed ? 'created' : changed ? 'updated' : 'unchanged';
       },
       exists: async (resourceType, id) => (await this.read(userId, resourceType, id)) !== undefined,
     };

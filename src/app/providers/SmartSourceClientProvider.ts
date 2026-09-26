@@ -79,7 +79,7 @@ export class SmartSourceClientProvider extends BaseSourceClientProvider {
   async fetchEverything(source: ConnectedSource, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport> {
     const url = `${source.fhirBaseUrl}/Patient/${encodeURIComponent(source.patient)}/$everything?_count=100`;
     const r = await syncFrom(url, { writer, accessToken, maxPages, allowInternal: this.options.allowInternal });
-    return { received: r.received, created: r.created, updated: r.updated, pages: r.pages, truncated: r.truncated };
+    return { received: r.received, created: r.created, updated: r.updated, unchanged: r.unchanged, pages: r.pages, truncated: r.truncated };
   }
 
   async fetchPages(source: ConnectedSource, resourceType: string, accessToken: string, writer: RecordsWriter, maxPages: number): Promise<FetchReport> {
@@ -88,13 +88,13 @@ export class SmartSourceClientProvider extends BaseSourceClientProvider {
     // have, and Epic refuses it (yourphr#753; Go read it by id too).
     if (resourceType === 'Patient') {
       const one = await syncResource(`${source.fhirBaseUrl}/Patient/${patient}`, { writer, accessToken, allowInternal: this.options.allowInternal });
-      return { received: one.received, created: one.created, updated: one.updated, pages: one.pages };
+      return { received: one.received, created: one.created, updated: one.updated, unchanged: one.unchanged, pages: one.pages };
     }
 
     const search = async (params: Record<string, string>): Promise<FetchReport> => {
       const query = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
       const r = await syncFrom(`${source.fhirBaseUrl}/${resourceType}?${query}&_count=100`, { writer, accessToken, maxPages, allowInternal: this.options.allowInternal });
-      return { received: r.received, created: r.created, updated: r.updated, pages: r.pages, truncated: r.truncated };
+      return { received: r.received, created: r.created, updated: r.updated, unchanged: r.unchanged, pages: r.pages, truncated: r.truncated };
     };
 
     try {
@@ -106,7 +106,7 @@ export class SmartSourceClientProvider extends BaseSourceClientProvider {
       const fanOut = refusalWantsMoreParameters(err) ? categorySearches(resourceType, source.patient) : [];
       if (fanOut.length === 0) throw err;
 
-      const total: FetchReport = { received: 0, created: 0, updated: 0, pages: 0, truncated: false };
+      const total: FetchReport = { received: 0, created: 0, updated: 0, unchanged: 0, pages: 0, truncated: false };
       const refused: string[] = [];
       for (const plan of fanOut) {
         try {
@@ -114,6 +114,7 @@ export class SmartSourceClientProvider extends BaseSourceClientProvider {
           total.received += part.received;
           total.created += part.created;
           total.updated += part.updated;
+          total.unchanged = (total.unchanged ?? 0) + (part.unchanged ?? 0);
           total.pages = (total.pages ?? 0) + (part.pages ?? 0);
           total.truncated = total.truncated || (part.truncated ?? false);
         } catch (inner) {

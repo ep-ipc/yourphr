@@ -8,6 +8,7 @@ import type { Bundle, Resource } from '@medplum/fhirtypes';
 import type { SearchRequest, WithId } from '@medplum/core';
 import { textFor } from '../record-text.js';
 import { BaseRecordsProvider, type IndexCondition, type RecordsWriter, type StoredRecord } from '../BaseRecordsProvider.js';
+import { sameContent } from '../../../SqliteFhirRepository.js';
 
 interface Row extends StoredRecord { userId: string; versions: number; firstSeen: string }
 
@@ -107,6 +108,7 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
         const k = this.key(userId, resource.resourceType, resource.id ?? '');
         const existing = this.rows.get(k);
         if (existing && existing.sourceId !== sourceId) throw new Error(`cross-source id collision: ${resource.resourceType}/${resource.id} is held from source ${existing.sourceId}`);
+        if (existing && sameContent(existing.resource, resource)) return 'unchanged';
         const at = this.tick();
         this.rows.set(k, { userId, resourceType: resource.resourceType, id: resource.id ?? '', sourceId, lastUpdated: at, resource, versions: (existing?.versions ?? 0) + 1, firstSeen: existing?.firstSeen ?? at });
         return existing ? 'updated' : 'created';

@@ -85,6 +85,29 @@ export interface IndexStats {
   failedExpressions: Record<string, string>;
 }
 
+/**
+ * Whether two copies of a resource say the same thing, ignoring the two meta fields this store
+ * stamps on every write (`versionId`, `lastUpdated`) — they differ on every copy by construction.
+ * Key order is ignored too: providers and this store may serialize the same object differently.
+ */
+export function sameContent(a: Resource, b: Resource): boolean {
+  return canonical(withoutStamps(a)) === canonical(withoutStamps(b));
+}
+
+function withoutStamps(r: Resource): Resource {
+  if (!r.meta) return r;
+  const { versionId: _v, lastUpdated: _l, ...meta } = r.meta;
+  return Object.keys(meta).length ? { ...r, meta } : (({ meta: _m, ...rest }) => rest as Resource)(r);
+}
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).filter((k) => (value as Record<string, unknown>)[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canonical((value as Record<string, unknown>)[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 export class SqliteFhirRepository extends FhirRepository {
   readonly db: InstanceType<typeof Database>;
   readonly stats: IndexStats = { collisions: 0, indexRows: 0, failedExpressions: {} };
@@ -278,14 +301,31 @@ export class SqliteFhirRepository extends FhirRepository {
       this.stats.collisions++;
       throw new Error(`duplicate id ${resource.resourceType}/${id}`);
     }
-    return this.writeResource({ ...resource, id } as WithId<T>);
+    return this.writeResource({ ...resource, id } as WithId<T>).stored;
   }
 
   async updateResource<T extends Resource>(resource: T): Promise<WithId<T>> {
     if (!resource.id) {
       throw new Error('updateResource requires an id');
     }
-    return this.writeResource(resource as WithId<T>);
+    return this.writeResource(resource as WithId<T>).stored;
+  }
+
+  /**
+   * Store `resource` unless the stored copy already says exactly the same thing (yourphr#781).
+   *
+   * Every sync pass receives every record again, and writing each one anyway stamped a new version,
+   * added a full copy to resource_history and re-indexed it — ~30,000 history rows a day on a
+   * live instance, for records nobody changed, until records.db reached 8.4 GB. A version that is
+   * byte-identical to the one before it is not a version. `changed` is false when nothing was
+   * written; the caller reports it as unchanged rather than updated.
+   */
+  async upsertIfChanged<T extends Resource>(resource: T): Promise<{ resource: WithId<T>; changed: boolean }> {
+    if (!resource.id) {
+      throw new Error('upsertIfChanged requires an id');
+    }
+    const { stored, changed } = this.writeResource(resource as WithId<T>, { skipUnchanged: true });
+    return { resource: stored, changed };
   }
 
   /**
@@ -297,7 +337,7 @@ export class SqliteFhirRepository extends FhirRepository {
    */
   static readonly COLLISION = 'cross-source id collision';
 
-  private writeResource<T extends Resource>(resource: WithId<T>): WithId<T> {
+  private writeResource<T extends Resource>(resource: WithId<T>, options: { skipUnchanged?: boolean } = {}): { stored: WithId<T>; changed: boolean } {
     const versionId = this.generateId();
     const lastUpdated = new Date().toISOString();
     const stored = {
@@ -308,7 +348,27 @@ export class SqliteFhirRepository extends FhirRepository {
 
     const source = this.sourceId ?? '';
 
+    let unchanged: WithId<T> | undefined;
     const tx = this.db.transaction(() => {
+      if (options.skipUnchanged) {
+        const held = this.db
+          .prepare('SELECT source_id, deleted, content FROM resources WHERE resource_type = ? AND id = ? AND user_id = ?')
+          .get(stored.resourceType, stored.id, this.userId ?? '') as { source_id: string; deleted: number; content: string } | undefined;
+        // Same source, not deleted, same content: nothing to write. A different source falls
+        // through to the collision rule below; a deleted record is being brought back, which is a change.
+        if (held && held.deleted === 0 && held.source_id === source) {
+          const previous = JSON.parse(held.content) as WithId<T>;
+          if (sameContent(previous, stored)) {
+            // Seen again, unchanged: move "last confirmed" (the row's last_updated, which provenance
+            // reads) and nothing else. No new version, no history copy, no re-index.
+            this.db
+              .prepare('UPDATE resources SET last_updated = ? WHERE resource_type = ? AND id = ? AND user_id = ?')
+              .run(lastUpdated, stored.resourceType, stored.id, this.userId ?? '');
+            unchanged = previous;
+            return;
+          }
+        }
+      }
       // Only meaningful once writes are attributed. With no source set — every existing harness,
       // and any single-source install — this is inert and the behaviour is exactly as before.
       if (source !== '') {
@@ -345,7 +405,7 @@ export class SqliteFhirRepository extends FhirRepository {
     });
     tx();
 
-    return stored;
+    return unchanged ? { stored: unchanged, changed: false } : { stored, changed: true };
   }
 
   async readResource<T extends Resource>(resourceType: string, id: string): Promise<WithId<T>> {

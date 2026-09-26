@@ -137,7 +137,7 @@ export class RecordsManager extends BaseManager {
    * visible in its history. Nothing missing is filled in here: confirming an undated record leaves
    * it undated. Supplying the missing piece is an ordinary edit, not this.
    */
-  async confirmReview(ctx: ApiContext, id: string): Promise<{ id: string; outcome: 'created' | 'updated' }> {
+  async confirmReview(ctx: ApiContext, id: string): Promise<{ id: string; outcome: 'created' | 'updated' | 'unchanged' }> {
     const stored = await this.provider.readById(this.who(ctx), id);
     if (!stored) throw new ApiError(404, 'not found');
     if (!RecordsManager.needsReview(stored.resource)) throw new ApiError(409, 'this record is not waiting for review');
@@ -283,7 +283,7 @@ export class RecordsManager extends BaseManager {
     const display = stored.sourceId === '' ? 'This instance (manual entry or upload)' : (await this.sourceDisplay(stored.sourceId)) || stored.sourceId;
     return {
       resourceType, id, sourceId: stored.sourceId, sourceDisplay: display,
-      firstReceivedAt: history.firstReceivedAt ?? stored.lastUpdated, lastConfirmedAt: stored.lastUpdated, timesSeen: Math.max(history.versions, 1),
+      firstReceivedAt: history.firstReceivedAt ?? stored.lastUpdated, lastConfirmedAt: stored.lastUpdated, versions: Math.max(history.versions, 1),
     };
   }
 
@@ -733,7 +733,7 @@ export class RecordsManager extends BaseManager {
    * the Angular app POSTs a new Practitioner and PUTs an edited one, and both are "this is what I
    * say about this record now".
    */
-  async savePatientRecord(ctx: ApiContext, resource: Resource): Promise<{ id: string; outcome: 'created' | 'updated' }> {
+  async savePatientRecord(ctx: ApiContext, resource: Resource): Promise<{ id: string; outcome: 'created' | 'updated' | 'unchanged' }> {
     ctx.requireAuthenticated();
     if (!resource || typeof resource !== 'object') throw new ApiError(400, 'a resource is required');
     const type = (resource as { resourceType?: unknown }).resourceType;

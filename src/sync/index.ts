@@ -47,6 +47,8 @@ export interface SyncReport {
   received: number;
   created: number;
   updated: number;
+  /** Received, already held, and identical to what is stored, so nothing was written (yourphr#781). */
+  unchanged: number;
   /** Same (type, id) appearing more than once within a single sync — a provider-side oddity. */
   duplicatesWithinRun: number;
   byType: Record<string, number>;
@@ -60,7 +62,7 @@ export interface SyncReport {
 }
 
 export function emptySyncReport(): SyncReport {
-  return { pages: 0, collisions: [], received: 0, created: 0, updated: 0, duplicatesWithinRun: 0, byType: {}, skipped: [], truncated: false };
+  return { pages: 0, collisions: [], received: 0, created: 0, updated: 0, unchanged: 0, duplicatesWithinRun: 0, byType: {}, skipped: [], truncated: false };
 }
 
 /**
@@ -89,7 +91,7 @@ export async function storeEntries(entries: { resource?: Resource }[], writer: R
     }
     seenThisRun.add(key);
 
-    let outcome: 'created' | 'updated';
+    let outcome: 'created' | 'updated' | 'unchanged';
     try {
       outcome = await writer.upsert(resource);
     } catch (err) {
@@ -102,7 +104,9 @@ export async function storeEntries(entries: { resource?: Resource }[], writer: R
       }
       throw err;
     }
-    if (outcome === 'updated') {
+    if (outcome === 'unchanged') {
+      report.unchanged++;
+    } else if (outcome === 'updated') {
       report.updated++;
     } else {
       report.created++;

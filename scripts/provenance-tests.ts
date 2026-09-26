@@ -73,14 +73,15 @@ async function main(): Promise<void> {
 
   const first = await records.provenance(alice, 'Condition', 'condition-1');
   check('a synced record knows its source, by NAME', first?.sourceDisplay === 'Fake Regional Health', first?.sourceDisplay);
-  check('and records when it first arrived', !!first?.firstReceivedAt && first.timesSeen === 1);
+  check('and records when it first arrived', !!first?.firstReceivedAt && first.versions === 1);
 
   await sources.pass(1_000_100);
   await sources.pass(1_000_200);
   const confirmed = (await records.provenance(alice, 'Condition', 'condition-1'))!;
-  check('a resync reads as re-confirmation: source and first-received STABLE, timesSeen grows',
-    confirmed.sourceId === first?.sourceId && confirmed.firstReceivedAt === first?.firstReceivedAt && confirmed.timesSeen === 3,
-    `seen ${confirmed.timesSeen}`);
+  // yourphr#781: an identical record brought back by a re-sync is confirmation, not a new version.
+  check('a resync reads as re-confirmation: source and first-received STABLE, no new version written',
+    confirmed.sourceId === first?.sourceId && confirmed.firstReceivedAt === first?.firstReceivedAt && confirmed.versions === 1,
+    `versions ${confirmed.versions}`);
   check('lastConfirmed moves forward with the source', confirmed.lastConfirmedAt >= first!.lastConfirmedAt);
 
   // Manual entry: no source, honestly attributed to this instance.
@@ -97,7 +98,10 @@ async function main(): Promise<void> {
 
   const line = legibleProvenance(confirmed);
   check('the legible line answers the patient\'s question in one sentence',
-    line.startsWith('From Fake Regional Health · first received ') && line.includes('seen 3 times'), line);
+    line.startsWith('From Fake Regional Health · first received ') && !line.includes('seen') && !line.includes('changed'), line);
+  const changedLine = legibleProvenance({ ...confirmed, firstReceivedAt: '2026-08-25T00:00:00Z', lastConfirmedAt: '2026-09-26T00:00:00Z', versions: 3 });
+  check('a record that changed says so, counting changes not sync passes',
+    changedLine === 'From Fake Regional Health · first received 2026-08-25 · last confirmed 2026-09-26 · changed 2 times', changedLine);
   const singleLine = legibleProvenance(manual);
   check('a once-seen record keeps the line short (no redundant confirmed/seen)',
     !singleLine.includes('seen') && singleLine.startsWith('From This instance'));

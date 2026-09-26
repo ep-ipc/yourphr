@@ -803,10 +803,10 @@ async function main(): Promise<void> {
     upCondition?.source_id === uploadedBody.source?.id && upCondition?.resource_raw?.subject?.reference === 'Patient/up-pat-1',
     JSON.stringify(upCondition));
 
-  const again = (await (await upload(upToken, 'export.json', upBundle)).json()) as { data?: { created?: number; updated?: number; collisions?: number }; source?: { id?: string } };
+  const again = (await (await upload(upToken, 'export.json', upBundle)).json()) as { data?: { created?: number; updated?: number; unchanged?: number; collisions?: number }; source?: { id?: string } };
   const sourcesAfter = ((await (await fetch(`${base}/api/secure/source`, authed(upToken))).json()) as { data: unknown[] }).data.length;
-  check('re-uploading the same file updates in place: same source, no new records, no refusals',
-    again.source?.id === uploadedBody.source?.id && again.data?.created === 0 && again.data?.updated === 2 && again.data?.collisions === 0 && sourcesAfter === sourcesBefore + 1,
+  check('re-uploading the same file lands in the same source: nothing new, nothing rewritten, no refusals',
+    again.source?.id === uploadedBody.source?.id && again.data?.created === 0 && again.data?.updated === 0 && again.data?.unchanged === 2 && again.data?.collisions === 0 && sourcesAfter === sourcesBefore + 1,
     `${JSON.stringify(again)} sources ${sourcesBefore} -> ${sourcesAfter}`);
 
   const notMultipart = await fetch(`${base}/api/secure/source/manual`, { method: 'POST', headers: { authorization: `Bearer ${upToken}`, 'content-type': 'application/json' }, body: upBundle });
@@ -929,9 +929,9 @@ async function main(): Promise<void> {
     setUrl.status === 200 && statusSet.data?.ready === true && ccdUp.status === 200 && ccdUpBody.data?.format === 'ccda' && ccdUpBody.data?.created === 2 &&
       call?.path.startsWith('/api/convert/cda/ccd.hbs?patientId=cda-') === true && call?.type === 'text/plain' && call?.body === ccd,
     `set ${setUrl.status} ready ${statusSet.data?.ready} upload ${ccdUp.status} ${JSON.stringify(ccdUpBody)} call ${call?.path}`);
-  const again2 = (await (await upload(upToken, 'summary-copy.xml', ccd, 'text/xml')).json()) as { data?: { created?: number; updated?: number }; source?: { id?: string; patient?: string } };
+  const again2 = (await (await upload(upToken, 'summary-copy.xml', ccd, 'text/xml')).json()) as { data?: { created?: number; updated?: number; unchanged?: number }; source?: { id?: string; patient?: string } };
   check('the same C-CDA again lands on the same Patient and source — the derived id is stable',
-    again2.source?.patient === ccdUpBody.source?.patient && again2.data?.created === 0 && again2.data?.updated === 2,
+    again2.source?.patient === ccdUpBody.source?.patient && again2.data?.created === 0 && again2.data?.updated === 0 && again2.data?.unchanged === 2,
     JSON.stringify(again2));
   converter.close();
 
