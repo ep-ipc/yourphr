@@ -131,7 +131,9 @@ test-frontend: dep-frontend
 .PHONY: test-e2e
 test-e2e: dep-frontend
 	cd frontend && yarn build -- -c prod
-	npm run e2e
+	# The build lands in dist/web; tell the E2E server so, as CI does (server-ci.yaml). Without it
+	# the server looks in its default /tmp/spike-web and refuses to start (exit 78).
+	SPIKE_E2E_WEB_DIR=$(CURDIR)/dist/web npm run e2e
 
 .PHONY: test-frontend-coverage
 # reduce logging, disable angular-cli analytics for ci environment
