@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Resource } from '@medplum/fhirtypes';
 import { SqliteRecordsProvider } from '../SqliteRecordsProvider.js';
+import { SqliteFhirRepository } from '../../../SqliteFhirRepository.js';
 
 const LOINC = 'http://loinc.org';
 const obs = (id: string, code: string, date: string, system = LOINC): Resource =>
@@ -111,5 +112,43 @@ describe('SqliteRecordsProvider — find anything by words (yourphr#599)', () =>
     expect(await provider.textSearch('alice', 'metformin', { limit: 10, offset: 0 })).toEqual([]);
     await provider.close();
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('compact — removing the identical history copies v3.7.2 and earlier wrote (yourphr#781)', () => {
+  it('keeps the first copy and every real change, repoints the current version, and touches nothing else', async () => {
+    // Build the bloat the old way: updateResource writes a full version every time, as every sync
+    // pass did up to v3.7.2. A (x3 identical), then a real change to B (x2 identical).
+    const file = join(dir, 'bloated.db');
+    const repo = new SqliteFhirRepository({ file, key: 'unit-key', userId: 'carol', sourceId: 'source-1' });
+    const A = obs('c1', '718-7', '2024-01-10');
+    const B = obs('c1', '718-7', '2024-02-10');
+    for (const r of [A, A, A, B, B]) await repo.updateResource(r);
+    await repo.updateResource(obs('c2', '2345-7', '2024-03-10')); // one version: nothing to remove
+    const p = SqliteRecordsProvider.overRepository(repo);
+    const before = await p.history('carol', 'Observation', 'c1');
+    expect(before.versions).toBe(5);
+
+    const dry = await p.compact({ dryRun: true });
+    expect(dry).toMatchObject({ resources: 2, historyBefore: 6, duplicates: 3, historyAfter: 6, repointed: 1, dryRun: true, vacuumed: false, integrity: 'ok' });
+    expect((await p.history('carol', 'Observation', 'c1')).versions).toBe(5);
+
+    const done = await p.compact();
+    expect(done).toMatchObject({ resources: 2, historyBefore: 6, duplicates: 3, historyAfter: 3, repointed: 1, dryRun: false, vacuumed: true, integrity: 'ok' });
+    const after = await p.history('carol', 'Observation', 'c1');
+    expect(after.versions).toBe(2); // A, then B: "changed 1 time", which is the truth
+    expect(after.firstReceivedAt).toBe(before.firstReceivedAt);
+
+    // The record reads as it did, and its current version is one that still exists in history.
+    const stored = await p.read('carol', 'Observation', 'c1');
+    expect((stored?.resource as { effectiveDateTime?: string }).effectiveDateTime).toBe('2024-02-10');
+    const versionId = (stored?.resource as { meta?: { versionId?: string } }).meta?.versionId;
+    const held = repo.db.prepare('SELECT COUNT(*) AS n FROM resource_history WHERE id = ? AND version_id = ?').get('c1', versionId) as { n: number };
+    expect(held.n).toBe(1);
+    expect((await p.history('carol', 'Observation', 'c2')).versions).toBe(1);
+
+    // Running it again finds nothing more to do.
+    expect(await p.compact()).toMatchObject({ duplicates: 0, repointed: 0, vacuumed: false, integrity: 'ok' });
+    repo.db.close();
   });
 });

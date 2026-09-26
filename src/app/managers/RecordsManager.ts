@@ -19,7 +19,7 @@ import { BaseManager, type BackupData } from '../../framework/BaseManager.js';
 import type { Engine } from '../../framework/Engine.js';
 import { ApiError, type ApiContext } from '../../framework/ApiContext.js';
 import type { BaseFavoritesProvider, Favorite } from '../providers/BaseFavoritesProvider.js';
-import type { BaseRecordsProvider, RecordsWriter, StoredRecord } from '../providers/BaseRecordsProvider.js';
+import type { BaseRecordsProvider, CompactReport, RecordsWriter, StoredRecord } from '../providers/BaseRecordsProvider.js';
 import { reconcileConditions, type ClassifiedCondition, type InputResource } from '../../conditions/index.js';
 import { classifyAllergies, type ClassifiedAllergy } from '../../allergies/index.js';
 import { classifyImmunizations, type ClassifiedImmunization } from '../../immunizations/index.js';
@@ -783,6 +783,15 @@ export class RecordsManager extends BaseManager {
 
   async integrityOk(): Promise<boolean> {
     return this.provider.integrityOk();
+  }
+
+  /**
+   * Offline compaction of the records store (yourphr#781) — the `compact` command's door. No request
+   * context, on purpose, as with `reset-password`: it is never reachable from a route, and the
+   * authority to run it is being able to run a process against the data directory.
+   */
+  async compact(options: { dryRun?: boolean; vacuum?: boolean } = {}): Promise<CompactReport> {
+    return this.provider.compact(options);
   }
 
   /** The admin's Database card: where the PHI store lives and its size. */

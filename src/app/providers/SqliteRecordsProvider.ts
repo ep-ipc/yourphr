@@ -8,12 +8,12 @@
 import type Database from 'better-sqlite3-multiple-ciphers';
 import type { Bundle, Resource } from '@medplum/fhirtypes';
 import type { SearchRequest, WithId } from '@medplum/core';
-import { SqliteFhirRepository } from '../../SqliteFhirRepository.js';
+import { SqliteFhirRepository, sameContent } from '../../SqliteFhirRepository.js';
 import { dirname } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { backupDatabase, stageInstanceRestore } from './sqlite-backup.js';
 import { ftsQuery } from './record-text.js';
-import { BaseRecordsProvider, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
+import { BaseRecordsProvider, type CompactReport, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
 
 const REFERENCE_SHAPE = /^[A-Z][A-Za-z]+\/[A-Za-z0-9.-]{1,64}$/;
 const PARAM_NAME = /^[a-z][a-z0-9-]*$/i;
@@ -256,6 +256,95 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
 
   storage(): { location: string; sizeBytes: number } {
     return { location: this.file, sizeBytes: existsSync(this.file) ? statSync(this.file).size : 0 };
+  }
+
+  /**
+   * Offline compaction (yourphr#781). Up to v3.7.2 every sync pass wrote a full history copy of
+   * every record it received, changed or not, so a live file reached 8.4 GB of identical copies.
+   *
+   * Within each record's history (ordered by time), a run of identical copies keeps only its FIRST
+   * row: "first received" and every real change survive; the repeats go. `sameContent` is the same
+   * comparison the write path now uses, so "identical" means one thing everywhere.
+   *
+   * The current version is almost always the last repeat of a run — the latest re-sync wrote it.
+   * Keeping it would leave nearly every record claiming a change it never had ("changed 1 time").
+   * So a record whose current version is removed is repointed at the first copy of that content,
+   * in the row and in the stored resource's meta.versionId. The resources table is otherwise
+   * untouched; its row count is checked before and after and a difference is an error.
+   *
+   * Synchronous and whole-file: run with the server stopped (the `compact` command says so).
+   */
+  async compact(options: { dryRun?: boolean; vacuum?: boolean } = {}): Promise<CompactReport> {
+    const db = this.anyDb();
+    const dryRun = options.dryRun ?? false;
+    const bytesBefore = existsSync(this.file) ? statSync(this.file).size : 0;
+    const count = (sql: string): number => (db.prepare(sql).get() as { n: number }).n;
+    const resources = count('SELECT COUNT(*) AS n FROM resources');
+    const historyBefore = count('SELECT COUNT(*) AS n FROM resource_history');
+    const current = new Map<string, string>();
+    for (const r of db.prepare('SELECT resource_type, id, version_id FROM resources').iterate() as Iterable<{ resource_type: string; id: string; version_id: string }>) {
+      current.set(`${r.resource_type}/${r.id}`, r.version_id);
+    }
+
+    // Collected first, deleted after: better-sqlite3 cannot write on a connection mid-iteration.
+    const doomed: number[] = [];
+    const repoint = new Map<string, { from: string; to: string }>();
+    let group = '';
+    let kept: { versionId: string; resource: Resource } | undefined;
+    const rows = db.prepare('SELECT rowid, resource_type, id, version_id, content FROM resource_history ORDER BY resource_type, id, last_updated, rowid')
+      .iterate() as Iterable<{ rowid: number; resource_type: string; id: string; version_id: string; content: string }>;
+    for (const row of rows) {
+      const key = `${row.resource_type}/${row.id}`;
+      const resource = JSON.parse(row.content) as Resource;
+      if (key !== group) {
+        group = key;
+        kept = { versionId: row.version_id, resource };
+        continue;
+      }
+      if (kept && sameContent(kept.resource, resource)) {
+        doomed.push(row.rowid);
+        if (current.get(key) === row.version_id) repoint.set(key, { from: row.version_id, to: kept.versionId });
+      } else {
+        kept = { versionId: row.version_id, resource };
+      }
+    }
+
+    if (!dryRun && doomed.length > 0) {
+      const remove = db.prepare('DELETE FROM resource_history WHERE rowid = ?');
+      const move = db.prepare("UPDATE resources SET version_id = ?, content = json_set(content, '$.meta.versionId', ?) WHERE resource_type = ? AND id = ? AND version_id = ?");
+      const BATCH = 10_000;
+      for (let i = 0; i < doomed.length; i += BATCH) {
+        const slice = doomed.slice(i, i + BATCH);
+        db.transaction(() => { for (const rowid of slice) remove.run(rowid); })();
+      }
+      db.transaction(() => {
+        for (const [key, { from, to }] of repoint) {
+          const slash = key.indexOf('/');
+          move.run(to, to, key.slice(0, slash), key.slice(slash + 1), from);
+        }
+      })();
+      const after = count('SELECT COUNT(*) AS n FROM resources');
+      if (after !== resources) throw new Error(`compact: the resources table changed from ${resources} to ${after} rows — nothing but history may be removed`);
+    }
+
+    const vacuum = !dryRun && (options.vacuum ?? true) && doomed.length > 0;
+    if (vacuum) {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+      db.exec('VACUUM');
+    }
+    const integrity = String((db.pragma('quick_check') as { quick_check: string }[])[0]?.quick_check ?? 'no answer');
+    return {
+      resources,
+      historyBefore,
+      duplicates: doomed.length,
+      historyAfter: dryRun ? historyBefore : count('SELECT COUNT(*) AS n FROM resource_history'),
+      repointed: repoint.size,
+      bytesBefore,
+      bytesAfter: existsSync(this.file) ? statSync(this.file).size : 0,
+      vacuumed: vacuum,
+      integrity,
+      dryRun,
+    };
   }
 
   async integrityOk(): Promise<boolean> {

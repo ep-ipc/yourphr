@@ -93,7 +93,7 @@ async function main(): Promise<void> {
     strayFlag.status === 2 && strayFlag.stderr.includes('--port'), `status ${strayFlag.status}`);
   const help = runOnce(good, ['help']);
   check('help exits 0 and names every command the image accepts',
-    help.status === 0 && ['start', 'migrate', 'reset-password', 'version'].every((c) => help.stdout.includes(c)), `status ${help.status}`);
+    help.status === 0 && ['start', 'migrate', 'reset-password', 'compact', 'version'].every((c) => help.stdout.includes(c)), `status ${help.status}`);
   const pkgVersion = (JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version: string }).version;
   const versionOut = runOnce(good, ['version']);
   check('version prints package.json\'s version and exits 0',
@@ -101,6 +101,12 @@ async function main(): Promise<void> {
   const recovery = runOnce(good, ['reset-password', '--user', 'admin', '--data', join(dir, 'nowhere')]);
   check('reset-password refuses a data directory that does not exist rather than creating an empty instance',
     recovery.status === 2 && recovery.stderr.includes('does not exist'), `status ${recovery.status}`);
+  const compactNowhere = runOnce(good, ['compact', '--data', join(dir, 'nowhere')]);
+  check('compact refuses a data directory that does not exist (yourphr#781)',
+    compactNowhere.status === 2 && compactNowhere.stderr.includes('does not exist'), `status ${compactNowhere.status}`);
+  const compactTypo = runOnce(good, ['compact', '--dryrun']);
+  check('compact refuses a flag it does not know rather than compacting for real',
+    compactTypo.status === 2 && compactTypo.stderr.includes('--dryrun'), `status ${compactTypo.status}`);
 
   // --- the process ---
   const port = 18000 + Math.floor(Math.random() * 1000);
@@ -149,6 +155,14 @@ async function main(): Promise<void> {
   const missing = runOnce({}, ['reset-password', '--user', 'nobody', '--data', dataDir]);
   check('reset-password on an account that does not exist exits non-zero and says which name',
     missing.status !== 0 && missing.stderr.includes('nobody'), `status ${missing.status}`);
+
+  // --- compact, against the same stopped instance (yourphr#781) — the command reaches the store ---
+  const dry = runOnce({}, ['compact', '--data', dataDir, '--dry-run']);
+  check('compact --dry-run reports and changes nothing, integrity ok',
+    dry.status === 0 && dry.stdout.includes('dry run') && dry.stdout.includes('integrity:          ok'), `status ${dry.status} ${dry.stderr.slice(0, 200)}`);
+  const compacted = runOnce({}, ['compact', '--data', dataDir]);
+  check('compact runs on a stopped instance and reports integrity ok',
+    compacted.status === 0 && compacted.stdout.includes('integrity:          ok'), `status ${compacted.status} ${compacted.stderr.slice(0, 200)}`);
 
   rmSync(dir, { recursive: true, force: true });
   // The version the UI shows comes from package.json (main.ts reads it), and the image is built

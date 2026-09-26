@@ -33,6 +33,7 @@ commands:
   start             run the server (the default when no command is given)
   migrate           import a Go (v1/v2) instance into this one, and verify it record for record
   reset-password    set a fresh password on an account when nobody can sign in
+  compact           remove identical history copies and reclaim the space (server stopped)
   version           print the version this build reports
   help              print this
 
@@ -57,6 +58,10 @@ async function run(command: string, argv: string[]): Promise<number | 'listening
     case 'reset-password': {
       const { resetPassword } = await import('./cli/reset-password.js');
       return await resetPassword(argv);
+    }
+    case 'compact': {
+      const { compact } = await import('./cli/compact.js');
+      return await compact(argv);
     }
     case 'version':
     case '--version':

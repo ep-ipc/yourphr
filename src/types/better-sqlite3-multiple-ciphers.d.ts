@@ -8,6 +8,8 @@ declare module 'better-sqlite3-multiple-ciphers' {
   interface Statement {
     all(...params: unknown[]): unknown[];
     get(...params: unknown[]): unknown;
+    /** Rows one at a time — for a scan too large to hold as an array (yourphr#781's compact). */
+    iterate(...params: unknown[]): IterableIterator<unknown>;
     run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
   }
 

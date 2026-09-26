@@ -82,6 +82,28 @@ export abstract class BaseRecordsProvider {
   abstract backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }>;
   /** Stage a backup back under this store's own key, next to its own files, for the next start. */
   abstract stageRestore(backupFile: string, backupKey: string): Promise<{ tables: number }>;
+  /**
+   * Offline maintenance (yourphr#781): drop history copies identical to the version before them,
+   * then give the space back. Run with the server stopped — it is synchronous and takes the file.
+   */
+  abstract compact(options?: { dryRun?: boolean; vacuum?: boolean }): Promise<CompactReport>;
+}
+
+/** What `compact` found and did. Counts are rows; sizes are bytes of the main database file. */
+export interface CompactReport {
+  resources: number;
+  historyBefore: number;
+  /** History rows identical to the version before them — removed, or that would be on a dry run. */
+  duplicates: number;
+  historyAfter: number;
+  /** Records whose current version was a duplicate, repointed to the first copy of that content. */
+  repointed: number;
+  bytesBefore: number;
+  bytesAfter: number;
+  vacuumed: boolean;
+  /** quick_check after the work: 'ok', or what SQLite reported. */
+  integrity: string;
+  dryRun: boolean;
 }
 
 export type { ResourceType };
