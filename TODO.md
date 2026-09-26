@@ -5,6 +5,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 ## 🔴 P0 — Security & Critical
 
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
+- [#781](https://github.com/jwilleke/yourphr/issues/781) — [BUG] records.db grows ~30k history rows a day — every sync re-writes every record, changed or not (8.4 GB live)
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟣 Epics
@@ -19,6 +20,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 - [#775](https://github.com/jwilleke/yourphr/issues/775) — [CHORE] One markdown module: CommonMark, sanitised before it is stored
 - [#774](https://github.com/jwilleke/yourphr/issues/774) — [BUG] Forms send what the patient types to NLM and Wikipedia, straight from their browser
+- [#782](https://github.com/jwilleke/yourphr/issues/782) — [BUG] A click that cannot complete says nothing — guards wait forever, failures are silent
 - [#778](https://github.com/jwilleke/yourphr/issues/778) — [BUG] Bare-metal setup serves no interface — the example sets YOURPHR_WEB_SRC_FRONTEND_PATH, the server reads YOURPHR_WEB_STATIC_DIR
 - [#777](https://github.com/jwilleke/yourphr/issues/777) — [BUG] open the raw record for reviewing
 - [#776](https://github.com/jwilleke/yourphr/issues/776) — [BUG] Sync imports document titles but never fetches the documents — the Binary pass went with the Go stack
@@ -87,6 +89,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 ## 🔵 In review
 
 - [#779](https://github.com/jwilleke/yourphr/issues/779) — [security] js/unvalidated-dynamic-method-call in patient-entry — CodeQL high, false positive in context
+- [#780](https://github.com/jwilleke/yourphr/issues/780) — [BUG] Opening /admin freezes the whole instance — the Database card runs quick_check on an 8.4 GB records file on every load
 - [#608](https://github.com/jwilleke/yourphr/issues/608) — [SPIKE] Architecture: build on the ngdpbase model throughout — engine, managers as the only door, config-bound providers, request context (the agreed architecture doc, applied)
 
 ## ⏸ Deferred
