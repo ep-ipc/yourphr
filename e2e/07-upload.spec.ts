@@ -24,11 +24,11 @@ test('uploading a FHIR file imports it and says what was added', async ({ page }
   await expect(page.getByText('Added 2 new records.')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/Error uploading file/)).toHaveCount(0);
 
-  // The file is now a source of its own, and a second upload of it changes nothing but freshness.
+  // The file is now a source of its own, and a second upload of it changes nothing, and says so (#781).
   await page.reload();
   await expect(page.getByText('Uploaded e2e-export.json').first()).toBeVisible({ timeout: 20_000 });
   await page.locator('input[type=file]').setInputFiles({ name: 'e2e-export.json', mimeType: 'application/json', buffer: Buffer.from(bundle) });
-  await expect(page.getByText('Refreshed 2 records you already had from this file.')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('You already had all 2 records in this file; nothing changed.')).toBeVisible({ timeout: 20_000 });
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
