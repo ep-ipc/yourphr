@@ -4,7 +4,7 @@
 > [`docs/deployment/deployment-contract.md`](deployment/deployment-contract.md). This page covers how a
 > maintainer cuts a release.
 
-Releases are cut by __direct annotated git tag__ — no release bot, no release PR, no tokens, no admin overrides. (We removed release-please, inherited from upstream Fasten, because its bot-created release PR could not pass `main`'s required status checks without a privileged token — see issue #241.)
+Releases are cut with the __`/semver <patch|minor|major>`__ skill, which runs the steps below. There is still no release bot, release PR, token or admin override. (We removed release-please, inherited from upstream Fasten, because its bot-created release PR could not pass `main`'s required status checks without a privileged token; see issue #241.) The Go stack was released by hand; the TypeScript stack uses the tooling ported from ngdpbase.
 
 ## Versioning
 
@@ -20,13 +20,15 @@ The UI shows `<environment-name>-<version>`, e.g. `willeke-3.2.0`. The name is t
 
 ## Cutting a release
 
-From a clean `main` with everything pushed and tests green:
+From a clean `main` with everything pushed and CI green, `/semver <level>` does this:
 
-1. Bump the version: `package.json` → `"version": "X.Y.Z"`. That file is the __only__ source — the running instance reads it beside its own compiled output and serves it on `/api/version`, which is what the footer shows. (`backend/pkg/version/version.go` is the frozen Go stack's constant and stops at 2.10.3; bumping it changes nothing a v3 instance reports.) `npm run process` fails if `package.json` is behind the newest tag, so a release cut without this step goes red — but only after the tag exists, which is why it is step one.
-2. Prepend a section to `CHANGELOG.md` (`## [X.Y.Z](compare-link) (DATE)` with Features / Bug Fixes).
-3. Commit: `chore(release): vX.Y.Z`.
-4. Tag + push: `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin main --tags`.
-5. GitHub Release: `gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes --notes-start-tag v<previous>`.
+1. __Test first.__ `npm run build`, `npm run typecheck`, `npm test`, then `make test-e2e` (it builds the Angular app and runs the whole Playwright suite). Nothing is bumped until these pass, so a failure leaves nothing to roll back.
+2. __Bump.__ `npm run bump -- <patch|minor|major>` (`scripts/version.ts`, ported from ngdpbase) sets `package.json`, the two version fields in `package-lock.json`, and a `## [X.Y.Z](compare-link) (DATE)` heading in `CHANGELOG.md`. If an `## [Unreleased]` section exists it becomes the release. `package.json` is the __only__ version source: the running instance reads it beside its own compiled output and serves it on `/api/version`, which is what the footer shows. `npm run process` fails if `package.json` is behind the newest tag.
+3. __Write the entry__ under the new heading: Features / Bug Fixes / Internal, in words a patient can follow, as the existing entries are.
+4. __Baseline.__ `npm run test:baseline:compare` (`scripts/baseline-profile.ts`, ported from ngdpbase) boots the app over the synthetic E2E household, records cold start, server memory and response times to `docs/performance/baseline-vX.Y.Z-DATE.md`, and appends a drift table against the previous baseline. It exits 1 on a regression candidate (memory +25%, or a route +50% __and__ +50 ms; override with `BASELINE_MEM_DELTA_PCT`, `BASELINE_RT_DELTA_PCT`, `BASELINE_RT_DELTA_MS`). Read the flag before proceeding; measurement noise is real.
+5. __Commit, tag, push:__ `chore: release vX.Y.Z` with `package.json`, `package-lock.json`, `CHANGELOG.md` and the baseline file; then `git tag -a vX.Y.Z -m "vX.Y.Z"`, `git push origin main`, `git push origin vX.Y.Z`.
+6. __GitHub Release:__ `gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes --notes-start-tag v<previous>`.
+7. __Confirm it deployed__ (next section): the release image built, and the live pod runs the new tag and answers.
 
 ## Deployment is release-gated
 
