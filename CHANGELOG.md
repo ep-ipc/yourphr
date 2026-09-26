@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.8.0](https://github.com/jwilleke/yourphr/compare/v3.7.3...v3.8.0) (2026-09-26)
+
+__Get back the space old syncs wasted.__ 3.7.3 stopped your records database filling up with identical copies of your records. This release removes the copies it already holds. On one household that is most of an 8.4 GB file.
+
+### Features
+
+- __`yourphr compact`__ ([#781](https://github.com/jwilleke/yourphr/issues/781)): a maintenance command, run with the server stopped and after a backup. It removes history copies that are identical to the version before them, keeping when each record was first received and every time it really changed, then shrinks the file and checks it. `--dry-run` shows what it would remove and changes nothing; `--no-vacuum` removes the copies without rewriting the file. Where a record came from reads correctly afterwards: a record that never changed does not claim that it did. On Kubernetes, scale the deployment to 0 and run it in a one-off pod on the same volume.
+
 ## [3.7.3](https://github.com/jwilleke/yourphr/compare/v3.7.2...v3.7.3) (2026-09-26)
 
 __Your records stop piling up copies of themselves.__ Every 15-minute sync used to store a full new copy of every record it received, even when nothing had changed. On one household that added up to 8.4 GB for two test connections, and the size is what made the admin pages freeze the instance. A record the provider sends again unchanged is now just marked as confirmed.
