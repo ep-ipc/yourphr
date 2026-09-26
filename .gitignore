@@ -176,3 +176,6 @@ scripts/**/*.js.map
 
 # e2e writes the admin password here at runtime (e2e/server.ts says 0600, gitignored — now true)
 e2e/.admin-pass
+
+# Credentials kept beside the docs for convenience; never committed.
+docs/creds/
