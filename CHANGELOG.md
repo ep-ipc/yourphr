@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.7.3](https://github.com/jwilleke/yourphr/compare/v3.7.2...v3.7.3) (2026-09-26)
+
+__Your records stop piling up copies of themselves.__ Every 15-minute sync used to store a full new copy of every record it received, even when nothing had changed. On one household that added up to 8.4 GB for two test connections, and the size is what made the admin pages freeze the instance. A record the provider sends again unchanged is now just marked as confirmed.
+
+### Bug Fixes
+
+- __A re-sync that brings back an identical record writes nothing__ ([#781](https://github.com/jwilleke/yourphr/issues/781)): no new version, no history copy, no re-indexing. The record is marked "last confirmed" now, and only a real change adds a version. This stops the growth; reclaiming the space an existing database already uses is a separate, planned maintenance step.
+- __Where a record came from reads "changed N times", not "seen N times"__ ([#781](https://github.com/jwilleke/yourphr/issues/781)): the old count went up every 15 minutes and reached the thousands without meaning anything. The line now says when the record was first received, when its source last confirmed it, and how many times it actually changed, each only when there is something to say.
+- __Uploading a file you already imported says nothing changed__ ([#781](https://github.com/jwilleke/yourphr/issues/781)): it used to say it "refreshed" records it had not touched. Sync logs likewise count unchanged records separately, instead of calling them updated.
+
+### Internal
+
+- Releases now use `npm run bump` and a per-release performance baseline (`npm run test:baseline:compare`), both ported from ngdpbase.
+
 ## [3.7.2](https://github.com/jwilleke/yourphr/compare/v3.7.1...v3.7.2) (2026-09-26)
 
 __Opening the admin pages no longer stops the instance.__ Every visit to Admin froze the whole server for minutes, for everyone in the household, and on a large database it got the server restarted. The rest of this release is buttons that looked like they worked and did not.
