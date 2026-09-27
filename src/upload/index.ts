@@ -37,6 +37,18 @@ export function looksLikeCda(bytes: Buffer): boolean {
   return head.startsWith('<') && head.includes('ClinicalDocument');
 }
 
+/**
+ * Whether the document's ROOT element is a ClinicalDocument — stricter than looksLikeCda, for a zip
+ * (yourphr#786), where a portal packs a stylesheet for its viewer beside the documents. Epic's
+ * `STYLE.XSL` names ClinicalDocument throughout, so the loose test would send it to the converter.
+ */
+export function isCdaDocument(bytes: Buffer): boolean {
+  const text = bytes.subarray(0, 64 * 1024).toString('utf8').replace(/^\uFEFF/, '');
+  // The XML declaration, comments, processing instructions and a DOCTYPE may come before the root.
+  const m = /^(?:\s|<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>)*<(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)/.exec(text);
+  return m?.[1] === 'ClinicalDocument';
+}
+
 const XML_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
 function xmlAttribute(tag: string, name: string): string {

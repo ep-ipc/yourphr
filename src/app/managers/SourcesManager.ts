@@ -34,7 +34,9 @@ import { providerRequiresLegalConsent } from '../../account/index.js';
 import { emptySyncReport, storeEntries } from '../../sync/index.js';
 import { FhirHttpError, decodeCapability, encodeCapability, narrowTypes } from '../../sources/index.js';
 import { resourceTypesFromScopes } from '../../migrate/index.js';
-import { UploadFormatError, parseFhirUpload, patientOf } from '../../upload/index.js';
+import { UploadFormatError, isCdaDocument, parseFhirUpload, patientOf, type ParsedUpload } from '../../upload/index.js';
+import { isZip, readZip } from '../../upload/zip.js';
+import type { Resource } from '@medplum/fhirtypes';
 
 declare module '../../framework/Engine.js' {
   interface ManagerRegistry {
@@ -91,7 +93,7 @@ export interface SourcesOptions {
 
 /** What an upload did (yourphr#736): the sync report's counts, so the page can say what happened. */
 export interface UploadReport {
-  /** The format converted from ('ccda'), or 'fhir' when the file was FHIR already. */
+  /** The format converted from ('ccda'), 'zip' for a portal download read whole (yourphr#786), or 'fhir' when the file was FHIR already. */
   format: string;
   received: number;
   created: number;
@@ -345,20 +347,31 @@ export class SourcesManager extends BaseManager {
    * converter claims it (C-CDA, yourphr#735), then read as FHIR and written through the same
    * `storeEntries` a sync page uses. The whole file is read BEFORE a source is created, so a file
    * that cannot be read leaves nothing behind. A job is recorded either way, as for a sync.
+   *
+   * A zip — a portal's "download my records" as the patient has it — is read whole (yourphr#786):
+   * every record inside is imported as this one upload. `maxUnpackedBytes` caps what it may unpack.
    */
-  async importUpload(ctx: ApiContext, upload: { filename: string; bytes: Buffer }, now = Math.floor(Date.now() / 1000)): Promise<{ source: Record<string, unknown>; data: UploadReport }> {
+  async importUpload(ctx: ApiContext, upload: { filename: string; bytes: Buffer; maxUnpackedBytes?: number }, now = Math.floor(Date.now() / 1000)): Promise<{ source: Record<string, unknown>; data: UploadReport }> {
     ctx.requireAuthenticated();
     // Before any conversion work, not just at add(): the shared demo account may not bring outside data in (yourphr#496).
     if (this.engine.has('demo')) this.engine.managers.demo.refuseConnect(ctx);
     const filename = cleanFilename(upload.filename);
 
-    let bytes = upload.bytes;
-    const converter = (this.options.converters ?? []).find((c) => c.canHandle(bytes, filename));
-    if (converter) bytes = await converter.convert(bytes);
-
-    let parsed;
+    let parsed: ParsedUpload;
+    let format = 'fhir';
     try {
-      parsed = parseFhirUpload(bytes);
+      if (isZip(upload.bytes)) {
+        format = 'zip';
+        parsed = await this.readArchive(upload.bytes, upload.maxUnpackedBytes ?? 100 * 1024 * 1024);
+      } else {
+        let bytes = upload.bytes;
+        const converter = (this.options.converters ?? []).find((c) => c.canHandle(bytes, filename));
+        if (converter) {
+          bytes = await converter.convert(bytes);
+          format = converter.formatId;
+        }
+        parsed = parseFhirUpload(bytes);
+      }
     } catch (err) {
       if (err instanceof UploadFormatError) throw new ApiError(400, `${filename || 'the file'} could not be imported: ${err.message}`, { error_code: 'upload_unreadable' });
       throw err;
@@ -383,10 +396,51 @@ export class SourcesManager extends BaseManager {
     } finally {
       this.options.events?.publish(source.userId, { event_type: 'source_complete', source_id: publicId });
     }
-    const data: UploadReport = { format: converter?.formatId ?? 'fhir', received: report.received, created: report.created, updated: report.updated, unchanged: report.unchanged, collisions: report.collisions.length, skipped: report.skipped.length };
+    const data: UploadReport = { format, received: report.received, created: report.created, updated: report.updated, unchanged: report.unchanged, collisions: report.collisions.length, skipped: report.skipped.length };
     this.log(`upload: source ${source.id} (${data.format}): received ${data.received}, created ${data.created}, updated ${data.updated}, unchanged ${data.unchanged}, collisions ${data.collisions}, skipped ${data.skipped}`);
     if (job.outcome !== 'success') throw new ApiError(500, `the import stopped part-way: ${job.error}`, { error_code: 'upload_failed' });
     return { source: sourceShape((await this.provider.byId(source.id)) ?? source, job), data };
+  }
+
+  /**
+   * The records in a portal's download zip, as one upload (yourphr#786). Each document a converter
+   * claims (C-CDA) is converted, and each FHIR JSON / NDJSON file read as it is. Everything else a
+   * portal packs beside the records — the PDF, the HTML viewer, its images, the XDM `METADATA.XML` —
+   * is passed over without a word: it is not a record, so "could not be read" would be untrue.
+   *
+   * A document that is a record but does not read is reported as skipped, and the rest still
+   * import. The same resource in several documents (a CCD repeats the allergy list in each) is
+   * kept once, the last copy winning, so a first import reads as "added", not "updated".
+   */
+  private async readArchive(bytes: Buffer, maxUnpackedBytes: number): Promise<ParsedUpload> {
+    const out: ParsedUpload = { resources: [], skipped: [] };
+    let documents = 0;
+    for (const entry of readZip(bytes, { maxTotalBytes: maxUnpackedBytes })) {
+      const base = (entry.name.split('/').pop() ?? '').toLowerCase();
+      if (base === '' || base.startsWith('.') || entry.name.startsWith('__MACOSX/')) continue;
+      let fhir: Buffer;
+      // XML only when its root IS a ClinicalDocument: the viewer's stylesheet merely mentions one.
+      const xml = entry.bytes.subarray(0, 64).toString('utf8').replace(/^\uFEFF/, '').trimStart().startsWith('<');
+      const converter = xml && !isCdaDocument(entry.bytes) ? undefined : (this.options.converters ?? []).find((c) => c.canHandle(entry.bytes, base));
+      if (converter) fhir = await converter.convert(entry.bytes);
+      else if (/\.(json|ndjson|jsonl|phr)$/.test(base)) fhir = entry.bytes;
+      else continue;
+      documents++;
+      try {
+        const one = parseFhirUpload(fhir);
+        out.resources.push(...one.resources);
+        out.skipped.push(...one.skipped.map((s) => ({ ...s, detail: `${entry.name}: ${s.detail}` })));
+      } catch (err) {
+        if (!(err instanceof UploadFormatError)) throw err;
+        out.skipped.push({ reason: err.message, detail: entry.name });
+      }
+    }
+    if (documents === 0) throw new UploadFormatError('the zip holds no health records this can read — it should contain the C-CDA (.xml) or FHIR (.json) files your portal exported');
+    const byKey = new Map<string, Resource>();
+    const unkeyed: Resource[] = [];
+    for (const r of out.resources) r.id ? byKey.set(`${r.resourceType}/${r.id}`, r) : unkeyed.push(r);
+    out.resources = [...byKey.values(), ...unkeyed];
+    return out;
   }
 
   /** Disconnect (Go's #437): the tokens go, the records stay; the worker skips it. */

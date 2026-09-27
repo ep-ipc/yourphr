@@ -1,3 +1,4 @@
+import {firstValueFrom} from 'rxjs';
 import {Component, EventEmitter, OnInit, Optional, Output, TemplateRef, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {Source} from '../../models/fasten/source';
@@ -321,50 +322,53 @@ export class MedicalSourcesComponent implements OnInit {
     this.uploadSourceBundleHandler(Array.from(fileList))
   }
 
+  // Every selected file, in turn (#786): a portal's download zip, or record files picked together.
+  // Anything the server can read just imports; a health summary the server cannot convert yet says
+  // so once instead of failing after the upload (#397).
   public async uploadSourceBundleHandler(files: File[]) {
     this.uploadErrorMsg = ""
     this.uploadResultMsg = ""
-    let processingFile = files[0] as File
-    this.uploadedFile = [processingFile]
+    this.uploadedFile = files
 
-    // C-CDA / CCD documents are converted to FHIR on the server (#254) by the self-hosted
-    // fhir-converter — the raw document is uploaded as-is and never leaves this instance.
-    // (Previously the browser shipped the CCDA to a third-party cloud; that path is gone.)
-    if(this.isCcdaFile(processingFile)){
-      // Ask the server whether conversion can actually happen BEFORE offering it. Otherwise the
-      // modal promises a conversion that the upload then rejects with a config error (#397).
-      try {
-        this.cdaConverterStatus = await this.fastenApi.getCDAConverterStatus().toPromise()
-      } catch (_) {
-        this.cdaConverterStatus = null // status unknown — fall back to offering it, as before
+    let converterChecked = false
+    const results: string[] = []
+    const errors: string[] = []
+    this.uploadInProgress = true
+    for (const file of files) {
+      if (this.isCcdaFile(file)) {
+        if (!converterChecked) {
+          converterChecked = true
+          try {
+            this.cdaConverterStatus = await firstValueFrom(this.fastenApi.getCDAConverterStatus())
+          } catch (_) {
+            this.cdaConverterStatus = null // status unknown — try the upload; the server says why if it fails
+          }
+        }
+        if (this.cdaConverterStatus && !this.cdaConverterStatus.ready) {
+          this.uploadInProgress = false
+          await this.showCcdaWarningModal()
+          this.uploadedFile = []
+          return
+        }
       }
-      const shouldConvert = await this.showCcdaWarningModal()
-      if(!shouldConvert){
-        this.uploadedFile = []
-        return
+      try {
+        const result = await firstValueFrom(this.fastenApi.createManualSource(file))
+        const msg = result ? uploadResultMessage(result) : ""
+        results.push(files.length > 1 ? `${file.name}: ${msg}` : msg)
+      } catch (err) {
+        console.log(err)
+        errors.push(`${files.length > 1 ? file.name + ": " : ""}${extractErrorFromResponse(err) || "Unknown Error"}`)
       }
     }
-
-    //TODO: handle manual bundles.
-    this.uploadInProgress = true
-    this.fastenApi.createManualSource(processingFile).subscribe(
-      (result) => {
-        this.uploadResultMsg = result ? uploadResultMessage(result) : ""
-      },
-      (err) => {
-        console.log(err)
-        this.uploadInProgress = false
-        this.uploadErrorMsg = "Error uploading file: " + (extractErrorFromResponse(err)|| "Unknown Error")
-      },
-      () => {
-        this.uploadInProgress = false
-        this.uploadedFile = []
-      }
-    )
+    this.uploadInProgress = false
+    this.uploadedFile = []
+    this.uploadResultMsg = results.join(" ")
+    this.uploadErrorMsg = errors.length ? "Error uploading file: " + errors.join(" ") : ""
   }
 
-  // Detects a C-CDA / CCD document upload by MIME type or file extension. The browser does not
-  // always set a reliable `type` for .ccd/.cda, so extension is the primary signal.
+  // Detects a health summary (C-CDA / CCD) by MIME type or file extension. The browser does not
+  // always set a reliable `type` for .ccd/.cda, so extension is the primary signal. A .zip is NOT
+  // one: it may hold FHIR files only, and the server reports it if it needs the converter.
   private isCcdaFile(file: File): boolean {
     const name = (file.name || "").toLowerCase()
     return file.type === "text/xml" || file.type === "application/xml" ||

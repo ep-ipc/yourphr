@@ -39,7 +39,7 @@ test('a C-CDA file on a server with no converter says so, with the setup steps, 
   const ccd = '<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3"><recordTarget><patientRole><id root="2.16.840.1.113883.19.5" extension="e2e"/></patientRole></recordTarget></ClinicalDocument>';
   await page.locator('input[type=file]').setInputFiles({ name: 'summary.xml', mimeType: 'text/xml', buffer: Buffer.from(ccd) });
   const modal = page.locator('.modal-content');
-  await expect(modal.getByText(/not turned on for this server/)).toBeVisible({ timeout: 20_000 });
+  await expect(modal.getByText(/needs one more piece set up/)).toBeVisible({ timeout: 20_000 });
   await expect(modal.getByText(/yourphr\.cda-converter\.url/)).toBeVisible();
   await expect(modal.getByRole('button', { name: 'Convert' })).toHaveCount(0);
   await modal.locator('.modal-footer').getByRole('button', { name: 'Close' }).click();

@@ -7,7 +7,7 @@
  * same document must land on them.
  */
 import { describe, expect, it } from 'vitest';
-import { UploadFormatError, cdaPatientId, looksLikeCda, parseFhirUpload, patientOf } from '../index.js';
+import { UploadFormatError, cdaPatientId, isCdaDocument, looksLikeCda, parseFhirUpload, patientOf } from '../index.js';
 
 const buf = (s: string): Buffer => Buffer.from(s, 'utf8');
 
@@ -102,5 +102,16 @@ describe('cdaPatientId — identical to Go\'s cdaPatientID', () => {
     ['a comment inside patientRole ignored', '<ClinicalDocument><recordTarget><patientRole><!-- <id root="commented-in-role"/> --><id root="real" extension="after-inner-comment"/></patientRole></recordTarget></ClinicalDocument>\n', 'cda-ec571ad15041d484'],
   ])('%s', (_, xml, expected) => {
     expect(cdaPatientId(xml)).toBe(expected);
+  });
+});
+
+describe('isCdaDocument (yourphr#786)', () => {
+  it('is true only when the root element is a ClinicalDocument', () => {
+    expect(isCdaDocument(buf('<?xml version="1.0"?>\n<!-- c --><ClinicalDocument xmlns="urn:hl7-org:v3"/>'))).toBe(true);
+    expect(isCdaDocument(buf('﻿<cda:ClinicalDocument xmlns:cda="urn:hl7-org:v3"/>'))).toBe(true);
+    // A viewer stylesheet names ClinicalDocument everywhere, but is not one.
+    expect(isCdaDocument(buf('<?xml version="1.0"?><xsl:stylesheet><xsl:template match="n1:ClinicalDocument"/></xsl:stylesheet>'))).toBe(false);
+    expect(isCdaDocument(buf('<SubmitObjectsRequest/>'))).toBe(false);
+    expect(isCdaDocument(buf('{"resourceType":"Bundle"}'))).toBe(false);
   });
 });

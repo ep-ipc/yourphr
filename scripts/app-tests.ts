@@ -6,6 +6,7 @@
  *   npm run app
  */
 import { startFakeProvider } from './lib/fake-provider.js';
+import { buildZip } from '../src/upload/__tests__/zip-fixture.js';
 import { reporter } from './lib/scrub.js';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -778,9 +779,9 @@ async function main(): Promise<void> {
   // the problem — `/source/manual` was read as a source id by the /source/:id route and 404'd. Also
   // after the practitioners, and on carol's token, for the same fixture reasons.
   const upToken = carolToken;
-  const upload = (token: string, filename: string, content: string, type = 'application/json') => {
+  const upload = (token: string, filename: string, content: string | Buffer, type = 'application/json') => {
     const form = new FormData();
-    form.append('file', new Blob([content], { type }), filename);
+    form.append('file', new Blob([typeof content === 'string' ? content : new Uint8Array(content)], { type }), filename);
     return fetch(`${base}/api/secure/source/manual`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
   };
   const upBundle = JSON.stringify({
@@ -940,6 +941,36 @@ async function main(): Promise<void> {
   check('the same C-CDA again lands on the same Patient and source — the derived id is stable',
     again2.source?.patient === ccdUpBody.source?.patient && again2.data?.created === 0 && again2.data?.updated === 0 && again2.data?.unchanged === 2,
     JSON.stringify(again2));
+
+  // A portal's download zip, as the patient has it (yourphr#786): documents beside a viewer, its
+  // stylesheet (which mentions ClinicalDocument), images, XDM metadata and a PDF. Only the
+  // documents reach the converter; the rest is passed over, not reported as unreadable.
+  const ccd2 = ccd.replace('996-756-495', '996-756-496');
+  const portalZip = buildZip([
+    { name: 'IHE_XDM/Una1/STYLE.XSL', data: '<?xml version="1.0"?><xsl:stylesheet><xsl:template match="n1:ClinicalDocument"/></xsl:stylesheet>' },
+    { name: 'IHE_XDM/Una1/DOC0001.XML', data: ccd },
+    { name: 'IHE_XDM/Una1/DOC0002.XML', data: ccd2 },
+    { name: 'IHE_XDM/Una1/METADATA.XML', data: '<SubmitObjectsRequest/>' },
+    { name: 'HTML/IMAGES/logo.png', data: Buffer.from([0x89, 0x50, 0x4e, 0x47]) },
+    { name: 'INDEX.HTM', data: '<html></html>' },
+    { name: '1 of 1 - My Health Summary.PDF', data: '%PDF-1.7' },
+  ]);
+  const before = converterCalls.length;
+  const zipUp = await upload(upToken, 'Requested-Records.zip', portalZip, 'application/zip');
+  const zipBody = (await zipUp.json()) as { data?: { format?: string; received?: number; created?: number; unchanged?: number; skipped?: number } };
+  const zipCalls = converterCalls.slice(before);
+  check('a portal download zip imports as one upload: both documents converted, the viewer files passed over',
+    zipUp.status === 200 && zipBody.data?.format === 'zip' && zipBody.data?.skipped === 0 &&
+      zipCalls.length === 2 && zipCalls.every((c) => c.body === ccd || c.body === ccd2),
+    `${zipUp.status} ${JSON.stringify(zipBody)} calls ${zipCalls.length}`);
+  const noRecords = await upload(upToken, 'photos.zip', buildZip([{ name: 'a.png', data: 'x' }]), 'application/zip');
+  const noRecordsBody = (await noRecords.json()) as { error_code?: string; error?: string };
+  const locked = await upload(upToken, 'locked.zip', buildZip([{ name: 'DOC0001.XML', data: ccd, encrypted: true }]), 'application/zip');
+  const lockedBody = (await locked.json()) as { error_code?: string; error?: string };
+  check('a zip with no records, or a password-protected one, is refused in words a patient can act on',
+    noRecords.status === 400 && noRecordsBody.error_code === 'upload_unreadable' && String(noRecordsBody.error).includes('no health records') &&
+      locked.status === 400 && String(lockedBody.error).includes('password-protected'),
+    `${noRecords.status} ${noRecordsBody.error} / ${locked.status} ${lockedBody.error}`);
   converter.close();
 
   fake.close();

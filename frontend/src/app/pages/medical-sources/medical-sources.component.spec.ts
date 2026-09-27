@@ -63,4 +63,26 @@ describe('MedicalSourcesComponent', () => {
     // Note: not calling httpMock.verify() — the <app-medical-sources-connected> child issues its own
     // GET /source on init, which is orthogonal to this test.
   });
+
+  // A portal download is a zip; several record files can be picked together (#786). Each is uploaded
+  // in turn, and a zip goes straight up — no "convert?" prompt, no converter status round-trip.
+  it('uploads every selected file in turn, a zip without asking anything', async () => {
+    const httpMock = TestBed.inject(HttpTestingController);
+    const zip = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'Requested-Records.zip', { type: 'application/zip' });
+    const json = new File(['{"resourceType":"Patient","id":"p"}'], 'patient.json', { type: 'application/json' });
+    const done = component.uploadSourceBundleHandler([zip, json]);
+
+    const upload = (name: string) => (r: { url: string; body: unknown }) => r.url.includes('/secure/source/manual') && (r.body as FormData).get('file') instanceof File && ((r.body as FormData).get('file') as File).name === name;
+    await new Promise((r) => setTimeout(r));
+    httpMock.expectOne(upload('Requested-Records.zip')).flush({ success: true, data: { format: 'zip', received: 3, created: 3, updated: 0, unchanged: 0, collisions: 0, skipped: 0 } });
+    await new Promise((r) => setTimeout(r));
+    httpMock.expectOne(upload('patient.json')).flush({ success: true, data: { format: 'fhir', received: 1, created: 1, updated: 0, unchanged: 0, collisions: 0, skipped: 0 } });
+    await done;
+
+    httpMock.expectNone((r) => r.url.includes('cda-converter/status'));
+    expect(component.uploadErrorMsg).toBe('');
+    expect(component.uploadResultMsg).toContain('Requested-Records.zip: Added 3 new records.');
+    expect(component.uploadResultMsg).toContain('patient.json: Added 1 new record.');
+    expect(component.uploadInProgress).toBe(false);
+  });
 });

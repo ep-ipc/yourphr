@@ -56,6 +56,12 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 `ready` does not prove the converter is running; an upload does. If it is not, the upload says so (see Troubleshooting).
 
+## Uploading a portal download
+
+Upload the file the portal gave you, just as it is. Epic MyChart's "Download my records" is a zip holding the C-CDA documents (`IHE_XDM/<name>/DOC000N.XML`) beside a PDF, an HTML viewer and its images. YourPHR reads the zip, converts every document in it, and imports them as one upload ([#786](https://github.com/jwilleke/yourphr/issues/786)). The viewer files are passed over. Several files can also be selected at once; each is imported in turn.
+
+A zip MyChart encrypted with a password has to be opened first, with that password; YourPHR says so rather than failing silently. What a zip may unpack to is capped by `yourphr.sources.upload.max-bytes`, the same cap as any upload.
+
 ## What happens to the document
 
 YourPHR posts the raw document to the converter (the open-source [Metriport fhir-converter](https://github.com/metriport/metriport/tree/master/packages/fhir-converter)), receives a FHIR R4 bundle, and imports it like any uploaded FHIR file.

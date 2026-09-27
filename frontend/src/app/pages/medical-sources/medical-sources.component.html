@@ -46,7 +46,7 @@
       }
 
       <div class="az-content-label mg-b-5">Manual Upload</div>
-      <p class="mg-b-20">YourPHR also supports manually uploaded electronic medical records (EMR/EHR). Click below to upload.</p>
+      <p class="mg-b-20">Already downloaded your records from a patient portal? Upload the file just as you got it — for example the zip from MyChart's "Download my records". You can pick several files at once.</p>
 
       <div class="row row-sm">
         <div class="col-lg">
@@ -59,11 +59,11 @@
             (dragleave)="dragActive = false"
             (drop)="!isDemoAccount && onBundleDrop($event)">
             <input #bundleInput type="file" class="d-none"
-              accept=".json,.phr,.ndjson,.jsonl,.xml,.ccd,.ccda,.cda"
+              accept=".zip,.json,.phr,.ndjson,.jsonl,.xml,.ccd,.ccda,.cda" multiple
               (change)="onBundleInput(bundleInput)">
             @if (!uploadedFile.length) {
               <i class="fas fa-cloud-upload-alt"></i>
-              <span>Select or drop your EMR/EHR bundle. Must be in JSON or XML format.</span>
+              <span>Select or drop your downloaded records (a .zip, or .json / .xml files)</span>
             } @else {
               @for (f of uploadedFile; track f) {
                 <span>{{ f.name }} ({{ f.type || 'unknown type' }})</span>
@@ -79,7 +79,7 @@
           @if (uploadInProgress) {
             <div class="alert alert-info mt-3" role="alert">
               <i class="fas fa-spinner fa-spin me-2"></i>
-              <strong>Starting import…</strong> Uploading your bundle and queuing the import. Large exports can take several minutes — progress then appears on your Connected Sources above, and you don't need to wait on this page.
+              <strong>Importing…</strong> Uploading your records. Large exports can take several minutes — progress then appears on your Connected Sources above, and you don't need to wait on this page.
             </div>
           }
 
@@ -94,6 +94,11 @@
               <strong>Error:</strong> {{uploadErrorMsg}}
             </div>
           }
+          <p class="small text-muted mt-2 mb-0">
+            Health summaries are converted on this server with
+            <a href="https://github.com/metriport/metriport/tree/master/packages/fhir-converter" externalLink>open-source software</a>
+            from <a href="https://www.metriport.com/" externalLink>Metriport</a>. Your records never leave this server.
+          </p>
         </div><!-- col -->
       </div><!-- row -->
 
@@ -195,62 +200,29 @@
 
 
 
+<!-- Shown only when a health-summary file cannot be imported because this server cannot convert it
+(#397). Anything this server CAN read just imports — there is nothing to ask the patient (#786). -->
 <ng-template #ccdaWarningModalRef let-modal>
-
   <div class="modal-header">
-    <h6 class="modal-title">Convert your records?</h6>
+    <h6 class="modal-title">This file can't be imported yet</h6>
     <button type="button" class="btn-close" aria-label="Close" (click)="modal.dismiss('cancel')"></button>
   </div>
-
   <div class="modal-body">
-    <h6>YourPHR does not natively support <a href="https://en.wikipedia.org/wiki/Consolidated_Clinical_Document_Architecture"  externalLink >CCDA</a> Health Records</h6>
-
-    <!-- Converter unavailable on this server: show the operator what to turn on, instead of a
-    Convert button that fails with a config error after the upload (#397). -->
-    @if (cdaConverterStatus && !cdaConverterStatus.ready) {
-      <p>
-        C-CDA conversion is <strong>not turned on for this server</strong>, so this file can't be
-        imported yet. It needs a separate converter service that this server has not been set up with.
-      </p>
-      <p class="mb-1">If you administer this server, enable it with:</p>
-      <pre class="bg-light border rounded p-2 small mb-2" style="white-space:pre-wrap">{{ cdaConverterStatus.setup_hint }}</pre>
-      <p class="small text-muted mb-0">
-        Your data is converted on this server and will <strong>NEVER</strong> be shared with any third parties.
-      </p>
-    } @else {
-      <p>However we can convert it automatically using <a href="https://github.com/metriport/metriport/tree/master/packages/fhir-converter" externalLink>open-source software</a> generously provided by the team at <a href="https://www.metriport.com/"  externalLink>Metriport</a>.<br/><br/>
-      Your data will <strong>NEVER</strong> be shared with any third parties.
+    <p>
+      This is a health summary from your patient portal. This server needs one more piece set up
+      before it can read that kind of file.
     </p>
-    <div class="d-flex h-100">
-      <div class="mx-auto my-auto">
-        <a href="https://www.metriport.com/"  externalLink>
-          <img style="height:50px" src="assets/images/metriport-logo.png">
-        </a>
-      </div>
-    </div>
-  }
-
-  <ng-template #ccdaConvertAvailable>
-    <p>However we can convert it automatically using <a href="https://github.com/metriport/metriport/tree/master/packages/fhir-converter" externalLink>open-source software</a> generously provided by the team at <a href="https://www.metriport.com/"  externalLink>Metriport</a>.<br/><br/>
-    Your data will <strong>NEVER</strong> be shared with any third parties.
-  </p>
-
-  <div class="d-flex h-100">
-    <div class="mx-auto my-auto">
-      <a href="https://www.metriport.com/"  externalLink>
-        <img style="height:50px" src="assets/images/metriport-logo.png">
-      </a>
-    </div>
+    @if (cdaConverterStatus?.setup_hint) {
+      <p class="mb-1">If you look after this server, here is what to set up:</p>
+      <pre class="bg-light border rounded p-2 small mb-2" style="white-space:pre-wrap">{{ cdaConverterStatus?.setup_hint }}</pre>
+    }
+    <p class="small text-muted mb-0">
+      Your records are read on this server and are <strong>never</strong> shared with anyone else.
+    </p>
   </div>
-</ng-template>
-
-</div>
-<div class="modal-footer">
-  @if (!cdaConverterStatus || cdaConverterStatus.ready) {
-    <button (click)="modal.close('convert')" type="button" class="btn btn-az-primary">Convert</button>
-  }
-  <button (click)="modal.dismiss('cancel')" type="button" class="btn btn-outline-secondary">{{ (cdaConverterStatus && !cdaConverterStatus.ready) ? 'Close' : 'Cancel' }}</button>
-</div>
+  <div class="modal-footer">
+    <button (click)="modal.dismiss('cancel')" type="button" class="btn btn-outline-secondary">Close</button>
+  </div>
 </ng-template>
 
 <!-- Pre-connect informed messaging — all medical sources by default; copy by profile. -->

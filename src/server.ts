@@ -921,13 +921,14 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/source/manual' && req.method === 'POST') {
-          const maxBytes = engine.has('configuration') ? engine.managers.configuration.getInt('yourphr.sources.upload.max-bytes') : 100 * 1024 * 1024;
-          const upload = await readUpload(req, maxBytes > 0 ? maxBytes : 100 * 1024 * 1024);
+          const configured = engine.has('configuration') ? engine.managers.configuration.getInt('yourphr.sources.upload.max-bytes') : 0;
+          const maxBytes = configured > 0 ? configured : 100 * 1024 * 1024;
+          const upload = await readUpload(req, maxBytes);
           if (!('file' in upload)) {
             send(res, upload.status, {success: false, error: upload.error});
             return;
           }
-          const result = await src.importUpload(ctx, upload.file); // ApiError -> the error boundary
+          const result = await src.importUpload(ctx, { ...upload.file, maxUnpackedBytes: maxBytes }); // ApiError -> the error boundary; a zip unpacks under the same cap (yourphr#786)
           send(res, 200, {success: true, data: result.data, source: result.source});
           return;
         }
