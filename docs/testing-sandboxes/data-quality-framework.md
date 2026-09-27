@@ -77,6 +77,14 @@ __What vendors actually send.__
 
 So no single field works for every provider, the declaration cannot be the switch either (Cerner sends versions and declares nothing), and content comparison alone is fooled by vendors that reorder lists: five Cerner allergies accumulated ~230 versions each without a single change.
 
+__What others do (checked 2026-09-27).__ The SMART team hits the same wall. Their open-source bulk client, [SMART Fetch](https://docs.smarthealthit.org/cumulus/fetch/since.html) (announced on the [SMART on FHIR list](https://groups.google.com/g/smart-on-fhir/c/tPuH4mJLmTI/m/UvkoYDCNAwAJ), July 2025), says "some vendors don't support the `meta.lastUpdated` field" and names Epic as "a notable example". Their workaround fakes "created since" from per-resource dates such as `DiagnosticReport.issued`, and states the limits plainly:
+
+- it does not see edits to a resource created earlier;
+- eight resource types have no searchable creation date (Device, Encounter, EpisodeOfCare, Immunization, MedicationDispense, Patient, Procedure, Specimen);
+- for change detection it recommends a full re-export.
+
+Nothing on the list describes a way to tell a changed resource from a repeat on a server that sends no `meta`. A 2017 thread ("Detecting patient changes in the background") calls it "the tricky part" and points at `meta.lastUpdated`. So a full fetch plus our own comparison, which is what we do, is what the people who wrote SMART do too. The difference is that we must compare carefully.
+
 __The rule, adopted for [#252](https://github.com/jwilleke/yourphr/issues/252) (decided with Jim, 2026-09-27).__ Take the best evidence each provider gives, in the spec's own order:
 
 - __`meta.versionId` sent:__ it decides. Same means unchanged; different means changed.
