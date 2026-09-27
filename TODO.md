@@ -9,7 +9,7 @@
 - Parked / half-done: none in the tree.
 - Next steps:
   - __Molly's records:__ MyChart (Licking Memorial) → Requested Records → Download when "Ready for download (1)"; upload the zip as-is on YourPHR → Sources __signed in as Molly__; delete the zip afterwards.
-  - __[#408](https://github.com/jwilleke/yourphr/issues/408) Epic production:__ wait for Epic's reply to the email sent 2026-09-27 to open@epic.com (production syncing disabled "while your app is modified"). Meanwhile Jim can Activate Licking Memorial (org 9332) for Non-Production on fhir.epic.com → Manage Keys; save the per-org secret in `private/secrets.md`.
+  - __[#408](https://github.com/jwilleke/yourphr/issues/408) Epic production:__ wait for Epic's reply to the email sent 2026-09-27 to `open@epic.com` (production syncing disabled "while your app is modified"). Meanwhile Jim can Activate Licking Memorial (org 9332) for Non-Production on fhir.epic.com → Manage Keys; save the per-org secret in `private/secrets.md`.
   - __[#784](https://github.com/jwilleke/yourphr/issues/784) step 2:__ re-key `resources`/`resource_history` by person + source (first real entry in `RECORDS_MIGRATIONS`). Then linking is separate issues (suggest by identifier → patient confirms → one entry, both sources). Waits partly on John Moehrke's reply (question sent 2026-09-27).
   - __[#252](https://github.com/jwilleke/yourphr/issues/252):__ tiered change detection (provider versionId → lastUpdated → order-insensitive content); design in `docs/testing-sandboxes/data-quality-framework.md` → Version signals. Builds on #784.
   - __[#783](https://github.com/jwilleke/yourphr/issues/783):__ no scheduled backup since the cut-over; move export off the request thread, then enable the schedule.
