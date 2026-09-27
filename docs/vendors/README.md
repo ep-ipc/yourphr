@@ -24,6 +24,8 @@ How to obtain credentials for each test sandbox. The index with connect values +
 
 See also: [`../FHIR/fhir-testing.md`](../FHIR/fhir-testing.md) (test-vs-real environments) and [`../FHIR/fhir-test-discovery-example.md`](../FHIR/fhir-test-discovery-example.md) (a captured FollowMyHealth discovery document).
 
+__Ask the community first:__ the [SMART on FHIR mailing list](https://groups.google.com/g/smart-on-fhir) is where the SMART team (Boston Children's) and vendor engineers answer questions about vendor behaviour, SMART auth and FHIR sync. Search it before re-deriving an answer. On 2026-09-27 it showed that the SMART team works around Epic's missing `meta.lastUpdated` the same way we do (see [version signals](../testing-sandboxes/data-quality-framework.md#version-signals--did-this-record-change)).
+
 ## ⚠️ Everything below is SANDBOX
 
 All credentials, endpoints, and test patients documented here and in `private/secrets.md` are __test/sandbox__ — synthetic patients, no real PHI. __Production__ registration for each vendor is a separate, later effort (different endpoints, real approval, real client_ids). Do not mix the two: the provider catalog separates them by `Environment` (`sandbox` vs `production`).
