@@ -37,7 +37,9 @@ const SUFFIX = '-yourphr-spike-backup.db';
 /** What one of our artifacts is called — the backup-storage provider lists by it. */
 export const BACKUP_SUFFIX = SUFFIX;
 /** Tables that live in records.db; everything else in a backup belongs to the app database. */
-export const RECORDS_TABLES = new Set(['resources', 'resource_history', 'search_index', 'search_text']);
+/** records.db's migration ledger (yourphr#784) — its own name, so a restore can return it to records.db. */
+export const RECORDS_LEDGER_TABLE = 'records_schema_migrations';
+export const RECORDS_TABLES = new Set(['resources', 'resource_history', 'search_index', 'search_text', RECORDS_LEDGER_TABLE]);
 /** The staged halves a restore writes next to the live files; applied at the next start. */
 export const STAGED_RECORDS = 'records.db.staged';
 export const STAGED_APP = 'spike.db.staged';

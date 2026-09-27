@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Resource } from '@medplum/fhirtypes';
 import { SqliteRecordsProvider } from '../SqliteRecordsProvider.js';
 import { SqliteFhirRepository } from '../../../SqliteFhirRepository.js';
+import Database from 'better-sqlite3-multiple-ciphers';
+import { backupDatabase, stageInstanceRestore, STAGED_APP, STAGED_RECORDS, RECORDS_LEDGER_TABLE } from '../sqlite-backup.js';
+import { runMigrations } from '../../../framework/providers/sqlite-migrations.js';
 
 const LOINC = 'http://loinc.org';
 const obs = (id: string, code: string, date: string, system = LOINC): Resource =>
@@ -167,5 +170,82 @@ describe('compact — removing the identical history copies v3.7.2 and earlier w
     const left = carol.db.prepare("SELECT COUNT(*) AS n FROM resource_history WHERE id = 'same-id'").get() as { n: number };
     expect(left.n).toBe(5); // every row of the shared id is still there
     carol.db.close(); dave.db.close();
+  });
+});
+
+describe('the records.db migration ledger (yourphr#784)', () => {
+  const baseline = { id: '20260927120000', description: 'records baseline', up: () => undefined };
+
+  it('is written on first start, skipped on the next, and leaves the records exactly as they were', async () => {
+    await provider.close();
+    const ledgered = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key', [baseline]);
+    await ledgered.initialize();
+    expect(ledgered.migrations).toEqual({ applied: ['20260927120000'], skipped: 0 });
+    expect((await ledgered.list('alice')).map((r) => r.id)).toEqual(['o1', 'o2', 'o3', 'o4']);
+    await ledgered.close();
+    const again = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key', [baseline]);
+    await again.initialize();
+    expect(again.migrations).toEqual({ applied: [], skipped: 1 });
+    await again.close();
+    provider = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key');
+  });
+
+  it('refuses a records database written by a newer build', async () => {
+    await provider.close();
+    const newer = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key', [baseline, { id: '20991231000000', description: 'from the future', up: () => undefined }]);
+    await newer.initialize();
+    await newer.close();
+    const older = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key', [baseline]);
+    await expect(older.initialize()).rejects.toThrow(/newer than this build.*20991231000000/);
+    provider = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key');
+  });
+
+  it('with no ledger (the contract harnesses) it never touches the ledger, even on a ledgered file', async () => {
+    await provider.close();
+    const ledgered = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key', [baseline, { id: '20991231000000', description: 'from the future', up: () => undefined }]);
+    await ledgered.initialize();
+    await ledgered.close();
+    const bare = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key');
+    await bare.initialize();
+    expect(bare.migrations).toBeUndefined();
+    await bare.close();
+    provider = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key');
+  });
+});
+
+describe('backup and restore keep the two ledgers apart (yourphr#784)', () => {
+  it('a backup holds both databases\' ledgers, and a restore returns each to its own file', async () => {
+    await provider.close();
+    const baseline = { id: '20260927120000', description: 'records baseline', up: () => undefined };
+    const records = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key', [baseline]);
+    await records.initialize();
+    await records.close();
+    const app = new Database(join(dir, 'spike.db'));
+    app.pragma("cipher='sqlcipher'");
+    app.pragma("key='unit-key'");
+    runMigrations(app, [{ id: '20260820200000', description: 'app baseline', up: () => undefined }]);
+
+    const repo = new SqliteFhirRepository({ file: join(dir, 'records.db'), key: 'unit-key', userId: 'alice' });
+    const taken = backupDatabase(repo, { destination: join(dir, 'backups'), backupKey: 'backup-key', alsoExport: [app] });
+    repo.db.close();
+    app.close();
+
+    stageInstanceRestore(taken.file, 'backup-key', dir, 'unit-key');
+    const open = (name: string): InstanceType<typeof Database> => {
+      const db = new Database(join(dir, name));
+      db.pragma("cipher='sqlcipher'");
+      db.pragma("key='unit-key'");
+      return db;
+    };
+    const tables = (db: InstanceType<typeof Database>): string[] => (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%migrations'").all() as { name: string }[]).map((r) => r.name);
+    const stagedRecords = open(STAGED_RECORDS);
+    const stagedApp = open(STAGED_APP);
+    expect(tables(stagedRecords)).toEqual([RECORDS_LEDGER_TABLE]);
+    expect(tables(stagedApp)).toEqual(['schema_migrations']);
+    expect((stagedRecords.prepare(`SELECT id FROM ${RECORDS_LEDGER_TABLE}`).all() as { id: string }[]).map((r) => r.id)).toEqual(['20260927120000']);
+    expect((stagedApp.prepare('SELECT id FROM schema_migrations').all() as { id: string }[]).map((r) => r.id)).toEqual(['20260820200000']);
+    stagedRecords.close();
+    stagedApp.close();
+    provider = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key');
   });
 });

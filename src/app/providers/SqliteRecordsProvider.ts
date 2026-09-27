@@ -11,8 +11,9 @@ import type { SearchRequest, WithId } from '@medplum/core';
 import { SqliteFhirRepository, sameContent } from '../../SqliteFhirRepository.js';
 import { dirname } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
-import { backupDatabase, stageInstanceRestore } from './sqlite-backup.js';
+import { backupDatabase, stageInstanceRestore, RECORDS_LEDGER_TABLE } from './sqlite-backup.js';
 import { ftsQuery } from './record-text.js';
+import { runMigrations, type Migration, type MigrationReport } from '../../framework/providers/sqlite-migrations.js';
 import { BaseRecordsProvider, type CompactReport, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
 
 const REFERENCE_SHAPE = /^[A-Z][A-Za-z]+\/[A-Za-z0-9.-]{1,64}$/;
@@ -22,7 +23,16 @@ const DATE_PREFIX = /^(eq|ne|gt|ge|lt|le|sa|eb|ap)(\d.*)$/;
 export class SqliteRecordsProvider extends BaseRecordsProvider {
   private readonly handles = new Map<string, SqliteFhirRepository>();
 
-  constructor(private readonly file: string, private readonly key: string | undefined) {
+  /** What the records ledger did at initialize — applied ids, skipped count. Undefined with no ledger. */
+  migrations: MigrationReport | undefined;
+
+  /**
+   * `ledger` is the records.db migration registry (yourphr#784), run at initialize() through the
+   * same runMigrations the app database uses: dated, run once, recorded, transactional, and a
+   * database from a newer build is refused. An empty ledger leaves the ledger alone — the contract
+   * harnesses open the store without one, and must not trip the newer-build refusal on a real file.
+   */
+  constructor(private readonly file: string, private readonly key: string | undefined, private readonly ledger: Migration[] = []) {
     super();
   }
 
@@ -42,9 +52,14 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
 
   async initialize(): Promise<void> {
     // Open once so the schema exists and the file is proven openable under the key at boot,
-    // rather than at the first request.
-    this.handle('__boot__').db.close();
-    this.handles.delete('__boot__');
+    // rather than at the first request — and migrate before any account's handle opens.
+    const boot = this.handle('__boot__');
+    try {
+      if (this.ledger.length > 0) this.migrations = runMigrations(boot.db, this.ledger, RECORDS_LEDGER_TABLE);
+    } finally {
+      boot.db.close();
+      this.handles.delete('__boot__');
+    }
   }
 
   async close(): Promise<void> {

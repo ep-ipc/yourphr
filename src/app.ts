@@ -220,6 +220,21 @@ const APP_MIGRATIONS: Migration[] = [
   },
 ];
 
+/**
+ * The records.db registry (yourphr#784) — the PHI store's own ledger, separate from the app
+ * database's because it is a separate file under its own schema. Same rules as APP_MIGRATIONS:
+ * a migration is a frozen snapshot of intent, never live code. SqliteFhirRepository's constructor
+ * keeps its CREATE IF NOT EXISTS; the baseline records that schema so the newer-build refusal has
+ * something to stand on from here on, and the re-keying by person and source is the next entry.
+ */
+const RECORDS_MIGRATIONS: Migration[] = [
+  {
+    id: '20260927120000',
+    description: 'records baseline — resources, resource_history, search_index, search_text as SqliteFhirRepository creates them (v3.8.1); ledger established',
+    up: () => undefined,
+  },
+];
+
 /** Everything that owns data, opened the one way the server opens it. */
 export interface Stores {
   config: ConfigurationManager;
@@ -365,7 +380,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   });
   // 6. The engine: managers in validated dependency order (yourphr#608). Configuration first,
   // then Records over the PHI-storage provider. The other stores join as their own children land.
-  const recordsProvider = new SqliteRecordsProvider(recordsDbPath, dbKey === '' ? undefined : dbKey);
+  const recordsProvider = new SqliteRecordsProvider(recordsDbPath, dbKey === '' ? undefined : dbKey, RECORDS_MIGRATIONS);
   engine.register('policy', new PolicyManager(engine, (line) => appLog.info(line))); // yourphr#623: roles and permissions from the merged configuration
   engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('database', database);

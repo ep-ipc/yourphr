@@ -56,7 +56,14 @@ export function addColumnWithDefault(
  * first failure, leaving everything before it applied and everything from it untouched — a rerun
  * after the fix picks up exactly there.
  */
-export function runMigrations(db: InstanceType<typeof Database>, registry: Migration[]): MigrationReport {
+/**
+ * `ledgerTable` names the table the applied ids are recorded in. The app database keeps the default;
+ * records.db uses its own name (yourphr#784) because a backup holds both databases' tables in one
+ * file and a restore splits them back BY TABLE NAME — two tables called schema_migrations could not
+ * be told apart.
+ */
+export function runMigrations(db: InstanceType<typeof Database>, registry: Migration[], ledgerTable = 'schema_migrations'): MigrationReport {
+  if (!/^[a-z_]+$/.test(ledgerTable)) throw new Error(`migration ledger table ${ledgerTable} is not a plain name`);
   // Registry hygiene before anything touches the database.
   let previous = '';
   for (const m of registry) {
@@ -69,7 +76,7 @@ export function runMigrations(db: InstanceType<typeof Database>, registry: Migra
     previous = m.id;
   }
 
-  db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+  db.exec(`CREATE TABLE IF NOT EXISTS ${ledgerTable} (
     id TEXT PRIMARY KEY,
     description TEXT NOT NULL,
     applied_at TEXT NOT NULL
@@ -78,7 +85,7 @@ export function runMigrations(db: InstanceType<typeof Database>, registry: Migra
   // Downgrade protection: an applied id the registry does not know means the database belongs to a
   // NEWER build. Opening it anyway is how corruption happens — refuse, name the ids.
   const appliedIds = new Set(
-    (db.prepare('SELECT id FROM schema_migrations').all() as { id: string }[]).map((r) => r.id)
+    (db.prepare(`SELECT id FROM ${ledgerTable}`).all() as { id: string }[]).map((r) => r.id)
   );
   const known = new Set(registry.map((m) => m.id));
   const fromTheFuture = [...appliedIds].filter((id) => !known.has(id));
@@ -97,7 +104,7 @@ export function runMigrations(db: InstanceType<typeof Database>, registry: Migra
     db.exec('BEGIN');
     try {
       migration.up(db);
-      db.prepare('INSERT INTO schema_migrations (id, description, applied_at) VALUES (?, ?, ?)').run(
+      db.prepare(`INSERT INTO ${ledgerTable} (id, description, applied_at) VALUES (?, ?, ?)`).run(
         migration.id, migration.description, new Date().toISOString()
       );
       db.exec('COMMIT');
