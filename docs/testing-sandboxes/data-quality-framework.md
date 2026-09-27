@@ -65,6 +65,8 @@ A sync receives every record again on every pass. Deciding whether one actually 
 
 __What FHIR R4 requires.__ Only the id. A server "SHALL" return every resource with its `id`. Versioning is a recommendation: servers "SHOULD support versions, but some are unable to"; one that versions fills in `meta.versionId` and `meta.lastUpdated`, and one that does not must leave `versionId` out and still keep `lastUpdated` correct. `meta`, `versionId` and `lastUpdated` are all 0..1. A read "SHOULD" carry the version as an ETag header, which does not help a search. Each server may declare what it does in its CapabilityStatement (`rest.resource.versioning`). US Core adds nothing: `meta` is not must-support.
 
+__What an id is, and is not.__ `Resource.id` is unique only on the server that issued it, for that resource type; it is not a key across vendors. `meta.versionId` names one version on that same server. What links the same real-world thing across providers is the optional, repeating `identifier` (system + value: MRN, NPI, order number). R4 does not require one on every resource, and US Core requires it only on some profiles (Patient, for example). So a provider's copy of a record is keyed by *server + type + id*, and linking two providers' copies goes through `identifier`. It is never assumed from a matching id, and never a silent join. YourPHR keys records without the server today; that is [#784](https://github.com/jwilleke/yourphr/issues/784).
+
 __What vendors actually send.__
 
 | Source | Declares `versioning` | `meta.versionId` | `meta.lastUpdated` | Evidence |

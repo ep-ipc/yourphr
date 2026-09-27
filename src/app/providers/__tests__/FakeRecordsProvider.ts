@@ -119,7 +119,7 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
   async compact(options: { dryRun?: boolean } = {}): Promise<CompactReport> {
     // The fake keeps no history table; there is nothing to compact.
     const n = this.rows.size;
-    return { resources: n, historyBefore: 0, duplicates: 0, historyAfter: 0, repointed: 0, bytesBefore: 0, bytesAfter: 0, vacuumed: false, integrity: 'ok', dryRun: options.dryRun ?? false };
+    return { resources: n, historyBefore: 0, duplicates: 0, historyAfter: 0, repointed: 0, skippedShared: 0, bytesBefore: 0, bytesAfter: 0, vacuumed: false, integrity: 'ok', dryRun: options.dryRun ?? false };
   }
   async removeBySource(userId: string, sourceId: string): Promise<number> {
     let n = 0;

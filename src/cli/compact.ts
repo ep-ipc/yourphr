@@ -61,6 +61,7 @@ export async function compact(argv: string[]): Promise<number> {
     console.log(`  history rows:       ${r.historyBefore} -> ${r.historyAfter}${dryRun ? ' (dry run: nothing removed)' : ''}`);
     console.log(`  identical copies:   ${r.duplicates}${dryRun ? ' would be removed' : ' removed'}`);
     console.log(`  current versions repointed to the first copy of their content: ${r.repointed}`);
+    if (r.skippedShared > 0) console.log(`  left untouched:     ${r.skippedShared} record id(s) held by more than one person — their histories share one bucket and cannot be told apart`);
     console.log(`  file size:          ${mb(r.bytesBefore)} -> ${mb(r.bytesAfter)}${r.vacuumed ? '' : dryRun ? '' : ' (not vacuumed; run again without --no-vacuum to reclaim)'}`);
     console.log(`  integrity:          ${r.integrity}`);
     if (r.integrity.toLowerCase() !== 'ok') {

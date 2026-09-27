@@ -281,6 +281,13 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
     const count = (sql: string): number => (db.prepare(sql).get() as { n: number }).n;
     const resources = count('SELECT COUNT(*) AS n FROM resources');
     const historyBefore = count('SELECT COUNT(*) AS n FROM resource_history');
+    // resource_history carries no user_id, so two people holding the same type/id share one history
+    // bucket. Those ids are left alone entirely: nothing deleted, nothing repointed. Counted and
+    // reported, so an operator knows. (Fixing the key itself is the records-keyed-by-source issue.)
+    const shared = new Set<string>();
+    for (const r of db.prepare('SELECT resource_type, id FROM resources GROUP BY resource_type, id HAVING COUNT(DISTINCT user_id) > 1').iterate() as Iterable<{ resource_type: string; id: string }>) {
+      shared.add(`${r.resource_type}/${r.id}`);
+    }
     const current = new Map<string, string>();
     for (const r of db.prepare('SELECT resource_type, id, version_id FROM resources').iterate() as Iterable<{ resource_type: string; id: string; version_id: string }>) {
       current.set(`${r.resource_type}/${r.id}`, r.version_id);
@@ -295,6 +302,7 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
       .iterate() as Iterable<{ rowid: number; resource_type: string; id: string; version_id: string; content: string }>;
     for (const row of rows) {
       const key = `${row.resource_type}/${row.id}`;
+      if (shared.has(key)) continue;
       const resource = JSON.parse(row.content) as Resource;
       if (key !== group) {
         group = key;
@@ -339,6 +347,7 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
       duplicates: doomed.length,
       historyAfter: dryRun ? historyBefore : count('SELECT COUNT(*) AS n FROM resource_history'),
       repointed: repoint.size,
+      skippedShared: shared.size,
       bytesBefore,
       bytesAfter: existsSync(this.file) ? statSync(this.file).size : 0,
       vacuumed: vacuum,

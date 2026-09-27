@@ -98,6 +98,11 @@ export interface CompactReport {
   historyAfter: number;
   /** Records whose current version was a duplicate, repointed to the first copy of that content. */
   repointed: number;
+  /**
+   * Record ids held by more than one person, left untouched. resource_history is keyed without the
+   * person, so their histories cannot be told apart; compacting them could cross accounts.
+   */
+  skippedShared: number;
   bytesBefore: number;
   bytesAfter: number;
   vacuumed: boolean;

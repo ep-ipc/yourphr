@@ -148,7 +148,24 @@ describe('compact — removing the identical history copies v3.7.2 and earlier w
     expect((await p.history('carol', 'Observation', 'c2')).versions).toBe(1);
 
     // Running it again finds nothing more to do.
-    expect(await p.compact()).toMatchObject({ duplicates: 0, repointed: 0, vacuumed: false, integrity: 'ok' });
+    expect(await p.compact()).toMatchObject({ duplicates: 0, repointed: 0, skippedShared: 0, vacuumed: false, integrity: 'ok' });
     repo.db.close();
+  });
+
+  it('leaves a record id held by more than one person untouched — their history rows cannot be told apart', async () => {
+    const file = join(dir, 'shared.db');
+    const carol = new SqliteFhirRepository({ file, key: 'unit-key', userId: 'carol', sourceId: 'source-1' });
+    const dave = new SqliteFhirRepository({ file, key: 'unit-key', userId: 'dave', sourceId: 'source-2' });
+    const A = obs('same-id', '718-7', '2024-01-10');
+    for (const r of [A, A, A]) await carol.updateResource(r);
+    for (const r of [A, A]) await dave.updateResource(r);
+    await carol.updateResource(obs('only-carol', '718-7', '2024-05-10'));
+    await carol.updateResource(obs('only-carol', '718-7', '2024-05-10'));
+    const p = SqliteRecordsProvider.overRepository(carol);
+    const done = await p.compact();
+    expect(done).toMatchObject({ skippedShared: 1, duplicates: 1, integrity: 'ok' }); // only only-carol's repeat goes
+    const left = carol.db.prepare("SELECT COUNT(*) AS n FROM resource_history WHERE id = 'same-id'").get() as { n: number };
+    expect(left.n).toBe(5); // every row of the shared id is still there
+    carol.db.close(); dave.db.close();
   });
 });
