@@ -52,12 +52,38 @@ What we know about each source's data quality. __Characterized__ is honest about
 | Source | US-Core baseline | Known quirks (observed) | Our handling | Characterized |
 |---|---|---|---|---|
 | __Synthea__ | aligned (synthetic) | "too clean" — never reproduces vendor non-conformance | happy-path baseline | ✅ well-understood (synthetic) |
-| __Epic__ (sandbox) | US-Core | `Encounter.class` is a LOCAL patient-class code (`HOV`/`Admission`, __not__ v3-ActCode) so `legibleClass()` misses; clinical resources dual-code SNOMED/ICD/LOINC/CPT __inline__; pre-Nov-2022 exports use OID code systems (newer use standard URLs); generated CDAs carry a Care-Everywhere perf table | prefer the standard coding when present; `type[].text` for local-only fields (`class`, `Goal`); strip CDA perf telemetry. See [`../vendors/epic/notes.md`](../vendors/epic/notes.md) | 🟡 one patient (Camila) |
-| __Oracle Health (Cerner)__ | US-Core | the `nsmart` export is __documents-only__ (~2,149 `DocumentReference`, allergies, some `DiagnosticReport`) — no `Patient`/`Encounter` | docs-only empty state; treat `DocumentReference` narrative as primary | 🟡 one export |
-| __CMS Blue Button 2.0__ | claims profiles | __claims only__ (EOB/Coverage), no clinical resources; no `$everything`; initial token omits `patient` | claims classifiers ([#294](https://github.com/jwilleke/yourphr/issues/294)–[#296](https://github.com/jwilleke/yourphr/issues/296)) | 🟡 connected; data = claims |
+| __Epic__ (sandbox) | US-Core | `Encounter.class` is a LOCAL patient-class code (`HOV`/`Admission`, __not__ v3-ActCode) so `legibleClass()` misses; clinical resources dual-code SNOMED/ICD/LOINC/CPT __inline__; pre-Nov-2022 exports use OID code systems (newer use standard URLs); generated CDAs carry a Care-Everywhere perf table; __sends no `meta` at all__ — no `versionId`, no `lastUpdated` (see [version signals](#version-signals--did-this-record-change)) | prefer the standard coding when present; `type[].text` for local-only fields (`class`, `Goal`); strip CDA perf telemetry. See [`../vendors/epic/notes.md`](../vendors/epic/notes.md) | 🟡 one patient (Camila) |
+| __Oracle Health (Cerner)__ | US-Core | the `nsmart` export is __documents-only__ (~2,149 `DocumentReference`, allergies, some `DiagnosticReport`) — no `Patient`/`Encounter`; __always sends `meta.versionId` + `meta.lastUpdated`__, stable across calls, yet the authenticated API returns list order unstably (`AllergyIntolerance.reaction[]`, `DocumentReference.category[]` shuffle between passes) | docs-only empty state; treat `DocumentReference` narrative as primary | 🟡 one export |
+| __CMS Blue Button 2.0__ | claims profiles | __claims only__ (EOB/Coverage), no clinical resources; no `$everything`; initial token omits `patient`; sends `meta.lastUpdated` but __no `versionId`__ | claims classifiers ([#294](https://github.com/jwilleke/yourphr/issues/294)–[#296](https://github.com/jwilleke/yourphr/issues/296)) | 🟡 connected; data = claims |
 | __Veradigm / FollowMyHealth__ | unknown | — | — | 🔴 never pulled data (blocked at auth) |
 | __VA Clinical Health__ | US-Core (per docs) | — | — | 🔴 candidate, not connected ([#370](https://github.com/jwilleke/yourphr/issues/370)) |
 | __athenahealth__ | unknown | — | — | 🔴 registered, not connected |
+
+### Version signals — did this record change?
+
+A sync receives every record again on every pass. Deciding whether one actually changed decides whether a new version is stored, and up to v3.7.2 we stored one every time: 8.4 GB of identical copies on one household ([#781](https://github.com/jwilleke/yourphr/issues/781)). This section records what we can rest that decision on. Checked 2026-09-27.
+
+__What FHIR R4 requires.__ Only the id. A server "SHALL" return every resource with its `id`. Versioning is a recommendation: servers "SHOULD support versions, but some are unable to"; one that versions fills in `meta.versionId` and `meta.lastUpdated`, and one that does not must leave `versionId` out and still keep `lastUpdated` correct. `meta`, `versionId` and `lastUpdated` are all 0..1. A read "SHOULD" carry the version as an ETag header, which does not help a search. Each server may declare what it does in its CapabilityStatement (`rest.resource.versioning`). US Core adds nothing: `meta` is not must-support.
+
+__What vendors actually send.__
+
+| Source | Declares `versioning` | `meta.versionId` | `meta.lastUpdated` | Evidence |
+|---|---|---|---|---|
+| __Epic__ | not stated (all 60 types) | never | __never__ — though the spec says it should be kept correct | raw sandbox capture (`sample-data/epic/`, 41 records), CapabilityStatement |
+| __Oracle Health (Cerner)__ | not stated (all 42 types) | always | always | 2,299 records in `sample-data/oracle-cerner/`; open sandbox, stable across repeated calls |
+| __CMS Blue Button 2.0__ | — | never | always | `sample-data/medicare/` |
+| __SMART Health IT__ | `versioned-update` | always (a real counter) | always | live open endpoint |
+| __HAPI__ (reference server, not a source) | — | always | always | live public endpoint |
+
+So no single field works for every provider, the declaration cannot be the switch either (Cerner sends versions and declares nothing), and content comparison alone is fooled by vendors that reorder lists: five Cerner allergies accumulated ~230 versions each without a single change.
+
+__The rule, adopted for [#252](https://github.com/jwilleke/yourphr/issues/252) (decided with Jim, 2026-09-27).__ Take the best evidence each provider gives, in the spec's own order:
+
+- __`meta.versionId` sent:__ it decides. Same means unchanged; different means changed.
+- __otherwise `meta.lastUpdated` sent:__ same means unchanged, newer means changed, older is refused as stale.
+- __otherwise__ compare content, with lists of objects compared regardless of order (lists of plain values keep their order), and a generated narrative ignored when the data matches.
+
+Underneath all three: store the provider's `meta.versionId` and `meta.lastUpdated` as it sent them, and keep our own version separately. Until #252 lands we overwrite them on write, which is why the first two rules have nothing to read today.
 
 A documents-only or claims-only source is itself a __completeness__ fact about that vendor — not a bug in our import. Recording it here stops us re-diagnosing "no encounters showed up" as a defect each time.
 
