@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.9.0](https://github.com/jwilleke/yourphr/compare/v3.8.1...v3.9.0) (2026-09-27)
+
+__Upload the file your patient portal gives you, as it is.__ MyChart's "Download my records" hands you a zip. You used to have to unzip it, work out which files were your records, and upload them one at a time. Now you upload the zip and YourPHR finds the records inside.
+
+### Features
+
+- __A patient-portal download zip imports in one step__ ([#786](https://github.com/jwilleke/yourphr/issues/786)): every health summary and FHIR file inside is imported as one upload, and the viewer files, images and PDF alongside them are passed over quietly. A record repeated across the zip's documents is kept once. A password-protected or damaged zip is refused with a message saying what to do. You can also pick several files at once, and there is no more "Convert your records? … CCDA" question: a file YourPHR can read just imports.
+- __Importing a health summary works out of the box__ ([#785](https://github.com/jwilleke/yourphr/issues/785)): the converter address now defaults to the standard name every deployment example uses, so running the converter is the only step. Before, every instance refused health-summary imports until an admin typed the address in by hand.
+- __Your records database can now change shape safely__ ([#784](https://github.com/jwilleke/yourphr/issues/784)): it keeps a record of its own upgrades, and a database written by a newer YourPHR is refused rather than opened. Nothing you see changes yet. It is the groundwork for keeping each provider's copy of a record separately.
+
 ## [3.8.1](https://github.com/jwilleke/yourphr/compare/v3.8.0...v3.8.1) (2026-09-27)
 
 ### Bug Fixes
