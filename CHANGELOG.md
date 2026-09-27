@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.8.1](https://github.com/jwilleke/yourphr/compare/v3.8.0...v3.8.1) (2026-09-27)
+
+### Bug Fixes
+
+- __`yourphr compact` never crosses between people__ ([#784](https://github.com/jwilleke/yourphr/issues/784)): record history is not yet kept separately per person, so when two members of a household hold a record with the same id (both connected the same clinic, say), their histories share one bucket. `compact` now leaves any such record completely untouched and says how many it skipped, rather than risk treating two people's copies as one. Keeping records per person and per provider is the underlying fix, tracked in #784.
+- __`make test-e2e` works on a developer's machine__: it built the app but never told the test server where, so it stopped before running anything.
+
+### Documentation
+
+- What each provider sends that tells a changed record from a repeat, what FHIR does and does not require, what an id is (unique per server, not across providers), and what the SMART team does about the same gap. All of it is in the data-quality framework. Also: the SMART on FHIR mailing list, recorded as the first place to ask.
+
 ## [3.8.0](https://github.com/jwilleke/yourphr/compare/v3.7.3...v3.8.0) (2026-09-26)
 
 __Get back the space old syncs wasted.__ 3.7.3 stopped your records database filling up with identical copies of your records. This release removes the copies it already holds. On one household that is most of an 8.4 GB file.
