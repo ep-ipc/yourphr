@@ -28,7 +28,10 @@ const dir = mkdtempSync(join(tmpdir(), 'spike-e2e-'));
 // Written BEFORE the app assembles: AgentTokensManager reads its policy once, at initialize, so a
 // set() afterwards would leave the screen offering a mint the manager refuses.
 mkdirSync(join(dir, 'config'), { recursive: true });
-writeFileSync(join(dir, 'config', 'app-custom-config.json'), JSON.stringify({ 'yourphr.auth.agent-token.enabled': true }, null, 2));
+// No converter address (yourphr#785): the shipped default now points at yourphr-cda-converter, and this
+// instance has none, so 07-upload's "a server with no converter says so" journey clears it, as
+// app-tests does, to keep covering the not-configured path the page must explain before an upload.
+writeFileSync(join(dir, 'config', 'app-custom-config.json'), JSON.stringify({ 'yourphr.auth.agent-token.enabled': true, 'yourphr.cda-converter.url': '' }, null, 2));
 const fake = startFakeProvider('tok');
 const fakeBase = await listenFake(fake);
 
