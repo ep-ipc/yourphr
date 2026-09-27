@@ -3,8 +3,9 @@
 #
 # INTERNAL-ONLY: this service receives raw C-CDA documents (full PHI). It must have NO Ingress and
 # must never be reachable from outside the cluster. The YourPHR app reaches it in-cluster at
-# http://yourphr-cda-converter:8080 — set that as `cda_converter.url` in the app config and set
-# `cda_converter.enabled: true`.
+# http://yourphr-cda-converter:8080, which is the default `yourphr.cda-converter.url` (#785) — nothing to
+# set when the app runs in the same namespace. From another namespace, set that setting on
+# Admin -> Configuration to http://yourphr-cda-converter.<namespace>.svc.cluster.local:8080.
 #
 # The image is built/pushed by .github/workflows/docker-cda-converter.yaml (manual trigger). It
 # repackages Metriport's AGPL-3.0 fhir-converter; the corresponding source/ref is recorded in the

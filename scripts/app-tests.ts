@@ -891,8 +891,15 @@ async function main(): Promise<void> {
   check('only an empty submission is refused, and no session is 401 on either route',
     nothing.status === 400 && anonEntry.status === 401 && anonQueue.status === 401, `empty ${nothing.status} anon ${anonEntry.status}/${anonQueue.status}`);
 
-  // C-CDA: unconfigured first — the page must be able to say so BEFORE anyone uploads (yourphr#397, #686).
+  // C-CDA: the shipped default already points at the documented converter name (yourphr#785).
+  const statusDefault = (await (await fetch(`${base}/api/secure/source/cda-converter/status`, authed(upToken))).json()) as { data?: { enabled?: boolean; ready?: boolean } };
+  check('cda-converter/status is ready out of the box: the default address is http://yourphr-cda-converter:8080',
+    statusDefault.data?.enabled === true && statusDefault.data?.ready === true, JSON.stringify(statusDefault.data));
+
+  // Then cleared — the page must be able to say so BEFORE anyone uploads (yourphr#397, #686).
   const ccd = '<?xml version="1.0"?><ClinicalDocument xmlns="urn:hl7-org:v3"><recordTarget><patientRole><id root="2.16.840.1.113883.19.5" extension="996-756-495"/><patient><name><given>Una</given></name></patient></patientRole></recordTarget></ClinicalDocument>';
+  const clearUrl = await fetch(`${base}/api/secure/admin/config`, { method: 'PUT', headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ key: 'yourphr.cda-converter.url', value: '' }) });
+  check('an admin can clear the converter address', clearUrl.status === 200, `status ${clearUrl.status}`);
   const statusUnset = (await (await fetch(`${base}/api/secure/source/cda-converter/status`, authed(upToken))).json()) as { data?: { enabled?: boolean; ready?: boolean; setup_hint?: string } };
   const ccdUnset = await upload(upToken, 'summary.xml', ccd, 'text/xml');
   const ccdUnsetBody = (await ccdUnset.json()) as { error_code?: string; error?: string };

@@ -8,7 +8,7 @@ Conversion runs __entirely on your own network__, in a separate converter servic
 
 ## Setting it up
 
-Two steps: run the converter next to YourPHR, then tell YourPHR where it is.
+Run the converter next to YourPHR under the name `yourphr-cda-converter`. YourPHR already looks for it at `http://yourphr-cda-converter:8080` ([#785](https://github.com/jwilleke/yourphr/issues/785)), so with that name there is nothing to configure.
 
 ### 1. Run the converter
 
@@ -27,13 +27,13 @@ The default `bridge` network does not resolve container names, which is why a na
 
 __Kubernetes.__ See [`deploy/yourphr-cda-converter.example.yaml`](../../deploy/yourphr-cda-converter.example.yaml): a Deployment and a ClusterIP Service, with no Ingress.
 
-### 2. Point YourPHR at it
+### 2. Point YourPHR at it — only if it has another name
 
-Signed in as an admin, open __Admin → Configuration__ and set:
+When the converter runs under a different name, or in another Kubernetes namespace (use `http://yourphr-cda-converter.<namespace>.svc.cluster.local:8080`), sign in as an admin, open __Admin → Configuration__ and set:
 
 | Setting | Value |
 |---|---|
-| `yourphr.cda-converter.url` | the converter as YourPHR reaches it, e.g. `http://yourphr-cda-converter:8080` |
+| `yourphr.cda-converter.url` | the converter as YourPHR reaches it; default `http://yourphr-cda-converter:8080` |
 | `yourphr.cda-converter.enabled` | `true` (the default) |
 | `yourphr.cda-converter.timeout-seconds` | `60` (the default); raise it for very large exports |
 
@@ -69,9 +69,9 @@ YourPHR posts the raw document to the converter (the open-source [Metriport fhir
 | Message | Meaning |
 |---|---|
 | `C-CDA import is turned off on this server` | `yourphr.cda-converter.enabled` is `false` |
-| `C-CDA import is enabled but no converter address is configured` | `yourphr.cda-converter.url` is empty — the most common case on a fresh install |
+| `C-CDA import is enabled but no converter address is configured` | `yourphr.cda-converter.url` was cleared on Admin → Configuration |
 | `The converter address yourphr.cda-converter.url is not usable` | the value is not an `http://` or `https://` address, or it carries a username/password |
-| `The C-CDA converter did not answer at the configured address (ECONNREFUSED)` | the converter is not running, or YourPHR cannot reach it by that name — check both containers are on the same network |
+| `The C-CDA converter did not answer at the configured address (ECONNREFUSED)` | the converter is not running, or YourPHR cannot reach it by that name — check both containers are on the same network. The most common case on a fresh install that has not started the converter |
 | `(ENOTFOUND)` in the same message | the host name does not resolve — on Docker, usually the default `bridge` network |
 | `no answer within 60s` | a very large export; raise `yourphr.cda-converter.timeout-seconds` |
 | `The C-CDA converter could not convert this document (HTTP 4xx/5xx)` | the converter rejected the document; the text after the status is the converter's own |
