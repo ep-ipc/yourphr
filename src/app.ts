@@ -394,7 +394,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const recordsManager = new RecordsManager(engine, recordsProvider, new SqliteFavoritesProvider(db));
   engine.register('records', recordsManager);
   // Backups (yourphr#615): the coordinator over OPTIONAL storage; the records door is the exporter.
-  engine.register('backups', new BackupManager(engine, backupProviderFor(config.getString('yourphr.backup.storage.provider')), { dataDir, exporter: recordsManager, alsoExport: [db] }));
+  engine.register('backups', new BackupManager(engine, backupProviderFor(config.getString('yourphr.backup.storage.provider')), { dataDir, exporter: recordsManager, alsoExport: [{ file: appDbPath, key: dbKey }] }));
   // 7. Jobs and Sources (yourphr#612): the source client is an OPTIONAL capability — bound by
   // configuration, loaded only when configured, inert (and said so) when not.
   const events = new EventBus();

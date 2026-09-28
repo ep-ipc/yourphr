@@ -226,7 +226,7 @@ describe('backup and restore keep the two ledgers apart (yourphr#784)', () => {
     runMigrations(app, [{ id: '20260820200000', description: 'app baseline', up: () => undefined }]);
 
     const repo = new SqliteFhirRepository({ file: join(dir, 'records.db'), key: 'unit-key', userId: 'alice' });
-    const taken = backupDatabase(repo, { destination: join(dir, 'backups'), backupKey: 'backup-key', alsoExport: [app] });
+    const taken = backupDatabase(repo, { destination: join(dir, 'backups'), backupKey: 'backup-key', alsoExport: [{ file: join(dir, 'spike.db'), key: 'unit-key' }] });
     repo.db.close();
     app.close();
 
@@ -247,5 +247,57 @@ describe('backup and restore keep the two ledgers apart (yourphr#784)', () => {
     stagedRecords.close();
     stagedApp.close();
     provider = new SqliteRecordsProvider(join(dir, 'records.db'), 'unit-key');
+  });
+});
+
+describe('a backup runs off the request thread (yourphr#787)', () => {
+  const openApp = (): InstanceType<typeof Database> => {
+    const app = new Database(join(dir, 'spike.db'));
+    app.pragma("cipher='sqlcipher'");
+    app.pragma("key='unit-key'");
+    app.pragma('journal_mode = WAL');
+    app.exec("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY); INSERT OR IGNORE INTO users VALUES ('alice')");
+    return app;
+  };
+
+  it('leaves the event loop free while it exports', async () => {
+    openApp().close();
+    // Queued before the call: a synchronous export would finish, and its promise settle, before this runs.
+    let loopRan = false;
+    setImmediate(() => { loopRan = true; });
+    const taken = await provider.backup({ destination: join(dir, 'backups'), key: 'backup-key', alsoExport: [{ file: join(dir, 'spike.db'), key: 'unit-key' }] });
+    expect(loopRan).toBe(true);
+    expect(taken.sizeBytes).toBeGreaterThan(0);
+  });
+
+  it('writes both databases into one file that restores, while the server keeps its own connections open', async () => {
+    const app = openApp();
+    const taken = await provider.backup({ destination: join(dir, 'backups'), key: 'backup-key', alsoExport: [{ file: join(dir, 'spike.db'), key: 'unit-key' }] });
+    app.close();
+    stageInstanceRestore(taken.file, 'backup-key', dir, 'unit-key');
+    const open = (name: string): InstanceType<typeof Database> => {
+      const db = new Database(join(dir, name));
+      db.pragma("cipher='sqlcipher'");
+      db.pragma("key='unit-key'");
+      return db;
+    };
+    const records = open(STAGED_RECORDS);
+    const staged = open(STAGED_APP);
+    expect((records.prepare('SELECT COUNT(*) AS n FROM resources').get() as { n: number }).n).toBe(5);
+    expect((staged.prepare('SELECT id FROM users').all() as { id: string }[]).map((r) => r.id)).toEqual(['alice']);
+    records.close();
+    staged.close();
+  });
+
+  it('takes two requested together one after the other, into two files', async () => {
+    openApp().close();
+    const now = new Date('2026-09-28T02:00:00Z');
+    const opts = { destination: join(dir, 'backups'), key: 'backup-key', now, alsoExport: [{ file: join(dir, 'spike.db'), key: 'unit-key' }] };
+    const [a, b] = await Promise.all([provider.backup(opts), provider.backup(opts)]);
+    expect(a.file).not.toBe(b.file);
+  });
+
+  it('reports a failure instead of hanging', async () => {
+    await expect(provider.backup({ destination: join(dir, 'backups'), key: '   ' })).rejects.toThrow(/backup key is required/);
   });
 });

@@ -30,6 +30,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { Worker } from 'node:worker_threads';
 import Database from 'better-sqlite3-multiple-ciphers';
 import type { SqliteFhirRepository } from '../../SqliteFhirRepository.js';
 
@@ -51,9 +52,21 @@ export const STAGED_APP = 'spike.db.staged';
  * spelled out.
  */
 function exportInto(db: InstanceType<typeof Database>, schema: string, only?: (table: string) => boolean): void {
+  db.exec('BEGIN');
+  try {
+    copyObjects(db, 'main', schema, only);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** The copy itself, from one schema of the connection into another, inside the caller's transaction. */
+function copyObjects(db: InstanceType<typeof Database>, from: string, schema: string, only?: (table: string) => boolean): void {
   const allObjects = (db
     .prepare(
-      "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END"
+      `SELECT type, name, tbl_name, sql FROM ${from}.sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 WHEN 'trigger' THEN 2 ELSE 3 END`
     )
     .all() as { type: string; name: string; tbl_name: string; sql: string }[]);
   // A virtual table (FTS5, yourphr#599) owns shadow tables named <table>_data, _idx, _content,
@@ -64,25 +77,18 @@ function exportInto(db: InstanceType<typeof Database>, schema: string, only?: (t
   const shadow = (name: string): boolean => virtual.some((v) => name.startsWith(`${v}_`));
   const objects = allObjects.filter((o) => !only || only(o.tbl_name));
 
-  db.exec('BEGIN');
-  try {
-    for (const object of objects) {
-      if (shadow(object.name)) continue;
-      // Re-point the DDL at the attached schema. CREATE TABLE x -> CREATE TABLE "schema".x is the
-      // one rewrite sqlcipher_export performs; sqlite_master SQL never carries a schema prefix.
-      const ddl = object.sql.replace(
-        /^(CREATE (?:TABLE|INDEX|UNIQUE INDEX|TRIGGER|VIEW|VIRTUAL TABLE))\s+(?:IF NOT EXISTS\s+)?("[^"]+"|\[[^\]]+\]|\S+)/i,
-        (_m, head: string, name: string) => `${head} ${schema}.${name}`
-      );
-      db.exec(ddl);
-      if (object.type === 'table') {
-        db.exec(`INSERT INTO ${schema}."${object.name}" SELECT * FROM main."${object.name}"`);
-      }
+  for (const object of objects) {
+    if (shadow(object.name)) continue;
+    // Re-point the DDL at the attached schema. CREATE TABLE x -> CREATE TABLE "schema".x is the
+    // one rewrite sqlcipher_export performs; sqlite_master SQL never carries a schema prefix.
+    const ddl = object.sql.replace(
+      /^(CREATE (?:TABLE|INDEX|UNIQUE INDEX|TRIGGER|VIEW|VIRTUAL TABLE))\s+(?:IF NOT EXISTS\s+)?("[^"]+"|\[[^\]]+\]|\S+)/i,
+      (_m, head: string, name: string) => `${head} ${schema}.${name}`
+    );
+    db.exec(ddl);
+    if (object.type === 'table') {
+      db.exec(`INSERT INTO ${schema}."${object.name}" SELECT * FROM ${from}."${object.name}"`);
     }
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
   }
 }
 
@@ -101,29 +107,36 @@ export interface BackupResult {
   pruned: string[];
 }
 
+/** One database a backup copies: where it is and the key it opens under (none = plaintext). */
+export interface DatabaseFile {
+  file: string;
+  key?: string;
+}
+
+export interface BackupOptions {
+  destination: string;
+  backupKey: string;
+  maxBackups?: number;
+  now?: Date;
+}
+
 /**
- * Writes an encrypted, consistent backup of the repository's live database into `destination`,
- * then prunes beyond `maxBackups` (oldest first; the date-first names sort chronologically).
+ * Writes an encrypted, consistent backup of `sources` into ONE file in `destination`, then prunes
+ * beyond `maxBackups` (oldest first; the date-first names sort chronologically). The first source is
+ * the records file; the rest belong in the same backup (yourphr#602): the app database with the
+ * accounts, sources, tokens and catalog — a backup of the records alone is not a backup of the
+ * instance. Table names must not collide; they do not, by construction.
+ *
+ * Synchronous, and long on a real instance: call it from a worker (backupFiles), never from the
+ * thread that answers requests (yourphr#787).
  */
-export function backupDatabase(
-  repo: SqliteFhirRepository,
-  options: {
-    destination: string;
-    backupKey: string;
-    maxBackups?: number;
-    now?: Date;
-    /**
-     * Other databases that belong in the same backup (yourphr#602): the app database with the
-     * accounts, sources, tokens and catalog. A backup of the records alone is not a backup of
-     * the instance. Table names must not collide — they do not, by construction.
-     */
-    alsoExport?: InstanceType<typeof Database>[];
-  }
-): BackupResult {
+export function backupFilesSync(sources: DatabaseFile[], options: BackupOptions): BackupResult {
   const backupKey = options.backupKey.trim();
   if (backupKey === '') {
     throw new Error('a backup key is required — backups are always encrypted (see backup.encryption.key)');
   }
+  const [first, ...rest] = sources;
+  if (!first) throw new Error('a backup needs at least one database to copy');
   mkdirSync(options.destination, { recursive: true });
   // Second-precision names collide when two backups are taken back to back (a backup, then the
   // restore that backs up first); the second gets a suffix rather than an ATTACH onto the first.
@@ -131,20 +144,38 @@ export function backupDatabase(
   let file = join(options.destination, stem + SUFFIX);
   for (let n = 2; existsSync(file); n++) file = join(options.destination, `${stem}-${n}${SUFFIX}`);
 
-  // ATTACH cannot bind the KEY clause, so the key is escaped inline exactly as the repository
-  // escapes its own key pragma. The filename IS bindable and stays bound.
-  // One snapshot across stores (yourphr#608): the records file and the app database are exported
-  // one after the other, and nothing can write between them ONLY because this loop is synchronous
-  // (better-sqlite3) and nothing else writes these files — no worker thread, no second process. Keep
-  // it that way: an `await` in here, or an async driver, lets a sync land between the two exports
-  // and the backup restores records from one moment and settings or audit from another.
-  for (const db of [repo.db, ...(options.alsoExport ?? [])]) {
-    db.prepare(`ATTACH DATABASE ? AS backup KEY ${quoteKey(backupKey)}`).run(file);
-    try {
-      exportInto(db, 'backup');
-    } finally {
-      db.prepare('DETACH DATABASE backup').run();
+  // A connection of the backup's own, opened the way SqliteFhirRepository opens the records file,
+  // with every other source and the backup ATTACHed to it. ATTACH cannot bind the KEY clause, so
+  // keys are escaped inline exactly as the repository escapes its own key pragma; filenames stay bound.
+  const db = new Database(first.file);
+  try {
+    if (first.key) {
+      db.pragma("cipher='sqlcipher'");
+      db.pragma(`key=${quoteKey(first.key)}`);
     }
+    const schemas = ['main'];
+    rest.forEach((source, i) => {
+      db.prepare(`ATTACH DATABASE ? AS src${i} KEY ${quoteKey(source.key ?? '')}`).run(source.file);
+      schemas.push(`src${i}`);
+    });
+    db.prepare(`ATTACH DATABASE ? AS backup KEY ${quoteKey(backupKey)}`).run(file);
+
+    // One snapshot across stores (yourphr#608). The live files are in WAL mode, so this read
+    // transaction never blocks the server's writers, and the server's writes never reach it. Each
+    // file's snapshot starts at its first read; the single statement below reads them all, so the
+    // snapshots are taken together — microseconds apart, where the live app itself writes the two
+    // files in separate transactions. Nothing here waits on the server, and the server waits on nothing here.
+    db.exec('BEGIN');
+    try {
+      db.prepare(`SELECT ${schemas.map((s) => `(SELECT COUNT(*) FROM ${s}.sqlite_master)`).join(' + ')} AS n`).get();
+      for (const schema of schemas) copyObjects(db, schema, 'backup');
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  } finally {
+    db.close();
   }
 
   const pruned: string[] = [];
@@ -157,6 +188,35 @@ export function backupDatabase(
     }
   }
   return { file, sizeBytes: statSync(file).size, pruned };
+}
+
+/**
+ * backupFilesSync on a worker thread (yourphr#787): the export is minutes of synchronous SQLite on a
+ * large instance, and on the request thread it answered nothing — not the household, not the
+ * liveness probe — until it finished. The worker opens its own connection; keys travel in
+ * workerData (memory), never argv or the environment.
+ */
+export function backupFiles(sources: DatabaseFile[], options: BackupOptions): Promise<BackupResult> {
+  // Compiled, the worker is the .js beside this file. From source (tsx, vitest) it is the .ts, and
+  // the worker needs tsx's loader to read it.
+  const fromSource = import.meta.url.endsWith('.ts');
+  const entry = new URL(fromSource ? './sqlite-backup-worker.ts' : './sqlite-backup-worker.js', import.meta.url);
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(entry, { workerData: { sources, options }, ...(fromSource ? { execArgv: ['--import', 'tsx'] } : {}) });
+    let settled = false;
+    worker.once('message', (m: { ok: true; result: BackupResult } | { ok: false; error: string }) => {
+      settled = true;
+      if (m.ok) resolve(m.result);
+      else reject(new Error(m.error));
+    });
+    worker.once('error', (err) => { settled = true; reject(err); });
+    worker.once('exit', (code) => { if (!settled) reject(new Error(`the backup worker exited (code ${code}) without a result`)); });
+  });
+}
+
+/** The repository's own file, plus `alsoExport`, in one backup. Synchronous: tests and harnesses; the server uses backupFiles. */
+export function backupDatabase(repo: SqliteFhirRepository, options: BackupOptions & { alsoExport?: DatabaseFile[] }): BackupResult {
+  return backupFilesSync([{ file: repo.file, key: repo.key }, ...(options.alsoExport ?? [])], options);
 }
 
 /** Backups in `dir`, newest first (the date-first names make name order time order). */

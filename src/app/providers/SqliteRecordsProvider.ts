@@ -11,7 +11,7 @@ import type { SearchRequest, WithId } from '@medplum/core';
 import { SqliteFhirRepository, sameContent } from '../../SqliteFhirRepository.js';
 import { dirname } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
-import { backupDatabase, stageInstanceRestore, RECORDS_LEDGER_TABLE } from './sqlite-backup.js';
+import { backupFiles, stageInstanceRestore, RECORDS_LEDGER_TABLE, type BackupResult, type DatabaseFile } from './sqlite-backup.js';
 import { ftsQuery } from './record-text.js';
 import { runMigrations, type Migration, type MigrationReport } from '../../framework/providers/sqlite-migrations.js';
 import { BaseRecordsProvider, type CompactReport, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
@@ -49,6 +49,8 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
   }
   /** Handles the caller owns: never closed here. */
   private readonly borrowed = new Set<SqliteFhirRepository>();
+  /** The backup running now, if any — the next one waits for it (see backup). */
+  private backupInFlight: Promise<unknown> = Promise.resolve();
 
   async initialize(): Promise<void> {
     // Open once so the schema exists and the file is proven openable under the key at boot,
@@ -379,14 +381,19 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
     }
   }
 
+  /**
+   * On a worker thread (yourphr#787), with its own connection. One at a time: when the export ran on
+   * the request thread two could never overlap, and two at once would race for the same file name.
+   * `alsoExport` names the other databases by file and key — a handle cannot cross threads.
+   */
   async backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }> {
-    return backupDatabase(this.handle('__any__'), {
-      destination: options.destination,
-      backupKey: options.key,
-      maxBackups: options.maxBackups,
-      now: options.now,
-      alsoExport: options.alsoExport as InstanceType<typeof Database>[] | undefined,
-    });
+    const run = (): Promise<BackupResult> => backupFiles(
+      [{ file: this.file, key: this.key }, ...((options.alsoExport ?? []) as DatabaseFile[])],
+      { destination: options.destination, backupKey: options.key, maxBackups: options.maxBackups, now: options.now }
+    );
+    const result = this.backupInFlight.then(run, run);
+    this.backupInFlight = result.catch(() => undefined);
+    return result;
   }
 
   async stageRestore(backupFile: string, backupKey: string): Promise<{ tables: number }> {
