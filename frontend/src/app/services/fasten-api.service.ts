@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import {map} from 'rxjs/operators';
 import {ResponseWrapper} from '../models/response-wrapper';
 import {ReconciledMedication} from '../models/fasten/reconciled-medication';
+import {MailSendResult, MailStatus} from '../models/fasten/mail-status';
 import {ClassifiedCondition} from '../models/fasten/classified-condition';
 import {ClassifiedAllergy} from '../models/fasten/classified-allergy';
 import {ClassifiedImmunization} from '../models/fasten/classified-immunization';
@@ -377,6 +378,28 @@ export class FastenApiService {
       .pipe(
         map((response: ResponseWrapper) => {
           return response.data as {staged: boolean; message: string}
+        })
+      );
+  }
+
+  // getMailStatus reads what outbound mail would do right now, and what stops it (#536). Admin-only.
+  getMailStatus(): Observable<MailStatus> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/mail`)
+      .pipe(
+        map((response: ResponseWrapper) => {
+          return response.data as MailStatus
+        })
+      );
+  }
+
+  // sendTestMail sends one test message with the settings as they are now (#536) — even while mail
+  // is off, so a relay can be checked before it is turned on. Errors carry the server's sentence
+  // naming the cause (bad password, no STARTTLS, unverifiable certificate).
+  sendTestMail(to: string): Observable<MailSendResult> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/mail/test`, {to})
+      .pipe(
+        map((response: ResponseWrapper) => {
+          return response.data as MailSendResult
         })
       );
   }

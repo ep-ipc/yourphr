@@ -87,6 +87,8 @@ jobs:
         run: npm run env
       - name: Encrypted backup (ciphertext, roundtrip, refusals)
         run: npm run backup
+      - name: Outbound mail over real SMTP (STARTTLS required, certificates verified, errors named)
+        run: npm run mail
       - name: Provider catalog + sync worker (secrets, seeding, refresh, isolation)
         run: npm run worker
       - name: Migrations (run-once, rollback, downgrade protection)

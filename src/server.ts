@@ -1162,6 +1162,16 @@ export function createYourPhrServer(options: ServerOptions) {
           send(res, 200, {success: true, data: await engine.managers.sources.adminMetrics(ctx)});
           return;
         }
+        // Outbound mail (yourphr#536): what it would do, and a test message that proves the relay.
+        if (engine.has('email') && url.pathname === '/api/secure/admin/mail' && req.method === 'GET') {
+          send(res, 200, {success: true, data: engine.managers.email.status(ctx)});
+          return;
+        }
+        if (engine.has('email') && url.pathname === '/api/secure/admin/mail/test' && req.method === 'POST') {
+          const body = await readJsonBody(req);
+          send(res, 200, {success: true, data: await engine.managers.email.sendTest(ctx, typeof body?.['to'] === 'string' ? (body['to'] as string) : '')});
+          return;
+        }
         const backups = engine.has('backups') ? engine.managers.backups : undefined;
         // Go's DatabaseInfoResponse over this stack's two files — a view composed from the doors,
         // each of which answers for its own storage (yourphr#619). No manager reads another's file.

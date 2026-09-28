@@ -43,6 +43,8 @@
     }
 
     @if (!loading && config) {
+      <app-admin-mail-card [refresh]="mailRefresh"></app-admin-mail-card>
+
       <ul class="nav nav-tabs mg-b-15">
         <li class="nav-item">
           <a class="nav-link cursor-pointer" [class.active]="activeTab === 'current'"

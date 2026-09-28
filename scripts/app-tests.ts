@@ -657,6 +657,22 @@ async function main(): Promise<void> {
   const traversal = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: '../spike.db', confirm: true }) });
   check('a restore must be confirmed and must name a backup in the destination — no path escapes', unconfirmed.status === 400 && missing.status === 404 && traversal.status === 404);
 
+  // Outbound mail (yourphr#536): off and on the console provider as shipped; Admin sees why it cannot
+  // send and can send a test message; a member can do neither.
+  const mailStatus = await adminJson('/api/secure/admin/mail');
+  const mailAsMember = await fetch(`${base}/api/secure/admin/mail`, authed(carolToken));
+  const testAsMember = await fetch(`${base}/api/secure/admin/mail/test`, { method: 'POST', body: JSON.stringify({ to: 'root@example.org' }), ...authed(carolToken) });
+  const testNoSender = await adminJson('/api/secure/admin/mail/test', { method: 'POST', body: JSON.stringify({ to: 'root@example.org' }) });
+  app.config.set('yourphr.mail.from', 'phr@example.org');
+  const testToLog = await adminJson('/api/secure/admin/mail/test', { method: 'POST', body: JSON.stringify({ to: 'root@example.org' }) });
+  const testBadTo = await adminJson('/api/secure/admin/mail/test', { method: 'POST', body: JSON.stringify({ to: 'nobody' }) });
+  check('mail ships off on the console provider; Admin sees the missing sender, a member gets 403',
+    mailStatus.status === 200 && mailStatus.body.data['enabled'] === false && mailStatus.body.data['provider'] === 'console'
+      && mailStatus.body.data['problems'].some((p: string) => p.includes('yourphr.mail.from')) && mailAsMember.status === 403 && testAsMember.status === 403);
+  check('a test message is refused naming the missing sender, then written to the log once there is one; a bad address is a 400',
+    testNoSender.status === 400 && /yourphr\.mail\.from/.test(testNoSender.body.error ?? '') && testToLog.status === 200 && testToLog.body.data['sent'] === true
+      && testToLog.body.data['provider'] === 'console' && testBadTo.status === 400);
+
   const logsBefore = await adminJson('/api/secure/admin/logs');
   const badLevel = await adminJson('/api/secure/admin/log-level', { method: 'PUT', body: JSON.stringify({ level: 'loud' }) });
   const debugLevel = await adminJson('/api/secure/admin/log-level', { method: 'PUT', body: JSON.stringify({ level: 'debug' }) });

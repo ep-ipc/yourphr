@@ -1,0 +1,52 @@
+<div class="card mg-b-20" data-testid="admin-mail-card">
+  <div class="card-header"><h6 class="card-title mg-b-0"><i class="fas fa-envelope"></i>&nbsp; Email</h6></div>
+  <div class="card-body">
+    @if (error) {
+      <div class="alert alert-danger mg-b-0">{{ error }}</div>
+    }
+    @if (status; as s) {
+      <p class="mg-b-10">
+        @if (s.enabled) {
+          <span class="badge badge-success">On</span>&nbsp; This instance sends email
+        } @else {
+          <span class="badge badge-secondary">Off</span>&nbsp; This instance sends no email — messages it would send are noted in the log instead
+        }
+        @if (s.provider === 'console') {
+          (provider <code>console</code>: the server log).
+        } @else {
+          through <strong>{{ s.destination }}</strong>@if (s.smtp?.user) { as <code>{{ s.smtp?.user }}</code>}.
+        }
+        @if (s.from) { Sender: <code>{{ s.from }}</code>. }
+      </p>
+
+      @if (s.problems.length) {
+        <div class="alert alert-warning tx-13" data-testid="mail-problems">
+          <strong>Before mail can be sent:</strong>
+          <ul class="mg-b-0 mg-t-5">
+            @for (p of s.problems; track p) { <li>{{ p }}</li> }
+          </ul>
+        </div>
+      }
+
+      <p class="tx-gray-500 tx-12">
+        Set these with the <code>yourphr.mail.*</code> rows below: <code>enabled</code>, <code>provider</code> (<code>smtp</code> or <code>console</code>), <code>from</code>, and the relay's <code>provider.smtp.host</code>, <code>port</code>, <code>secure</code>, <code>user</code>, <code>pass</code>.
+        Mail is always encrypted: port 465 with <code>secure</code> on, or port 587 with STARTTLS, which is then required. A certificate that cannot be verified is refused.
+      </p>
+
+      <form class="form-inline" (ngSubmit)="sendTest()">
+        <label class="sr-only" for="mailTestTo">Send a test message to</label>
+        <input id="mailTestTo" type="email" class="form-control mg-r-10 mg-b-5" name="to" placeholder="you@example.org" [(ngModel)]="to" [disabled]="sending">
+        <button type="submit" class="btn btn-outline-secondary mg-b-5" [disabled]="sending || !to.trim()">
+          {{ sending ? 'Sending…' : 'Send a test message' }}
+        </button>
+      </form>
+      <p class="tx-gray-500 tx-12 mg-t-5 mg-b-0">Works even while mail is off, so you can check the relay first.</p>
+      @if (result) {
+        <div class="alert alert-success tx-13 mg-t-10 mg-b-0" data-testid="mail-test-result"><i class="fas fa-check mg-r-5"></i>{{ result }}</div>
+      }
+      @if (sendError) {
+        <div class="text-danger tx-13 mg-t-10" data-testid="mail-test-error">{{ sendError }}</div>
+      }
+    }
+  </div>
+</div>
