@@ -24,11 +24,11 @@ Do not make YourPHR’s usefulness depend on universal vendor cooperation.
 
 Build a resilient acquisition ladder:
 
-1. **Direct SMART connection** when a provider supports it.
-2. **Portal export import** when direct connection is unavailable.
-3. **Manual record entry** for information the portal omits or the patient wants to add.
-4. **Claims, public-program, and device sources** where they broaden coverage.
-5. **Document ingestion and extraction** as a later fallback for PDFs and scans.
+1. __Direct SMART connection__ when a provider supports it.
+2. __Portal export import__ when direct connection is unavailable.
+3. __Manual record entry__ for information the portal omits or the patient wants to add.
+4. __Claims, public-program, and device sources__ where they broaden coverage.
+5. __Document ingestion and extraction__ as a later fallback for PDFs and scans.
 
 Every path should converge on the same normalized record, provenance model, deduplication logic, and user experience. A patient should care that the data arrived, not which transport succeeded.
 
@@ -40,19 +40,19 @@ Manual import should not feel like a degraded fallback. For many users, it may b
 
 ### Recommended capabilities
 
-- **Import portal downloads as-is.** Accept ZIP packages, directories, FHIR JSON, C-CDA/XML, and mixed exports without asking the user to unpack or classify files.
+- __Import portal downloads as-is.__ Accept ZIP packages, directories, FHIR JSON, C-CDA/XML, and mixed exports without asking the user to unpack or classify files.
 
-- **Detect source flavor.** Identify common export conventions from Epic MyChart, Oracle Health, FollowMyHealth/Veradigm, athenahealth, labs, and other portals. Keep detection heuristic and non-blocking: unknown packages should still enter the generic pipeline.
+- __Detect source flavor.__ Identify common export conventions from Epic MyChart, Oracle Health, FollowMyHealth/Veradigm, athenahealth, labs, and other portals. Keep detection heuristic and non-blocking: unknown packages should still enter the generic pipeline.
 
-- **Create an import manifest.** Before committing data, show files discovered, formats recognized, records parsed, warnings, unsupported content, and duplicates.
+- __Create an import manifest.__ Before committing data, show files discovered, formats recognized, records parsed, warnings, unsupported content, and duplicates.
 
-- **Preserve originals.** Retain the source archive or document alongside normalized resources, with hashes and provenance, so processing can be repeated when parsers improve.
+- __Preserve originals.__ Retain the source archive or document alongside normalized resources, with hashes and provenance, so processing can be repeated when parsers improve.
 
-- **Make re-import safe.** Harden deterministic deduplication and clearly distinguish exact duplicates, updated versions, and conflicting records.
+- __Make re-import safe.__ Harden deterministic deduplication and clearly distinguish exact duplicates, updated versions, and conflicting records.
 
-- **Expose completeness.** Report which clinical categories were found and which were absent without claiming that an absent category means the provider has no such data.
+- __Expose completeness.__ Report which clinical categories were found and which were absent without claiming that an absent category means the provider has no such data.
 
-- **Design recovery paths.** A partially malformed package should import valid content and produce actionable diagnostics for the rest.
+- __Design recovery paths.__ A partially malformed package should import valid content and produce actionable diagnostics for the rest.
 
 ### Product opportunity
 
@@ -109,10 +109,10 @@ Dynamic Client Registration is worth pursuing where a provider advertises a regi
 
 Build a registration ladder:
 
-1. **Automatic DCR** when metadata and policy permit it.
-2. **Known shared registration** when a client identifier can be distributed across participating institutions.
-3. **Operator-supplied registration** through the provider catalog for self-hosted instances.
-4. **Documented manual import** when registration is unavailable.
+1. __Automatic DCR__ when metadata and policy permit it.
+2. __Known shared registration__ when a client identifier can be distributed across participating institutions.
+3. __Operator-supplied registration__ through the provider catalog for self-hosted instances.
+4. __Documented manual import__ when registration is unavailable.
 
 For operator-supplied registration, create a registration assistant that:
 
@@ -152,13 +152,13 @@ A later community contribution flow could accept redacted compatibility reports.
 
 ### High-value candidates
 
-- **CMS Blue Button 2.0.** Useful for Medicare claims and a plausible first production proof, while recognizing that claims are not a complete clinical record.
+- __CMS Blue Button 2.0.__ Useful for Medicare claims and a plausible first production proof, while recognizing that claims are not a complete clinical record.
 
-- **VA Clinical Health.** Already represented in the roadmap and potentially valuable to a defined patient population.
+- __VA Clinical Health.__ Already represented in the roadmap and potentially valuable to a defined patient population.
 
-- **Manual patient-authored records.** Essential for over-the-counter medications, symptoms, home measurements, family history, corrections, and records that never appear in an EHR export.
+- __Manual patient-authored records.__ Essential for over-the-counter medications, symptoms, home measurements, family history, corrections, and records that never appear in an EHR export.
 
-- **Wearable and device data.** Useful when kept distinct from clinician-authored data and accompanied by device provenance.
+- __Wearable and device data.__ Useful when kept distinct from clinician-authored data and accompanied by device provenance.
 
 ### Optional commercial bridge
 
@@ -174,11 +174,11 @@ Vendor restrictions matter less if YourPHR is uniquely useful once data arrives.
 
 Priorities include:
 
-- **Unified longitudinal view.** Merge records across providers while preserving source provenance.
-- **Patient annotations.** Let users add context without altering the imported clinical source.
-- **Local search and question answering.** Explore the upstream RAG/Ollama work as an optional, local-first capability with citations back to source records.
-- **Patient-controlled sharing.** Evaluate scoped exports or SMART Health Links so a user can share selected information intentionally.
-- **Data quality feedback.** Flag contradictions, stale medication lists, duplicate conditions, and missing units as review prompts, not medical conclusions.
+- __Unified longitudinal view.__ Merge records across providers while preserving source provenance.
+- __Patient annotations.__ Let users add context without altering the imported clinical source.
+- __Local search and question answering.__ Explore the upstream RAG/Ollama work as an optional, local-first capability with citations back to source records.
+- __Patient-controlled sharing.__ Evaluate scoped exports or SMART Health Links so a user can share selected information intentionally.
+- __Data quality feedback.__ Flag contradictions, stale medication lists, duplicate conditions, and missing units as review prompts, not medical conclusions.
 
 Local intelligence should never obscure provenance. Every generated answer or summary should point back to the exact records that support it.
 
@@ -218,7 +218,7 @@ An “access help kit” could include:
 - Add import manifests and partial-failure recovery.
 - Improve manual record entry.
 
-**Outcome:** YourPHR is useful even when no live connection is possible.
+__Outcome:__ YourPHR is useful even when no live connection is possible.
 
 ### Phase 2: One production proof
 
@@ -227,7 +227,7 @@ An “access help kit” could include:
 - Instrument the complete authorization and sync path.
 - Publish a redacted compatibility report.
 
-**Outcome:** the project can demonstrate real patient access outside a sandbox.
+__Outcome:__ the project can demonstrate real patient access outside a sandbox.
 
 ### Phase 3: Scale what was learned
 
@@ -236,7 +236,7 @@ An “access help kit” could include:
 - Expand the catalog through verified entries.
 - Add redacted diagnostics and community compatibility reports.
 
-**Outcome:** each new provider costs less effort to onboard and troubleshoot.
+__Outcome:__ each new provider costs less effort to onboard and troubleshoot.
 
 ### Phase 4: Increase patient value
 
@@ -244,7 +244,7 @@ An “access help kit” could include:
 - Improve cross-provider reconciliation and patient annotations.
 - Add selective sharing and carefully chosen alternate sources.
 
-**Outcome:** YourPHR becomes more than an EHR mirror.
+__Outcome:__ YourPHR becomes more than an EHR mirror.
 
 ## What not to do yet
 
@@ -277,9 +277,9 @@ That promise is honest about today’s ecosystem while still supporting the long
 
 ## Sources
 
-- YourPHR repository: https://github.com/jwilleke/yourphr
-- Roadmap: https://github.com/jwilleke/yourphr/blob/main/docs/Roadmap.md
-- SMART on FHIR flow map: https://github.com/jwilleke/yourphr/blob/main/docs/SMART-flow-map.md
-- Production SMART provider issue: https://github.com/jwilleke/yourphr/issues/408
-- Dynamic Client Registration issue: https://github.com/jwilleke/yourphr/issues/355
-- Apple Health institution-list exploration: https://github.com/jwilleke/yourphr/issues/251
+- YourPHR repository: <https://github.com/jwilleke/yourphr>
+- Roadmap: <https://github.com/jwilleke/yourphr/blob/main/docs/Roadmap.md>
+- SMART on FHIR flow map: <https://github.com/jwilleke/yourphr/blob/main/docs/SMART-flow-map.md>
+- Production SMART provider issue: <https://github.com/jwilleke/yourphr/issues/408>
+- Dynamic Client Registration issue: <https://github.com/jwilleke/yourphr/issues/355>
+- Apple Health institution-list exploration: <https://github.com/jwilleke/yourphr/issues/251>
