@@ -21,7 +21,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 - [#775](https://github.com/jwilleke/yourphr/issues/775) — [CHORE] One markdown module: CommonMark, sanitised before it is stored
 - [#774](https://github.com/jwilleke/yourphr/issues/774) — [BUG] Forms send what the patient types to NLM and Wikipedia, straight from their browser
-- [#789](https://github.com/jwilleke/yourphr/issues/789) — [FEATURE] Alert when no backup has succeeded in over 26 hours
 - [#784](https://github.com/jwilleke/yourphr/issues/784) — [BUG] Records are keyed without their source — a second provider's record with the same id is refused, and history is shared across people
 - [#782](https://github.com/jwilleke/yourphr/issues/782) — [BUG] A click that cannot complete says nothing — guards wait forever, failures are silent
 - [#778](https://github.com/jwilleke/yourphr/issues/778) — [BUG] Bare-metal setup serves no interface — the example sets YOURPHR_WEB_SRC_FRONTEND_PATH, the server reads YOURPHR_WEB_STATIC_DIR
@@ -38,7 +37,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#631](https://github.com/jwilleke/yourphr/issues/631) — [SPIKE] Backups must restore the instance, not just the data
 - [#628](https://github.com/jwilleke/yourphr/issues/628) — [SPIKE] Refuse to boot when a SQLite database resolves onto a network filesystem
 - [#624](https://github.com/jwilleke/yourphr/issues/624) — [SPIKE] Configuration: split the bootstrap flag — it is doing three jobs (raw-env, restart-required, secret)
-- [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
 - [#408](https://github.com/jwilleke/yourphr/issues/408) — [FEATURE] Prove one production SMART provider end-to-end via provider catalog
 - [#389](https://github.com/jwilleke/yourphr/issues/389) — [FEATURE] /patient-profile Care Provider
@@ -91,10 +89,14 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
+- [#793](https://github.com/jwilleke/yourphr/issues/793) — [FEATURE] Port ngdpbase's NotificationManager — notifications, a banner, and email escalation
+- [#792](https://github.com/jwilleke/yourphr/issues/792) — [FEATURE] Accounts carry an optional email address — so an alert can reach an admin
 - [#790](https://github.com/jwilleke/yourphr/issues/790) — [BUG] Backup files are called "spike", and the Admin page says they are gzip .db.gz
+- [#789](https://github.com/jwilleke/yourphr/issues/789) — [FEATURE] Alert when no backup has succeeded in over 26 hours
 - [#787](https://github.com/jwilleke/yourphr/issues/787) — [BUG] A backup blocks the one Node thread — move the export into a worker
 - [#786](https://github.com/jwilleke/yourphr/issues/786) — [FEATURE] Import a patient-portal download zip as-is (MyChart / IHE XDM)
 - [#785](https://github.com/jwilleke/yourphr/issues/785) — [FEATURE] Default yourphr.cda-converter.url to <http://yourphr-cda-converter:8080>
+- [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
 
 ## ⏸ Deferred
 
