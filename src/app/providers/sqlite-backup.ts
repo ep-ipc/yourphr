@@ -34,9 +34,16 @@ import { Worker } from 'node:worker_threads';
 import Database from 'better-sqlite3-multiple-ciphers';
 import type { SqliteFhirRepository } from '../../SqliteFhirRepository.js';
 
-const SUFFIX = '-yourphr-spike-backup.db';
+const SUFFIX = '-yourphr-backup.db';
 /** What one of our artifacts is called — the backup-storage provider lists by it. */
 export const BACKUP_SUFFIX = SUFFIX;
+/**
+ * Every name a backup has been written under, newest first (yourphr#790). Listing, pruning and
+ * restore match all of them, so backups written before the rename are still counted, pruned and
+ * restorable. The names begin with the timestamp, so a mixed list still sorts in time order.
+ */
+export const BACKUP_SUFFIXES = [SUFFIX, '-yourphr-spike-backup.db'] as const;
+const isOurs = (name: string): boolean => BACKUP_SUFFIXES.some((s) => name.endsWith(s));
 /** Tables that live in records.db; everything else in a backup belongs to the app database. */
 /** records.db's migration ledger (yourphr#784) — its own name, so a restore can return it to records.db. */
 export const RECORDS_LEDGER_TABLE = 'records_schema_migrations';
@@ -223,7 +230,7 @@ export function backupDatabase(repo: SqliteFhirRepository, options: BackupOption
 export function listBackups(dir: string): { name: string; sizeBytes: number; modified: string }[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => f.endsWith(SUFFIX))
+    .filter(isOurs)
     .sort()
     .reverse()
     .map((name) => {
@@ -233,7 +240,7 @@ export function listBackups(dir: string): { name: string; sizeBytes: number; mod
 }
 
 export function isBackupFileName(name: string): boolean {
-  return name.endsWith(SUFFIX) && !name.includes('/') && !name.includes('\\') && !name.includes('..');
+  return isOurs(name) && !name.includes('/') && !name.includes('\\') && !name.includes('..');
 }
 
 export interface RestoreResult {

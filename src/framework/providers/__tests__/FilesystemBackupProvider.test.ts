@@ -9,7 +9,7 @@ let fs: FilesystemBackupProvider;
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'spike-fsbackup-spec-'));
-  fs = new FilesystemBackupProvider('-backup.db');
+  fs = new FilesystemBackupProvider(['-backup.db']);
   await fs.initialize();
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -28,6 +28,16 @@ describe('FilesystemBackupProvider — artifacts on a folder', () => {
     expect(await fs.prune(dest, 0)).toEqual([]);
     expect(await fs.prune(dest, 2)).toEqual(['2026-01-01T00-00-00Z-backup.db']);
     expect(existsSync(join(dest, '2026-01-01T00-00-00Z-backup.db'))).toBe(false);
+  });
+
+  it('counts, prunes and resolves artifacts written under an earlier suffix alongside new ones, in time order (yourphr#790)', async () => {
+    const renamed = new FilesystemBackupProvider(['-yourphr-backup.db', '-yourphr-spike-backup.db']);
+    const dest = join(dir, 'mixed');
+    await renamed.ensure(dest);
+    for (const n of ['2026-01-01T00-00-00Z-yourphr-spike-backup.db', '2026-01-02T00-00-00Z-yourphr-spike-backup.db', '2026-01-03T00-00-00Z-yourphr-backup.db']) writeFileSync(join(dest, n), 'x');
+    expect((await renamed.list(dest)).map((a) => a.name)).toEqual(['2026-01-03T00-00-00Z-yourphr-backup.db', '2026-01-02T00-00-00Z-yourphr-spike-backup.db', '2026-01-01T00-00-00Z-yourphr-spike-backup.db']);
+    expect(await renamed.resolve(dest, '2026-01-02T00-00-00Z-yourphr-spike-backup.db')).toBe(join(dest, '2026-01-02T00-00-00Z-yourphr-spike-backup.db'));
+    expect(await renamed.prune(dest, 2)).toEqual(['2026-01-01T00-00-00Z-yourphr-spike-backup.db']);
   });
 
   it('proves a destination by writing and removing a probe; a missing folder is not writable', async () => {

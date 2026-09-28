@@ -6,6 +6,6 @@ test('the admin takes a backup from the Database page and sees it listed', async
   await login(page, 'admin', adminPassword());
   await page.goto(`${BASE}/admin/database`);
   await page.getByRole('button', { name: /back up to server now/i }).click();
-  await expect(page.getByText(/-yourphr-spike-backup\.db/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/\d{2}Z-yourphr-backup\.db/).first()).toBeVisible({ timeout: 30_000 });
   expect(errors, errors.join('\n')).toEqual([]);
 });

@@ -51,17 +51,14 @@ Endpoint: `POST /api/secure/admin/database/schedule`. On startup the worker seed
 
 ### Filenames
 
-Date-first, ISO-ish, UTC, filesystem-safe (colons → dashes), version- and label-stamped, gzip:
+Date-first, UTC, filesystem-safe (colons become dashes), one encrypted SQLite file:
 
 ```
-2026-06-21T17-07-11Z-yourphr-prod-1.10.0-backup.db.gz
-└──── UTC timestamp ────┘ │      │      │
-                          │      │      └─ producing app version (version.VERSION)
-                          │      └──────── instance label (backup.label; omitted if blank)
-                          └─────────────── product name
+2026-09-28T12-27-27Z-yourphr-backup.db
+└──── UTC timestamp ───┘
 ```
 
-They sort chronologically by name, and each backup says which __instance__ and __app version__ produced it — useful when deciding whether a backup is safe to restore. Older names (`yourphr-backup.db`, `yourphr-backup-<date>.db`, un-labeled `…-yourphr-<version>-backup.db.gz`) are still recognized and restorable.
+They sort chronologically by name. The file is encrypted with the backup key (`YOURPHR_BACKUP_ENCRYPTION_KEY`); it is not gzip-compressed, because encrypted bytes do not compress. Two backups in the same second get `-2`, `-3` after the timestamp. Files named `…-yourphr-spike-backup.db`, written before [#790](https://github.com/jwilleke/yourphr/issues/790), are still listed, counted toward __Keep last__, pruned and restorable.
 
 ### Destination folder
 

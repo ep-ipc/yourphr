@@ -642,7 +642,7 @@ async function main(): Promise<void> {
   const download = await fetch(`${base}/api/secure/admin/database/backup/download`, { method: 'POST', ...authed(adminToken) });
   const downloaded = Buffer.from(await download.arrayBuffer());
   check('download streams a fresh backup as an attachment, ciphertext',
-    download.status === 200 && /attachment; filename=.*-yourphr-spike-backup\.db/.test(download.headers.get('content-disposition') ?? '') && downloaded.length > 0 && !downloaded.subarray(0, 16).includes('SQLite format 3'));
+    download.status === 200 && /attachment; filename=.*\d{2}Z-yourphr-backup\.db/.test(download.headers.get('content-disposition') ?? '') && downloaded.length > 0 && !downloaded.subarray(0, 16).includes('SQLite format 3'));
   const badTime = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '25:00', days: 'daily', destination: '', max_backups: 3 }) });
   const scheduled = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '02:30', days: 'weekly', destination: '', max_backups: 3 }) });
   check('the schedule is validated (HH:MM, daily|weekly) and stored in the settings store',
@@ -653,7 +653,7 @@ async function main(): Promise<void> {
   check('a destination is proven writable before a schedule relies on it; the folder browser lists one level',
     testOk.body.data['writable'] === true && testBad.body.data['writable'] === false && !!testBad.body.data['error'] && browse.body.data['dirs'].includes('backups') && browse.body.data['parent'] !== '');
   const unconfirmed = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: basename(backupPath), confirm: false }) });
-  const missing = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: 'nope-yourphr-spike-backup.db', confirm: true }) });
+  const missing = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: 'nope-yourphr-backup.db', confirm: true }) });
   const traversal = await adminJson('/api/secure/admin/database/restore', { method: 'POST', body: JSON.stringify({ backup_name: '../spike.db', confirm: true }) });
   check('a restore must be confirmed and must name a backup in the destination — no path escapes', unconfirmed.status === 400 && missing.status === 404 && traversal.status === 404);
 

@@ -59,7 +59,7 @@ import { BackupManager, applyStagedRestore } from './framework/managers/BackupMa
 import { applyDemoReset } from './app/providers/demo-reset.js';
 import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
-import { BACKUP_SUFFIX, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';
+import { BACKUP_SUFFIXES, STAGED_APP, STAGED_RECORDS } from './app/providers/sqlite-backup.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
 import { refreshRedactedSecrets } from './log/redact.js';
 import { createYourPhrServer, toResourceFhir } from './server.js';
@@ -267,7 +267,7 @@ export interface Stores {
 
 /** The backup-storage provider configuration names: 'filesystem' or 'null' (inert, said so); anything else refuses to boot. */
 function backupProviderFor(name: string): BaseBackupProvider {
-  if (name === 'filesystem') return new FilesystemBackupProvider(BACKUP_SUFFIX);
+  if (name === 'filesystem') return new FilesystemBackupProvider(BACKUP_SUFFIXES);
   if (name === 'null') { appLog.warn('backup.storage.provider = null: no backup storage — every backup action will refuse'); return new NullBackupProvider(); }
   throw new Error(`backup.storage.provider: unknown provider '${name}' (filesystem or null)`);
 }

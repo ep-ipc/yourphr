@@ -99,7 +99,7 @@ export class AdminDatabaseComponent implements OnInit {
         if (!blob) { this.downloading = false; return; }
         const disposition = resp.headers.get('Content-Disposition') || '';
         const match = /filename="?([^";]+)"?/i.exec(disposition);
-        const filename = (match && match[1].trim()) || 'yourphr-backup.db.gz';
+        const filename = (match && match[1].trim()) || 'yourphr-backup.db';
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

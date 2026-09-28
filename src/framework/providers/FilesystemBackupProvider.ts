@@ -5,8 +5,12 @@ import { BaseBackupProvider, type BackupArtifact } from './BaseBackupProvider.js
 
 export class FilesystemBackupProvider extends BaseBackupProvider {
   readonly name = 'filesystem';
-  /** What one of our artifacts is called — the suffix the export writes. */
-  constructor(private readonly suffix: string) { super(); }
+  /** What our artifacts are called — the suffix the export writes, then any it wrote before. */
+  constructor(private readonly suffixes: readonly string[]) { super(); }
+
+  private isOurs(name: string): boolean {
+    return this.suffixes.some((s) => name.endsWith(s));
+  }
 
   async initialize(): Promise<void> { /* nothing to open */ }
 
@@ -17,7 +21,7 @@ export class FilesystemBackupProvider extends BaseBackupProvider {
   async list(destination: string): Promise<BackupArtifact[]> {
     if (!existsSync(destination)) return [];
     return readdirSync(destination)
-      .filter((f) => f.endsWith(this.suffix))
+      .filter((f) => this.isOurs(f))
       .sort()
       .reverse()
       .map((name) => {
@@ -27,7 +31,7 @@ export class FilesystemBackupProvider extends BaseBackupProvider {
   }
 
   isArtifactName(name: string): boolean {
-    return name.endsWith(this.suffix) && !name.includes('/') && !name.includes('\\') && !name.includes('..');
+    return this.isOurs(name) && !name.includes('/') && !name.includes('\\') && !name.includes('..');
   }
 
   async resolve(destination: string, name: string): Promise<string | undefined> {
