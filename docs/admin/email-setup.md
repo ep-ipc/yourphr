@@ -6,7 +6,7 @@ The mail code is ngdpbase's `EmailManager`, with the same settings under the `yo
 
 ## Where to set it
 
-__Admin → Configuration__. The __Email__ card at the top says whether this instance sends mail, where it would go, and what is stopping it. It can also send a test message. The settings themselves are the `yourphr.mail.*` rows on the same page.
+The __Email__ card on the __Admin__ dashboard, beside Database, says whether this instance sends mail, where it would go, and what is stopping it. It can also send a test message. The settings themselves are the `yourphr.mail.*` rows on __Admin → Configuration__.
 
 Do not put these in deployment yaml ([#472](https://github.com/jwilleke/yourphr/issues/472)); environment variables are for bootstrap and secrets. The settings are read each time a message is sent, so a change takes effect at once, with no restart.
 
@@ -81,7 +81,7 @@ Managed relays walk you through these when you sign up.
 
 ## Check it with a test message
 
-On the Email card, enter an address and press __Send a test message__. It uses the settings as they are right now, and it works __even while mail is off__, so you can prove the relay before turning mail on. It reports one of:
+On the Email card (Admin dashboard), enter an address and press __Send a test message__. It uses the settings as they are right now, and it works __even while mail is off__, so you can prove the relay before turning mail on. It reports one of:
 
 - __Sent__, with the relay it went through. Check that inbox, including spam.
 - __Written to the server log__: the provider is still `console`.

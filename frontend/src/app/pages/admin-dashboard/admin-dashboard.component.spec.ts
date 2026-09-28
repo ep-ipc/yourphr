@@ -61,6 +61,8 @@ function setup(
         getRelayConfig: () => opts.relayFail ? throwError(() => new Error('boom')) : of(relay),
         getInstanceSettings: () => opts.instanceFail ? throwError(() => new Error('boom')) : of(instance),
         setInstanceSettings: (s: InstanceSettings) => of(s),
+        getMailStatus: () => of({enabled: true, provider: 'smtp', from: 'phr@example.org', destination: 'relay.example.org:587 (STARTTLS required)', problems: []}),
+        sendTestMail: () => of({sent: true, provider: 'smtp', destination: 'relay.example.org:587 (STARTTLS required)'}),
         getDatabaseInfo: () => opts.dbFail
           ? throwError(() => new Error('boom'))
           : of({backup_health: health}),

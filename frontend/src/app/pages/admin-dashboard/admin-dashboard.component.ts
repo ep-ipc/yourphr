@@ -14,9 +14,10 @@ import {AdminMetrics, RecentSyncJob} from '../../models/fasten/admin-metrics';
 // shared <app-admin-back-link> back to here.
 //
 // Instance / operator contact is an *inline* card (like SMART relay): a few fields, no subpage.
+import {AdminMailCardComponent} from '../../components/admin-mail-card/admin-mail-card.component';
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule],
+  imports: [CommonModule, FormsModule, RouterModule, AdminMailCardComponent],
   selector: 'app-admin-dashboard',
   templateUrl: './admin-dashboard.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

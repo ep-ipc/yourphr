@@ -1,6 +1,7 @@
 import {ComponentFixture, TestBed, waitForAsync} from '@angular/core/testing';
 import {of, throwError} from 'rxjs';
 import {HttpErrorResponse} from '@angular/common/http';
+import {RouterTestingModule} from '@angular/router/testing';
 import {AdminMailCardComponent} from './admin-mail-card.component';
 import {FastenApiService} from '../../services/fasten-api.service';
 import {MailStatus} from '../../models/fasten/mail-status';
@@ -24,7 +25,7 @@ describe('AdminMailCardComponent', () => {
     apiSpy = jasmine.createSpyObj('FastenApiService', ['getMailStatus', 'sendTestMail']);
     apiSpy.getMailStatus.and.returnValue(of(smtp()));
     TestBed.configureTestingModule({
-      imports: [AdminMailCardComponent],
+      imports: [AdminMailCardComponent, RouterTestingModule],
       providers: [{provide: FastenApiService, useValue: apiSpy}],
     }).compileComponents();
   }));
@@ -88,10 +89,9 @@ describe('AdminMailCardComponent', () => {
     expect(component.sending).toBeFalse();
   });
 
-  it('re-reads the settings when the page reloads configuration', async () => {
+  it('shows nothing to a read-only admin, who may not read mail settings', async () => {
+    apiSpy.getMailStatus.and.returnValue(throwError(() => new HttpErrorResponse({status: 403, error: {success: false, error: 'forbidden'}})));
     await render();
-    apiSpy.getMailStatus.calls.reset();
-    component.refresh = 1;
-    expect(apiSpy.getMailStatus).toHaveBeenCalledTimes(1);
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="admin-mail-card"]')).toBeNull();
   });
 });

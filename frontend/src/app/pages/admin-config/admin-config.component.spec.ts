@@ -37,9 +37,8 @@ describe('AdminConfigComponent', () => {
 
   beforeEach(waitForAsync(() => {
     apiSpy = jasmine.createSpyObj('FastenApiService', [
-      'getAdminConfig', 'revealAdminConfigValue', 'setAdminConfigValue', 'resetAdminConfigValue', 'getMailStatus', 'sendTestMail',
+      'getAdminConfig', 'revealAdminConfigValue', 'setAdminConfigValue', 'resetAdminConfigValue',
     ]);
-    apiSpy.getMailStatus.and.returnValue(of({enabled: false, provider: 'console', from: '', destination: 'the server log', problems: []}));
     apiSpy.getAdminConfig.and.returnValue(of(config()));
     apiSpy.revealAdminConfigValue.and.returnValue(of({key: 'jwt.issuer.key', value: 'real-secret', default: ''}));
     apiSpy.setAdminConfigValue.and.returnValue(of(true));

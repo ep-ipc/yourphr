@@ -5,7 +5,6 @@ import {FastenApiService} from '../../services/fasten-api.service';
 import {AdminConfig, ConfigEntry} from '../../models/fasten/admin-config';
 import {AdminBackLinkComponent} from '../../components/admin-back-link/admin-back-link.component';
 import {LoadingSpinnerComponent} from '../../components/loading-spinner/loading-spinner.component';
-import {AdminMailCardComponent} from '../../components/admin-mail-card/admin-mail-card.component';
 
 type TabId = 'current' | 'custom' | 'defaults';
 
@@ -20,7 +19,7 @@ type TabId = 'current' | 'custom' | 'defaults';
 // form would only ever produce errors. Overriding any known key is done from the rows themselves.
 @Component({
   standalone: true,
-  imports: [FormsModule, AdminBackLinkComponent, LoadingSpinnerComponent, AdminMailCardComponent],
+  imports: [FormsModule, AdminBackLinkComponent, LoadingSpinnerComponent],
   selector: 'app-admin-config',
   templateUrl: './admin-config.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -45,9 +44,6 @@ export class AdminConfigComponent implements OnInit {
   editingValue: any = '';
   saving = false;
 
-  // Bumped on every reload, so the Email card re-reads after a yourphr.mail.* change (#536).
-  mailRefresh = 0;
-
   constructor(private fastenApi: FastenApiService) {}
 
   ngOnInit() {
@@ -61,7 +57,6 @@ export class AdminConfigComponent implements OnInit {
       next: (config) => {
         this.config = config;
         this.loading = false;
-        this.mailRefresh++;
       },
       error: (err) => {
         if (err?.status === 403) this.restricted = true;
