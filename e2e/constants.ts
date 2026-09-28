@@ -11,5 +11,8 @@ export const E2E_PW_USER = 'carol';
 export const E2E_PW_PASS = 'carols-long-enough-password';
 export const E2E_RESET_USER = 'dave';
 export const E2E_RESET_PASS = 'daves-long-enough-password';
+/** Holds the one seeded notification (yourphr#793), so no other journey sees a banner. */
+export const E2E_NOTE_USER = 'nora';
+export const E2E_NOTE_PASS = 'noras-long-enough-password';
 /** Written by server.ts at boot (0600, gitignored); read by the admin journeys. */
 export const ADMIN_PASS_FILE = join(E2E_DIR, '.admin-pass');

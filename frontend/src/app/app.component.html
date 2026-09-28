@@ -4,6 +4,9 @@
   }
   <app-toast aria-live="polite" aria-atomic="true"></app-toast>
   <div class="az-content-wrapper">
+    @if (showHeader) {
+      <app-notification-banner></app-notification-banner>
+    }
     <router-outlet></router-outlet>
   </div>
   @if (showFooter) {

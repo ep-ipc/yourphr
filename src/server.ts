@@ -609,6 +609,21 @@ export function createYourPhrServer(options: ServerOptions) {
         if (category) await engine.managers.audit.record(ctx, category);
       }
 
+      // Notifications (yourphr#793): the caller's own — targeted at them or at everyone, not
+      // dismissed by them — and dismissing one, which hides it from the caller only.
+      if (auth && engine.has('notifications') && url.pathname === '/api/secure/notifications' && req.method === 'GET') {
+        send(res, 200, {success: true, data: engine.managers.notifications.getUserNotifications(ctx.username).map((n) => ({
+          id: n.id, type: n.type, title: n.title, message: n.message, level: n.level, created_at: n.createdAt.toISOString(), expires_at: n.expiresAt ? n.expiresAt.toISOString() : null,
+        }))});
+        return;
+      }
+      const dismissMatch = url.pathname.match(/^\/api\/secure\/notifications\/([^/]+)\/dismiss$/);
+      if (auth && engine.has('notifications') && dismissMatch && req.method === 'POST') {
+        const dismissed = await engine.managers.notifications.dismissNotification(decodeURIComponent(dismissMatch[1]!), ctx);
+        dismissed ? send(res, 200, {success: true}) : send(res, 404, {success: false, error: 'no such notification'});
+        return;
+      }
+
       // --- the account page (yourphr#596) ---
       // The route composes doors; no manager reaches through another. Consent is the users
       // manager's fact, the disconnect that follows a revocation is the sources manager's rule

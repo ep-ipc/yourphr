@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { assembleApp } from '../src/app.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
 import { startFakeProvider, listenFake } from '../scripts/lib/fake-provider.js';
-import { ADMIN_PASS_FILE, E2E_PASS, E2E_PORT, E2E_PW_PASS, E2E_PW_USER, E2E_RESET_PASS, E2E_RESET_USER, E2E_USER } from './constants.js';
+import { ADMIN_PASS_FILE, E2E_NOTE_PASS, E2E_NOTE_USER, E2E_PASS, E2E_PORT, E2E_PW_PASS, E2E_PW_USER, E2E_RESET_PASS, E2E_RESET_USER, E2E_USER } from './constants.js';
 
 const webDir = process.env['SPIKE_E2E_WEB_DIR'] ?? '/tmp/spike-web';
 if (!existsSync(join(webDir, 'index.html'))) {
@@ -53,6 +53,8 @@ const seed = ApiContext.system('e2e-seed', 'admin', app.engine);
 await app.users.createUser(seed, E2E_USER, E2E_PASS);
 await app.users.createUser(seed, E2E_PW_USER, E2E_PW_PASS);
 await app.users.createUser(seed, E2E_RESET_USER, E2E_RESET_PASS);
+await app.users.createUser(seed, E2E_NOTE_USER, E2E_NOTE_PASS);
+await app.engine.managers.notifications.createNotification({ title: 'No backup in over 26 hours', message: 'Synthetic notice for the banner journey.', level: 'error', targetUsers: [E2E_NOTE_USER] });
 await app.users.setConsent(ApiContext.system('e2e-seed', E2E_USER, app.engine), new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'));
 await app.sources.add(ApiContext.system('e2e-seed', E2E_USER, app.engine), {
   userId: E2E_USER, display: 'Fake Regional Health', fhirBaseUrl: fakeBase, tokenUrl: `${fakeBase}/token`, clientId: 'fake-cid',

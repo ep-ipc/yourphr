@@ -69,6 +69,16 @@
   "yourphr.cda-converter.enabled": true,
   "yourphr.cda-converter.url": "http://yourphr-cda-converter:8080",
   "yourphr.cda-converter.timeout-seconds": 60,
+  "_comment_notifications": "yourphr#793 — notifications, ported from ngdpbase's NotificationManager with the same keys under the yourphr. prefix. A notification is a message the instance shows signed-in people as a banner until they dismiss it or it expires; targetUsers empty means everyone. Kept in one JSON file under dir, saved on every change and every auto-save-interval milliseconds.",
+  "yourphr.notifications.dir": "${YOURPHR_FAST_STORAGE}/notifications",
+  "yourphr.notifications.file": "notifications.json",
+  "yourphr.notifications.auto-save-interval": 300000,
+  "_comment_notification_escalation": "Email escalation, as ngdpbase: a notification at one of these levels is also emailed to every account holding recipient-role that has given an email address (Settings). Needs outbound mail on (yourphr.mail.*); while mail is off the escalation is logged, not sent. Off by default.",
+  "yourphr.notifications.escalation.enabled": false,
+  "yourphr.notifications.escalation.levels": [
+    "error"
+  ],
+  "yourphr.notifications.escalation.recipient-role": "admin",
   "_comment_mail": "yourphr#536 — outbound email, ported from ngdpbase's EmailManager (same keys, yourphr. prefix). OFF by default: a demo or a fresh install must never email anyone until an admin turns it on. provider is 'console' (the message goes to the server log — To and Subject only while mail is off, the whole message once an admin turns it on with console chosen) or 'smtp' (sent through the relay below). SMTP always encrypts: port 465 with secure=true is TLS from the first byte; any other port must offer STARTTLS or nothing is sent. There is no setting to accept an unverified certificate, by design. smtp.from overrides mail.from and may carry a display name. Read on every send, so no restart after changing them. Admin -> Configuration -> Email can send a test message. smtp.pass is masked on the Admin screen (yourphr.config.secret-keys).",
   "yourphr.mail.enabled": false,
   "yourphr.mail.provider": "console",

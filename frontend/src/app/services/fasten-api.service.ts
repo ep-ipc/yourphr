@@ -7,6 +7,7 @@ import {map} from 'rxjs/operators';
 import {ResponseWrapper} from '../models/response-wrapper';
 import {ReconciledMedication} from '../models/fasten/reconciled-medication';
 import {MailSendResult, MailStatus} from '../models/fasten/mail-status';
+import {AppNotification} from '../models/fasten/app-notification';
 import {ClassifiedCondition} from '../models/fasten/classified-condition';
 import {ClassifiedAllergy} from '../models/fasten/classified-allergy';
 import {ClassifiedImmunization} from '../models/fasten/classified-immunization';
@@ -388,6 +389,23 @@ export class FastenApiService {
         map((response: ResponseWrapper) => {
           return response.data as {staged: boolean; message: string}
         })
+      );
+  }
+
+  // getNotifications lists the signed-in person's notifications (#793): targeted at them or at
+  // everyone, not dismissed by them, not expired.
+  getNotifications(): Observable<AppNotification[]> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/notifications`)
+      .pipe(
+        map((response: ResponseWrapper) => (response.data || []) as AppNotification[])
+      );
+  }
+
+  // dismissNotification hides one notification from the signed-in person only (#793).
+  dismissNotification(id: string): Observable<boolean> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/notifications/${encodeURIComponent(id)}/dismiss`, {})
+      .pipe(
+        map((response: ResponseWrapper) => response.success)
       );
   }
 

@@ -56,6 +56,7 @@ import { SqliteFavoritesProvider } from './app/providers/SqliteFavoritesProvider
 import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { EmailManager } from './framework/managers/EmailManager.js';
+import { NotificationManager } from './framework/managers/NotificationManager.js';
 import { BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
 import { applyDemoReset } from './app/providers/demo-reset.js';
 import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
@@ -394,6 +395,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   engine.register('policy', new PolicyManager(engine, (line) => appLog.info(line))); // yourphr#623: roles and permissions from the merged configuration
   engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('email', new EmailManager(engine, (line) => appLog.info(line))); // yourphr#536: outbound mail, off until an admin turns it on
+  engine.register('notifications', new NotificationManager(engine, (line) => appLog.info(line))); // yourphr#793: banners, and email escalation through the mail manager
   engine.register('database', database);
   // Audit (yourphr#614) is REQUIRED: a provider this stack does not have, or one that is not healthy, refuses the boot.
   engine.register('audit', new AuditManager(engine, auditProviderFor(config.getString('yourphr.audit.provider'), db)));

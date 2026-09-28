@@ -691,6 +691,24 @@ async function main(): Promise<void> {
       && carolRow?.has_email === true && !JSON.stringify(usersListed.body).includes('carol@example.org') && clearCarol.status === 200 && carolAfter.data.email === '',
     `${setCarol.status} ${carolMe.data.email} ${badCarol.status} ${missingEmail.status} ${JSON.stringify(carolRow)} ${clearCarol.status}`);
 
+  // Notifications (yourphr#793): a person sees what is targeted at them or at everyone, and a
+  // dismissal hides it from them only.
+  const notes = app.engine.managers.notifications;
+  const forAll = await notes.createNotification({ title: 'For everyone', level: 'info' });
+  await notes.createNotification({ title: 'Admins only', level: 'error', targetUsers: ['admin'] });
+  const listFor = async (token: string) => ((await (await fetch(`${base}/api/secure/notifications`, authed(token))).json()) as { data: { id: string; title: string; level: string; created_at: string }[] }).data;
+  const carolNotes = await listFor(carolToken);
+  const adminNotes = await listFor(adminToken);
+  const dismissed = await fetch(`${base}/api/secure/notifications/${forAll}/dismiss`, { method: 'POST', ...authed(carolToken) });
+  const dismissMissing = await fetch(`${base}/api/secure/notifications/notification_9999/dismiss`, { method: 'POST', ...authed(carolToken) });
+  const carolAfterDismiss = await listFor(carolToken);
+  const adminNotesAfter = await listFor(adminToken);
+  check('notifications: each person sees what is for them or everyone; a dismissal hides it from that person only; an unknown id is 404',
+    carolNotes.map((n) => n.title).join('|') === 'For everyone' && adminNotes.map((n) => n.title).join('|') === 'For everyone|Admins only'
+      && dismissed.status === 200 && dismissMissing.status === 404 && carolAfterDismiss.length === 0 && adminNotesAfter.length === 2 && !!adminNotes[1]!.created_at,
+    `${carolNotes.map((n) => n.title)} / ${adminNotes.map((n) => n.title)} / ${dismissed.status} ${dismissMissing.status}`);
+  await notes.clearAllActive();
+
   const logsBefore = await adminJson('/api/secure/admin/logs');
   const badLevel = await adminJson('/api/secure/admin/log-level', { method: 'PUT', body: JSON.stringify({ level: 'loud' }) });
   const debugLevel = await adminJson('/api/secure/admin/log-level', { method: 'PUT', body: JSON.stringify({ level: 'debug' }) });

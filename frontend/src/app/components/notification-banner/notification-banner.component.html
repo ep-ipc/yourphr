@@ -1,0 +1,11 @@
+@if (notifications.length) {
+  <div class="container mg-t-15" data-testid="notification-banner">
+    @for (n of notifications; track n.id) {
+      <div class="alert alert-dismissible mg-b-10" [class]="alertClass(n)" [attr.role]="n.level === 'error' ? 'alert' : 'status'">
+        <i class="fas me-2" [class]="icon(n)"></i><strong>{{ n.title }}</strong>
+        @if (n.message) { <span>&nbsp;{{ n.message }}</span> }
+        <button type="button" class="btn-close" aria-label="Dismiss" (click)="dismiss(n)"></button>
+      </div>
+    }
+  </div>
+}
