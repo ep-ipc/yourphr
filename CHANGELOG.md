@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.9.1](https://github.com/jwilleke/yourphr/compare/v3.9.0...v3.9.1) (2026-09-28)
+
+### Bug Fixes
+
+- __Taking a backup no longer freezes YourPHR__ ([#787](https://github.com/jwilleke/yourphr/issues/787)): a backup used to copy every record on the same thread that answers the household, so nothing loaded until it finished, and the health check could restart the instance halfway through, leaving a partial file. The copy now runs alongside, and YourPHR keeps answering while it works. This is what nightly backups were waiting on ([#783](https://github.com/jwilleke/yourphr/issues/783)).
+
 ## [3.9.0](https://github.com/jwilleke/yourphr/compare/v3.8.1...v3.9.0) (2026-09-27)
 
 __Upload the file your patient portal gives you, as it is.__ MyChart's "Download my records" hands you a zip. You used to have to unzip it, work out which files were your records, and upload them one at a time. Now you upload the zip and YourPHR finds the records inside.
