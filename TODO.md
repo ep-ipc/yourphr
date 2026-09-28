@@ -4,11 +4,10 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔴 P0 — Security & Critical
 
+- [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#788](https://github.com/jwilleke/yourphr/issues/788) — [BUG] Scheduled backups are off on the live instance — enable them once the export no longer blocks
-- [#787](https://github.com/jwilleke/yourphr/issues/787) — [BUG] A backup blocks the one Node thread — move the export into a worker
 - [#783](https://github.com/jwilleke/yourphr/issues/783) — [BUG] No backup since the cut-over — the schedule was never enabled, and enabling it as-is would freeze the instance nightly
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
-- [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 
 ## 🟣 Epics
 
@@ -20,14 +19,14 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟠 P1
 
+- [#775](https://github.com/jwilleke/yourphr/issues/775) — [CHORE] One markdown module: CommonMark, sanitised before it is stored
+- [#774](https://github.com/jwilleke/yourphr/issues/774) — [BUG] Forms send what the patient types to NLM and Wikipedia, straight from their browser
 - [#789](https://github.com/jwilleke/yourphr/issues/789) — [FEATURE] Alert when no backup has succeeded in over 26 hours
 - [#784](https://github.com/jwilleke/yourphr/issues/784) — [BUG] Records are keyed without their source — a second provider's record with the same id is refused, and history is shared across people
 - [#782](https://github.com/jwilleke/yourphr/issues/782) — [BUG] A click that cannot complete says nothing — guards wait forever, failures are silent
 - [#778](https://github.com/jwilleke/yourphr/issues/778) — [BUG] Bare-metal setup serves no interface — the example sets YOURPHR_WEB_SRC_FRONTEND_PATH, the server reads YOURPHR_WEB_STATIC_DIR
 - [#777](https://github.com/jwilleke/yourphr/issues/777) — [BUG] open the raw record for reviewing
 - [#776](https://github.com/jwilleke/yourphr/issues/776) — [BUG] Sync imports document titles but never fetches the documents — the Binary pass went with the Go stack
-- [#775](https://github.com/jwilleke/yourphr/issues/775) — [CHORE] One markdown module: CommonMark, sanitised before it is stored
-- [#774](https://github.com/jwilleke/yourphr/issues/774) — [BUG] Forms send what the patient types to NLM and Wikipedia, straight from their browser
 - [#772](https://github.com/jwilleke/yourphr/issues/772) — [CHORE] check-routes compares paths, not methods — a GET-only path reads as served for PATCH and DELETE
 - [#737](https://github.com/jwilleke/yourphr/issues/737) — [BUG] PDF, DICOM and image uploads (v2's #255) are gone in v3
 - [#713](https://github.com/jwilleke/yourphr/issues/713) — [BUG] A fix to the search index reaches no record already stored — reindexAll() has no caller outside a test
@@ -92,6 +91,8 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
+- [#790](https://github.com/jwilleke/yourphr/issues/790) — [BUG] Backup files are called "spike", and the Admin page says they are gzip .db.gz
+- [#787](https://github.com/jwilleke/yourphr/issues/787) — [BUG] A backup blocks the one Node thread — move the export into a worker
 - [#786](https://github.com/jwilleke/yourphr/issues/786) — [FEATURE] Import a patient-portal download zip as-is (MyChart / IHE XDM)
 - [#785](https://github.com/jwilleke/yourphr/issues/785) — [FEATURE] Default yourphr.cda-converter.url to <http://yourphr-cda-converter:8080>
 
@@ -103,4 +104,4 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## ❓ Needs triage
 
-*None.*
+- [#791](https://github.com/jwilleke/yourphr/issues/791) — [BUG] The backup and recovery docs describe the Go stack — plaintext, gzip, settings file, labels
