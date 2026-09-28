@@ -219,6 +219,15 @@ const APP_MIGRATIONS: Migration[] = [
       if (!columns.includes('user_id')) addColumnWithDefault(db, 'sync_jobs', 'user_id', 'TEXT', '');
     },
   },
+  {
+    id: '20260928180000',
+    description: 'auth_users.email (yourphr#792) — an optional address, so an alert can reach an admin; empty for every existing account',
+    up: (db) => {
+      const columns = (db.pragma('table_info(auth_users)') as { name: string }[]).map((c) => c.name);
+      // '' is "not given": nobody's address is guessed from anything, and escalation skips them.
+      if (!columns.includes('email')) addColumnWithDefault(db, 'auth_users', 'email', 'TEXT', '');
+    },
+  },
 ];
 
 /**

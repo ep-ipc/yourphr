@@ -687,6 +687,19 @@ export function createYourPhrServer(options: ServerOptions) {
           send(res, 200, {success: true, data: {...consentStatus(''), medicare_sources_disconnected: disconnected}});
           return;
         }
+        // The person's own email address (yourphr#792): optional, only ever used to reach them
+        // through the mail manager. The shared demo account may not keep one — every visitor signs
+        // in as it, so an address there would belong to whoever typed it last.
+        if (url.pathname === '/api/secure/account/email' && req.method === 'PUT') {
+          if (engine.has('demo')) engine.managers.demo.refuseWrite(ctx, 'setting an email address');
+          const body = await readJsonBody(req);
+          if (!body || typeof body['email'] !== 'string') {
+            send(res, 400, {success: false, error: 'email is required (an empty string clears it)'});
+            return;
+          }
+          send(res, 200, {success: true, data: {email: await engine.managers.users.setEmail(ctx, body['email'] as string)}});
+          return;
+        }
         if (url.pathname === '/api/secure/account/password' && req.method === 'POST') {
           // The shared demo account may not do this (yourphr#514): the configured password would
           // stop matching the stored hash, and demo sign-in — the only advertised way in — would
@@ -743,11 +756,12 @@ export function createYourPhrServer(options: ServerOptions) {
       }
 
       // Who am I — the call the Angular app makes on every route to decide it is signed in, and
-      // where it learns the role. Fields the spike does not store (full_name, email, picture) are
-      // empty, not invented; id is the username because that is the spike's account identity.
+      // where it learns the role. Fields the spike does not store (full_name, picture) are empty,
+      // not invented; email is the person's own, when they gave one (yourphr#792); id is the
+      // username because that is the spike's account identity.
       if (auth && url.pathname === '/api/secure/account/me' && req.method === 'GET') {
         send(res, 200, {success: true, data: {
-          id: sessionUser, username: sessionUser, full_name: '', email: '', picture: '',
+          id: sessionUser, username: sessionUser, full_name: '', email: await engine.managers.users.email(ctx), picture: '',
           role: ctx.role,
           // demo_account tells the UI to render the connect affordances as disabled rather than
           // offering an action the server will refuse (yourphr#496). Derived from demo mode plus
@@ -790,7 +804,7 @@ export function createYourPhrServer(options: ServerOptions) {
           return;
         }
         if (url.pathname === '/api/secure/users' && req.method === 'GET') {
-          send(res, 200, {success: true, data: (await engine.managers.users.listUsers(ctx)).map((u) => ({id: u.username, username: u.username, role: u.role, created_at: u.created_at, login_count: 0}))});
+          send(res, 200, {success: true, data: (await engine.managers.users.listUsers(ctx)).map((u) => ({id: u.username, username: u.username, role: u.role, created_at: u.created_at, has_email: u.has_email, login_count: 0}))});
           return;
         }
         if (url.pathname === '/api/secure/users' && req.method === 'POST') {

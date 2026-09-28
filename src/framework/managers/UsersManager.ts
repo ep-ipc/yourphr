@@ -14,6 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
 import { ApiError, type ApiContext } from '../ApiContext.js';
+import { isEmailAddress } from '../email-address.js';
 import { type BaseUsersProvider, normaliseRole, type Role, type UserRecord } from '../providers/BaseUsersProvider.js';
 import type { BaseAuthProvider } from '../providers/BaseAuthProvider.js';
 import { isLegacyBcrypt } from '../providers/PasswordAuthProvider.js';
@@ -155,10 +156,46 @@ export class UsersManager extends BaseManager {
     await this.provider.create({ username, passwordHash: this.passwords.hash(password), tokenGeneration: 0, role: this.checkRole(role) });
   }
 
-  /** Every account, for the admin's Users page: names, roles, when created — never a hash. */
-  async listUsers(ctx: ApiContext): Promise<{ username: string; role: Role; created_at: string }[]> {
+  /**
+   * Every account, for the admin's Users page: names, roles, when created — never a hash. Whether an
+   * account has an email address, not the address itself (yourphr#792): an admin needs to know an
+   * alert can reach someone, not to read everyone's inbox name.
+   */
+  async listUsers(ctx: ApiContext): Promise<{ username: string; role: Role; created_at: string; has_email: boolean }[]> {
     ctx.require('user-read');
-    return (await this.provider.list()).map((u) => ({ username: u.username, role: u.role, created_at: u.createdAt }));
+    return (await this.provider.list()).map((u) => ({ username: u.username, role: u.role, created_at: u.createdAt, has_email: u.email !== '' }));
+  }
+
+  /** The caller's own email address (yourphr#792), '' when they have not given one. */
+  async email(ctx: ApiContext): Promise<string> {
+    return (await this.provider.get(ctx.username))?.email ?? '';
+  }
+
+  /**
+   * The caller sets or clears ('') their own email address (yourphr#792). One address, checked the
+   * way the mail manager checks one; the relay has the last word on whether it exists. Only ever
+   * used to reach this person through the mail manager — never exported, never shown to others.
+   */
+  async setEmail(ctx: ApiContext, email: string): Promise<string> {
+    const address = String(email ?? '').trim();
+    if (address !== '' && !isEmailAddress(address)) throw new ApiError(400, `'${address}' is not an email address`);
+    if (!(await this.provider.setEmail(ctx.username, address))) throw new ApiError(404, 'no such account');
+    return address;
+  }
+
+  /**
+   * The accounts holding a role that have an email address — who an escalation can reach
+   * (ngdpbase's searchUsers('', { role })). The system or an admin; resolved roles, so an account
+   * whose stored role this instance no longer defines is not an admin here either.
+   */
+  async recipients(ctx: ApiContext, role: Role): Promise<{ username: string; email: string }[]> {
+    if (ctx.system === '') ctx.require('user-read');
+    const out: { username: string; email: string }[] = [];
+    for (const u of await this.provider.list()) {
+      if (u.email === '') continue;
+      if ((await this.roleOf(u.username)) === role) out.push({ username: u.username, email: u.email });
+    }
+    return out;
   }
 
   /** The caller changes their own password: the current one must verify, the policy applies, every session ends. */

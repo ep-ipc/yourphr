@@ -50,6 +50,12 @@ export class SettingsComponent implements OnInit {
 
   busyTokenId = '';
 
+  // The person's own email address (#792): editing state, and the server's refusal if any.
+  editingEmail = false;
+  emailDraft = '';
+  savingEmail = false;
+  emailError = '';
+
   constructor(private api: FastenApiService) { }
 
   ngOnInit(): void {
@@ -67,6 +73,34 @@ export class SettingsComponent implements OnInit {
         }
       },
       error: () => this.loading = false,
+    });
+  }
+
+  startEmailEdit(): void {
+    this.emailDraft = this.currentUser?.email || '';
+    this.emailError = '';
+    this.editingEmail = true;
+  }
+
+  cancelEmailEdit(): void {
+    this.editingEmail = false;
+    this.emailError = '';
+  }
+
+  /** Saves the draft; an empty draft clears the address. */
+  saveEmail(value: string = this.emailDraft): void {
+    this.savingEmail = true;
+    this.emailError = '';
+    this.api.setAccountEmail(value.trim()).subscribe({
+      next: (email) => {
+        this.currentUser = {...this.currentUser, email};
+        this.savingEmail = false;
+        this.editingEmail = false;
+      },
+      error: (err) => {
+        this.savingEmail = false;
+        this.emailError = extractErrorFromResponse(err) || 'Could not save your email address.';
+      },
     });
   }
 

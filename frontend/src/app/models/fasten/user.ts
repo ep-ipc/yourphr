@@ -12,4 +12,7 @@ export class User {
   // #512 — shown on the admin users list; absent until the first sign-in ("Never").
   last_login?: string
   login_count?: number
+  // #792 — whether the account has given an email address. The Users list never carries the
+  // address itself: an admin needs to know an alert can reach someone, not what their inbox is.
+  has_email?: boolean
 }

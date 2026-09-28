@@ -162,6 +162,45 @@ describe('UsersManager — accounts, roles, policy, consent, bootstrap and recov
   });
 });
 
+describe('UsersManager — an account\'s own email address (yourphr#792)', () => {
+  it('starts empty; the person sets, changes and clears their own; a non-address is a 400', async () => {
+    await users.createUser(sys, 'alice', PW);
+    const alice = ApiContext.from({ username: 'alice', role: 'user' }, engine);
+    expect(await users.email(alice)).toBe('');
+    expect(await users.setEmail(alice, '  alice@example.org ')).toBe('alice@example.org');
+    expect(await users.email(alice)).toBe('alice@example.org');
+    await expect(users.setEmail(alice, 'not an address')).rejects.toMatchObject({ status: 400 });
+    await expect(users.setEmail(alice, 'a@b.org, c@d.org')).rejects.toMatchObject({ status: 400 });
+    expect(await users.email(alice)).toBe('alice@example.org'); // a refusal changed nothing
+    expect(await users.setEmail(alice, '')).toBe('');
+    expect(await users.email(alice)).toBe('');
+  });
+
+  it('the Users list says whether an account has an address, never the address', async () => {
+    await users.createUser(sys, 'alice', PW);
+    await users.createUser(sys, 'bob', PW);
+    await users.setEmail(ApiContext.from({ username: 'alice', role: 'user' }, engine), 'alice@example.org');
+    const admin = ApiContext.from({ username: 'root', role: 'admin' }, engine);
+    const listed = await users.listUsers(admin);
+    expect(listed.map((u) => [u.username, u.has_email])).toEqual([['alice', true], ['bob', false]]);
+    expect(JSON.stringify(listed)).not.toContain('alice@example.org');
+  });
+
+  it('recipients: exactly the accounts holding the role that gave an address; a member may not ask', async () => {
+    await users.createUser(sys, 'root', PW, 'admin');
+    await users.createUser(sys, 'ops', PW, 'admin');
+    await users.createUser(sys, 'alice', PW);
+    const as = (u: string, role: string) => ApiContext.from({ username: u, role }, engine);
+    await users.setEmail(as('root', 'admin'), 'root@example.org');
+    await users.setEmail(as('alice', 'user'), 'alice@example.org');
+    expect(await users.recipients(sys, 'admin')).toEqual([{ username: 'root', email: 'root@example.org' }]);
+    await expect(users.recipients(as('alice', 'user'), 'admin')).rejects.toMatchObject({ status: 403 });
+    // A stored role the instance no longer defines is not that role here either (yourphr#648).
+    await provider.setRoleForTest('root', 'wizard');
+    expect(await users.recipients(sys, 'admin')).toEqual([]);
+  });
+});
+
 describe('SessionsManager — sign-in, tokens, revocation, throttling, cardinality', () => {
   it('signs in with a token carrying the generation; wrong password and unknown account get the one generic error', async () => {
     await users.createUser(sys, 'alice', PW);

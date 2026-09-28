@@ -329,9 +329,11 @@ async function main(): Promise<void> {
     fetch(`${base}/api/secure/account/password`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${demoToken}` }, body: JSON.stringify({ current_password: 'whatever', new_password: 'a-long-enough-password' }) }),
     fetch(`${base}/api/secure/account/sign-out-everywhere`, { method: 'POST', headers: authed(demoToken).headers }),
     fetch(`${base}/api/secure/account/me`, { method: 'DELETE', headers: authed(demoToken).headers }),
+    // yourphr#792: every visitor signs in as this account, so an address on it would be whoever typed last.
+    fetch(`${base}/api/secure/account/email`, { method: 'PUT', headers: { 'content-type': 'application/json', authorization: `Bearer ${demoToken}` }, body: JSON.stringify({ email: 'visitor@example.org' }) }),
   ]);
   const demoWriteBodies = await Promise.all(demoWrites.map((r) => r.json() as Promise<{ code?: string; error?: string }>));
-  check('the shared demo account cannot change its password, sign everyone out, or delete itself (yourphr#514)',
+  check('the shared demo account cannot change its password, sign everyone out, delete itself (yourphr#514) or keep an email address (yourphr#792)',
     demoWrites.every((r) => r.status === 403) && demoWriteBodies.every((b) => b.code === 'demo_account_restricted'),
     demoWrites.map((r) => r.status).join(','));
   // Still the demo account's session afterwards: a refusal must not have ended it or changed anything.
@@ -642,7 +644,7 @@ async function main(): Promise<void> {
   const download = await fetch(`${base}/api/secure/admin/database/backup/download`, { method: 'POST', ...authed(adminToken) });
   const downloaded = Buffer.from(await download.arrayBuffer());
   check('download streams a fresh backup as an attachment, ciphertext',
-    download.status === 200 && /attachment; filename=.*\d{2}Z-yourphr-backup\.db/.test(download.headers.get('content-disposition') ?? '') && downloaded.length > 0 && !downloaded.subarray(0, 16).includes('SQLite format 3'));
+    download.status === 200 && /attachment; filename=.*\d{2}Z(-\d+)?-yourphr-backup\.db/.test(download.headers.get('content-disposition') ?? '') && downloaded.length > 0 && !downloaded.subarray(0, 16).includes('SQLite format 3'));
   const badTime = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '25:00', days: 'daily', destination: '', max_backups: 3 }) });
   const scheduled = await adminJson('/api/secure/admin/database/schedule', { method: 'POST', body: JSON.stringify({ enabled: true, time: '02:30', days: 'weekly', destination: '', max_backups: 3 }) });
   check('the schedule is validated (HH:MM, daily|weekly) and stored in the settings store',
@@ -672,6 +674,22 @@ async function main(): Promise<void> {
   check('a test message is refused naming the missing sender, then written to the log once there is one; a bad address is a 400',
     testNoSender.status === 400 && /yourphr\.mail\.from/.test(testNoSender.body.error ?? '') && testToLog.status === 200 && testToLog.body.data['sent'] === true
       && testToLog.body.data['provider'] === 'console' && testBadTo.status === 400);
+
+  // An account's own email address (yourphr#792): set, shown on /account/me, cleared; the admin's
+  // Users list says whether there is one, not what it is.
+  const putEmail = (token: string, email: unknown) => fetch(`${base}/api/secure/account/email`, { method: 'PUT', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ email }) });
+  const setCarol = await putEmail(carolToken, ' carol@example.org ');
+  const carolMe = (await (await fetch(`${base}/api/secure/account/me`, authed(carolToken))).json()) as { data: { email: string } };
+  const badCarol = await putEmail(carolToken, 'not an address');
+  const missingEmail = await putEmail(carolToken, 42);
+  const usersListed = await adminJson('/api/secure/users');
+  const carolRow = (usersListed.body.data as unknown as { username: string; has_email: boolean }[]).find((u) => u.username === 'carol');
+  const clearCarol = await putEmail(carolToken, '');
+  const carolAfter = (await (await fetch(`${base}/api/secure/account/me`, authed(carolToken))).json()) as { data: { email: string } };
+  check('a person sets, sees and clears their own email address; a non-address is a 400; Users shows only whether one exists',
+    setCarol.status === 200 && carolMe.data.email === 'carol@example.org' && badCarol.status === 400 && missingEmail.status === 400
+      && carolRow?.has_email === true && !JSON.stringify(usersListed.body).includes('carol@example.org') && clearCarol.status === 200 && carolAfter.data.email === '',
+    `${setCarol.status} ${carolMe.data.email} ${badCarol.status} ${missingEmail.status} ${JSON.stringify(carolRow)} ${clearCarol.status}`);
 
   const logsBefore = await adminJson('/api/secure/admin/logs');
   const badLevel = await adminJson('/api/secure/admin/log-level', { method: 'PUT', body: JSON.stringify({ level: 'loud' }) });

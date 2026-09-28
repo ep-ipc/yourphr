@@ -45,11 +45,13 @@ export interface UserRecord {
   tokenGeneration: number;
   role: Role;
   createdAt: string;
+  /** The person's own email address (yourphr#792), '' when they have not given one. Optional to keep. */
+  email: string;
 }
 
 export abstract class BaseUsersProvider {
   abstract initialize(): Promise<void>;
-  abstract create(record: Omit<UserRecord, 'createdAt'> & { createdAt?: string }): Promise<void>;
+  abstract create(record: Omit<UserRecord, 'createdAt' | 'email'> & { createdAt?: string; email?: string }): Promise<void>;
   abstract get(username: string): Promise<UserRecord | undefined>;
   abstract list(): Promise<UserRecord[]>;
   abstract count(): Promise<number>;
@@ -57,6 +59,8 @@ export abstract class BaseUsersProvider {
   abstract setPasswordHash(username: string, hash: string, bumpGeneration: boolean): Promise<boolean>;
   abstract bumpGeneration(username: string): Promise<void>;
   abstract delete(username: string): Promise<boolean>;
+  /** Set or clear ('') the account's email address (yourphr#792). False when there is no such account. */
+  abstract setEmail(username: string, email: string): Promise<boolean>;
   /** The legal consent (yourphr#614): when the person accepted the Privacy Policy and Terms, RFC3339 UTC; '' = revoked or never. */
   abstract consentAcceptedAt(username: string): Promise<string>;
   abstract setConsentAcceptedAt(username: string, acceptedAt: string): Promise<void>;

@@ -81,7 +81,7 @@
               <tr>
                 <td>{{ user.full_name || '—' }}</td>
                 <td>{{ user.username }}</td>
-                <td>{{ user.email || '—' }}</td>
+                <td>@if (user.has_email) { <span class="text-bg-success badge">Given</span> } @else { — }</td>
                 <!-- text-bg-*, never the Bootstrap 4 badge-* names: those render white-on-white in
                 light mode, and there is a build guard that fails on them (#486). -->
                 <td>

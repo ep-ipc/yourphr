@@ -36,7 +36,7 @@ describe('SettingsComponent', () => {
 
   beforeEach(waitForAsync(() => {
     api = jasmine.createSpyObj('FastenApiService', [
-      'getCurrentUser', 'getPublicInstanceInfo', 'getAgentTokens', 'mintAgentToken', 'revokeAgentToken', 'renewAgentToken',
+      'getCurrentUser', 'getPublicInstanceInfo', 'getAgentTokens', 'mintAgentToken', 'revokeAgentToken', 'renewAgentToken', 'setAccountEmail',
     ]);
     api.getCurrentUser.and.returnValue(of({username: 'jane', role: 'user'} as never));
     api.getPublicInstanceInfo.and.returnValue(instance(true));
@@ -85,6 +85,44 @@ describe('SettingsComponent', () => {
     button.click();
     fixture.detectChanges();
   };
+
+  // #792: the person's own address — optional, set and cleared here, never offered to the demo account.
+  it('adds an email address, shows it, and removes it again', async () => {
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="account-email"]').textContent).toContain('Not set');
+    api.setAccountEmail.and.returnValue(of('jane@example.org'));
+    press('Add');
+    await fixture.whenStable(); // ngModel writes the form's starting value asynchronously
+    type('#accountEmail', 'jane@example.org');
+    press('Save');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.setAccountEmail).toHaveBeenCalledWith('jane@example.org');
+    expect(fixture.nativeElement.querySelector('[data-testid="account-email"]').textContent).toContain('jane@example.org');
+
+    api.setAccountEmail.and.returnValue(of(''));
+    press('Change');
+    press('Remove');
+    expect(api.setAccountEmail).toHaveBeenCalledWith('');
+    expect(fixture.nativeElement.querySelector('[data-testid="account-email"]').textContent).toContain('Not set');
+  });
+
+  it("shows the server's reason when an address is refused", async () => {
+    api.setAccountEmail.and.returnValue(throwError(() => ({name: 'HttpErrorResponse', status: 400, error: {success: false, error: "'nope' is not an email address"}})));
+    fixture.detectChanges();
+    press('Add');
+    await fixture.whenStable();
+    type('#accountEmail', 'nope');
+    press('Save');
+    expect(fixture.nativeElement.querySelector('[data-testid="account-email-error"]').textContent).toContain('is not an email address');
+  });
+
+  it('offers the shared demo account no way to keep an address', () => {
+    api.getCurrentUser.and.returnValue(of({username: 'demo', role: 'user', demo_account: true} as never));
+    fixture.detectChanges();
+    const cell = fixture.nativeElement.querySelector('[data-testid="account-email"]') as HTMLElement;
+    expect(cell.querySelector('button')).toBeNull();
+  });
 
   it('lists the keys with what each may read and when it stops', () => {
     fixture.detectChanges();

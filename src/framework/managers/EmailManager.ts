@@ -24,6 +24,7 @@ import { ApiError, type ApiContext } from '../ApiContext.js';
 import { SmtpError } from '../../http/index.js';
 import { BaseMailProvider, ConsoleMailProvider, type MailMessage } from '../providers/BaseMailProvider.js';
 import { NodemailerMailProvider } from '../providers/NodemailerMailProvider.js';
+import { addressOf, isEmailAddress } from '../email-address.js';
 
 declare module '../Engine.js' {
   interface ManagerRegistry {
@@ -60,10 +61,6 @@ export interface SendResult {
 /** Builds the transport for the settings of the moment. Tests pass their own. */
 export type MailProviderFactory = (settings: MailSettings, pass: string) => BaseMailProvider;
 
-/** A deliberately plain check — one address, no display name, no list. The relay has the last word. */
-const ADDRESS = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
-/** The address inside "Name <addr>", or the whole string. */
-const addressOf = (from: string): string => /<([^>]+)>\s*$/.exec(from)?.[1]?.trim() ?? from.trim();
 
 export class EmailManager extends BaseManager {
   readonly name = 'email';
@@ -130,7 +127,7 @@ export class EmailManager extends BaseManager {
     const provider = this.cfg.getString('yourphr.mail.provider');
     if (provider !== 'smtp' && provider !== 'console') out.push(`yourphr.mail.provider is '${provider}', which is not a mail provider — use 'smtp' or 'console'.`);
     if (!s.from) out.push('No sender address: set yourphr.mail.from (or yourphr.mail.provider.smtp.from).');
-    else if (!ADDRESS.test(addressOf(s.from))) out.push(`The sender address '${s.from}' is not an email address (yourphr.mail.from).`);
+    else if (!isEmailAddress(addressOf(s.from))) out.push(`The sender address '${s.from}' is not an email address (yourphr.mail.from).`);
     if (s.provider === 'smtp') {
       if (!s.smtp.host) out.push('No SMTP relay: set yourphr.mail.provider.smtp.host.');
       if (!Number.isInteger(s.smtp.port) || s.smtp.port < 1 || s.smtp.port > 65535) out.push(`yourphr.mail.provider.smtp.port (${s.smtp.port}) is not a port number.`);
@@ -185,7 +182,7 @@ export class EmailManager extends BaseManager {
 
   private async deliver(message: MailMessage, test: boolean): Promise<SendResult> {
     const to = String(message.to ?? '').trim();
-    if (!ADDRESS.test(to)) throw new ApiError(400, `'${to}' is not an email address.`);
+    if (!isEmailAddress(to)) throw new ApiError(400, `'${to}' is not an email address.`);
     const s = this.settings();
     const pass = this.cfg.getString('yourphr.mail.provider.smtp.pass');
     if (!s.enabled && !test) {

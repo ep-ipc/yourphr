@@ -17,7 +17,28 @@
               <dt class="col-sm-3 profile-label">User Name:</dt>
               <dd class="col-sm-9 profile-value">{{ currentUser.full_name || currentUser.username || 'N/A' }}</dd>
               <dt class="col-sm-3 profile-label">User Email:</dt>
-              <dd class="col-sm-9 profile-value">{{ currentUser.email || 'N/A' }}</dd>
+              <dd class="col-sm-9 profile-value" data-testid="account-email">
+                @if (!editingEmail) {
+                  {{ currentUser.email || 'Not set' }}
+                  @if (!currentUser.demo_account) {
+                    <button type="button" class="btn btn-link btn-sm pd-y-0" (click)="startEmailEdit()">{{ currentUser.email ? 'Change' : 'Add' }}</button>
+                  }
+                } @else {
+                  <form class="d-flex flex-wrap align-items-center" (ngSubmit)="saveEmail()">
+                    <label class="visually-hidden" for="accountEmail">Your email address</label>
+                    <input id="accountEmail" name="email" type="email" class="form-control form-control-sm me-2 mg-b-5" style="max-width: 20rem" placeholder="you@example.org" [(ngModel)]="emailDraft" [disabled]="savingEmail">
+                    <button type="submit" class="btn btn-az-primary btn-sm me-2 mg-b-5" [disabled]="savingEmail">Save</button>
+                    @if (currentUser.email) {
+                      <button type="button" class="btn btn-outline-secondary btn-sm me-2 mg-b-5" (click)="saveEmail('')" [disabled]="savingEmail">Remove</button>
+                    }
+                    <button type="button" class="btn btn-link btn-sm mg-b-5" (click)="cancelEmailEdit()" [disabled]="savingEmail">Cancel</button>
+                  </form>
+                  @if (emailError) {
+                    <div class="text-danger tx-13" data-testid="account-email-error">{{ emailError }}</div>
+                  }
+                }
+                <div class="tx-gray-500 tx-12">Optional. Used only to reach you by email — if you run this instance, that is where alerts about it go. Never shared.</div>
+              </dd>
               <dt class="col-sm-3 profile-label">User Role:</dt>
               <dd class="col-sm-9 profile-value">{{ currentUser.role || 'N/A' }}</dd>
             </dl>

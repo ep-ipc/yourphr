@@ -144,6 +144,15 @@ export class FastenApiService {
       );
   }
 
+  // Set or clear ('') the current user's own email address (#792). Optional; used only to reach
+  // them — an admin receives alerts about this instance there. Resolves to the address as stored.
+  setAccountEmail(email: string): Observable<string> {
+    return this._httpClient.put<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/email`, {email})
+      .pipe(
+        map((response: ResponseWrapper) => (response.data?.email ?? '') as string)
+      );
+  }
+
   // Change the current user's password. The server verifies the current password before applying.
   changePassword(currentPassword: string, newPassword: string): Observable<boolean> {
     return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/password`, {

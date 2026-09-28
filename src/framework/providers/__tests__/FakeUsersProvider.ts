@@ -15,9 +15,9 @@ export class FakeUsersProvider extends BaseUsersProvider {
   readonly rows = new Map<string, UserRecord>();
   initialized = false;
   async initialize(): Promise<void> { this.initialized = true; }
-  async create(record: Omit<UserRecord, 'createdAt'> & { createdAt?: string }): Promise<void> {
+  async create(record: Omit<UserRecord, 'createdAt' | 'email'> & { createdAt?: string; email?: string }): Promise<void> {
     if (this.rows.has(record.username)) throw new Error('UNIQUE constraint failed: auth_users.username');
-    this.rows.set(record.username, { ...record, createdAt: record.createdAt ?? '2026-01-01T00:00:00Z' });
+    this.rows.set(record.username, { ...record, createdAt: record.createdAt ?? '2026-01-01T00:00:00Z', email: record.email ?? '' });
   }
   async get(username: string): Promise<UserRecord | undefined> { return this.rows.get(username); }
   async list(): Promise<UserRecord[]> { return [...this.rows.values()]; }
@@ -31,6 +31,12 @@ export class FakeUsersProvider extends BaseUsersProvider {
   }
   async bumpGeneration(username: string): Promise<void> { const r = this.rows.get(username); if (r) r.tokenGeneration++; }
   async delete(username: string): Promise<boolean> { return this.rows.delete(username); }
+  async setEmail(username: string, email: string): Promise<boolean> {
+    const r = this.rows.get(username);
+    if (!r) return false;
+    r.email = email;
+    return true;
+  }
   readonly consent = new Map<string, string>();
   async consentAcceptedAt(username: string): Promise<string> { return this.consent.get(username) ?? ''; }
   async setConsentAcceptedAt(username: string, acceptedAt: string): Promise<void> { this.consent.set(username, acceptedAt); }
