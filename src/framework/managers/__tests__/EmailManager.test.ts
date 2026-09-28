@@ -102,6 +102,8 @@ describe('EmailManager — the one door to outbound mail', () => {
     await expect(refusal).rejects.toThrow(/set yourphr\.mail\.from.*smtp\.host.*password is empty/s);
     expect(built).toEqual([]);
     expect(lines.some((l) => l.startsWith('mail: No SMTP relay'))).toBe(true);
+    // yourphr#794: the refusal itself is in the log, not only on the page that asked.
+    expect(lines.at(-1)).toMatch(/^mail: refused to=admin@example\.org subject="\[YourPHR\] s": No sender address/);
   });
 
   it('flags secure on port 587, a bad port, a bad sender and an unknown provider', () => {
@@ -131,6 +133,9 @@ describe('EmailManager — the one door to outbound mail', () => {
   it('refuses a recipient that is not an address', async () => {
     await boot(SMTP);
     await expect(email.sendTo(system, 'nobody', 's', 't')).rejects.toMatchObject({ status: 400, message: "'nobody' is not an email address." });
+    expect(lines.at(-1)).toBe(`mail: refused to=nobody subject="[YourPHR] s": 'nobody' is not an email address.`);
+    await expect(email.sendTest(admin, 'nobody')).rejects.toMatchObject({ status: 400 });
+    expect(lines.at(-1)).toMatch(/^mail: refused \(test\) to=nobody /);
     await expect(email.sendTo(system, 'a@b.org, c@d.org', 's', 't')).rejects.toMatchObject({ status: 400 });
     expect(relay.sent).toEqual([]);
   });

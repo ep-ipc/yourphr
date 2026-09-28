@@ -176,7 +176,7 @@ export class EmailManager extends BaseManager {
     return this.deliver({
       to,
       subject: 'Test message',
-      text: `This is a test message from your YourPHR instance, sent at ${at} by ${ctx.username || 'an admin'} from Admin -> Configuration.\n\nIf you are reading it, this instance can send email. Nothing else is needed.`,
+      text: `This is a test message from your YourPHR instance, sent at ${at} by ${ctx.username || 'an admin'} from the Admin dashboard.\n\nIf you are reading it, this instance can send email. Nothing else is needed.`,
     }, true);
   }
 
@@ -189,7 +189,13 @@ export class EmailManager extends BaseManager {
   private async deliver(original: MailMessage, test: boolean): Promise<SendResult> {
     const message = { ...original, subject: this.subjectOf(String(original.subject ?? '')) };
     const to = String(message.to ?? '').trim();
-    if (!isEmailAddress(to)) throw new ApiError(400, `'${to}' is not an email address.`);
+    // A refusal before connecting is logged like a send (yourphr#794) — who and what, never the body
+    // — so "it never arrived" can be told apart from "it was never attempted" without the page.
+    const refuse = (cause: string): never => {
+      this.log(`mail: refused${test ? ' (test)' : ''} to=${to} subject=${JSON.stringify(message.subject)}: ${cause}`);
+      throw new ApiError(400, cause);
+    };
+    if (!isEmailAddress(to)) refuse(`'${to}' is not an email address.`);
     const s = this.settings();
     const pass = this.cfg.getString('yourphr.mail.provider.smtp.pass');
     if (!s.enabled && !test) {
@@ -198,12 +204,12 @@ export class EmailManager extends BaseManager {
       return { sent: false, provider: s.provider, destination: 'nowhere', reason };
     }
     const problems = this.problems(s);
-    if (problems.length > 0) throw new ApiError(400, problems.join(' '));
+    if (problems.length > 0) refuse(problems.join(' '));
     let provider: BaseMailProvider;
     try {
       provider = this.providerFor(s, pass);
     } catch (err) {
-      throw new ApiError(400, (err as Error).message);
+      return refuse((err as Error).message);
     }
     try {
       await provider.send({ ...message, to, from: message.from?.trim() || s.from });
