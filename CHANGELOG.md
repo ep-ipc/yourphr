@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.10.0](https://github.com/jwilleke/yourphr/compare/v3.9.1...v3.10.0) (2026-09-28)
+
+__When backups stop, the people who run the instance are told.__ For a month, no backup ran on the live instance and nobody noticed: the only place that said so was a page nobody had reason to open. Now every admin sees a warning at the top of every page, and it can be emailed to them too.
+
+### Features
+
+- __Backup alerts__ ([#789](https://github.com/jwilleke/yourphr/issues/789)): if scheduled backups are on and none has succeeded in over 49 hours (193 for a weekly schedule), every admin sees an error notice on every page. If no backup has succeeded in 15 days, they see a warning even when the schedule is off. A notice repeats at most once a day while the problem lasts, and goes away by itself once backups succeed again. All three limits are settings.
+- __Notices on every page__ ([#793](https://github.com/jwilleke/yourphr/issues/793)): the instance can show a signed-in person a notice across the top of every page until they dismiss it. Dismissing it hides it only for you. At chosen levels, a notice is also emailed to the admins.
+- __Email__ ([#536](https://github.com/jwilleke/yourphr/issues/536)): the instance can send email through a mail relay you choose. It is __off__ until an admin turns it on, so a demo or a fresh install never emails anyone. Mail is always encrypted and the relay's certificate is always checked: a relay that cannot do that gets nothing, not even the password. Admin → Configuration has an Email card that says what is missing and sends a test message, even before mail is turned on. Setup: `docs/admin/email-setup.md`.
+- __Your email address, if you want__ ([#792](https://github.com/jwilleke/yourphr/issues/792)): add, change or remove your own address on Settings. It is only used to reach you; if you run the instance, that is where backup alerts go. The Users page shows admins whether an account has an address, not what it is.
+
+### Bug Fixes
+
+- __Backup files no longer carry an internal code name__ ([#790](https://github.com/jwilleke/yourphr/issues/790)): new backups are named `…-yourphr-backup.db`. Earlier ones, named `…-yourphr-spike-backup.db`, still count toward the number kept, are still cleaned up, and can still be restored. The Admin page no longer says backups are gzip `.db.gz` files; they are encrypted `.db` files.
+- __Backup health counts hours, not whole days__ ([#789](https://github.com/jwilleke/yourphr/issues/789)): 71 hours without a backup used to be rounded down to 2 days and reported as fine.
+
 ## [3.9.1](https://github.com/jwilleke/yourphr/compare/v3.9.0...v3.9.1) (2026-09-28)
 
 ### Bug Fixes
