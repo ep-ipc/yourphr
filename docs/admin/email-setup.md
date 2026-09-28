@@ -117,6 +117,8 @@ __"… refused the sender or recipient address …"__
 
 ## What uses it
 
-- [#789](https://github.com/jwilleke/yourphr/issues/789): the alert when no backup has succeeded in over 26 hours, sent to admins through notification escalation.
+- [#789](https://github.com/jwilleke/yourphr/issues/789): the backup alerts. With the schedule on and no backup succeeding in 49 hours (`yourphr.backup.alert.stale-hours`; 193 for a weekly schedule, `stale-hours-weekly`), every admin gets an error notice. With no backup in 15 days (`yourphr.backup.alert.unscheduled-days`), they get a warning, even if the schedule is off. Both appear as a banner on every page. The error is also emailed when escalation is on (`yourphr.notifications.escalation.enabled`) to each admin who has added an email address on Settings ([#792](https://github.com/jwilleke/yourphr/issues/792)).
+
+For an alert email to arrive, three things must be set: mail on and working (this page), `yourphr.notifications.escalation.enabled` on, and an email address on at least one admin's Settings page.
 
 Sending a report by email is still done by the patient, not the instance ([#687](https://github.com/jwilleke/yourphr/issues/687)). Password reset needs no email: it is done through account recovery or by an admin ([#507](https://github.com/jwilleke/yourphr/issues/507)).

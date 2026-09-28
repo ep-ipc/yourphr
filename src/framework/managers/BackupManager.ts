@@ -13,7 +13,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
-import { ApiError, type ApiContext } from '../ApiContext.js';
+import { ApiContext, ApiError } from '../ApiContext.js';
 import type { BackupArtifact, BaseBackupProvider } from '../providers/BaseBackupProvider.js';
 
 declare module '../Engine.js' {
@@ -40,8 +40,20 @@ export interface BackupHealth {
   last_error?: string;
   consecutive_failures: number;
   days_since_success?: number;
+  /** Whole hours since the last success (yourphr#789), which is what the alert thresholds count. */
+  hours_since_success?: number;
   failing_stale: boolean;
   summary: string;
+}
+
+/** What checkAlerts() raised, if anything (yourphr#789). */
+export interface BackupAlert {
+  kind: 'stale' | 'unscheduled';
+  level: 'error' | 'warning';
+  title: string;
+  message: string;
+  /** The notification it created, or '' when this condition was already notified today. */
+  notificationId: string;
 }
 
 export interface BackupOutcome { file: string; name: string; sizeBytes: number; pruned: string[] }
@@ -76,7 +88,23 @@ export function applyStagedRestore(dataDir: string, pairs: [staged: string, live
   }
 }
 
-interface HealthState { lastSuccessAt?: string; lastSuccessPath?: string; lastAttemptAt?: string; lastError?: string; consecutiveFailures: number }
+interface HealthState {
+  lastSuccessAt?: string;
+  lastSuccessPath?: string;
+  lastAttemptAt?: string;
+  lastError?: string;
+  consecutiveFailures: number;
+  /** yourphr#789: when checking began, for an instance with no success on record — the clock the thresholds run from. */
+  watchingSince?: string;
+  /** yourphr#789: the last alert raised, and for which condition, so one condition notifies at most once a day. */
+  alertedAt?: string;
+  alertKind?: BackupAlert['kind'];
+}
+
+const HOUR_MS = 3_600_000;
+/** A condition that holds is notified again after this long; each notice expires a little after, so there is one at a time. */
+const REALERT_MS = 24 * HOUR_MS;
+const NOTICE_TTL_MS = 25 * HOUR_MS;
 
 export class BackupManager extends BaseManager {
   readonly name = 'backups';
@@ -182,12 +210,19 @@ export class BackupManager extends BaseManager {
     writeFileSync(this.healthFile, JSON.stringify(this.state, null, 2) + '\n', { mode: 0o600 });
   }
 
+  /** The stale threshold for the schedule as it stands (yourphr#789): stale-hours, or stale-hours-weekly for a weekly one. */
+  staleAfterHours(s: BackupSchedule = this.schedule()): number {
+    return this.cfg.getInt(s.days === 'weekly' ? 'yourphr.backup.alert.stale-hours-weekly' : 'yourphr.backup.alert.stale-hours');
+  }
+
   health(): BackupHealth {
     const s = this.schedule();
     const h = this.state;
-    const days = h.lastSuccessAt ? Math.floor((this.now().getTime() - Date.parse(h.lastSuccessAt)) / 86_400_000) : undefined;
-    const overdueAfter = s.days === 'weekly' ? 8 : 2;
-    const failingStale = s.enabled && (days === undefined || days > overdueAfter);
+    const since = h.lastSuccessAt ? this.now().getTime() - Date.parse(h.lastSuccessAt) : undefined;
+    const days = since === undefined ? undefined : Math.floor(since / 86_400_000);
+    const hours = since === undefined ? undefined : Math.floor(since / HOUR_MS);
+    // Hours, not whole days (yourphr#789): counting days rounded 71 hours down to 2 and called it fresh.
+    const failingStale = s.enabled && (since === undefined || since > this.staleAfterHours(s) * HOUR_MS);
     const ok = !failingStale && h.consecutiveFailures === 0;
     let summary: string;
     if (!s.enabled && !h.lastSuccessAt) summary = 'No scheduled backups; none taken yet.';
@@ -205,9 +240,63 @@ export class BackupManager extends BaseManager {
       ...(h.lastError && h.consecutiveFailures > 0 ? { last_error: h.lastError } : {}),
       consecutive_failures: h.consecutiveFailures,
       ...(days !== undefined ? { days_since_success: days } : {}),
+      ...(hours !== undefined ? { hours_since_success: hours } : {}),
       failing_stale: failingStale,
       summary,
     };
+  }
+
+  /**
+   * Tell the admins when backups have stopped (yourphr#789), without anyone having to look — the
+   * failure #783 was a month of no backups that only the Database page knew about.
+   *
+   *   - Schedule on, no success in stale-hours (stale-hours-weekly when weekly): an ERROR notice,
+   *     which escalation emails.
+   *   - No success in unscheduled-days, even with the schedule off: a WARNING notice.
+   *
+   * To every admin (an empty target would mean everyone). Once a day at most while a condition holds;
+   * each notice expires after 25 hours, so a recovered instance stops showing it without anybody
+   * clearing anything. With no success on record, time counts from when checking began.
+   */
+  async checkAlerts(): Promise<BackupAlert | undefined> {
+    const now = this.now();
+    const h = this.state;
+    if (!h.lastSuccessAt && !h.watchingSince) {
+      this.state = { ...h, watchingSince: now.toISOString() };
+      this.saveHealth();
+    }
+    const from = this.state.lastSuccessAt ?? this.state.watchingSince!;
+    const hours = (now.getTime() - Date.parse(from)) / HOUR_MS;
+    const s = this.schedule();
+    const last = this.state.lastSuccessAt ? `The last successful backup was ${this.state.lastSuccessAt}.` : 'No backup has succeeded on this instance yet.';
+    let alert: Omit<BackupAlert, 'notificationId'> | undefined;
+    const staleHours = this.staleAfterHours(s);
+    const unscheduledDays = this.cfg.getInt('yourphr.backup.alert.unscheduled-days');
+    if (s.enabled && hours > staleHours) {
+      const failed = this.state.consecutiveFailures > 0 && this.state.lastError ? ` The last attempt failed: ${this.state.lastError}` : '';
+      alert = { kind: 'stale', level: 'error', title: `No backup has succeeded in over ${staleHours} hours`, message: `Scheduled backups are on. ${last}${failed} See Admin -> Database.` };
+    } else if (hours > unscheduledDays * 24) {
+      alert = s.enabled
+        ? { kind: 'unscheduled', level: 'warning', title: `No backup in over ${unscheduledDays} days`, message: `${last} See Admin -> Database.` }
+        : { kind: 'unscheduled', level: 'warning', title: `No backup in over ${unscheduledDays} days`, message: `Scheduled backups are off. ${last} Turn them on in Admin -> Database, or dismiss this if this instance is backed up another way.` };
+    }
+    if (!alert) {
+      if (this.state.alertedAt) {
+        this.state = { ...this.state, alertedAt: undefined, alertKind: undefined };
+        this.saveHealth();
+      }
+      return undefined;
+    }
+    const recent = this.state.alertedAt && this.state.alertKind === alert.kind && now.getTime() - Date.parse(this.state.alertedAt) < REALERT_MS;
+    if (recent || !this.engine.has('notifications') || !this.engine.has('users')) return { ...alert, notificationId: '' };
+    const system = ApiContext.system('backup alert: who holds admin', 'backups', this.engine);
+    const admins = await this.engine.managers.users.holders(system, 'admin');
+    const notificationId = await this.engine.managers.notifications.createNotification({
+      type: 'system', level: alert.level, title: alert.title, message: alert.message, targetUsers: admins, expiresAt: new Date(now.getTime() + NOTICE_TTL_MS),
+    });
+    this.state = { ...this.state, alertedAt: now.toISOString(), alertKind: alert.kind };
+    this.saveHealth();
+    return { ...alert, notificationId };
   }
 
   list(ctx: ApiContext): Promise<BackupArtifact[]> {

@@ -512,6 +512,16 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     );
   }, 60_000);
   scheduleTimer?.unref?.();
+  // Stale-backup alerts (yourphr#789): at start, then hourly — admins hear that backups stopped
+  // without having to open the Database page. Same gate as the scheduler: a harness that drives
+  // the app without a worker gets neither.
+  const checkBackupAlerts = () => backups.checkAlerts().then(
+    (a) => { if (a?.notificationId) appLog.warn(`backup alert raised (${a.kind}): ${a.title}`); },
+    (err: Error) => appLog.error(`backup alert check failed: ${err.message}`)
+  );
+  const alertTimer = options.workerIntervalMs === undefined ? undefined : setInterval(() => { void checkBackupAlerts(); }, 3_600_000);
+  alertTimer?.unref?.();
+  if (alertTimer) void checkBackupAlerts();
 
   const server = createYourPhrServer({
     engine,
@@ -537,6 +547,7 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     close: async () => {
       if (timer) clearInterval(timer);
       if (scheduleTimer) clearInterval(scheduleTimer);
+      if (alertTimer) clearInterval(alertTimer);
       server.close();
       await stores.close();
     },

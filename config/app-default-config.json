@@ -98,6 +98,10 @@
   "yourphr.operator.name": "",
   "yourphr.operator.contact-email": "",
   "yourphr.operator.contact-url": "",
+  "_comment_backup_alert": "yourphr#789 — when backups stop, admins are told without having to look. schedule on and no backup has succeeded in stale-hours (stale-hours-weekly for a weekly schedule): an error notification, which escalation emails (yourphr.notifications.escalation.*). No backup in unscheduled-days, even with the schedule off: a warning notification. Each notice goes to every admin, repeats at most once a day while the condition holds, and expires after 25 hours, so it clears itself once backups succeed. With no success on record, time counts from when the instance began checking.",
+  "yourphr.backup.alert.stale-hours": 49,
+  "yourphr.backup.alert.stale-hours-weekly": 193,
+  "yourphr.backup.alert.unscheduled-days": 15,
   "yourphr.backup.encryption.key": "",
   "_comment_authorization": "yourphr#623 — permissions and roles are DATA, read from the merged configuration at startup. The permission NAMES are the enforcement contract: a role may only name one this build defines, and an unknown name refuses the boot. roles.definitions is an object, so it deep-merges PER ROLE — an operator adds a role in app-custom-config.json without restating the others. A role's permissions[] is a plain list and is replaced wholesale on override, which is intended: it is one role's list, not the catalogue. issystem marks a role this build defines; it is not the operator's to redefine out of existence, because accounts store the role name.",
   "yourphr.auth.permissions.definitions": {

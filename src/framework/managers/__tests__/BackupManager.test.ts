@@ -11,6 +11,10 @@ import { BackupManager, applyStagedRestore, type BackupExporter } from '../Backu
 import { FakeBackupProvider } from '../../providers/__tests__/FakeBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from '../../providers/BaseBackupProvider.js';
 import type { BackupData } from '../../BaseManager.js';
+import { UsersManager } from '../UsersManager.js';
+import { NotificationManager } from '../NotificationManager.js';
+import { FakeUsersProvider } from '../../providers/__tests__/FakeUsersProvider.js';
+import { PasswordAuthProvider } from '../../providers/PasswordAuthProvider.js';
 
 /** The PHI store's door, scripted: "writes" a file name the fake store then lists. */
 class FakeExporter implements BackupExporter {
@@ -165,3 +169,127 @@ describe('BackupManager — the coordinator', () => {
     expect(backups.health().last_success_at).toBe('2026-04-01T02:00:30.000Z');
   });
 });
+
+describe('BackupManager — stale-backup alerts (yourphr#789)', () => {
+  let notes: NotificationManager;
+
+  /** The coordinator with the doors an alert needs: accounts (who is an admin) and notifications. */
+  async function bootWithAlerts(custom: Record<string, unknown> = {}): Promise<void> {
+    engine = new Engine();
+    exporter = new FakeExporter(store);
+    backups = new BackupManager(engine, store, { dataDir: dir, exporter, now: () => clock });
+    notes = new NotificationManager(engine);
+    engine
+      .register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(custom as never, undefined, undefined, dir), { env: { YOURPHR_BACKUP_ENCRYPTION_KEY: 'travel-key' } }))
+      .register('policy', new PolicyManager(engine))
+      .register('notifications', notes)
+      .register('users', new UsersManager(engine, new FakeUsersProvider(), new PasswordAuthProvider()))
+      .register('backups', backups);
+    await engine.initialize();
+    const sys = ApiContext.system('test', 'test', engine);
+    await engine.managers.users.createUser(sys, 'root', 'a-long-enough-password', 'admin');
+    await engine.managers.users.createUser(sys, 'ops', 'a-long-enough-password', 'admin');
+    await engine.managers.users.createUser(sys, 'alice', 'a-long-enough-password');
+    admin = ApiContext.from({ username: 'root', role: 'admin' }, engine);
+  }
+  const hoursLater = (h: number) => { clock = new Date(clock.getTime() + h * 3_600_000); };
+  // The notifications manager judges expiry by the real clock; these tests run the coordinator's
+  // fake one, so they read every notice and judge "current" against the fake clock themselves.
+  const currentFor = (username: string) => notes.getUserNotifications(username, true).filter((n) => !n.expiresAt || n.expiresAt > clock);
+
+  beforeEach(async () => { await engine.shutdown(); await bootWithAlerts(); });
+
+  it('health counts hours, not whole days: 71 hours is stale at the 49-hour threshold', async () => {
+    backups.setSchedule(admin, { enabled: true, time: '02:00', days: 'daily' });
+    await backups.backupNow(admin);
+    hoursLater(48);
+    expect(backups.health()).toMatchObject({ failing_stale: false, hours_since_success: 48, days_since_success: 2 });
+    hoursLater(23);
+    expect(backups.health()).toMatchObject({ failing_stale: true, hours_since_success: 71, days_since_success: 2 });
+  });
+
+  it('schedule on and nothing for 49 hours: one error notice, to the admins only, expiring after 25 hours', async () => {
+    backups.setSchedule(admin, { enabled: true, time: '02:00', days: 'daily' });
+    await backups.backupNow(admin);
+    hoursLater(49);
+    expect(await backups.checkAlerts()).toBeUndefined(); // 49 exactly is not "over 49"
+    hoursLater(1);
+    const alert = await backups.checkAlerts();
+    expect(alert).toMatchObject({ kind: 'stale', level: 'error', title: 'No backup has succeeded in over 49 hours' });
+    expect(alert!.message).toContain('Scheduled backups are on. The last successful backup was 2026-04-01T02:00:30.000Z.');
+    const [n] = notes.getAllNotifications(true);
+    expect(n).toMatchObject({ level: 'error', targetUsers: ['root', 'ops'] });
+    expect(n!.expiresAt!.getTime() - clock.getTime()).toBe(25 * 3_600_000);
+    expect(currentFor('alice')).toEqual([]);
+  });
+
+  it('while it holds: at most once a day; after a success it stops, and the notice expires by itself', async () => {
+    backups.setSchedule(admin, { enabled: true, time: '02:00', days: 'daily' });
+    await backups.backupNow(admin);
+    hoursLater(50);
+    expect((await backups.checkAlerts())!.notificationId).not.toBe('');
+    hoursLater(1);
+    expect((await backups.checkAlerts())!.notificationId).toBe(''); // already told today
+    hoursLater(23);
+    expect((await backups.checkAlerts())!.notificationId).not.toBe(''); // a day on, still stale: again
+    expect(currentFor('root')).toHaveLength(2);
+    await backups.backupNow(admin);
+    expect(await backups.checkAlerts()).toBeUndefined();
+    hoursLater(26);
+    expect(currentFor('root')).toEqual([]); // both expired; nobody had to clear them
+  });
+
+  it('a weekly schedule uses its own threshold, so it is quiet between weekly runs', async () => {
+    backups.setSchedule(admin, { enabled: true, time: '02:00', days: 'weekly' });
+    await backups.backupNow(admin);
+    hoursLater(150);
+    expect(await backups.checkAlerts()).toBeUndefined();
+    hoursLater(44);
+    expect(await backups.checkAlerts()).toMatchObject({ kind: 'stale', title: 'No backup has succeeded in over 193 hours' });
+  });
+
+  it('schedule off: a warning after 15 days without a backup — and not before', async () => {
+    await backups.backupNow(admin);
+    hoursLater(15 * 24);
+    expect(await backups.checkAlerts()).toBeUndefined();
+    hoursLater(1);
+    const alert = await backups.checkAlerts();
+    expect(alert).toMatchObject({ kind: 'unscheduled', level: 'warning', title: 'No backup in over 15 days' });
+    expect(alert!.message).toContain('Scheduled backups are off.');
+    expect(notes.getAllNotifications(true)[0]!.level).toBe('warning');
+  });
+
+  it('with no success on record, time counts from when checking began — kept across a restart', async () => {
+    const scheduled = { 'yourphr.backup.schedule.enabled': true };
+    await engine.shutdown();
+    await bootWithAlerts(scheduled);
+    expect(await backups.checkAlerts()).toBeUndefined();
+    hoursLater(30);
+    await engine.shutdown();
+    await bootWithAlerts(scheduled);
+    hoursLater(20);
+    const alert = await backups.checkAlerts();
+    expect(alert).toMatchObject({ kind: 'stale' });
+    expect(alert!.message).toContain('No backup has succeeded on this instance yet.');
+  });
+
+  it('the thresholds are configuration', async () => {
+    await engine.shutdown();
+    await bootWithAlerts({ 'yourphr.backup.alert.stale-hours': 10, 'yourphr.backup.alert.unscheduled-days': 1 });
+    await backups.backupNow(admin);
+    hoursLater(25);
+    expect(await backups.checkAlerts()).toMatchObject({ kind: 'unscheduled', title: 'No backup in over 1 days' });
+    backups.setSchedule(admin, { enabled: true, time: '02:00', days: 'daily' });
+    expect(await backups.checkAlerts()).toMatchObject({ kind: 'stale', title: 'No backup has succeeded in over 10 hours' });
+  });
+
+  it('names the failure when the last attempt failed', async () => {
+    backups.setSchedule(admin, { enabled: true, time: '02:00', days: 'daily' });
+    await backups.backupNow(admin);
+    exporter.fail = true;
+    hoursLater(50);
+    await expect(backups.backupNow(admin)).rejects.toThrow('disk full');
+    expect((await backups.checkAlerts())!.message).toContain('The last attempt failed: disk full');
+  });
+});
+

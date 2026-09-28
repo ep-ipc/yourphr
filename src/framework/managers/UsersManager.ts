@@ -183,6 +183,14 @@ export class UsersManager extends BaseManager {
     return address;
   }
 
+  /** The usernames holding a role, resolved — who a notification for that role is addressed to. The system or an admin. */
+  async holders(ctx: ApiContext, role: Role): Promise<string[]> {
+    if (ctx.system === '') ctx.require('user-read');
+    const out: string[] = [];
+    for (const u of await this.provider.list()) if ((await this.roleOf(u.username)) === role) out.push(u.username);
+    return out;
+  }
+
   /**
    * The accounts holding a role that have an email address — who an escalation can reach
    * (ngdpbase's searchUsers('', { role })). The system or an admin; resolved roles, so an account
