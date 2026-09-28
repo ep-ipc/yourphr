@@ -7,9 +7,9 @@
     @if (status; as s) {
       <p class="mg-b-10">
         @if (s.enabled) {
-          <span class="badge badge-success">On</span>&nbsp; This instance sends email
+          <span class="badge text-bg-success">On</span>&nbsp; This instance sends email
         } @else {
-          <span class="badge badge-secondary">Off</span>&nbsp; This instance sends no email — messages it would send are noted in the log instead
+          <span class="badge text-bg-secondary">Off</span>&nbsp; This instance sends no email — messages it would send are noted in the log instead
         }
         @if (s.provider === 'console') {
           (provider <code>console</code>: the server log).
