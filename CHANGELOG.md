@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.10.1](https://github.com/jwilleke/yourphr/compare/v3.10.0...v3.10.1) (2026-09-28)
+
+### Features
+
+- __Mail from this instance is easy to spot__ ([#536](https://github.com/jwilleke/yourphr/issues/536)): every subject now starts with `[YourPHR] `, so its messages stand out in an inbox and are easy to filter. The prefix is a setting, `yourphr.mail.subject-prefix`, and can be emptied. The email setup guide also explains how to keep the relay password in the environment rather than in the configuration file.
+
 ## [3.10.0](https://github.com/jwilleke/yourphr/compare/v3.9.1...v3.10.0) (2026-09-28)
 
 __When backups stop, the people who run the instance are told.__ For a month, no backup ran on the live instance and nobody noticed: the only place that said so was a page nobody had reason to open. Now every admin sees a warning at the top of every page, and it can be emailed to them too.
