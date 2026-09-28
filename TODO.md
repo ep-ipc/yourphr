@@ -92,7 +92,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#793](https://github.com/jwilleke/yourphr/issues/793) — [FEATURE] Port ngdpbase's NotificationManager — notifications, a banner, and email escalation
 - [#792](https://github.com/jwilleke/yourphr/issues/792) — [FEATURE] Accounts carry an optional email address — so an alert can reach an admin
 - [#790](https://github.com/jwilleke/yourphr/issues/790) — [BUG] Backup files are called "spike", and the Admin page says they are gzip .db.gz
-- [#789](https://github.com/jwilleke/yourphr/issues/789) — [FEATURE] Alert when no backup has succeeded in over 26 hours
+- [#789](https://github.com/jwilleke/yourphr/issues/789) — [FEATURE] Alert when backups stop — 49 hours with the schedule on, 15 days regardless
 - [#787](https://github.com/jwilleke/yourphr/issues/787) — [BUG] A backup blocks the one Node thread — move the export into a worker
 - [#786](https://github.com/jwilleke/yourphr/issues/786) — [FEATURE] Import a patient-portal download zip as-is (MyChart / IHE XDM)
 - [#785](https://github.com/jwilleke/yourphr/issues/785) — [FEATURE] Default yourphr.cda-converter.url to <http://yourphr-cda-converter:8080>
