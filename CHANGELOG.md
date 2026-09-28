@@ -4,7 +4,7 @@
 
 ### Features
 
-- __Mail from this instance is easy to spot__ ([#536](https://github.com/jwilleke/yourphr/issues/536)): every subject now starts with `[YourPHR] `, so its messages stand out in an inbox and are easy to filter. The prefix is a setting, `yourphr.mail.subject-prefix`, and can be emptied. The email setup guide also explains how to keep the relay password in the environment rather than in the configuration file.
+- __Mail from this instance is easy to spot__ ([#536](https://github.com/jwilleke/yourphr/issues/536)): every subject now starts with `[YourPHR]`, so its messages stand out in an inbox and are easy to filter. The prefix is a setting, `yourphr.mail.subject-prefix`, and can be emptied. The email setup guide also explains how to keep the relay password in the environment rather than in the configuration file.
 
 ## [3.10.0](https://github.com/jwilleke/yourphr/compare/v3.9.1...v3.10.0) (2026-09-28)
 
