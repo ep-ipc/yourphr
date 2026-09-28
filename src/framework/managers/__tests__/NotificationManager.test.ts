@@ -140,7 +140,7 @@ describe('NotificationManager — email escalation', () => {
     await notes.createNotification({ title: 'Backups are stale', message: 'No backup in 30 hours <b>now</b>', level: 'error', targetUsers: ['root', 'ops'] });
     await notes.settled();
     expect(mail.sent.map((m) => m.to)).toEqual(['root@example.org']);
-    expect(mail.sent[0]).toMatchObject({ subject: '[ERROR] Backups are stale', from: 'phr@example.org' });
+    expect(mail.sent[0]).toMatchObject({ subject: '[YourPHR] [ERROR] Backups are stale', from: 'phr@example.org' });
     expect(mail.sent[0]!.text).toContain('No backup in 30 hours <b>now</b>');
     expect(mail.sent[0]!.html).toContain('No backup in 30 hours &lt;b&gt;now&lt;/b&gt;');
     expect(lines).toContain('notifications: notification_1 emailed to root');

@@ -68,7 +68,7 @@ describe('EmailManager — the one door to outbound mail', () => {
     const result = await email.sendTo(system, 'admin@example.org', 'Backups are stale', 'PRIVATE BODY');
     expect(result).toEqual({ sent: false, provider: 'console', destination: 'nowhere', reason: 'Outbound mail is off (yourphr.mail.enabled).' });
     expect(built).toEqual([]);
-    expect(lines.at(-1)).toBe('mail: off — not sent: to=admin@example.org subject="Backups are stale"');
+    expect(lines.at(-1)).toBe('mail: off — not sent: to=admin@example.org subject="[YourPHR] Backups are stale"');
     expect(lines.join('\n')).not.toContain('PRIVATE BODY');
   });
 
@@ -84,7 +84,7 @@ describe('EmailManager — the one door to outbound mail', () => {
     await boot(SMTP);
     const result = await email.sendTo(system, 'admin@example.org', 'Backups are stale', 'body');
     expect(result).toEqual({ sent: true, provider: 'smtp', destination: 'relay.test:587 (STARTTLS required)' });
-    expect(relay.sent).toEqual([{ to: 'admin@example.org', subject: 'Backups are stale', text: 'body', from: 'YourPHR <phr@example.org>' }]);
+    expect(relay.sent).toEqual([{ to: 'admin@example.org', subject: '[YourPHR] Backups are stale', text: 'body', from: 'YourPHR <phr@example.org>' }]);
     expect(built[0]!.pass).toBe('s3cret');
     expect(built[0]!.settings.smtp).toEqual({ host: 'relay.test', port: 587, secure: false, user: 'phr', passwordSet: true });
     // An admin changes the relay on the Configuration screen: the next send uses it, no restart.
@@ -123,7 +123,7 @@ describe('EmailManager — the one door to outbound mail', () => {
     await boot(SMTP);
     relay.failWith = new SmtpError('The relay at relay.test:587 refused the username or password (yourphr.mail.provider.smtp.user / .pass).', 'EAUTH');
     await expect(email.sendTo(system, 'admin@example.org', 'subject', 'PRIVATE BODY')).rejects.toMatchObject({ status: 502, message: expect.stringMatching(/refused the username or password/) });
-    expect(lines.at(-1)).toMatch(/^mail: NOT sent via smtp to=admin@example\.org subject="subject": The relay at relay\.test:587 refused/);
+    expect(lines.at(-1)).toMatch(/^mail: NOT sent via smtp to=admin@example\.org subject="\[YourPHR\] subject": The relay at relay\.test:587 refused/);
     expect(lines.join('\n')).not.toContain('PRIVATE BODY');
     expect(lines.join('\n')).not.toContain('s3cret');
   });
@@ -139,7 +139,7 @@ describe('EmailManager — the one door to outbound mail', () => {
     await boot({ ...SMTP, 'yourphr.mail.enabled': false });
     const result = await email.sendTest(admin, 'root@example.org');
     expect(result).toMatchObject({ sent: true, provider: 'smtp' });
-    expect(relay.sent[0]).toMatchObject({ to: 'root@example.org', subject: 'YourPHR test message', from: 'YourPHR <phr@example.org>' });
+    expect(relay.sent[0]).toMatchObject({ to: 'root@example.org', subject: '[YourPHR] Test message', from: 'YourPHR <phr@example.org>' });
     expect(relay.sent[0]!.text).toContain('sent at');
     expect(relay.sent[0]!.text).toContain('by root');
   });
@@ -163,6 +163,15 @@ describe('EmailManager — the one door to outbound mail', () => {
       problems: [],
     });
     expect(JSON.stringify(status)).not.toContain('s3cret');
+  });
+
+  it('every subject starts with the configured prefix, never twice; an empty prefix adds nothing', async () => {
+    await boot(SMTP);
+    await email.sendTo(system, 'a@example.org', 'Backups are stale', 't');
+    await email.sendTo(system, 'a@example.org', '[YourPHR] Already marked', 't');
+    engine.managers.configuration.set('yourphr.mail.subject-prefix', '');
+    await email.sendTo(system, 'a@example.org', 'Plain', 't');
+    expect(relay.sent.map((m) => m.subject)).toEqual(['[YourPHR] Backups are stale', '[YourPHR] Already marked', 'Plain']);
   });
 
   it('has nothing of its own to back up: its settings travel with configuration', async () => {

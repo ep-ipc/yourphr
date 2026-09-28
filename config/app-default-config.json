@@ -83,6 +83,8 @@
   "yourphr.mail.enabled": false,
   "yourphr.mail.provider": "console",
   "yourphr.mail.from": "",
+  "_comment_mail_subject_prefix": "yourphr#536 — put in front of every subject this instance sends, so its mail is recognisable in an inbox and easy to filter. Empty for none. Not added twice.",
+  "yourphr.mail.subject-prefix": "[YourPHR] ",
   "yourphr.mail.provider.smtp.host": "",
   "yourphr.mail.provider.smtp.port": 587,
   "yourphr.mail.provider.smtp.secure": false,

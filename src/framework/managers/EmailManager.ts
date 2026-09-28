@@ -175,12 +175,19 @@ export class EmailManager extends BaseManager {
     const at = new Date().toISOString();
     return this.deliver({
       to,
-      subject: 'YourPHR test message',
+      subject: 'Test message',
       text: `This is a test message from your YourPHR instance, sent at ${at} by ${ctx.username || 'an admin'} from Admin -> Configuration.\n\nIf you are reading it, this instance can send email. Nothing else is needed.`,
     }, true);
   }
 
-  private async deliver(message: MailMessage, test: boolean): Promise<SendResult> {
+  /** The configured prefix in front of a subject (yourphr.mail.subject-prefix), never twice. */
+  private subjectOf(subject: string): string {
+    const prefix = this.cfg.getString('yourphr.mail.subject-prefix');
+    return prefix !== '' && !subject.startsWith(prefix) ? prefix + subject : subject;
+  }
+
+  private async deliver(original: MailMessage, test: boolean): Promise<SendResult> {
+    const message = { ...original, subject: this.subjectOf(String(original.subject ?? '')) };
     const to = String(message.to ?? '').trim();
     if (!isEmailAddress(to)) throw new ApiError(400, `'${to}' is not an email address.`);
     const s = this.settings();

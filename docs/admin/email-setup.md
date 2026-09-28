@@ -25,11 +25,14 @@ To deliver real mail, __both must change__: `enabled` on, and `provider` set to 
 |---|---|---|
 | `yourphr.mail.from` | `""` | Sender address. Required. `YourPHR <phr@example.org>` is fine. |
 | `yourphr.mail.provider.smtp.from` | `""` | Overrides `mail.from` for SMTP, if set. |
+| `yourphr.mail.subject-prefix` | `"[YourPHR] "` | Put in front of every subject, so this instance's mail is easy to spot and filter. Empty for none. |
 | `yourphr.mail.provider.smtp.host` | `""` | Relay hostname. Required for `smtp`. |
 | `yourphr.mail.provider.smtp.port` | `587` | `587` for STARTTLS, `465` for TLS from the first byte. |
 | `yourphr.mail.provider.smtp.secure` | `false` | `true` only for port 465. |
 | `yourphr.mail.provider.smtp.user` | `""` | Username. Most relays require one. |
 | `yourphr.mail.provider.smtp.pass` | `""` | Password or API key. |
+
+Rather than typing the password into the Configuration screen, you can put it in the environment as `YOURPHR_MAIL_PROVIDER_SMTP_PASS` (in `<data>/.env` or a Kubernetes Secret). The environment then owns the setting, so the screen shows it read-only and it is never written to the configuration file.
 
 `yourphr.mail.provider.smtp.pass` is on the instance's secret list (`yourphr.config.secret-keys`), so the Configuration screen hides it until an admin explicitly reveals it. It is never included in the Email card, in any API response, or in an error message. It is stored in `app-custom-config.json` on the data volume like every other setting, so prefer an API key that can only send mail over a full account password.
 
