@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Engine } from '../../Engine.js';
 import { ApiContext, ApiError } from '../../ApiContext.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
+import { FilterManager } from '../FilterManager.js';
 import { SettingsManager, coerceToShippedType } from '../SettingsManager.js';
 import { PolicyManager } from '../PolicyManager.js';
 import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
@@ -18,6 +19,7 @@ async function boot(env: Record<string, string> = {}) {
   const log: string[] = [];
   engine.register('configuration', new ConfigurationManager(engine, new FakeConfigProvider(), { env: env })).register('policy', new PolicyManager(engine));
   const settings = new SettingsManager(engine, { log: (line) => log.push(line), dataDir: dir });
+  engine.register('filters', new FilterManager(engine));
   engine.register('settings', settings);
   await engine.initialize();
   const admin = ApiContext.from({ username: 'ops', role: 'admin' }, engine);
@@ -29,7 +31,7 @@ async function boot(env: Record<string, string> = {}) {
 describe('SettingsManager — what the instance says about itself, with the caller passed in', () => {
   it('boots after configuration and publishes only the public keys to an anonymous caller', async () => {
     const { engine, settings, nobody } = await boot();
-    expect(engine.registered).toEqual(['configuration', 'policy', 'settings']);
+    expect(engine.registered).toEqual(['configuration', 'policy', 'filters', 'settings']);
     const pub = settings.publicInstance(nobody);
     // Wire format, read by the Angular app — deliberately NOT the yourphr.* config key names (yourphr#627).
     expect(Object.keys(pub).sort()).toEqual(['agent_token.enabled', 'demo.admin.enabled', 'demo.enabled', 'operator.contact_url', 'operator.name', 'password.min_length', 'signup.enabled']);
@@ -138,18 +140,24 @@ describe('SettingsManager — what the instance says about itself, with the call
 
   it('the legal text is public, shipped unless the operator overrides it, and an unusable override is an error rather than a silent fallback (yourphr#619)', async () => {
     const { settings, nobody, dir } = await boot();
-    const shipped = settings.legalDocument(nobody, 'privacy');
+    const shipped = await settings.legalDocument(nobody, 'privacy');
     expect(shipped).toMatchObject({ kind: 'privacy', source: 'shipped' });
     expect(shipped?.html).toContain('<');
-    expect(settings.legalDocument(nobody, 'PRIVACY')).toMatchObject({ kind: 'privacy' }); // Go accepts either case
-    expect(settings.legalDocument(nobody, 'nonsense')).toBeUndefined();
+    expect(await settings.legalDocument(nobody, 'PRIVACY')).toMatchObject({ kind: 'privacy' }); // Go accepts either case
+    expect(await settings.legalDocument(nobody, 'nonsense')).toBeUndefined();
     mkdirSync(join(dir, 'config'), { recursive: true });
     writeFileSync(join(dir, 'config', 'terms-of-service.md'), '# Our terms\n');
-    const overridden = settings.legalDocument(nobody, 'terms');
+    const overridden = await settings.legalDocument(nobody, 'terms');
     expect(overridden).toMatchObject({ kind: 'terms', source: 'operator' });
     expect(overridden?.markdown).toBe('# Our terms\n');
+    // yourphr#775: `marked` passed an override's raw HTML straight to the page; one pipeline now shows it as text.
+    writeFileSync(join(dir, 'config', 'terms-of-service.md'), '# Terms\n\n<img src=x onerror=alert(1)>\n\n| a | b |\n|---|---|\n| 1 | 2 |\n');
+    const hostile = await settings.legalDocument(nobody, 'terms');
+    expect(hostile?.html).not.toContain('<img');
+    expect(hostile?.html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(hostile?.html).toContain('<table>');
     writeFileSync(join(dir, 'config', 'terms-of-service.md'), '   \n');
-    expect(() => settings.legalDocument(nobody, 'terms')).toThrow(/empty/);
+    await expect(settings.legalDocument(nobody, 'terms')).rejects.toThrow(/empty/);
   });
 
   it('backup() carries nothing of its own — the configuration manager\'s overlay is what travels', async () => {

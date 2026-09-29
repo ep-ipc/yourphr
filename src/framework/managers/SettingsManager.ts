@@ -71,11 +71,14 @@ export class SettingsManager extends BaseManager {
    * overrides it in the data directory. Undefined for a kind this stack does not have; throws when
    * an override exists but is unusable (the operator must know, not get the shipped text silently).
    */
-  legalDocument(_ctx: ApiContext, kind: string): LegalDocument | undefined {
+  async legalDocument(_ctx: ApiContext, kind: string): Promise<LegalDocument | undefined> {
     const parsed = parseLegalKind(kind);
     if (!parsed) return undefined;
     if (this.dataDir === undefined) throw new ApiError(500, 'legal documents are not configured on this instance');
-    return loadLegalDocument(this.dataDir, parsed);
+    // Markdown is rendered in one place (yourphr#775).
+    if (!this.engine.has('filters')) throw new ApiError(500, 'no markdown renderer is registered (filters)');
+    const filters = this.engine.managers.filters;
+    return loadLegalDocument(this.dataDir, parsed, (markdown) => filters.render(markdown));
   }
 
   private get configuration() {

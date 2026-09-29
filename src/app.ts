@@ -56,6 +56,7 @@ import { SqliteFavoritesProvider } from './app/providers/SqliteFavoritesProvider
 import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { EmailManager } from './framework/managers/EmailManager.js';
+import { FilterManager } from './framework/managers/FilterManager.js';
 import { NotificationManager } from './framework/managers/NotificationManager.js';
 import { refuseNetworkFilesystem } from './framework/providers/sqlite-location.js';
 import { applyStagedConfig, BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
@@ -399,6 +400,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // then Records over the PHI-storage provider. The other stores join as their own children land.
   const recordsProvider = new SqliteRecordsProvider(recordsDbPath, dbKey === '' ? undefined : dbKey, RECORDS_MIGRATIONS);
   engine.register('policy', new PolicyManager(engine, (line) => appLog.info(line))); // yourphr#623: roles and permissions from the merged configuration
+  engine.register('filters', new FilterManager(engine, (line) => appLog.info(line))); // yourphr#775: one markdown pipeline, save and render
   engine.register('settings', new SettingsManager(engine, { log: (line) => appLog.info(line), dataDir })); // yourphr#618, #619
   engine.register('email', new EmailManager(engine, (line) => appLog.info(line))); // yourphr#536: outbound mail, off until an admin turns it on
   engine.register('notifications', new NotificationManager(engine, (line) => appLog.info(line))); // yourphr#793: banners, and email escalation through the mail manager

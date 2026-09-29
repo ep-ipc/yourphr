@@ -424,7 +424,7 @@ export function createYourPhrServer(options: ServerOptions) {
       }
       const legalMatch = url.pathname.match(/^\/api\/legal\/([^/]+)$/);
       if (engine.has('settings') && legalMatch && req.method === 'GET') {
-        const document = engine.managers.settings.legalDocument(ApiContext.anonymous(engine), decodeURIComponent(legalMatch[1]!));
+        const document = await engine.managers.settings.legalDocument(ApiContext.anonymous(engine), decodeURIComponent(legalMatch[1]!));
         document === undefined ? send(res, 404, {success: false, error: `unknown legal document "${legalMatch[1]}"`}) : send(res, 200, {success: true, data: document});
         return;
       }

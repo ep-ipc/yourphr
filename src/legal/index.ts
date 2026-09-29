@@ -9,7 +9,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { marked } from 'marked';
 import { SHIPPED_PRIVACY_POLICY, SHIPPED_TERMS_OF_SERVICE } from './shipped.js';
 
 export type LegalKind = 'privacy' | 'terms';
@@ -35,7 +34,12 @@ export function legalDigest(markdown: string): string {
   return 'sha256:' + createHash('sha256').update(markdown.replace(/\r\n/g, '\n')).digest('hex');
 }
 
-export function loadLegalDocument(dataDir: string, kind: LegalKind): LegalDocument {
+/**
+ * `render` is FilterManager.render (yourphr#775): the one markdown path — CommonMark, raw HTML off.
+ * The shipped text is ours, but an operator's override is a file anyone with the volume can write,
+ * and `marked` passed its raw HTML straight through (`<img src=x onerror=…>` survived, verified).
+ */
+export async function loadLegalDocument(dataDir: string, kind: LegalKind, render: (markdown: string) => Promise<string>): Promise<LegalDocument> {
   const path = join(dataDir, 'config', OVERRIDE_FILE[kind]);
   let markdown: string;
   let source: LegalSource;
@@ -51,7 +55,7 @@ export function loadLegalDocument(dataDir: string, kind: LegalKind): LegalDocume
   }
   return {
     kind,
-    html: marked.parse(markdown, { async: false }) as string,
+    html: await render(markdown),
     markdown,
     digest: legalDigest(markdown),
     source,
