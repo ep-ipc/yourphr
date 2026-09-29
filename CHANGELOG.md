@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.10.2](https://github.com/jwilleke/yourphr/compare/v3.10.1...v3.10.2) (2026-09-29)
+
+### Features
+
+- __The Email card is on the Admin dashboard__ ([#795](https://github.com/jwilleke/yourphr/issues/795)): it now sits beside the Database card, where it can be found, instead of at the top of Configuration. It links to Configuration for the mail settings. A read-only admin does not see it.
+
+### Bug Fixes
+
+- __A refused email is recorded in the log__ ([#794](https://github.com/jwilleke/yourphr/issues/794)): when a message is refused before it is sent (an address that is not one, a missing setting), the server log now says so, with who it was for and the subject, never the contents. Before, only the page that asked saw the reason, so "it never arrived" could not be told apart from "it was never tried".
+
 ## [3.10.1](https://github.com/jwilleke/yourphr/compare/v3.10.0...v3.10.1) (2026-09-28)
 
 ### Features
