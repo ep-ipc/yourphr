@@ -70,6 +70,42 @@ await app.engine.managers.records.savePatientRecord(ApiContext.system('e2e-seed'
   id: 'e2e-practitioner-1',
   name: [{ text: 'Dr Ada Handentered' }],
 } as never);
+// A practitioner with one encounter that names them (yourphr#690), so the practitioner's history
+// page has something to show — the empty state alone proves nothing about the page.
+await app.engine.managers.records.savePatientRecord(ApiContext.system('e2e-seed', E2E_USER, app.engine), {
+  resourceType: 'Practitioner',
+  id: 'e2e-practitioner-2',
+  name: [{ text: 'Dr Linus Seeded' }],
+} as never);
+await app.engine.managers.records.savePatientRecord(ApiContext.system('e2e-seed', E2E_USER, app.engine), {
+  resourceType: 'Encounter',
+  id: 'e2e-encounter-1',
+  status: 'finished',
+  class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'AMB', display: 'ambulatory' },
+  type: [{ text: 'Synthetic annual check-up' }],
+  period: { start: '2026-03-14T09:00:00Z', end: '2026-03-14T09:30:00Z' },
+  participant: [{ individual: { reference: 'Practitioner/e2e-practitioner-2', display: 'Dr Linus Seeded' } }],
+} as never);
+// One allergy and one immunization with real codes (yourphr#690), so the allergies and immunizations
+// pages are asserted legible — a person reads "Peanut" and "Influenza", not a SNOMED or CVX number.
+await app.engine.managers.records.savePatientRecord(ApiContext.system('e2e-seed', E2E_USER, app.engine), {
+  resourceType: 'AllergyIntolerance',
+  id: 'e2e-allergy-1',
+  clinicalStatus: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical', code: 'active' }] },
+  verificationStatus: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/allergyintolerance-verification', code: 'confirmed' }] },
+  category: ['food'],
+  criticality: 'high',
+  code: { coding: [{ system: 'http://snomed.info/sct', code: '256349002', display: 'Peanut' }], text: 'Peanut' },
+  recordedDate: '2025-06-01',
+  reaction: [{ manifestation: [{ coding: [{ system: 'http://snomed.info/sct', code: '247472004', display: 'Hives' }], text: 'Hives' }] }],
+} as never);
+await app.engine.managers.records.savePatientRecord(ApiContext.system('e2e-seed', E2E_USER, app.engine), {
+  resourceType: 'Immunization',
+  id: 'e2e-immunization-1',
+  status: 'completed',
+  vaccineCode: { coding: [{ system: 'http://hl7.org/fhir/sid/cvx', code: '140', display: 'Influenza, seasonal, injectable, preservative free' }] },
+  occurrenceDateTime: '2025-10-01',
+} as never);
 app.config.set('yourphr.backup.destination', join(dir, 'backups'));
 
 await new Promise<void>((resolve) => app.server.listen(E2E_PORT, '127.0.0.1', resolve));
