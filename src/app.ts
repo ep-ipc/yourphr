@@ -57,6 +57,7 @@ import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { EmailManager } from './framework/managers/EmailManager.js';
 import { NotificationManager } from './framework/managers/NotificationManager.js';
+import { refuseNetworkFilesystem } from './framework/providers/sqlite-location.js';
 import { applyStagedConfig, BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
 import { applyDemoReset } from './app/providers/demo-reset.js';
 import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
@@ -352,6 +353,10 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // resolved path's filesystem and is yourphr#628.
   const appDbPath = config.getString('yourphr.database.location');
   const recordsDbPath = config.getString('yourphr.records.location');
+  // yourphr#628: neither database may resolve onto NFS/SMB — checked where they will ACTUALLY live,
+  // before the staged-restore swap or any open. The backup destination is not a database and is
+  // never checked: it is meant to be on the NAS.
+  for (const file of [appDbPath, recordsDbPath]) refuseNetworkFilesystem(file);
   applyStagedRestore(dataDir, [[STAGED_RECORDS, basename(recordsDbPath)], [STAGED_APP, basename(appDbPath)]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
   await applyStagedConfig(dataDir, config, (line) => appLog.info(line)); // yourphr#631: and its settings with it
   // The demo reset (yourphr#645), after an operator's explicit restore and before anything opens:
