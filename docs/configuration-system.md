@@ -156,9 +156,11 @@ Only two variables genuinely need to live in the environment, and they are exact
 - __`YOURPHR_STORAGE_DATA_DIR`__ — changing it does not move the data. The next start looks in a different directory, finds nothing, and shows the first-run wizard. The records are still on disk, but the instance behaves like a fresh install.
 - __`YOURPHR_DATABASE_ENCRYPTION_KEY`__ — writing it to a plaintext file on the same volume as the encrypted database defeats the encryption. The point of that key being external is that it is not beside the thing it locks.
 
+  __Superseded for the key's storage, 2026-09-29 ([#796](https://github.com/jwilleke/yourphr/issues/796), option A):__ the reference instance now keeps both keys in `<data>/.env`, accepting that at-rest encryption no longer protects against a copied volume, with an off-instance copy of the backup key as the condition. What is still rejected is a UI that edits `.env`: the keys are placed there by the operator, never from a screen. See [Encryption keys](deployment/README.md#encryption-keys).
+
 Everything else is already editable in-app, so there is nothing left for such an editor to usefully write.
 
-There is also a mechanical problem: on Kubernetes and Docker Compose the app never reads `.env` — the environment arrives from the pod spec or `env_file:` before the process starts. Writing the file would appear to work and change nothing, which is the accept-then-silently-revert pattern this system has been bitten by three times.
+There is also a mechanical problem, now only half true: since [#630](https://github.com/jwilleke/yourphr/issues/630) the server __does__ read `<data>/.env` at start on every platform, Kubernetes included — but anything the pod spec or `env_file:` sets outranks it. Writing the file would appear to work and change nothing, which is the accept-then-silently-revert pattern this system has been bitten by three times.
 
 __Reading is already solved, and better than reading the file.__ Admin → Configuration reports `source: environment` and names the variable, showing the *effective* value whatever supplied it. Reading `.env` would show one of four possible sources and mislead about the other three.
 

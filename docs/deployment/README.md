@@ -48,7 +48,7 @@ docker run -p 8080:8080 -v "$(pwd)/data:/opt/yourphr/data" ghcr.io/jwilleke/your
 Open `http://localhost:8080` and complete the first-run setup. On first run YourPHR is __secure by default__:
 
 - The __JWT signing key auto-generates__ and is persisted (0600) at `<db-dir>/.jwt_issuer_key` — zero config ([#102](https://github.com/jwilleke/yourphr/issues/102)). There is no default key. Upstream Fasten's *known public placeholder* is still recognised and rejected, because older deployment guides hand it to you.
-- The __database-encryption key__ is set during first-run setup (the setup wizard prompts for it) — or you can supply it ahead of time via `YOURPHR_DATABASE_ENCRYPTION_KEY` (see below). DB encryption is __on by default__.
+- The __encryption keys__ — `YOURPHR_DATABASE_ENCRYPTION_KEY` and `YOURPHR_BACKUP_ENCRYPTION_KEY` — are supplied by you, before the first start. See [Encryption keys](#encryption-keys).
 
 ### The first account is the owner of the instance
 
@@ -161,7 +161,33 @@ Bare metal in particular __must__ set `YOURPHR_WEB_SRC_FRONTEND_PATH` to whereve
 
 ### D. Kubernetes / GitOps
 
-Provide config via a `ConfigMap` (non-secret) + `Secret` (the DB encryption key, an optional pinned JWT key) injected as `YOURPHR_*` environment variables. Mount a `PersistentVolume` at `/opt/yourphr/data`. Any GitOps tool works; nothing in the app is Kubernetes- or Flux-specific.
+Mount a `PersistentVolume` at `/opt/yourphr/data`; the manifests carry infrastructure only (image, volume, service, ingress). Settings live on the volume and are changed from Admin → Configuration; the encryption keys live in `/opt/yourphr/data/.env` on the same volume ([Encryption keys](#encryption-keys)). Any GitOps tool works; nothing in the app is Kubernetes- or Flux-specific.
+
+## Encryption keys
+
+Two keys, both required, both supplied by you ([#796](https://github.com/jwilleke/yourphr/issues/796)):
+
+| Key | Opens | Needed to restore? |
+|---|---|---|
+| `YOURPHR_DATABASE_ENCRYPTION_KEY` | this instance's own database files | No — a restore re-encrypts under the new instance's key |
+| `YOURPHR_BACKUP_ENCRYPTION_KEY` | every backup this instance writes | __Yes — it is the only thing a restore needs.__ Lose it and every backup is unreadable. |
+
+__Where they live:__ `<data>/.env` (`/opt/yourphr/data/.env` in a container), which the server reads at start ([#630](https://github.com/jwilleke/yourphr/issues/630)). A variable set in the pod spec or container environment __outranks__ that file, so do not set the keys in both places.
+
+__Keep a copy somewhere else.__ `.env` sits on the same volume as the database: lose the volume and you lose the key that opens the backups on your NAS. Record both keys off the instance — a password manager, or an encrypted file on another machine — and prove the copy with a [restore drill](../recovery/data-recovery.md) that uses it. The server says so at every start.
+
+__The trade-off, stated plainly:__ with the database key beside the database, at-rest encryption no longer protects against someone who copies the whole volume. It still protects every backup, which leaves the volume. That is the choice made for the reference instance; an instance on hardware you do not control may prefer to supply the database key from the environment instead.
+
+__Putting the keys on a running Kubernetes volume__ (no `kubectl` on your machine needed — through the node):
+
+```bash
+grep '^YOURPHR_' my-keys.env | ssh <node> \
+  'sudo kubectl -n <ns> exec -i deploy/<name> -- sh -c "cat >> /opt/yourphr/data/.env"'
+```
+
+Then restart the pod. Back up the existing `.env` first, and check for duplicate lines — the last occurrence of a variable wins.
+
+__When the pod cannot start__ (a new, empty volume, or a crash caused by a missing key), write the file straight onto the volume's directory on the node — for k3s `local-path`, `/var/lib/rancher/k3s/storage/<pvc-dir>/.env` — owned by the container user (uid 1000), mode 0600. On a brand-new volume do this __before the first start__: an instance that starts without a database key creates an unencrypted database.
 
 ## Configuration model
 
