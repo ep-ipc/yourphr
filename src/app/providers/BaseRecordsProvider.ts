@@ -7,6 +7,7 @@
  * A second implementation is plausible for an adopter (a server-grade database, an encrypted
  * object store); the interface is what lets that arrive without touching the manager.
  */
+import type { BackupData } from '../../framework/BaseManager.js';
 import type { Bundle, Resource, ResourceType } from '@medplum/fhirtypes';
 import type { SearchRequest, WithId } from '@medplum/core';
 
@@ -79,9 +80,11 @@ export abstract class BaseRecordsProvider {
   /** Where the data lives and how big it is — the admin's Database card (yourphr#619). */
   abstract storage(): { location: string; sizeBytes: number };
   /** An encrypted copy of the whole store under `key`; returns the file written. */
-  abstract backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }>;
+  abstract backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[]; payloads?: BackupData[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }>;
   /** Stage a backup back under this store's own key, next to its own files, for the next start. */
   abstract stageRestore(backupFile: string, backupKey: string): Promise<{ tables: number }>;
+  /** Other managers' payloads carried in a backup (yourphr#631), by manager; {} when it carries none. */
+  abstract readPayloads(backupFile: string, backupKey: string): Promise<Record<string, BackupData>>;
   /**
    * Offline maintenance (yourphr#781): drop history copies identical to the version before them,
    * then give the space back. Run with the server stopped — it is synchronous and takes the file.

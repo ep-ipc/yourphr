@@ -800,7 +800,7 @@ export class RecordsManager extends BaseManager {
     return this.provider.storage();
   }
 
-  async backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }> {
+  async backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[]; payloads?: BackupData[] }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }> {
     const result = await this.provider.backup(options);
     return { manager: this.name, takenAt: (options.now ?? new Date()).toISOString(), files: [result.file], ...result };
   }
@@ -810,5 +810,10 @@ export class RecordsManager extends BaseManager {
     const file = data.files?.[0];
     if (!file) throw new ApiError(400, 'a records restore needs the backup file to stage');
     await this.provider.stageRestore(file, options.key);
+  }
+
+  /** Other managers' payloads carried in a backup file (yourphr#631) — the PHI store wrote them, so it reads them. */
+  async readPayloads(file: string, options: { key: string }): Promise<Record<string, BackupData>> {
+    return this.provider.readPayloads(file, options.key);
   }
 }

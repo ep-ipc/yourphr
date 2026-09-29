@@ -48,6 +48,14 @@ const isOurs = (name: string): boolean => BACKUP_SUFFIXES.some((s) => name.endsW
 /** records.db's migration ledger (yourphr#784) — its own name, so a restore can return it to records.db. */
 export const RECORDS_LEDGER_TABLE = 'records_schema_migrations';
 export const RECORDS_TABLES = new Set(['resources', 'resource_history', 'search_index', 'search_text', RECORDS_LEDGER_TABLE]);
+/**
+ * Managers' own backup payloads (yourphr#631) — today the configuration's overrides, ngdpbase's
+ * ConfigurationManager.backup(). One row per manager, JSON, inside the same encrypted file. It
+ * belongs to neither database, so a restore stages it into neither: readBackupPayloads() reads it.
+ */
+export const BACKUP_PAYLOAD_TABLE = 'backup_payloads';
+/** A manager's payload as it travels in a backup: who, when, and what (JSON-serialisable). */
+export interface BackupPayload { manager: string; takenAt: string; payload: unknown }
 /** The staged halves a restore writes next to the live files; applied at the next start. */
 export const STAGED_RECORDS = 'records.db.staged';
 export const STAGED_APP = 'spike.db.staged';
@@ -125,6 +133,8 @@ export interface BackupOptions {
   backupKey: string;
   maxBackups?: number;
   now?: Date;
+  /** Managers' payloads to carry in the same file (yourphr#631). Plain data: it crosses to the worker. */
+  payloads?: BackupPayload[];
 }
 
 /**
@@ -176,6 +186,10 @@ export function backupFilesSync(sources: DatabaseFile[], options: BackupOptions)
     try {
       db.prepare(`SELECT ${schemas.map((s) => `(SELECT COUNT(*) FROM ${s}.sqlite_master)`).join(' + ')} AS n`).get();
       for (const schema of schemas) copyObjects(db, schema, 'backup');
+      // The managers' payloads (yourphr#631), in the same transaction and the same encrypted file.
+      db.exec(`CREATE TABLE backup.${BACKUP_PAYLOAD_TABLE} (manager TEXT PRIMARY KEY, taken_at TEXT NOT NULL, payload TEXT NOT NULL)`);
+      const put = db.prepare(`INSERT INTO backup.${BACKUP_PAYLOAD_TABLE} (manager, taken_at, payload) VALUES (?, ?, ?)`);
+      for (const p of options.payloads ?? []) put.run(p.manager, p.takenAt, JSON.stringify(p.payload ?? null));
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -293,6 +307,27 @@ export function stageRestore(
  */
 export function stageInstanceRestore(backupFile: string, backupKey: string, dataDir: string, targetKey: string): { tables: number } {
   const records = stageRestore(backupFile, backupKey, join(dataDir, STAGED_RECORDS), targetKey, (t) => RECORDS_TABLES.has(t));
-  stageRestore(backupFile, backupKey, join(dataDir, STAGED_APP), targetKey, (t) => !RECORDS_TABLES.has(t));
+  stageRestore(backupFile, backupKey, join(dataDir, STAGED_APP), targetKey, (t) => !RECORDS_TABLES.has(t) && t !== BACKUP_PAYLOAD_TABLE);
   return { tables: records.tables };
+}
+
+/**
+ * The managers' payloads in a backup (yourphr#631), by manager. Empty for a backup taken before
+ * they were carried — the caller says so rather than treating that as "no settings". Throws the
+ * same way staging does when the key is wrong.
+ */
+export function readBackupPayloads(backupFile: string, backupKey: string): Record<string, BackupPayload> {
+  const db = new Database(backupFile, { readonly: true, fileMustExist: true });
+  try {
+    db.pragma("cipher='sqlcipher'");
+    db.pragma(`key=${quoteKey(backupKey)}`);
+    const present = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(BACKUP_PAYLOAD_TABLE);
+    if (!present) return {};
+    const rows = db.prepare(`SELECT manager, taken_at, payload FROM ${BACKUP_PAYLOAD_TABLE}`).all() as { manager: string; taken_at: string; payload: string }[];
+    return Object.fromEntries(rows.map((r) => [r.manager, { manager: r.manager, takenAt: r.taken_at, payload: JSON.parse(r.payload) as unknown }]));
+  } catch (err) {
+    throw new Error(`backup cannot be read — wrong key, or not a backup: ${(err as Error).message}`);
+  } finally {
+    db.close();
+  }
 }

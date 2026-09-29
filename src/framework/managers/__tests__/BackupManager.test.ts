@@ -7,7 +7,7 @@ import { ApiContext } from '../../ApiContext.js';
 import { ConfigurationManager } from '../../ConfigurationManager.js';
 import { PolicyManager } from '../PolicyManager.js';
 import { FakeConfigProvider } from '../../providers/__tests__/FakeConfigProvider.js';
-import { BackupManager, applyStagedRestore, type BackupExporter } from '../BackupManager.js';
+import { BackupManager, applyStagedConfig, applyStagedRestore, STAGED_CONFIG, type BackupExporter } from '../BackupManager.js';
 import { FakeBackupProvider } from '../../providers/__tests__/FakeBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from '../../providers/BaseBackupProvider.js';
 import type { BackupData } from '../../BaseManager.js';
@@ -22,15 +22,21 @@ class FakeExporter implements BackupExporter {
   restores: { file: string; key: string }[] = [];
   fail = false;
   constructor(private readonly store: FakeBackupProvider) {}
-  async backup(options: { destination: string; key: string; now?: Date }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }> {
+  /** What each written file carried for other managers (yourphr#631), by file. */
+  carried = new Map<string, Record<string, BackupData>>();
+  async backup(options: { destination: string; key: string; now?: Date; payloads?: BackupData[] }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }> {
     if (this.fail) throw new Error('disk full');
     this.backups.push({ destination: options.destination, key: options.key });
     const name = `${(options.now ?? new Date()).toISOString().replace(/:/g, '-')}-backup.db`;
+    this.carried.set(`${options.destination}/${name}`, Object.fromEntries((options.payloads ?? []).map((p) => [p.manager, p])));
     this.store.add(options.destination, name, 42);
     return { manager: 'records', takenAt: 'now', file: `${options.destination}/${name}`, sizeBytes: 42, pruned: [] };
   }
   async restore(data: BackupData, options: { key: string }): Promise<void> {
     this.restores.push({ file: data.files![0]!, key: options.key });
+  }
+  async readPayloads(file: string): Promise<Record<string, BackupData>> {
+    return this.carried.get(file) ?? {};
   }
 }
 
@@ -146,6 +152,48 @@ describe('BackupManager — the coordinator', () => {
     expect(exporter.restores).toEqual([{ file: taken.file, key: 'travel-key' }]);
     expect(await backups.testDestination(admin, '')).toEqual({ destination: join(dir, 'backups'), writable: true });
     expect(await backups.browse(admin, '/')).toMatchObject({ dirs: ['a', 'b'] });
+  });
+
+  it('a backup carries the operator\'s settings; a restore stages them and says .env is not included (yourphr#631)', async () => {
+    engine.managers.configuration.set('yourphr.operator.name', 'The Willekes');
+    engine.managers.configuration.set('yourphr.backup.max-backups', 3);
+    const taken = await backups.backupNow(admin);
+    expect(exporter.carried.get(taken.file)!['configuration']!.payload).toMatchObject({ 'yourphr.operator.name': 'The Willekes', 'yourphr.backup.max-backups': 3 });
+    engine.managers.configuration.set('yourphr.operator.name', 'Changed since');
+    clock = new Date('2026-04-01T03:00:00Z');
+    const r = await backups.stageRestore(admin, taken.name);
+    expect(r.message).toContain('Its settings come back too.');
+    expect(r.message).toContain('A backup never includes <data>/.env');
+    const staged = JSON.parse(readFileSync(join(dir, STAGED_CONFIG), 'utf8')) as BackupData;
+    expect(staged.payload).toMatchObject({ 'yourphr.operator.name': 'The Willekes' });
+    // Staged, not applied: the running instance keeps its settings until the restart.
+    expect(engine.managers.configuration.getString('yourphr.operator.name')).toBe('Changed since');
+  });
+
+  it('a backup from before settings were carried restores records and says the settings stay as they are', async () => {
+    const taken = await backups.backupNow(admin);
+    exporter.carried.set(taken.file, {});
+    clock = new Date('2026-04-01T03:00:00Z');
+    const r = await backups.stageRestore(admin, taken.name);
+    expect(r.message).toContain('This backup predates settings in backups, so the current settings are kept.');
+    expect(existsSync(join(dir, STAGED_CONFIG))).toBe(false);
+  });
+
+  it('applyStagedConfig: the backup\'s settings REPLACE the instance\'s at start; the old ones are kept aside', async () => {
+    const config = engine.managers.configuration;
+    config.set('yourphr.operator.name', 'Before');
+    config.set('yourphr.operator.contact-email', 'set-after-the-backup@example.org');
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(join(dir, STAGED_CONFIG), JSON.stringify({ manager: 'configuration', takenAt: '2026-04-01T02:00:00Z', payload: { 'yourphr.operator.name': 'From the backup', 'yourphr.not.a.key': 'dropped' } }));
+    const lines: string[] = [];
+    await applyStagedConfig(dir, config, (l) => lines.push(l));
+    expect(config.getString('yourphr.operator.name')).toBe('From the backup');
+    expect(config.getString('yourphr.operator.contact-email')).toBe(''); // replaced, not blended
+    expect(config.customValues()).not.toHaveProperty('yourphr.not.a.key');
+    expect(existsSync(join(dir, STAGED_CONFIG))).toBe(false);
+    expect(lines[0]).toContain('restore applied: configuration from the backup taken 2026-04-01T02:00:00Z');
+    await applyStagedConfig(dir, config, (l) => lines.push(l)); // nothing staged: nothing happens
+    expect(lines).toHaveLength(1);
   });
 
   it('applyStagedRestore swaps staged files in by rename, keeping the previous live file', () => {

@@ -57,7 +57,7 @@ import { AuditManager } from './framework/managers/AuditManager.js';
 import { SqliteAuditProvider } from './framework/providers/SqliteAuditProvider.js';
 import { EmailManager } from './framework/managers/EmailManager.js';
 import { NotificationManager } from './framework/managers/NotificationManager.js';
-import { BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
+import { applyStagedConfig, BackupManager, applyStagedRestore } from './framework/managers/BackupManager.js';
 import { applyDemoReset } from './app/providers/demo-reset.js';
 import { FilesystemBackupProvider } from './framework/providers/FilesystemBackupProvider.js';
 import { NullBackupProvider, type BaseBackupProvider } from './framework/providers/BaseBackupProvider.js';
@@ -353,6 +353,7 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   const appDbPath = config.getString('yourphr.database.location');
   const recordsDbPath = config.getString('yourphr.records.location');
   applyStagedRestore(dataDir, [[STAGED_RECORDS, basename(recordsDbPath)], [STAGED_APP, basename(appDbPath)]], (line) => appLog.info(line)); // yourphr#602: a staged restore lands before anything opens
+  await applyStagedConfig(dataDir, config, (line) => appLog.info(line)); // yourphr#631: and its settings with it
   // The demo reset (yourphr#645), after an operator's explicit restore and before anything opens:
   // an operator asking for a specific database must beat the demo's automatic one. Refuses unless
   // armed AND proven — see src/demo/reset.ts for what it proves and why it refuses.

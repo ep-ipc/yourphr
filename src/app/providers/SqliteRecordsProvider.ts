@@ -11,7 +11,7 @@ import type { SearchRequest, WithId } from '@medplum/core';
 import { SqliteFhirRepository, sameContent } from '../../SqliteFhirRepository.js';
 import { dirname } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
-import { backupFiles, stageInstanceRestore, RECORDS_LEDGER_TABLE, type BackupResult, type DatabaseFile } from './sqlite-backup.js';
+import { backupFiles, readBackupPayloads, stageInstanceRestore, RECORDS_LEDGER_TABLE, type BackupPayload, type BackupResult, type DatabaseFile } from './sqlite-backup.js';
 import { ftsQuery } from './record-text.js';
 import { runMigrations, type Migration, type MigrationReport } from '../../framework/providers/sqlite-migrations.js';
 import { BaseRecordsProvider, type CompactReport, type IndexCondition, type RecordsWriter, type StoredRecord } from './BaseRecordsProvider.js';
@@ -386,10 +386,10 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
    * the request thread two could never overlap, and two at once would race for the same file name.
    * `alsoExport` names the other databases by file and key — a handle cannot cross threads.
    */
-  async backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }> {
+  async backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[]; payloads?: BackupPayload[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }> {
     const run = (): Promise<BackupResult> => backupFiles(
       [{ file: this.file, key: this.key }, ...((options.alsoExport ?? []) as DatabaseFile[])],
-      { destination: options.destination, backupKey: options.key, maxBackups: options.maxBackups, now: options.now }
+      { destination: options.destination, backupKey: options.key, maxBackups: options.maxBackups, now: options.now, payloads: options.payloads }
     );
     const result = this.backupInFlight.then(run, run);
     this.backupInFlight = result.catch(() => undefined);
@@ -398,5 +398,10 @@ export class SqliteRecordsProvider extends BaseRecordsProvider {
 
   async stageRestore(backupFile: string, backupKey: string): Promise<{ tables: number }> {
     return stageInstanceRestore(backupFile, backupKey, dirname(this.file), this.key ?? '');
+  }
+
+  /** The managers' payloads carried in a backup (yourphr#631); {} for one taken before they were. */
+  async readPayloads(backupFile: string, backupKey: string): Promise<Record<string, BackupPayload>> {
+    return readBackupPayloads(backupFile, backupKey);
   }
 }

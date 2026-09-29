@@ -414,7 +414,13 @@ export class ConfigurationManager extends BaseManager {
     return { manager: this.name, takenAt: new Date().toISOString(), payload: this.customValues() };
   }
 
+  /**
+   * The overrides from a backup REPLACE this instance's (yourphr#631), as ngdpbase's restore replaces
+   * its customConfig: a restore returns the instance to the backup's settings, not a blend. Keys this
+   * version does not know are dropped; the environment is never touched.
+   */
   async restore(data: BackupData): Promise<void> {
+    this.custom = {};
     for (const [key, value] of Object.entries((data.payload ?? {}) as Record<string, ConfigValue>)) {
       if (this.known(key)) this.custom[key] = value;
     }

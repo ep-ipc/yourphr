@@ -4,6 +4,7 @@
  * with no SQLite — and it is the second implementation of the interface, which is the test the
  * architecture doc sets for a provider: someone could plausibly swap it.
  */
+import type { BackupData } from '../../../framework/BaseManager.js';
 import type { Bundle, Resource } from '@medplum/fhirtypes';
 import type { SearchRequest, WithId } from '@medplum/core';
 import { textFor } from '../record-text.js';
@@ -137,8 +138,11 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
   async release(userId: string): Promise<void> { this.released.push(userId); }
   async integrityOk(): Promise<boolean> { return true; }
   storage(): { location: string; sizeBytes: number } { return { location: ':memory:', sizeBytes: 0 }; }
-  async backup(options: { destination: string; key: string }): Promise<{ file: string; sizeBytes: number; pruned: string[] }> {
+  /** What the last backup carried for other managers (yourphr#631), and what readPayloads hands back. */
+  payloads: Record<string, BackupData> = {};
+  async backup(options: { destination: string; key: string; payloads?: BackupData[] }): Promise<{ file: string; sizeBytes: number; pruned: string[] }> {
     this.backups.push({ destination: options.destination, key: options.key });
+    this.payloads = Object.fromEntries((options.payloads ?? []).map((p) => [p.manager, p]));
     return { file: `${options.destination}/fake.db`, sizeBytes: this.rows.size, pruned: [] };
   }
   staged: { backupFile: string; backupKey: string }[] = [];
@@ -146,4 +150,5 @@ export class FakeRecordsProvider extends BaseRecordsProvider {
     this.staged.push({ backupFile, backupKey });
     return { tables: 3 };
   }
+  async readPayloads(): Promise<Record<string, BackupData>> { return this.payloads; }
 }

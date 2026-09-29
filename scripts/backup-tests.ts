@@ -8,11 +8,16 @@
  *
  *   npm run backup
  */
-import { mkdtempSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteFhirRepository } from '../src/SqliteFhirRepository.js';
-import { backupDatabase, listBackups, stageRestore, backupFileName } from '../src/app/providers/sqlite-backup.js';
+import { backupDatabase, listBackups, stageRestore, stageInstanceRestore, backupFileName, readBackupPayloads, BACKUP_PAYLOAD_TABLE } from '../src/app/providers/sqlite-backup.js';
+import Database from 'better-sqlite3-multiple-ciphers';
+import { Engine } from '../src/framework/Engine.js';
+import { ConfigurationManager } from '../src/framework/ConfigurationManager.js';
+import { FileConfigProvider } from '../src/framework/providers/FileConfigProvider.js';
+import { applyStagedConfig, STAGED_CONFIG } from '../src/framework/managers/BackupManager.js';
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): void {
@@ -98,6 +103,44 @@ async function main(): Promise<void> {
     listBackups(dest).length === 3 && result.pruned.length > 0, `pruned ${result.pruned.length}`);
   check('names sort chronologically (date-first convention)',
     backupFileName(new Date('2026-01-02T03:04:05Z')) < backupFileName(new Date('2026-01-02T03:04:06Z')));
+
+  // --- the settings travel in the same encrypted file and come back at start (yourphr#631) ---
+  const withSettings = backupDatabase(repo, {
+    destination: dest,
+    backupKey: BACKUP_KEY,
+    now: new Date(Date.now() + 20_000),
+    payloads: [{ manager: 'configuration', takenAt: '2026-09-29T02:00:00Z', payload: { 'yourphr.operator.name': 'Synthetic Household', 'yourphr.backup.max-backups': 5 } }],
+  });
+  const carried = readBackupPayloads(withSettings.file, BACKUP_KEY);
+  check('a backup carries the operator\'s settings, readable only with the backup key',
+    (carried['configuration']?.payload as Record<string, unknown>)?.['yourphr.operator.name'] === 'Synthetic Household' && !readFileSync(withSettings.file).includes('Synthetic Household'));
+  let payloadWrongKey = false;
+  try { readBackupPayloads(withSettings.file, 'not-the-backup-key'); } catch { payloadWrongKey = true; }
+  check('and a wrong key refuses to read them', payloadWrongKey);
+  const noSettings = backupDatabase(repo, { destination: join(dir, 'older'), backupKey: BACKUP_KEY });
+  check('a backup that carries no settings reads as none, not as an error', Object.keys(readBackupPayloads(noSettings.file, BACKUP_KEY)).length === 0);
+
+  const instance = join(dir, 'instance');
+  mkdirSync(join(instance, 'config'), { recursive: true });
+  stageInstanceRestore(withSettings.file, BACKUP_KEY, instance, 'fresh-instance-key');
+  const leaked = ['records.db.staged', 'spike.db.staged'].some((f) => {
+    const db = new Database(join(instance, f));
+    db.pragma("cipher='sqlcipher'");
+    db.pragma("key='fresh-instance-key'");
+    const has = !!db.prepare("SELECT 1 FROM sqlite_master WHERE name = ?").get(BACKUP_PAYLOAD_TABLE);
+    db.close();
+    return has;
+  });
+  check('the settings are staged into neither database', !leaked);
+
+  writeFileSync(join(instance, 'config', 'app-custom-config.json'), JSON.stringify({ 'yourphr.operator.name': 'Blank new instance', 'yourphr.operator.contact-email': 'new@example.org' }));
+  writeFileSync(join(instance, STAGED_CONFIG), JSON.stringify(carried['configuration']));
+  const config = new ConfigurationManager(new Engine(), new FileConfigProvider(instance), { env: {} });
+  await applyStagedConfig(instance, config, () => undefined);
+  const reread = new ConfigurationManager(new Engine(), new FileConfigProvider(instance), { env: {} });
+  check('at the next start the backup\'s settings REPLACE the new instance\'s, on disk',
+    reread.getString('yourphr.operator.name') === 'Synthetic Household' && reread.getInt('yourphr.backup.max-backups') === 5 && reread.getString('yourphr.operator.contact-email') === '');
+  check('and the settings they replaced are kept aside', existsSync(join(instance, 'config', 'app-custom-config.json.pre-restore')) && !existsSync(join(instance, STAGED_CONFIG)));
 
   repo.db.close();
   rmSync(dir, { recursive: true, force: true });

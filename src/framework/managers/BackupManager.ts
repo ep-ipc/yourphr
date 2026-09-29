@@ -9,7 +9,7 @@
  * Known gap the doc names: one exporter today, so the snapshot is consistent; with several, the
  * per-manager backup() contract yields a torn snapshot and quiescing is engine-level work still to design.
  */
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { BaseManager, type BackupData } from '../BaseManager.js';
 import type { Engine } from '../Engine.js';
@@ -60,8 +60,33 @@ export interface BackupOutcome { file: string; name: string; sizeBytes: number; 
 
 /** The door that can write an encrypted copy of the instance and stage one back — the PHI store's manager. */
 export interface BackupExporter {
-  backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[] }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }>;
+  backup(options: { destination: string; key: string; maxBackups?: number; now?: Date; alsoExport?: unknown[]; payloads?: BackupData[] }): Promise<BackupData & { file: string; sizeBytes: number; pruned: string[] }>;
   restore(data: BackupData, options: { key: string }): Promise<void>;
+  /** Other managers' payloads the backup file carries (yourphr#631), by manager; {} when none. */
+  readPayloads(file: string, options: { key: string }): Promise<Record<string, BackupData>>;
+}
+
+/**
+ * The configuration a restore brings back (yourphr#631), staged beside the databases and applied at
+ * the next start, before anything reads a setting — the same moment the databases are swapped in.
+ */
+export const STAGED_CONFIG = 'config.staged.json';
+
+/**
+ * Applies a staged configuration restore at start (yourphr#631): the overrides in the backup replace
+ * the instance's through ConfigurationManager.restore() — ngdpbase's ConfigurationManager.restore(),
+ * which replaces its customConfig — and the previous overrides step aside as *.pre-restore, as the
+ * databases do. The environment is untouched: a restore never brings back <data>/.env.
+ */
+export async function applyStagedConfig(dataDir: string, config: { restore(data: BackupData): Promise<void>; customConfigPath(): string }, log: (line: string) => void): Promise<void> {
+  const staged = join(dataDir, STAGED_CONFIG);
+  if (!existsSync(staged)) return;
+  const data = JSON.parse(readFileSync(staged, 'utf8')) as BackupData;
+  const current = config.customConfigPath();
+  if (existsSync(current)) copyFileSync(current, `${current}.pre-restore`);
+  await config.restore(data);
+  unlinkSync(staged);
+  log(`restore applied: configuration from the backup taken ${data.takenAt} (previous kept as ${current}.pre-restore)`);
 }
 
 export interface BackupOptions {
@@ -194,7 +219,10 @@ export class BackupManager extends BaseManager {
       const reason = this.unavailable();
       if (reason !== '') throw new ApiError(400, reason);
       await this.provider.ensure(destination);
-      const result = await this.options.exporter.backup({ destination, key: this.cfg.getString('yourphr.backup.encryption.key'), now: this.now(), alsoExport: this.options.alsoExport });
+      // The configuration's own backup travels in the same file (yourphr#631): a restore that forgot
+      // the operator's settings is half a restore.
+      const payloads = [await this.cfg.backup()];
+      const result = await this.options.exporter.backup({ destination, key: this.cfg.getString('yourphr.backup.encryption.key'), now: this.now(), alsoExport: this.options.alsoExport, payloads });
       const pruned = await this.provider.prune(destination, this.cfg.getInt('yourphr.backup.max-backups'));
       this.state = { lastSuccessAt: at, lastSuccessPath: result.file, lastAttemptAt: at, consecutiveFailures: 0 };
       this.saveHealth();
@@ -328,8 +356,19 @@ export class BackupManager extends BaseManager {
     const file = await this.provider.resolve(this.destination(), backupName);
     if (!file) throw new ApiError(404, 'no such backup in the destination folder');
     await this.backupNow(ctx);
-    await this.options.exporter.restore({ manager: 'backups', takenAt: this.now().toISOString(), files: [file] }, { key: this.cfg.getString('yourphr.backup.encryption.key') });
-    return { staged: true, message: 'Restore staged (current databases backed up first). Restart the app to apply it.' };
+    const key = this.cfg.getString('yourphr.backup.encryption.key');
+    await this.options.exporter.restore({ manager: 'backups', takenAt: this.now().toISOString(), files: [file] }, { key });
+    // The settings, staged for the same restart (yourphr#631). A backup taken before they were
+    // carried has none — said plainly, rather than restoring records and silently keeping settings.
+    const config = (await this.options.exporter.readPayloads(file, { key }))['configuration'];
+    if (config) writeFileSync(join(this.options.dataDir, STAGED_CONFIG), JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+    const settings = config
+      ? 'Its settings come back too.'
+      : 'This backup predates settings in backups, so the current settings are kept.';
+    return {
+      staged: true,
+      message: `Restore staged (current databases backed up first). ${settings} Restart the app to apply it. A backup never includes <data>/.env: re-add any lines it held besides the encryption keys (for example the mail relay password) by hand.`,
+    };
   }
 
   /** The coordinator keeps no data of its own; the health file is derived and rewritten by the next outcome. */
