@@ -67,10 +67,7 @@ const EXEMPT: Record<string, string> = {
 };
 
 /** Reads record content with no category yet — tracked, not forgiven. */
-const KNOWN_UNLOGGED: Record<string, string> = {
-  '/api/secure/practitioners/x/history': 'yourphr#798 — returns the Encounters that name a practitioner',
-  '/api/secure/resource/provenance/x/x': 'yourphr#798 — where one record came from and when',
-};
+const KNOWN_UNLOGGED: Record<string, string> = {};
 
 // --- the parser: which paths answer a GET ---
 

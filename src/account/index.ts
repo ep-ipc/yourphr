@@ -83,6 +83,11 @@ export function accessCategoryFor(pathname: string): string | undefined {
   };
   if (exact[pathname]) return exact[pathname];
   if (/^\/api\/secure\/resource\/fhir\/[^/]+\/[^/]+$/.test(pathname)) return 'Records (FHIR)';
+  // Both read FHIR resources and were served unlogged until the category check found them
+  // (yourphr#798, Jim 2026-09-29: the existing category, so no new agent-token scope): a
+  // practitioner's Encounters, and where one record came from.
+  if (/^\/api\/secure\/practitioners\/[^/]+\/history$/.test(pathname)) return 'Records (FHIR)';
+  if (/^\/api\/secure\/resource\/provenance\/[^/]+\/[^/]+$/.test(pathname)) return 'Records (FHIR)';
   if (/^\/api\/secure\/source\/[^/]+\/export$/.test(pathname)) return 'Full export';
   return undefined;
 }

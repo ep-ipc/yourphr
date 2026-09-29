@@ -811,7 +811,13 @@ async function main(): Promise<void> {
   });
   check('the route refuses a resource that is not a Practitioner', wrongType.status === 400, `status ${wrongType.status}`);
 
+  // yourphr#798: reading a practitioner's Encounters is a read of the record, logged as Records (FHIR).
+  const fhirReads = async (): Promise<number> => ((await (await fetch(`${base}/api/secure/account/access-log`, authed(pracToken))).json()) as { data: { category: string; count: number }[] }).data
+    .filter((e) => e.category === 'Records (FHIR)').reduce((n, e) => n + e.count, 0);
+  const fhirBefore = await fhirReads();
   const history = (await (await fetch(`${base}/api/secure/practitioners/prac-1/history`, authed(pracToken))).json()) as { relatedResources?: { source_resource_id?: string }[] };
+  check('reading a practitioner\'s history is written to the patient\'s access log as Records (FHIR) (yourphr#798)',
+    (await fhirReads()) === fhirBefore + 1, `${fhirBefore} -> ${await fhirReads()}`);
   check('GET /secure/practitioners/:id/history returns relatedResources at the TOP level — the shape the page reads',
     Array.isArray(history.relatedResources), JSON.stringify(Object.keys(history)));
 
