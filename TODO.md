@@ -5,8 +5,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 ## 🔴 P0 — Security & Critical
 
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
-- [#788](https://github.com/jwilleke/yourphr/issues/788) — [BUG] Scheduled backups are off on the live instance — enable them once the export no longer blocks
-- [#783](https://github.com/jwilleke/yourphr/issues/783) — [BUG] No backup since the cut-over — the schedule was never enabled, and enabling it as-is would freeze the instance nightly
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟣 Epics
@@ -89,14 +87,8 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#793](https://github.com/jwilleke/yourphr/issues/793) — [FEATURE] Port ngdpbase's NotificationManager — notifications, a banner, and email escalation
-- [#792](https://github.com/jwilleke/yourphr/issues/792) — [FEATURE] Accounts carry an optional email address — so an alert can reach an admin
-- [#790](https://github.com/jwilleke/yourphr/issues/790) — [BUG] Backup files are called "spike", and the Admin page says they are gzip .db.gz
-- [#789](https://github.com/jwilleke/yourphr/issues/789) — [FEATURE] Alert when backups stop — 49 hours with the schedule on, 15 days regardless
-- [#787](https://github.com/jwilleke/yourphr/issues/787) — [BUG] A backup blocks the one Node thread — move the export into a worker
-- [#786](https://github.com/jwilleke/yourphr/issues/786) — [FEATURE] Import a patient-portal download zip as-is (MyChart / IHE XDM)
-- [#785](https://github.com/jwilleke/yourphr/issues/785) — [FEATURE] Default yourphr.cda-converter.url to <http://yourphr-cda-converter:8080>
-- [#536](https://github.com/jwilleke/yourphr/issues/536) — [FEATURE] Outbound mail transport: one sender, console by default
+- [#788](https://github.com/jwilleke/yourphr/issues/788) — [BUG] Scheduled backups are off on the live instance — enable them once the export no longer blocks
+- [#783](https://github.com/jwilleke/yourphr/issues/783) — [BUG] No backup since the cut-over — the schedule was never enabled, and enabling it as-is would freeze the instance nightly
 
 ## ⏸ Deferred
 
