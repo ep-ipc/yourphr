@@ -43,6 +43,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟡 P2
 
+- [#791](https://github.com/jwilleke/yourphr/issues/791) — [BUG] The backup and recovery docs describe the Go stack — plaintext, gzip, settings file, labels
 - [#770](https://github.com/jwilleke/yourphr/issues/770) — [FEATURE] Patient self-report forms as QuestionnaireResponse — the questionnaire has to exist first
 - [#714](https://github.com/jwilleke/yourphr/issues/714) — [FEATURE] Maintenance mode — no way to say the instance is briefly not itself
 - [#709](https://github.com/jwilleke/yourphr/issues/709) — [FEATURE] Per-user settings have no store — Go's user_settings table got no successor, so preferences live in one browser
@@ -98,4 +99,4 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## ❓ Needs triage
 
-- [#791](https://github.com/jwilleke/yourphr/issues/791) — [BUG] The backup and recovery docs describe the Go stack — plaintext, gzip, settings file, labels
+*None.*
