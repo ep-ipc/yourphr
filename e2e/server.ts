@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { assembleApp } from '../src/app.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
 import { startFakeProvider, listenFake } from '../scripts/lib/fake-provider.js';
-import { ADMIN_PASS_FILE, E2E_NOTE_PASS, E2E_NOTE_USER, E2E_PASS, E2E_PORT, E2E_PW_PASS, E2E_PW_USER, E2E_RESET_PASS, E2E_RESET_USER, E2E_USER } from './constants.js';
+import { ADMIN_PASS_FILE, E2E_DIR, E2E_NOTE_PASS, E2E_NOTE_USER, E2E_PASS, E2E_PORT, E2E_PW_PASS, E2E_PW_USER, E2E_RESET_PASS, E2E_RESET_USER, E2E_USER } from './constants.js';
 
 const webDir = process.env['SPIKE_E2E_WEB_DIR'] ?? '/tmp/spike-web';
 if (!existsSync(join(webDir, 'index.html'))) {
@@ -106,6 +106,12 @@ await app.engine.managers.records.savePatientRecord(ApiContext.system('e2e-seed'
   vaccineCode: { coding: [{ system: 'http://hl7.org/fhir/sid/cvx', code: '140', display: 'Influenza, seasonal, injectable, preservative free' }] },
   occurrenceDateTime: '2025-10-01',
 } as never);
+// A DICOM image and a PDF (yourphr#690), from the frontend's own synthetic fixtures — the RUBO viewer
+// demo image and a sample PDF — so a record whose content is a document is asserted to render.
+for (const fixture of ['exampleDicom', 'examplePdf']) {
+  const binary = JSON.parse(readFileSync(join(E2E_DIR, '..', 'frontend', 'src', 'lib', 'fixtures', 'r4', 'resources', 'binary', `${fixture}.json`), 'utf8')) as Record<string, unknown>;
+  await app.engine.managers.records.savePatientRecord(ApiContext.system('e2e-seed', E2E_USER, app.engine), { ...binary, id: `e2e-${fixture.toLowerCase()}` } as never);
+}
 app.config.set('yourphr.backup.destination', join(dir, 'backups'));
 
 await new Promise<void>((resolve) => app.server.listen(E2E_PORT, '127.0.0.1', resolve));
