@@ -131,8 +131,11 @@ export class DatatableGenericResourceComponent implements OnInit, ResourceListCo
    * created in renderList()
    * @param selected
    */
-  onSelect({ selected }) {
-    this.selectionChanged.emit(selected[0])
+  // ngx-datatable 25 removed the `(select)` output (#690): bound to it, a row click selected the row
+  // and nothing opened, silently — Angular takes an unknown output for a DOM event that never fires.
+  // `(selectedChange)` hands over the selected rows themselves.
+  onSelect(selected: FastenDisplayModel[]) {
+    if (selected?.[0]) this.selectionChanged.emit(selected[0])
   }
 
   //check to see if this row should be selectable
