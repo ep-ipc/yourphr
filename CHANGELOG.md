@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.11.0](https://github.com/jwilleke/yourphr/compare/v3.10.2...v3.11.0) (2026-09-29)
+
+__A backup now brings your instance back, not just your records.__ Restoring used to return every record and account onto an instance that had forgotten its own settings: no mail, no backup schedule, not even its name. Now the settings come back with the data.
+
+### Features
+
+- __Backups carry the instance's settings__ ([#631](https://github.com/jwilleke/yourphr/issues/631)): everything an admin changed on the Configuration page travels in the same encrypted backup, and a restore brings it back at the next restart. The settings it replaces are kept aside, as the old databases are. A backup taken before this version still restores the records, and says that the current settings stay as they are.
+- __What a backup does not include__, stated on the restore: the instance's `.env` file. It holds the encryption keys, and the key that decrypts a backup must always come from outside it. Any other line kept there (for example the mail relay password) is re-added by hand after a restore.
+
 ## [3.10.2](https://github.com/jwilleke/yourphr/compare/v3.10.1...v3.10.2) (2026-09-29)
 
 ### Features
