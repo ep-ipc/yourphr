@@ -54,6 +54,7 @@ The log is bucketed per owner, actor, category and day, with a count. So a chatt
 - __A token used from a browser.__ Agent tokens are accepted from an `Authorization` header only, never from a cookie, so a page cannot silently borrow one.
 - __A token that renews or mints another.__ Two independent locks: the edge gate refuses the route, and `AgentTokensManager.requireHuman` refuses the call.
 - __Bundling, recommending, or proxying a model.__ Out of scope by policy, not merely unimplemented.
+- __Tool and prompt arguments outside their declared shape.__ They come from the client, which means from a model and whatever text it was shown, so the bridge treats them as untrusted input: an undeclared argument, a query that is not text, holds control characters, or runs past 200 characters, or a `limit` outside 1–100 is refused with a message naming the fix — before anything reaches YourPHR, so a malformed call is never an access-log line ([#657](https://github.com/jwilleke/yourphr/issues/657)).
 
 ## The decision this policy owes: is the audit a guarantee or a list?
 
@@ -67,7 +68,7 @@ __The allow-list is fail-safe for agents and fail-open for sessions.__ Omit a ca
 
 __The recommendation is to keep the allow-list and make omission loud.__ Moving the audit into the managers is the tempting answer and the wrong one here: scopes are the log's categories, so a category is a property of *the surface a request arrives on*, not of the manager underneath — several routes with different categories share one manager, and `Full export` and `Records (FHIR)` are the same manager reached two ways. Binding audit to the manager would break the property that makes scoping trustworthy.
 
-What is missing is not a different mechanism but a check that fails, per the twelfth architecture principle. A CI step that requires every GET under `/api/secure/` to either resolve a category or appear on an explicit __not-an-access__ list would convert a silent hole into a build failure, and would have caught yourphr#599's search route on the commit that introduced it. That belongs in its own issue rather than this slice, and this policy is the argument for filing it.
+What was missing was not a different mechanism but a check that fails, per the twelfth architecture principle. __It now exists:__ `npm run check:categories` (`scripts/check-access-categories.ts`, in Server CI) requires every GET under `/api/secure/` to resolve a category, to be exempt with a stated reason, or to be a tracked gap with its issue — so a silent hole is a build failure, as yourphr#599's search route would have been on the commit that introduced it. Its first run found two: practitioner history and record provenance ([#798](https://github.com/jwilleke/yourphr/issues/798)).
 
 ## Connecting a client
 

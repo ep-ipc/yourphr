@@ -69,6 +69,36 @@ function toolResult(text: string, isError = false): Record<string, unknown> {
   return { content: [{ type: 'text', text }], isError };
 }
 
+/** The longest query the bridge passes on. A search for more than a sentence is not a search. */
+const MAX_QUERY = 200;
+
+/**
+ * Tool and prompt arguments come from the client — which in practice means from a model, and from
+ * whatever text that model has been shown. So they are validated like any request body from outside
+ * (yourphr#657): the declared shape and nothing else, before anything is sent to YourPHR. A refusal
+ * names what to fix, so the model can correct itself; and because it happens here, a malformed call
+ * never reaches the server, never becomes an access-log line, and never reaches the search index.
+ */
+function readSearchArguments(raw: unknown, allowed: readonly string[] = ['query', 'limit']): { ok: true; query: string; limit: number } | { ok: false; message: string } {
+  if (raw === undefined) raw = {};
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, message: 'The arguments must be an object.' };
+  const args = raw as Record<string, unknown>;
+  const unexpected = Object.keys(args).filter((k) => !allowed.includes(k));
+  if (unexpected.length) return { ok: false, message: `Unexpected argument${unexpected.length === 1 ? '' : 's'}: ${unexpected.join(', ')}. Accepted: ${allowed.join(', ')}.` };
+  if (args['query'] !== undefined && typeof args['query'] !== 'string') return { ok: false, message: 'query must be text.' };
+  const query = typeof args['query'] === 'string' ? args['query'].trim() : '';
+  // Control characters have no place in words a person searches for, and a newline in a query is how
+  // text meant for a model gets smuggled into one.
+  if (/[\u0000-\u001f\u007f]/.test(query)) return { ok: false, message: 'query contains control characters; give plain words.' };
+  if (query.length < 2) return { ok: false, message: 'Give at least two characters to search for.' };
+  if (query.length > MAX_QUERY) return { ok: false, message: `query is longer than ${MAX_QUERY} characters; give a few words.` };
+  const asked = args['limit'];
+  if (asked !== undefined && !(typeof asked === 'number' && Number.isInteger(asked) && asked >= 1 && asked <= 100)) {
+    return { ok: false, message: 'limit must be a whole number from 1 to 100.' };
+  }
+  return { ok: true, query, limit: typeof asked === 'number' ? asked : 20 };
+}
+
 const SEARCH_RECORDS = {
   name: 'search_records',
   title: 'Search health records',
@@ -315,6 +345,19 @@ async function handle(msg: Rpc): Promise<void> {
         fail(id, -32602, `unknown prompt: ${String(asked?.name ?? '')}`);
         return;
       }
+      // A prompt's arguments are written into text the model will read as the patient's own words,
+      // so they pass the same checks as a tool's (yourphr#657).
+      const declared = prompt.arguments.map((a) => a.name);
+      if (declared.length) {
+        const checked = readSearchArguments(asked?.arguments, declared);
+        if (!checked.ok) {
+          fail(id, -32602, checked.message);
+          return;
+        }
+      } else if (asked?.arguments && Object.keys(asked.arguments).length) {
+        fail(id, -32602, `this prompt takes no arguments`);
+        return;
+      }
       reply(id, {
         description: prompt.description,
         messages: [{ role: 'user', content: { type: 'text', text: prompt.build(asked?.arguments ?? {}) } }],
@@ -328,15 +371,12 @@ async function handle(msg: Rpc): Promise<void> {
         fail(id, -32602, `unknown tool: ${String(call?.name ?? '')}`);
         return;
       }
-      const args = call.arguments ?? {};
-      const query = typeof args['query'] === 'string' ? args['query'].trim() : '';
-      if (query.length < 2) {
-        reply(id, toolResult('Give at least two characters to search for.', true));
+      const args = readSearchArguments(call.arguments);
+      if (!args.ok) {
+        reply(id, toolResult(args.message, true));
         return;
       }
-      const asked = Number(args['limit'] ?? 20);
-      const limit = Number.isInteger(asked) ? Math.min(Math.max(asked, 1), 100) : 20;
-      reply(id, await searchRecords(query, limit));
+      reply(id, await searchRecords(args.query, args.limit));
       return;
     }
 
