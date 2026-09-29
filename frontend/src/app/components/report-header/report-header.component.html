@@ -7,7 +7,7 @@
     <div class="media">
       <div class="media-body">
         <label>Last Updated</label>
-        <h6>{{lastUpdated ? (lastUpdated | date:'MMM d, yyyy') : ''}}</h6>
+        <h6 data-testid="last-updated">{{lastUpdated ? (lastUpdated | date:'MMM d, yyyy') : 'Not synced yet'}}</h6>
       </div><!-- media-body -->
     </div><!-- media -->
     @if (primaryCare) {

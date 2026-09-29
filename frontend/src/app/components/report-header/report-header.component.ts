@@ -38,12 +38,13 @@ export class ReportHeaderComponent implements OnInit {
 
   ngOnInit(): void {
     this.fastenApi.getSummary().subscribe((summary: Summary) => {
-      if (summary.sources && summary.sources.length > 0) {
-        this.lastUpdated = summary.sources.reduce((latest, source) => {
-          const sourceDate = new Date(source.updated_at);
-          return sourceDate > latest ? sourceDate : latest;
-        }, new Date(0));
-      }
+      // The newest sync any source reports — and nothing when none has synced (yourphr#690): the
+      // record states no date, so the page must not invent one (starting from new Date(0) showed
+      // "Jan 1, 1970" for an account whose sources had never synced).
+      const synced = (summary.sources ?? [])
+        .map((source) => new Date(source.updated_at))
+        .filter((d) => !isNaN(d.getTime()));
+      this.lastUpdated = synced.length ? new Date(Math.max(...synced.map((d) => d.getTime()))) : null;
     })
     this.fastenApi.getResources("Patient").subscribe(results => {
       this.patient = results[0]

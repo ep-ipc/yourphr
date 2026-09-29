@@ -35,6 +35,25 @@ describe('ReportHeaderComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  // #690: the date comes from the record; with none, the page says so rather than inventing 1970.
+  describe('Last Updated', () => {
+    const render = (sources: {updated_at?: string}[]) => {
+      mockedFastenApiService.getSummary.and.returnValue(of({sources}));
+      fixture = TestBed.createComponent(ReportHeaderComponent);
+      fixture.detectChanges();
+      return (fixture.nativeElement.querySelector('[data-testid="last-updated"]') as HTMLElement).textContent!.trim();
+    };
+
+    it('says "Not synced yet" when no source has synced, never Jan 1, 1970', () => {
+      expect(render([{}, {updated_at: undefined}])).toBe('Not synced yet');
+      expect(render([])).toBe('Not synced yet');
+    });
+
+    it('shows the newest sync across the sources', () => {
+      expect(render([{updated_at: '2026-03-01T10:00:00Z'}, {}, {updated_at: '2026-09-28T12:00:00Z'}])).toBe('Sep 28, 2026');
+    });
+  });
+
   describe('Save Report (#523)', () => {
     // The button used to be inert AND carried routerLink="/", so pressing it threw you off the page.
     it('should not download until the warning is accepted', () => {
