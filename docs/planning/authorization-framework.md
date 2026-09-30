@@ -47,15 +47,16 @@ The rule is __ngdpbase first__: a new auth capability is designed and built in n
 |---|---|---|---|---|
 | Provider registry (`registerProvider`, first-wins) | built | own `BaseAuthProvider` + `yourphr.auth.providers` | ngdpbase (done) | — YourPHR converges on it |
 | Provider result contract (subject, factors, issuedAt, token generation) | `AuthResult {username, viaToken}` | richer result | YourPHR (done) | yes: `factors` and `issuedAt` are what step-up and "how was this session established" need |
-| Factor policy ("password + any one second factor", "passkey alone") | single factor | ALL-OF list | __ngdpbase__ (new) | — |
-| Credentials table (more than one credential per account) | `allowedAuthMethods` on user | password column | __ngdpbase__ (new; passkeys need it) | — |
+| Factor policy: per-provider `auth-factors` ([ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)) | single factor | ALL-OF list | __ngdpbase__ | — |
+| Credentials store ([ngdpbase#1524](https://github.com/jwilleke/ngdpbase/issues/1524)) | `allowedAuthMethods` on user | password column | __ngdpbase__ (passkeys need it) | — |
 | Passkeys / WebAuthn | [ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448) deferred | none | __ngdpbase__ | — |
 | TOTP | [ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421) deferred | none | __ngdpbase__ | — |
 | Email magic link | built, with device binding and single-use gate | none | ngdpbase (done) | port, as sign-in and as a second-factor code |
-| SMS code | none | none | __ngdpbase__, transport off by default | — |
-| Step-up re-authentication | none | none | __ngdpbase__ | — |
+| Email code as a second factor ([ngdpbase#1527](https://github.com/jwilleke/ngdpbase/issues/1527)) | magic link only | none | __ngdpbase__ | — |
+| SMS code ([ngdpbase#1528](https://github.com/jwilleke/ngdpbase/issues/1528)) | none | none | __ngdpbase__, transport off by default | — |
+| Step-up re-authentication ([ngdpbase#1525](https://github.com/jwilleke/ngdpbase/issues/1525)) | none | none | __ngdpbase__ | — |
 | Sign-in record | logger lines | none | either; YourPHR's needs patient visibility | the patient-visible shape |
-| RFC 8628 device authorization | none (fernfiles plans one) | none; required by [#314](https://github.com/jwilleke/yourphr/issues/314) | __ngdpbase__ | — |
+| RFC 8628 device authorization ([ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526)) | none (fernfiles plans one) | none; required by [#314](https://github.com/jwilleke/yourphr/issues/314) | __ngdpbase__ | — |
 | Agent tokens | built ([ngdpbase#946](https://github.com/jwilleke/ngdpbase/issues/946), #1108) | ported | ngdpbase (done) | category-scopes idea; write scopes inside a consent grant |
 | Roles and permissions as config | two lists kept in sync by a comment ([ngdpbase#713](https://github.com/jwilleke/ngdpbase/issues/713)) | one list, boot refuses unknown names | YourPHR (done) | yes: the one-list fix |
 | Client permission projection | server-rendered, not needed | needed (SPA) | YourPHR | no — SPA-specific |
@@ -87,7 +88,9 @@ __The policy shape this needs.__ Today's `yourphr.auth.factors` is ALL-OF (`pass
 - `password` + __any one__ enrolled second factor, from an instance-allowed list; or
 - `passkey` alone.
 
-An admin account requires a second factor once any are enabled. An account with no second factor enrolled signs in with a password alone until the instance requires enrolment. This is the "factor policy" row above. It is built in ngdpbase's `AuthManager` (whose `required-factors` is the same key with the same gap) and replaces the ALL-OF list on both sides.
+An admin account requires a second factor once any are enabled. An account with no second factor enrolled signs in with a password alone until the instance requires enrolment.
+
+__How configuration expresses it__ (Jim, 2026-09-30; [ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)): every factor is a registered `AuthProvider`, and each provider carries an `auth-factors` count. `0` means signing in through that provider needs no further factor (passkey, agent token, an IdP that already did MFA). `2` means the provider is one factor and the sign-in needs a second, different one (password). Unknown or unsatisfiable settings refuse the boot. Roles can raise the count, never lower it. This replaces ngdpbase's `required-factors` and YourPHR's ALL-OF `yourphr.auth.factors`, which ports it as `yourphr.auth.<provider>.auth-factors`.
 
 ### Credentials table
 
@@ -167,12 +170,13 @@ __Recommendation:__ take ideas and at most its passkey provider. Do not take its
 - 2026-09-30 (Jim): this document is the single source of truth for the auth plan, and the work is coordinated with ngdpbase.
 - 2026-09-30 (Jim): email magic links and codes, and SMS codes, are viable additional sign-in factors.
 - 2026-09-30 (Jim): YourPHR needs RFC 8628 device authorization, from [#314](https://github.com/jwilleke/yourphr/issues/314).
+- 2026-09-30 (Jim): the ngdpbase phases are filed there, under the epic [ngdpbase#1522](https://github.com/jwilleke/ngdpbase/issues/1522). Factor counts are per-provider configuration, and every factor is an `AuthProvider` ([ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)).
 
 ## Awaiting decision
 
 Asked one at a time, in this order:
 
-1. __Where RFC 8628 is built first.__ Recommend ngdpbase, which moves it out of "fernfiles plans one".
+1. ~~Where RFC 8628 is built first.~~ ngdpbase: [ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526) was filed there (Jim, 2026-09-30).
 2. __Second-factor order.__ Recommend passkey first ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)), then email code (ngdpbase's magic link, ported), then TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)), then SMS.
 3. __Passkey-alone sign-in__ allowed at launch of passkeys, or second-factor only at first.
 4. __Sign-in record retention__ and whether denials are recorded with it.
@@ -180,15 +184,15 @@ Asked one at a time, in this order:
 
 ## Sequencing
 
-Each phase is its own issue, linked by blocked-by and never a checklist inside one issue. The ngdpbase phases come first, and each YourPHR phase is blocked by its ngdpbase counterpart.
+Each phase is its own issue, linked by blocked-by and never a checklist inside one issue. The ngdpbase issues sit under the epic [ngdpbase#1522](https://github.com/jwilleke/ngdpbase/issues/1522) with real sub-issue and blocked-by relations. The ngdpbase phases come first, and each YourPHR phase is blocked by its ngdpbase counterpart.
 
 | Phase | Repository | Work | Blocked by |
 |---|---|---|---|
-| A1 | ngdpbase | Credentials table; factor policy ("any one second factor" / "passkey alone"); factors and issuedAt in the provider result | — |
+| A1 | ngdpbase | [ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523) per-provider `auth-factors`; [ngdpbase#1524](https://github.com/jwilleke/ngdpbase/issues/1524) credentials store | — |
 | A2 | ngdpbase | Passkey provider ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)) | A1 |
-| A3 | ngdpbase | Step-up re-authentication | A1 |
-| A4 | ngdpbase | RFC 8628 device authorization | A3 |
-| A5 | ngdpbase | TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)); email code as a factor; SMS transport, off by default | A1 |
+| A3 | ngdpbase | [ngdpbase#1525](https://github.com/jwilleke/ngdpbase/issues/1525) step-up re-authentication; factors and issuedAt in the provider result | A1 |
+| A4 | ngdpbase | [ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526) RFC 8628 device authorization | A3 |
+| A5 | ngdpbase | TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)); [ngdpbase#1527](https://github.com/jwilleke/ngdpbase/issues/1527) email code; [ngdpbase#1528](https://github.com/jwilleke/ngdpbase/issues/1528) SMS, off by default | A1 |
 | Y1 | YourPHR | Port A1: credentials table and migration; `yourphr.auth.factors` becomes the policy | A1 |
 | Y2 | YourPHR | Sign-in record in the access log, with optional new-sign-in email ([#507](https://github.com/jwilleke/yourphr/issues/507)) | — |
 | Y3 | YourPHR | Port passkeys and step-up; re-auth on DB download and secret reveal | Y1, A2, A3 |
