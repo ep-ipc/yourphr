@@ -11,9 +11,10 @@ Reviewed for Jim Willeke on 2026-09-30. The review itself was read-only. __Updat
 
 __Storage model — decided, recorded on [#314](https://github.com/jwilleke/yourphr/issues/314).__
 
-- __Raw device values__ go in a dedicated value store, __`phd-samples.db`__ (PHD = Personal Health Device, HL7's term), its own encrypted file, included in backups: every sample as it arrived, with source, device and timezone offset. This replaces the branch's tables in `spike.db` (M10).
+- __Raw device values__ go in a dedicated value store, __`phd-samples.db`__ (PHD = Personal Health Device, HL7's term), its own encrypted file, included in backups: every sample as it arrived, with source, device and timezone offset. This replaces the branch's tables in the app database (M10).
 - __Daily aggregates__ are written into __`records.db`__ as FHIR R4 Observations marked patient-generated (PGHD): `performer` → Patient, `device` → Device, Provenance for the sending app. They go through `RecordsManager`, the one door for records, so charts, search, provenance, the summary, IPS and full export work unchanged.
 - __Spot readings__ (blood pressure, weight, temperature) go straight in as Observations, as home vitals do today. Only high-frequency data (heart rate, steps, watch SpO₂) is rolled up.
+- __Timestamps__ are RFC 3339 with an explicit offset, or refused (Jim, 2026-09-30). Each sample keeps its original offset alongside its UTC instant.
 - __Weekly and monthly__ views are summed from daily on read, not stored.
 - __Detail on request:__ an aggregate covers a window; drilling in reads that window from `phd-samples.db` (as points, or as an Observation with `valueSampledData`), with its own access-log line.
 - __Late, edited or deleted samples__ re-roll their day and __update__ that day's Observation, so its history shows the change. The rollup is where cross-source de-duplication (M4), local-time day bucketing (M3) and blood-pressure pairing (M1) are solved once.
@@ -210,7 +211,7 @@ I inserted 1,000,000 heart-rate rows at a 5-second cadence (about 58 days) direc
 | `daily-stats` over the whole history | 1.7 s |
 | `metrics` summary | 0.7 s |
 
-Extrapolated, not measured: one year at 5 s ≈ 6.3 M rows ≈ 2.8 GB per person. That volume would land in the shared app database (`spike.db`) next to accounts, sessions and the audit log, and in every backup of it.
+Extrapolated, not measured: one year at 5 s ≈ 6.3 M rows ≈ 2.8 GB per person. That volume would land in the shared app database next to accounts, sessions and the audit log, and in every backup of it.
 
 `seriesPoints` and `seriesDailyStats` load every row in the window into JavaScript before downsampling (`SqliteHealthProvider.ts:277-279, 372-374`). better-sqlite3 is synchronous, so the event loop is blocked for that whole time. There is no rollup table and no retention policy. Real Apple Watch heart-rate cadence is usually much lower at rest, so this is a worst case.
 
@@ -320,7 +321,7 @@ What is not covered:
 5. __Separate vendor systems and aliases.__ HealthKit vs Health Connect coding systems, and numeric stage aliases per vendor.
 6. __Blood pressure.__ Merge components across batches by correlation id (update the existing row), and accept standalone systolic/diastolic Observations.
 7. __Updates and deletes.__ Upsert on `(user_id, identifier_system, external_uuid)` with a version/modified marker, and add a tombstone/delete path for HealthKit deletions and Health Connect changes.
-8. __Timezones.__ Keep each sample's UTC offset / tz, bucket days and nights in the patient's local time, and reject timestamps without an offset.
+8. __Timestamps and timezones.__ Every date-time must be __RFC 3339 with an explicit offset__ (`2026-09-30T07:15:00-04:00` or `…Z`) — what FHIR itself requires of `instant` and of a `dateTime` that carries a time. Anything else is refused with a message, never guessed in the server's timezone (M3). Keep each sample's original offset as well as its UTC instant, and bucket days and nights in the sample's local time.
 9. __De-duplicate cumulative metrics.__ Either apply source priority / overlap handling server-side, or have mobile device apps send vendor-computed aggregates for steps.
 10. __Scale — superseded by the storage decision.__ Raw samples move to `phd-samples.db` and the record gets daily Observations, so the record store stays at thousands of entries a year. Within the value store: downsample in SQL for every mode and default or require a window; the daily rollup into `records.db` replaces the rollup table this item used to suggest.
 11. __FHIR output.__
@@ -351,7 +352,7 @@ What is not covered:
 1. Mobile device apps associated with yourPHR? __Answered:__ separate repositories, permissive licence, not owned or maintained by yourPHR; linked once reviewed. Distribution costs and store review sit with the apps' maintainer.
 2. Ingest credential: agent tokens with a write scope, or a separate type? __Answered:__ an agent-token write scope, revisiting #695's read-only first cut for that one route.
 3. A long-lived credential for background sync? __Proposed, needs Jim's OK:__ a patient consent grant (operator maximum 30 days) with short keys exchanged inside it; only the patient extends. See Decisions.
-4. Samples in `spike.db` or a separate file? __Answered:__ `phd-samples.db`, included in backups; daily aggregates in `records.db`.
+4. Samples in the app database or a separate file? __Answered:__ `phd-samples.db`, included in backups; daily aggregates in `records.db`.
 5. Timezone policy? __Recommended:__ keep each sample's own offset and bucket by it (no per-user settings store exists yet, #709).
 6. "First Patient" acceptable? __Recommended:__ yes for the first cut, stated as a known limit.
 7. Full export? __Recommended:__ daily Observations always (they are records); raw detail as an option.
@@ -376,7 +377,7 @@ What is not covered:
 > 3. __Rebase on main.__ The branch is about 145 commits behind, with conflicts in 8 files. Please drop the QR pairing screen, `/api/auth/companion-session`, and the `/api/secure/access/token` + `/api/secure/sync/discovery` routes; #719 removed those on purpose. CI currently stops at the route-contract check, and the discovery test depends on the machine's hostname.
 > 4. __PR 1: the value store, catalog, rollup and upload API__, behind a `yourphr.health.enabled` flag (off by default), with upload through the signed-in web session only for now. That also covers #314's CSV/JSON/FHIR-file path. It should include:
 >    - __Corrected codes__, plus a test that checks every catalog code against a terminology source. From tx.fhir.org: 248218006, 248219008 and 248218000 don't resolve; 248220008 is "Asleep"; 89129007 (REM) sits in the Awake aliases; 93832-4 is "Sleep duration", not a stage; `sleep` isn't an HL7 observation-category; pulse oximetry is 59408-5. Also keep HealthKit and Health Connect as separate coding systems, with per-vendor numeric sleep stages (Health Connect's 4 = LIGHT).
->    - __The sync fixes, handled in the rollup:__ pair blood-pressure halves across batches and accept standalone systolic/diastolic; propagate updates and deletions; keep each sample's timezone offset and group days and nights by it (reject timestamps without one); and de-duplicate overlapping sources such as iPhone + Watch steps.
+>    - __The sync fixes, handled in the rollup:__ pair blood-pressure halves across batches and accept standalone systolic/diastolic; propagate updates and deletions; require every date-time to be RFC 3339 with an explicit offset (as FHIR's `instant` does), refusing anything else, then keep each sample's offset and group days and nights by it; and de-duplicate overlapping sources such as iPhone + Watch steps.
 >    - __One migration__ with the final schema, input limits (value ranges, string lengths, an anchor cap), and removal of the token `console.log`.
 > 5. __PR 2:__ the Health page and visit summary.
 > 6. __PR 3:__ the MCP read tool.
