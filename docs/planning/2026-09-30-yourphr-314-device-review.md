@@ -1,15 +1,43 @@
 # Review: yourphr#314 wearable / device samples, fork `ep-ipc/yourphr` branch `sat-apple-health-ts`
 
-Reviewed for Jim Willeke on 2026-09-30. This was a read-only review: nothing was posted to GitHub and nobody was contacted.
+Reviewed for Jim Willeke on 2026-09-30. The review itself was read-only. __Updated the same day with Jim's decisions__ ([below](#decisions-jim-2026-09-30); the storage-model part is also recorded on [#314](https://github.com/jwilleke/yourphr/issues/314)). The reply to Scott has not been posted.
 
 - Branch head: `4bc619949` ("docs: add proposal for implementing 314"), 14 commits. Authors are Scott Teglasi / steglasaurous, plus one commit by Parth Kheni (`4ca9c2b91`, the MCP bridge).
 - Merge-base with upstream: `de8f0a92c` (2026-09-14). Upstream `main` is now `20a068eb0` (2026-09-29). __The branch is 145 commits behind__ (13 of those landed after `baf0121`).
 - Diff against the merge-base: 61 files, +8,973 / −66. By area: server src +2,684, server tests +1,066, frontend Health page +4,198, other frontend +324, MCP bridge +210, docs +420, Docker +56.
 - __It does not merge cleanly into main.__ A trial merge has 8 conflicted files: `src/server.ts`, `src/app.ts`, `src/account/index.ts`, `scripts/check-routes.ts`, `scripts/mcp-server.ts`, `scripts/mcp-tests.ts`, `frontend/src/app/app.module.ts`, and `frontend/src/app/pages/settings/settings.component.ts`.
 
+## Decisions (Jim, 2026-09-30)
+
+__Storage model — decided, recorded on [#314](https://github.com/jwilleke/yourphr/issues/314).__
+
+- __Raw device values__ go in a dedicated value store, __`phd-samples.db`__ (PHD = Personal Health Device, HL7's term), its own encrypted file, included in backups: every sample as it arrived, with source, device and timezone offset. This replaces the branch's tables in `spike.db` (M10).
+- __Daily aggregates__ are written into __`records.db`__ as FHIR R4 Observations marked patient-generated (PGHD): `performer` → Patient, `device` → Device, Provenance for the sending app. They go through `RecordsManager`, the one door for records, so charts, search, provenance, the summary, IPS and full export work unchanged.
+- __Spot readings__ (blood pressure, weight, temperature) go straight in as Observations, as home vitals do today. Only high-frequency data (heart rate, steps, watch SpO₂) is rolled up.
+- __Weekly and monthly__ views are summed from daily on read, not stored.
+- __Detail on request:__ an aggregate covers a window; drilling in reads that window from `phd-samples.db` (as points, or as an Observation with `valueSampledData`), with its own access-log line.
+- __Late, edited or deleted samples__ re-roll their day and __update__ that day's Observation, so its history shows the change. The rollup is where cross-source de-duplication (M4), local-time day bucketing (M3) and blood-pressure pairing (M1) are solved once.
+- __Retention__ of raw samples can later be an operator setting; daily Observations are kept.
+- __The FHIR claim, stated precisely:__ R4 fully supports this representation — Observation with `performer`/`device`/Provenance, `SampledData`; HL7's Physical Activity IG models daily summary Observations — but it prescribes no storage. The side store plus rollup is our design. R4 has no standard PGHD tag code; a `meta.tag` for it would be a YourPHR code.
+
+__Also decided:__
+
+- __Companion apps__ live in separate repositories under a permissive licence (MIT or Apache-2.0), not in yourPHR, which avoids the GPL / App Store conflict. yourPHR links to them once reviewed; it does not own or maintain them.
+- __The phone's credential__ is an agent token with a single __write__ scope ("add health samples"), reaching only `POST /api/secure/health/samples` and `GET /api/secure/health/sync-state` at the existing default-deny edge gate. This consciously revisits #695's "read-only first cut" for that one route.
+- __Contribution provenance:__ ask for a light confirmation that the work is contributed under GPLv3 with the employer's agreement (most commits use an `@experiencepoint.com` address; one commit has another author).
+
+__Proposed, needs Jim's OK — the phone's consent and lifetime.__ Jim: "I think we need the patient's consent." Today's rule already enforces it: minting, renewing and revoking an agent token all need the owner's own session (`requireHuman`, `AgentTokensManager`), so a token never extends itself. "Renew on each successful sync" would break that, and is dropped. Instead the __consent__ carries the term, not the token:
+
+1. __The patient grants__ in Settings: what the phone may do (only "add health samples") and for how long, up to an operator maximum (30 days by default). The screen says plainly what is allowed; the grant — who, what, until when — is written to the patient's access log.
+2. __Short keys inside the grant:__ the phone holds a short-lived key (24 h, like agent tokens today) and exchanges it for a fresh one as needed — the OAuth refresh pattern. An exchange __never__ moves the grant's end date.
+3. __Only the patient extends:__ before the grant ends the patient is told (the notification banner, and email when escalation is on). Extending needs their signed-in session — a fresh consent. With no action, syncing stops and the phone says why.
+4. __It ends early__ on revoke, password change, or "sign out everywhere".
+
+A FHIR `Consent` resource could record the grant formally; start with the access-log record and add `Consent` if it should be exportable.
+
 ## Recommendation
 
-__Go ahead with changes, and split it.__ The sample store, catalog and ingest/read API fit yourPHR's manager/provider pattern well and are worth taking. The pairing credential needs a redesign before any of it merges. Today it is a never-expiring, full-account token (admin rights included) that can be traded for a normal browser session. That contradicts #695/#719, and main has already deleted the screen it depends on. The sleep terminology also needs fixing before the first merge, because the wrong codes are persisted.
+__Go ahead with changes, and split it.__ The sample store, catalog and ingest/read API fit yourPHR's manager/provider pattern well and are worth taking, with the storage reshaped per the decisions above (`phd-samples.db` plus daily PGHD Observations in `records.db`). The pairing credential needs a redesign before any of it merges. Today it is a never-expiring, full-account token (admin rights included) that can be traded for a normal browser session. That contradicts #695/#719, and main has already deleted the screen it depends on. The sleep terminology also needs fixing before the first merge, because the wrong codes are persisted.
 
 ## Summary
 
@@ -228,12 +256,12 @@ What is not covered:
 ## Requested changes (for "go ahead with changes")
 
 1. __Rebase on current main.__ Drop the revived QR pairing screen and the Go-era `/api/secure/access/token` + `/api/secure/sync/discovery` routes (removed on purpose in #719). Get CI green, including a hermetic discovery test (inject `hostname`) or dropping discovery for now.
-2. __Replace the full-account device token with a narrowly scoped ingest credential.__ Preferably extend the agent-token model: a single write scope such as `health:write`, allowed only on `POST /api/secure/health/samples` (and `GET /api/secure/health/sync-state`), enforced at the existing default-deny edge gate. It should:
+2. __Replace the full-account device token with a narrowly scoped ingest credential__ — decided: an agent token with one write scope ("add health samples"), allowed only on `POST /api/secure/health/samples` (and `GET /api/secure/health/sync-state`), enforced at the existing default-deny edge gate. It should:
    - never carry admin rights
    - be capped per user
    - have mint/revoke audited
-   - have a bounded TTL, with rotation on use if background sync needs longevity
-   - end on password change / sign-out-everywhere (or document clearly why it doesn't)
+   - live inside a __patient consent grant__ with a patient-chosen term (operator maximum 30 days), short-lived keys exchanged within it, and only the patient able to extend it (see Decisions — proposed)
+   - end on revoke, password change or sign-out-everywhere
    - be __off by default__ behind a config flag
 3. __Remove `/api/auth/companion-session` from this work.__ The "web UI inside the app" companion should get its own issue, as Scott already suggested.
 4. __Fix the terminology__ and add a snapshot test that checks every catalog code against a terminology source:
@@ -246,7 +274,7 @@ What is not covered:
 7. __Updates and deletes.__ Upsert on `(user_id, identifier_system, external_uuid)` with a version/modified marker, and add a tombstone/delete path for HealthKit deletions and Health Connect changes.
 8. __Timezones.__ Keep each sample's UTC offset / tz, bucket days and nights in the patient's local time, and reject timestamps without an offset.
 9. __De-duplicate cumulative metrics.__ Either apply source priority / overlap handling server-side, or have companions send vendor-computed aggregates for steps.
-10. __Scale.__ Downsample in SQL for every mode, default or require a window, and consider a daily rollup table. Decide whether samples belong in a separate database file (see Q4).
+10. __Scale — superseded by the storage decision.__ Raw samples move to `phd-samples.db` and the record gets daily Observations, so the record store stays at thousands of entries a year. Within the value store: downsample in SQL for every mode and default or require a window; the daily rollup into `records.db` replaces the rollup table this item used to suggest.
 11. __FHIR output.__
     - `meta.source` must be a URI, or drop it
     - no `Bundle.total` on `collection`
@@ -260,43 +288,43 @@ What is not covered:
 
 ## Suggested phasing (mergeable pieces)
 
-1. __PR 1: storage and API, session-authenticated only.__
-   - Contents: migration, `SqliteHealthProvider`, `HealthManager`, catalog, `toObservation`, and the `/api/secure/health/*` routes, with requested changes 4–13 applied.
+1. __PR 1: value store, rollup and API, session-authenticated only.__
+   - Contents: `phd-samples.db` (one migration, final schema) behind `SqliteHealthProvider`/`HealthManager`, the catalog, the __daily rollup into `records.db` as PGHD Observations through `RecordsManager`__ (spot readings direct), detail-on-request reads, and the `/api/secure/health/*` routes, with requested changes 4–13 applied.
    - Behind `yourphr.health.enabled` (default off).
    - Ingest works from the web session, which also covers #314's "Manual / CSV / JSON fallback" (upload an Apple Health / Health Connect export or a FHIR Bundle) without any new credential.
 2. __PR 2: read UI.__ The Health page, charts, dashboard tile, and visit summary (reviewed on its own; it's 4 k lines).
 3. __PR 3: MCP bridge.__ The `read_health_metric` tool and the `yourphr://health` resource, plus the `Health` access category. This already rides on agent tokens.
-4. __PR 4: scoped ingest credential.__ A short design note first, aligned with #695 and ngdpbase's agent-token/route-map model, then the implementation and pairing UI inside main's new Settings key screen.
-5. __Separately:__ companion apps in their own repo(s), with a license decision and a distribution plan. The WebView companion goes in its own issue.
+4. __PR 4: scoped ingest credential.__ An agent-token write scope inside a patient consent grant (see Decisions). A short design note first, aligned with #695 and ngdpbase's agent-token/route-map model, then the implementation and the grant UI inside main's Settings key screen.
+5. __Separately:__ companion apps in their own repositories under a permissive licence (decided), with a distribution plan. The WebView companion goes in its own issue.
 6. __Separate small PRs:__ Docker image slimming, and agent-token cleanup on account deletion.
 
-## Open questions for Jim
+## Open questions for Jim — status 2026-09-30
 
-1. Do you want companion mobile apps associated with yourPHR at all? If so: in this repo or separate, under what license, and who maintains them and pays for the developer accounts?
-2. Should the ingest credential extend agent tokens with a first __write__ scope (which revisits #695's "read-only first cut"), or be a separate token type with the same guarantees (scoped, capped, audited, expiring, off by default)?
-3. Background sync wants a long-lived credential. Is a rotating credential (for example, a 30-day TTL renewed on each successful sync) acceptable, given that #719 removed "never expires"?
-4. Should samples live in `spike.db` or in a separate encrypted database file? This affects backup size and the ngdpbase layout.
-5. Timezone policy: a per-user timezone setting, or the per-sample offset?
-6. Is "first Patient" acceptable for the first cut, given one account per household member, or should the account pick its Patient explicitly?
-7. Should "Full export" include the wearable Bundle?
-8. How to model sleep: stage intervals (a codeable value per interval), per-night stage durations (`93829-0` REM, `93830-8` light, `93831-6` deep, `93828-2` awakening), or both?
-9. Is a light confirmation of contribution provenance (corporate email, a second author) worth asking for?
+1. Companion apps associated with yourPHR? __Answered:__ separate repositories, permissive licence, not owned or maintained by yourPHR; linked once reviewed. Distribution costs and store review sit with the apps' maintainer.
+2. Ingest credential: agent tokens with a write scope, or a separate type? __Answered:__ an agent-token write scope, revisiting #695's read-only first cut for that one route.
+3. A long-lived credential for background sync? __Proposed, needs Jim's OK:__ a patient consent grant (operator maximum 30 days) with short keys exchanged inside it; only the patient extends. See Decisions.
+4. Samples in `spike.db` or a separate file? __Answered:__ `phd-samples.db`, included in backups; daily aggregates in `records.db`.
+5. Timezone policy? __Recommended:__ keep each sample's own offset and bucket by it (no per-user settings store exists yet, #709).
+6. "First Patient" acceptable? __Recommended:__ yes for the first cut, stated as a known limit.
+7. Full export? __Recommended:__ daily Observations always (they are records); raw detail as an option.
+8. Sleep model? __Recommended:__ store stage intervals with correct codes in `phd-samples.db`; the rollup writes per-night stage totals (LOINC `93829-0` REM, `93830-8` light, `93831-6` deep, `93828-2` awakening).
+9. Contribution provenance? __Answered:__ yes, a light confirmation of GPLv3 and the employer's agreement.
 
 ## Suggested reply to steglasaurous (draft, NOT posted)
 
-> Hi Scott, thank you for this. It's a lot of careful work, and the proposal doc made it easy to follow. I read through the branch and ran it locally, and I'd like to take it. Here's the direction I'm hoping for:
+> Hi Scott — thank you. This is a lot of careful work, and the proposal made it easy to follow. I read the branch and ran it, and I'd like to take it. Here's the direction, with some decisions already made (the storage part is on #314):
 >
-> __What I'd love to merge first:__ the samples store and API. Keeping wearable data out of the FHIRPath write path in dedicated tables behind `HealthManager`/`SqliteHealthProvider`, and rebuilding Observations on read, is the right call, and it fits how the rest of the server is built. Idempotency on the external id, per-account isolation, the Health access category and the tests are all what I'd want.
+> __Storage.__ Keeping raw wearable data out of the FHIR record store is right — but rather than tables in the app database, the raw samples go in their own encrypted file, `phd-samples.db`, and a daily rollup writes FHIR Observations into `records.db`, marked patient-generated (`performer` = Patient, `device` = Device, Provenance for the app). Spot readings such as blood pressure and weight go straight in as Observations, as home vitals already do. Drilling into a day reads the detail from the value store. The rollup is also where the sync edge cases get solved once: de-duplicating iPhone + Watch steps, bucketing days in the sample's local time, pairing blood-pressure halves that arrive in different batches, and re-rolling a day when samples are edited or deleted.
 >
-> __What I'd like to change before it lands:__
+> __The phone's credential.__ Today the device token acts as the whole account (on an admin account it reaches the admin screens and can delete the account), `companion-session` turns it into a normal session that can mint more tokens, and it defaults to never expiring. On main, #695/#719 went the other way, and removed the QR screen and the `/access/token` + `/sync/discovery` routes on purpose. The direction: an agent token with a single "add health samples" write scope that reaches only `POST /api/secure/health/samples` and sync-state, inside a consent grant the patient gives in Settings for a chosen term (30 days at most by default). The phone exchanges short-lived keys within the grant, but only the patient can extend it. Let's leave `companion-session` and the WebView companion for the separate issue you suggested.
 >
-> - __Pairing credential.__ Right now the device token acts as the whole account (on an admin account it can reach the admin screens and delete the account), `companion-session` can turn it into a normal session that mints more tokens, and it defaults to never expiring. On main, #695/#719 went the other way: tokens are scoped, capped, audited and always expire, and the old QR pairing screen and `/access/token` + `/sync/discovery` routes were removed on purpose. Could we make the phone credential a narrowly scoped one, ideally an agent-token-style key with a single "write health samples" scope that only reaches `POST /api/secure/health/samples` (plus sync-state)? Let's leave `companion-session` and the WebView companion for the separate issue you suggested.
-> - __Sleep codes.__ I checked the catalog against tx.fhir.org. Most of the SNOMED sleep-stage codes don't resolve (248218006, 248219008, 248218000), 248220008 is "Asleep" rather than deep sleep, and 89129007 (REM sleep) is in the Awake aliases. 93832-4 is "Sleep duration" rather than a stage, `sleep` isn't an HL7 observation-category code, and 59408-5 would be the pulse-ox code. Since these get stored, it'd be great to fix them before the first merge, maybe with a small test that checks the catalog codes.
-> - __Sync edge cases:__ blood-pressure halves arriving in different batches (the diastolic gets dropped as a duplicate), updates/deletions from HealthKit and Health Connect, keeping each sample's timezone offset so days and nights bucket locally (a Pacific-time night currently splits in two), steps from iPhone + Watch being summed twice, and Health Connect's numeric sleep stages (4 = LIGHT) colliding with HealthKit's.
+> __Sleep codes.__ Checked against tx.fhir.org: most of the SNOMED sleep-stage codes don't resolve (248218006, 248219008, 248218000), 248220008 is "Asleep" rather than deep sleep, and 89129007 (REM) is in the Awake aliases. 93832-4 is "Sleep duration" rather than a stage, `sleep` isn't an HL7 observation-category code, and 59408-5 is the pulse-ox code. Since these get stored, please fix them first, ideally with a test that checks every catalog code. Health Connect's numeric sleep stages (4 = LIGHT) also collide with HealthKit's.
 >
-> __Could you split it up?__ Roughly: (1) storage + API + catalog behind a `yourphr.health.enabled` flag, with session-authenticated ingest (which also covers the CSV/JSON/FHIR-bundle upload path in #314); (2) the Health page and visit summary; (3) the MCP tool; (4) the scoped phone credential, after a short design note. The Dockerfile/distroless, `angular.json` and header CSS changes would be great as their own PRs, as would the agent-token cleanup on account deletion, which is a nice fix. The branch is about 145 commits behind main now and conflicts in 8 files, so a rebase first would help. CI currently fails at the route-contract step, and the discovery test depends on the machine's hostname.
+> __Could you split it?__ Roughly: (1) `phd-samples.db`, the catalog, the rollup and the API behind a `yourphr.health.enabled` flag, with upload through the web session only — which also covers #314's CSV/JSON/FHIR-file path; (2) the Health page and visit summary; (3) the MCP tool; (4) the scoped phone credential, after a short design note. The Dockerfile, `angular.json` and header-CSS changes would be good as their own PRs, as would the agent-token cleanup on account deletion, which is a nice fix. The branch is about 145 commits behind main with conflicts in 8 files, so a rebase first will help; CI stops at the route-contract step, and the discovery test depends on the machine's hostname.
 >
-> __The apps:__ I couldn't find the iOS/Android source. Is it in another repo? I'd like to understand the license, where the token is stored, whether they use any third-party SDKs or analytics, and whether they talk plain HTTP on the LAN, before we point people at them. I'm happy to talk through how we'd distribute them.
+> __The apps.__ We'd like them in their own repositories under a permissive licence (MIT or Apache-2.0) rather than in yourPHR — that sidesteps the GPL / App Store conflict — and we'll happily link to them. I couldn't find the iOS/Android source; where is it? Before pointing people at them I'd like to understand where the token is stored, any third-party SDKs or analytics, and whether they talk plain HTTP on the LAN.
+>
+> __One small thing:__ most commits come from an `@experiencepoint.com` address and one has another author. Could you confirm the work is contributed under yourPHR's GPLv3, with your employer's agreement?
 >
 > Thanks again. This is the feature I hoped someone would pick up, and you've done most of the hard thinking already.
 
