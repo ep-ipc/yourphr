@@ -1,6 +1,6 @@
 # Review: yourphr#314 wearable / device samples, fork `ep-ipc/yourphr` branch `sat-apple-health-ts`
 
-Reviewed for Jim Willeke on 2026-09-30. The review itself was read-only. __Updated the same day with Jim's decisions__ ([below](#decisions-jim-2026-09-30); the storage-model part is also recorded on [#314](https://github.com/jwilleke/yourphr/issues/314)). The reply to Scott has not been posted.
+Reviewed for Jim Willeke on 2026-09-30. The review itself was read-only. __Updated the same day with Jim's decisions__ ([below](#decisions-jim-2026-09-30); the storage-model part is also recorded on [#314](https://github.com/jwilleke/yourphr/issues/314)). The reply to Scott is posted on the issue, not kept here.
 
 - Branch head: `4bc619949` ("docs: add proposal for implementing 314"), 14 commits. Authors are Scott Teglasi / steglasaurous, plus one commit by Parth Kheni (`4ca9c2b91`, the MCP bridge).
 - Merge-base with upstream: `de8f0a92c` (2026-09-14). Upstream `main` is now `20a068eb0` (2026-09-29). __The branch is 145 commits behind__ (13 of those landed after `baf0121`).
@@ -358,33 +358,6 @@ What is not covered:
 7. Full export? __Recommended:__ daily Observations always (they are records); raw detail as an option.
 8. Sleep model? __Recommended:__ store stage intervals with correct codes in `phd-samples.db`; the rollup writes per-night stage totals (LOINC `93829-0` REM, `93830-8` light, `93831-6` deep, `93828-2` awakening).
 9. Contribution provenance? __Answered:__ yes, a light confirmation of GPLv3 and the employer's agreement.
-
-## Suggested reply to steglasaurous (draft, NOT posted)
-
-> Hi Scott, thank you. This is a lot of careful work, and the proposal made it easy to follow. I read the branch and ran it, and I'd like to take it. Some decisions are already made (recorded on #314); here is the direction, and then what I'd ask you to do.
->
-> __Direction__
->
-> - __Storage:__ raw readings in their own encrypted value store, `phd-samples.db`; a daily rollup writes FHIR Observations into `records.db`, marked patient-generated (`performer` = Patient, `device` = Device, Provenance for the app). Spot readings such as blood pressure and weight go straight in as Observations, as home vitals already do. Drilling into a day reads the detail from the value store.
-> - __One upload API for every device:__ scales and cuffs will follow, so ingest is generic: FHIR Observations are the canonical input to `POST /api/secure/health/samples`, with HealthKit and Health Connect as adapters in front of it through your catalog. MCP stays read-only, for the patient's AI assistant; your `read_health_metric` tool fits there.
-> - __Connected devices get a scoped, consented grant,__ not a full-account token: an agent token with a single "add health samples" scope, inside a consent term the patient chooses (30 days at most by default), extendable only by the patient, and suspended after 14 days without an upload (phones get replaced and sold). A mobile device app pairs through a one-time code the patient gets after consenting (a QR on a computer, or an "Open in app" link on the phone); a device with its own screen uses the standard OAuth device flow (RFC 8628). The full design is in the review note in the repo.
-> - __Mobile device apps__ live in their own repositories under a permissive licence (MIT or Apache-2.0), not in yourPHR. That sidesteps the GPL / App Store conflict, and we'll link to them once reviewed.
->
-> __What I'd ask you to do__
->
-> 1. __Confirm__ the work is contributed under yourPHR's GPLv3 with your employer's agreement. Most commits come from an `@experiencepoint.com` address, and one has another author.
-> 2. __Point me to the mobile device apps' source__, in their own repositories. Before we link to them I'd like to see where the credential is stored, any third-party SDKs or analytics, and whether they use plain HTTP on the LAN.
-> 3. __Rebase on main.__ The branch is about 145 commits behind, with conflicts in 8 files. Please drop the QR pairing screen, `/api/auth/companion-session`, and the `/api/secure/access/token` + `/api/secure/sync/discovery` routes; #719 removed those on purpose. CI currently stops at the route-contract check, and the discovery test depends on the machine's hostname.
-> 4. __PR 1: the value store, catalog, rollup and upload API__, behind a `yourphr.health.enabled` flag (off by default), with upload through the signed-in web session only for now. That also covers #314's CSV/JSON/FHIR-file path. It should include:
->    - __Corrected codes__, plus a test that checks every catalog code against a terminology source. From tx.fhir.org: 248218006, 248219008 and 248218000 don't resolve; 248220008 is "Asleep"; 89129007 (REM) sits in the Awake aliases; 93832-4 is "Sleep duration", not a stage; `sleep` isn't an HL7 observation-category; pulse oximetry is 59408-5. Also keep HealthKit and Health Connect as separate coding systems, with per-vendor numeric sleep stages (Health Connect's 4 = LIGHT).
->    - __The sync fixes, handled in the rollup:__ pair blood-pressure halves across batches and accept standalone systolic/diastolic; propagate updates and deletions; require every date-time to be RFC 3339 with an explicit offset (as FHIR's `instant` does), refusing anything else, then keep each sample's offset and group days and nights by it; and de-duplicate overlapping sources such as iPhone + Watch steps.
->    - __One migration__ with the final schema, input limits (value ranges, string lengths, an anchor cap), and removal of the token `console.log`.
-> 5. __PR 2:__ the Health page and visit summary.
-> 6. __PR 3:__ the MCP read tool.
-> 7. __PR 4: the connected-device grant__, after a short design note we agree on first. It reuses the agent-token machinery, so it maps onto how yourPHR is moving to ngdpbase.
-> 8. __Separate small PRs:__ the Dockerfile/distroless image, the `angular.json` changes, the header CSS, and the agent-token cleanup on account deletion, which is a nice fix on its own.
->
-> I'll review each PR promptly, and I'm happy to talk any of this through, including how the mobile device apps get distributed. Thanks again. This is the feature I hoped someone would pick up, and you've done most of the hard thinking already.
 
 ## What I could not check
 
