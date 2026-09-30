@@ -1,6 +1,6 @@
 # Auth framework — plan and source of truth
 
-> __Status: the source of truth for YourPHR's auth plan__ (Jim, 2026-09-30). It covers both halves: __authentication__ (proving who someone is: sign-in, second factors, device and agent credentials) and __authorization__ (what an identified caller may do). [`authentication-framework.md`](authentication-framework.md) was folded in here and now only points here. Started 2026-08-13; rewritten 2026-09-30 for the TypeScript stack. The Go-era text is in git history.
+> __Status: the source of truth for YourPHR's auth plan__ (Jim, 2026-09-30). It covers both halves: __authentication__ (proving who someone is: sign-in, second factors, device and agent credentials) and __authorization__ (what an identified caller may do). The separate `authentication-framework.md` was folded in here and deleted (2026-09-30). Started 2026-08-13; rewritten 2026-09-30 for the TypeScript stack. The Go-era text is in git history.
 >
 > __Coordinated with ngdpbase.__ ngdpbase is the framework, and YourPHR runs on its model: managers are the only door, providers are bound by configuration, and ported pieces keep ngdpbase's names and config meanings under the `yourphr.` prefix. Every capability below says where it lives today, which repository builds it first, and what flows back. See [Coordination with ngdpbase](#coordination-with-ngdpbase).
 
