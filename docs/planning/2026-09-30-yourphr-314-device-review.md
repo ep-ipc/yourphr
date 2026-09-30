@@ -27,7 +27,7 @@ __Also decided:__
 - __The phone's credential__ is an agent token with a single __write__ scope ("add health samples"), reaching only `POST /api/secure/health/samples` and `GET /api/secure/health/sync-state` at the existing default-deny edge gate. This consciously revisits #695's "read-only first cut" for that one route.
 - __Contribution provenance:__ ask for a light confirmation that the work is contributed under GPLv3 with the employer's agreement (most commits use an `@experiencepoint.com` address; one commit has another author).
 
-__Proposed, needs Jim's OK — the phone's consent and lifetime.__ Jim: "I think we need the patient's consent." Today's rule already enforces it: minting, renewing and revoking an agent token all need the owner's own session (`requireHuman`, `AgentTokensManager`), so a token never extends itself. "Renew on each successful sync" would break that, and is dropped. Instead the __consent__ carries the term, not the token:
+__Decided (Jim, 2026-09-30) — the phone's consent and lifetime.__ Jim: "I think we need the patient's consent." Today's rule already enforces it: minting, renewing and revoking an agent token all need the owner's own session (`requireHuman`, `AgentTokensManager`), so a token never extends itself. "Renew on each successful sync" would break that, and is dropped. Instead the __consent__ carries the term, not the token:
 
 1. __The patient grants__ in Settings: what the phone may do (only "add health samples") and for how long, up to an operator maximum (30 days by default). The screen says plainly what is allowed; the grant — who, what, until when — is written to the patient's access log.
 2. __Short keys inside the grant:__ the phone holds a short-lived key (24 h, like agent tokens today) and exchanges it for a fresh one as needed — the OAuth refresh pattern. An exchange __never__ moves the grant's end date.
@@ -42,7 +42,7 @@ A FHIR `Consent` resource could record the grant formally; start with the access
 - __Personal health device (PHD)__ — the thing that takes the reading: watch, scale, blood-pressure cuff, glucose meter. HL7's term.
 - __Connected device__ — anything holding an upload grant from the patient: a mobile device app, or a scale's own gateway. One grant per connected device; the patient sees and manages the list in Settings.
 
-### Device upload is an HTTP API, not MCP (proposed, 2026-09-30)
+### Device upload is an HTTP API, not MCP (decided, Jim 2026-09-30)
 
 - __MCP is for AI clients reading__ the record — the patient's own AI assistant. yourPHR's MCP bridge is read-only and stays that way; Scott's `read_health_metric` tool belongs there (PR 3).
 - __A connected device uploading readings is data ingest__, so it is an ordinary HTTP API: `POST /api/secure/health/samples`, callable by any mobile device app, scale gateway or script, with no AI in the path.
@@ -51,15 +51,15 @@ A FHIR `Consent` resource could record the grant formally; start with the access
   - __vendor formats are adapters__ in front of it: HealthKit and Health Connect JSON map to the same Observations through Scott's catalog; a scale's own format gets its own adapter;
   - storage (`phd-samples.db`), the daily rollup, consent and audit are shared by every connected device.
 
-### Inactive connected devices are suspended (proposed, 2026-09-30)
+### Inactive connected devices are suspended (decided, Jim 2026-09-30)
 
 Jim's experience: phones and scales get replaced and sold, and the old one keeps its access.
 
-- A connected device with __no successful upload for 14 days__ (operator setting, for example `yourphr.devices.inactive-after-days`) has its grant __suspended__ — not deleted; the readings it sent stay.
+- A connected device with __no successful upload for 14 days__ has its grant __suspended__. The 14 days is a __configuration value read through `ConfigurationManager`__ — `yourphr.devices.inactive-after-days`, default `14`, changed on Admin → Configuration, never set in the environment or deployment yaml (Jim, 2026-09-30) — not deleted; the readings it sent stay.
 - The patient is told, in plain words: *"'Jim's iPhone' hasn't sent anything since 12 Sept, so its access is off. Turn it back on in Settings if that's a mistake."* Turning it back on needs the patient's own session — a fresh consent.
 - __What inactivity cannot catch: a sold device that keeps syncing__, which would put the new owner's readings into the old owner's record. Defences: per-device grants shown with "last data received" so an unexpected source stands out; one-tap revoke per device; the consent term bounding how long a forgotten device runs; and "revoke yourPHR access before selling or resetting" in each mobile device app's own help.
 
-### Setting up and renewing a connected device (proposed, 2026-09-30)
+### Setting up and renewing a connected device (decided, Jim 2026-09-30)
 
 Every path ends in the same thing: a __grant__ — an agent-token write scope ("add health samples") inside a patient consent term (operator maximum 30 days), recorded in the patient's access log, suspended after 14 days without an upload. What differs is how a device reaches it, and that depends on the device.
 
@@ -309,7 +309,7 @@ What is not covered:
    - never carry admin rights
    - be capped per user
    - have mint/revoke audited
-   - live inside a __patient consent grant__ with a patient-chosen term (operator maximum 30 days), short-lived keys exchanged within it, and only the patient able to extend it (see Decisions — proposed)
+   - live inside a __patient consent grant__ with a patient-chosen term (operator maximum 30 days), short-lived keys exchanged within it, and only the patient able to extend it (see Decisions)
    - end on revoke, password change or sign-out-everywhere
    - be __off by default__ behind a config flag
 3. __Remove `/api/auth/companion-session` from this work.__ A mobile device app that wraps the web UI should get its own issue, as Scott already suggested.
@@ -347,16 +347,16 @@ What is not covered:
 5. __Separately:__ mobile device apps in their own repositories under a permissive licence (decided), with a distribution plan. A mobile device app wrapping the web UI goes in its own issue.
 6. __Separate small PRs:__ Docker image slimming, and agent-token cleanup on account deletion.
 
-## Open questions for Jim — status 2026-09-30
+## Open questions for Jim — all answered 2026-09-30
 
 1. Mobile device apps associated with yourPHR? __Answered:__ separate repositories, permissive licence, not owned or maintained by yourPHR; linked once reviewed. Distribution costs and store review sit with the apps' maintainer.
 2. Ingest credential: agent tokens with a write scope, or a separate type? __Answered:__ an agent-token write scope, revisiting #695's read-only first cut for that one route.
-3. A long-lived credential for background sync? __Proposed, needs Jim's OK:__ a patient consent grant (operator maximum 30 days) with short keys exchanged inside it; only the patient extends. See Decisions.
+3. A long-lived credential for background sync? __Answered:__ a patient consent grant (operator maximum 30 days) with short keys exchanged inside it; only the patient extends. See Decisions.
 4. Samples in the app database or a separate file? __Answered:__ `phd-samples.db`, included in backups; daily aggregates in `records.db`.
-5. Timezone policy? __Recommended:__ keep each sample's own offset and bucket by it (no per-user settings store exists yet, #709).
-6. "First Patient" acceptable? __Recommended:__ yes for the first cut, stated as a known limit.
-7. Full export? __Recommended:__ daily Observations always (they are records); raw detail as an option.
-8. Sleep model? __Recommended:__ store stage intervals with correct codes in `phd-samples.db`; the rollup writes per-night stage totals (LOINC `93829-0` REM, `93830-8` light, `93831-6` deep, `93828-2` awakening).
+5. Timezone policy? __Answered__ (by the RFC 3339 decision): keep each sample's own offset and bucket by it (no per-user settings store exists yet, #709).
+6. "First Patient" acceptable? __Answered:__ yes for the first cut, stated as a known limit.
+7. Full export? __Answered:__ daily Observations always (they are records); raw detail as an option.
+8. Sleep model? __Answered:__ store stage intervals with correct codes in `phd-samples.db`; the rollup writes per-night stage totals (LOINC `93829-0` REM, `93830-8` light, `93831-6` deep, `93828-2` awakening).
 9. Contribution provenance? __Answered:__ yes, a light confirmation of GPLv3 and the employer's agreement.
 
 ## What I could not check
