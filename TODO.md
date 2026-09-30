@@ -17,7 +17,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟠 P1
 
-- [#775](https://github.com/jwilleke/yourphr/issues/775) — [CHORE] One markdown module: CommonMark, sanitised before it is stored
 - [#774](https://github.com/jwilleke/yourphr/issues/774) — [BUG] Forms send what the patient types to NLM and Wikipedia, straight from their browser
 - [#784](https://github.com/jwilleke/yourphr/issues/784) — [BUG] Records are keyed without their source — a second provider's record with the same id is refused, and history is shared across people
 - [#782](https://github.com/jwilleke/yourphr/issues/782) — [BUG] A click that cannot complete says nothing — guards wait forever, failures are silent
@@ -32,7 +31,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#641](https://github.com/jwilleke/yourphr/issues/641) — [SPIKE] Ship a minimal working deployment for each of the three targets — bare metal, Docker, k8s
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
 - [#632](https://github.com/jwilleke/yourphr/issues/632) — [FEATURE] In-app help pages — markdown shipped with the code, rendered as HTML
-- [#631](https://github.com/jwilleke/yourphr/issues/631) — [SPIKE] Backups must restore the instance, not just the data
 - [#628](https://github.com/jwilleke/yourphr/issues/628) — [SPIKE] Refuse to boot when a SQLite database resolves onto a network filesystem
 - [#624](https://github.com/jwilleke/yourphr/issues/624) — [SPIKE] Configuration: split the bootstrap flag — it is doing three jobs (raw-env, restart-required, secret)
 - [#436](https://github.com/jwilleke/yourphr/issues/436) — [FEATURE] Support for "Bootstrap" and themas
@@ -88,8 +86,12 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
+- [#798](https://github.com/jwilleke/yourphr/issues/798) — [BUG] Practitioner history and record provenance are read without an access-log line
+- [#775](https://github.com/jwilleke/yourphr/issues/775) — [CHORE] One markdown module: CommonMark, sanitised before it is stored
+- [#796](https://github.com/jwilleke/yourphr/issues/796) — [FEATURE] Keys in the instance's .env, not a SOPS Secret — with the backup key also kept off-cluster
 - [#788](https://github.com/jwilleke/yourphr/issues/788) — [BUG] Scheduled backups are off on the live instance — enable them once the export no longer blocks
 - [#783](https://github.com/jwilleke/yourphr/issues/783) — [BUG] No backup since the cut-over — the schedule was never enabled, and enabling it as-is would freeze the instance nightly
+- [#631](https://github.com/jwilleke/yourphr/issues/631) — [SPIKE] Backups must restore the instance, not just the data
 
 ## ⏸ Deferred
 
@@ -99,4 +101,4 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## ❓ Needs triage
 
-*None.*
+- [#799](https://github.com/jwilleke/yourphr/pull/799) — chore(deps): bump the npm_and_yarn group across 1 directory with 2 updates *(PR · ready)* — no linked issue
