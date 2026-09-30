@@ -58,6 +58,31 @@ Jim's experience: phones and scales get replaced and sold, and the old one keeps
 - The patient is told, in plain words: *"'Jim's iPhone' hasn't sent anything since 12 Sept, so its access is off. Turn it back on in Settings if that's a mistake."* Turning it back on needs the patient's own session — a fresh consent.
 - __What inactivity cannot catch: a sold device that keeps syncing__, which would put the new owner's readings into the old owner's record. Defences: per-device grants shown with "last data received" so an unexpected source stands out; one-tap revoke per device; the consent term bounding how long a forgotten device runs; and "revoke yourPHR access before selling or resetting" in each mobile device app's own help.
 
+### Setting up and renewing a connected device (proposed, 2026-09-30)
+
+Every path ends in the same thing: a __grant__ — an agent-token write scope ("add health samples") inside a patient consent term (operator maximum 30 days), recorded in the patient's access log, suspended after 14 days without an upload. What differs is how a device reaches it, and that depends on the device.
+
+#### Rules for every path
+
+- __A link never grants anything.__ Email links, QR codes and app links only lead to the consent page; the patient signs in there and approves. A link that approved in one click would make the mailbox the key (and #507 already rejected "email me a link" for sign-in).
+- __Emails carry no health data and no token__ — only "a device is asking to add health samples to your record; review it", with a link that expires.
+- __Pairing codes are one-time and short-lived__ (about 10 minutes, single use), exchanged through the API for the grant. The long-lived credential is never shown, printed or put in a QR code (the branch's QR carried the token itself — H1).
+- __The consent page confirms the connection__ ("'Jim's iPhone' connected just now", with Revoke), so an unexpected device shows at once.
+- __Notices go by email and the in-app banner.__ No SMS for now: yourPHR stores no phone numbers and has no SMS transport; SMS could later be another way of sending the same notice.
+
+#### Three kinds of device, three paths
+
+| Device | Examples | Path |
+|---|---|---|
+| __Mobile device app__ (phone, has a camera) | iOS HealthKit / Android Health Connect relays | __Patient-started:__ Settings or an emailed link → sign in → consent (what, how long) → a one-time pairing code shown as a __QR__ on a computer, or an __"Open in app"__ button (app link) when the page is viewed on the phone itself, which cannot scan its own screen → the app exchanges the code for its grant. |
+| __Has its own screen and internet connection__ | Wi-Fi scale with a display, networked cuff | __Device-started — OAuth 2.0 Device Authorization Grant (RFC 8628)__, the "TV sign-in" flow: the device calls `POST /api/device/authorize`, gets a secret device code and a short user code (for example `WDJB-MJHT`) plus a verification address, and displays the code (optionally as a QR of `verification_uri_complete`). yourPHR emails the patient a link; the patient signs in, sees the request with the same code, checks it matches the device, and approves. The device polls (`authorization_pending` / `slow_down` / `expired_token`) and receives its grant. |
+| __No screen, Bluetooth only__ | most inexpensive scales and cuffs | Pairs with the phone; the __mobile device app__ uploads its readings (row 1). The phone is the connected device. |
+| __Talks only to the maker's cloud__ | Withings, Omron, Fitbit accounts | Not the upload API at all: yourPHR __pulls__ from the maker's cloud as a __source__ in the provider catalog, with the ordinary OAuth sign-in used for Epic — the existing Sources model. |
+
+__Renewal__ reuses the patient-started path without pairing: before the term ends yourPHR sends "extend 'Jim's iPhone' for another 30 days?" (email and banner) → sign in → Extend. The device keeps working until the old term ends, so extending early costs nothing; with no action, uploads stop at the end of the term and the device says why.
+
+The QR here is not the screen #719 removed. That one paired an app that did not exist with a never-expiring, full-account token and no consent; this is a one-time pairing code shown after explicit consent.
+
 ## Recommendation
 
 __Go ahead with changes, and split it.__ The sample store, catalog and ingest/read API fit yourPHR's manager/provider pattern well and are worth taking, with the storage reshaped per the decisions above (`phd-samples.db` plus daily PGHD Observations in `records.db`). The pairing credential needs a redesign before any of it merges. Today it is a never-expiring, full-account token (admin rights included) that can be traded for a normal browser session. That contradicts #695/#719, and main has already deleted the screen it depends on. The sleep terminology also needs fixing before the first merge, because the wrong codes are persisted.
@@ -335,23 +360,30 @@ What is not covered:
 
 ## Suggested reply to steglasaurous (draft, NOT posted)
 
-> Hi Scott — thank you. This is a lot of careful work, and the proposal made it easy to follow. I read the branch and ran it, and I'd like to take it. Here's the direction, with some decisions already made (the storage part is on #314):
+> Hi Scott, thank you. This is a lot of careful work, and the proposal made it easy to follow. I read the branch and ran it, and I'd like to take it. Some decisions are already made (recorded on #314); here is the direction, and then what I'd ask you to do.
 >
-> __Storage.__ Keeping raw wearable data out of the FHIR record store is right — but rather than tables in the app database, the raw samples go in their own encrypted file, `phd-samples.db`, and a daily rollup writes FHIR Observations into `records.db`, marked patient-generated (`performer` = Patient, `device` = Device, Provenance for the app). Spot readings such as blood pressure and weight go straight in as Observations, as home vitals already do. Drilling into a day reads the detail from the value store. The rollup is also where the sync edge cases get solved once: de-duplicating iPhone + Watch steps, bucketing days in the sample's local time, pairing blood-pressure halves that arrive in different batches, and re-rolling a day when samples are edited or deleted.
+> __Direction__
 >
-> __The phone's credential.__ Today the device token acts as the whole account (on an admin account it reaches the admin screens and can delete the account), `companion-session` turns it into a normal session that can mint more tokens, and it defaults to never expiring. On main, #695/#719 went the other way, and removed the QR screen and the `/access/token` + `/sync/discovery` routes on purpose. The direction: an agent token with a single "add health samples" write scope that reaches only `POST /api/secure/health/samples` and sync-state, inside a consent grant the patient gives in Settings for a chosen term (30 days at most by default). The phone exchanges short-lived keys within the grant, but only the patient can extend it. Let's leave `companion-session` and the mobile device app that wraps the web UI for the separate issue you suggested.
+> - __Storage:__ raw readings in their own encrypted value store, `phd-samples.db`; a daily rollup writes FHIR Observations into `records.db`, marked patient-generated (`performer` = Patient, `device` = Device, Provenance for the app). Spot readings such as blood pressure and weight go straight in as Observations, as home vitals already do. Drilling into a day reads the detail from the value store.
+> - __One upload API for every device:__ scales and cuffs will follow, so ingest is generic: FHIR Observations are the canonical input to `POST /api/secure/health/samples`, with HealthKit and Health Connect as adapters in front of it through your catalog. MCP stays read-only, for the patient's AI assistant; your `read_health_metric` tool fits there.
+> - __Connected devices get a scoped, consented grant,__ not a full-account token: an agent token with a single "add health samples" scope, inside a consent term the patient chooses (30 days at most by default), extendable only by the patient, and suspended after 14 days without an upload (phones get replaced and sold). A mobile device app pairs through a one-time code the patient gets after consenting (a QR on a computer, or an "Open in app" link on the phone); a device with its own screen uses the standard OAuth device flow (RFC 8628). The full design is in the review note in the repo.
+> - __Mobile device apps__ live in their own repositories under a permissive licence (MIT or Apache-2.0), not in yourPHR. That sidesteps the GPL / App Store conflict, and we'll link to them once reviewed.
 >
-> __Sleep codes.__ Checked against tx.fhir.org: most of the SNOMED sleep-stage codes don't resolve (248218006, 248219008, 248218000), 248220008 is "Asleep" rather than deep sleep, and 89129007 (REM) is in the Awake aliases. 93832-4 is "Sleep duration" rather than a stage, `sleep` isn't an HL7 observation-category code, and 59408-5 is the pulse-ox code. Since these get stored, please fix them first, ideally with a test that checks every catalog code. Health Connect's numeric sleep stages (4 = LIGHT) also collide with HealthKit's.
+> __What I'd ask you to do__
 >
-> __One upload API for every device.__ More device kinds will follow (scales, cuffs), so let's make ingest generic rather than Apple/Google-specific: FHIR Observations as the canonical input to `POST /api/secure/health/samples`, with HealthKit and Health Connect as adapters in front of it through your catalog. MCP stays read-only, for the patient's AI assistant — your `read_health_metric` tool fits there. A connected device that hasn't uploaded for a couple of weeks will have its grant suspended until the patient turns it back on, since phones get replaced and sold.
+> 1. __Confirm__ the work is contributed under yourPHR's GPLv3 with your employer's agreement. Most commits come from an `@experiencepoint.com` address, and one has another author.
+> 2. __Point me to the mobile device apps' source__, in their own repositories. Before we link to them I'd like to see where the credential is stored, any third-party SDKs or analytics, and whether they use plain HTTP on the LAN.
+> 3. __Rebase on main.__ The branch is about 145 commits behind, with conflicts in 8 files. Please drop the QR pairing screen, `/api/auth/companion-session`, and the `/api/secure/access/token` + `/api/secure/sync/discovery` routes; #719 removed those on purpose. CI currently stops at the route-contract check, and the discovery test depends on the machine's hostname.
+> 4. __PR 1: the value store, catalog, rollup and upload API__, behind a `yourphr.health.enabled` flag (off by default), with upload through the signed-in web session only for now. That also covers #314's CSV/JSON/FHIR-file path. It should include:
+>    - __Corrected codes__, plus a test that checks every catalog code against a terminology source. From tx.fhir.org: 248218006, 248219008 and 248218000 don't resolve; 248220008 is "Asleep"; 89129007 (REM) sits in the Awake aliases; 93832-4 is "Sleep duration", not a stage; `sleep` isn't an HL7 observation-category; pulse oximetry is 59408-5. Also keep HealthKit and Health Connect as separate coding systems, with per-vendor numeric sleep stages (Health Connect's 4 = LIGHT).
+>    - __The sync fixes, handled in the rollup:__ pair blood-pressure halves across batches and accept standalone systolic/diastolic; propagate updates and deletions; keep each sample's timezone offset and group days and nights by it (reject timestamps without one); and de-duplicate overlapping sources such as iPhone + Watch steps.
+>    - __One migration__ with the final schema, input limits (value ranges, string lengths, an anchor cap), and removal of the token `console.log`.
+> 5. __PR 2:__ the Health page and visit summary.
+> 6. __PR 3:__ the MCP read tool.
+> 7. __PR 4: the connected-device grant__, after a short design note we agree on first. It reuses the agent-token machinery, so it maps onto how yourPHR is moving to ngdpbase.
+> 8. __Separate small PRs:__ the Dockerfile/distroless image, the `angular.json` changes, the header CSS, and the agent-token cleanup on account deletion, which is a nice fix on its own.
 >
-> __Could you split it?__ Roughly: (1) `phd-samples.db`, the catalog, the rollup and the API behind a `yourphr.health.enabled` flag, with upload through the web session only — which also covers #314's CSV/JSON/FHIR-file path; (2) the Health page and visit summary; (3) the MCP tool; (4) the scoped phone credential, after a short design note. The Dockerfile, `angular.json` and header-CSS changes would be good as their own PRs, as would the agent-token cleanup on account deletion, which is a nice fix. The branch is about 145 commits behind main with conflicts in 8 files, so a rebase first will help; CI stops at the route-contract step, and the discovery test depends on the machine's hostname.
->
-> __The mobile device apps.__ We'd like them in their own repositories under a permissive licence (MIT or Apache-2.0) rather than in yourPHR — that sidesteps the GPL / App Store conflict — and we'll happily link to them. I couldn't find the iOS/Android source; where is it? Before pointing people at them I'd like to understand where the token is stored, any third-party SDKs or analytics, and whether they talk plain HTTP on the LAN.
->
-> __One small thing:__ most commits come from an `@experiencepoint.com` address and one has another author. Could you confirm the work is contributed under yourPHR's GPLv3, with your employer's agreement?
->
-> Thanks again. This is the feature I hoped someone would pick up, and you've done most of the hard thinking already.
+> I'll review each PR promptly, and I'm happy to talk any of this through, including how the mobile device apps get distributed. Thanks again. This is the feature I hoped someone would pick up, and you've done most of the hard thinking already.
 
 ## What I could not check
 
