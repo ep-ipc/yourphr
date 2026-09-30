@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.12.1](https://github.com/jwilleke/yourphr/compare/v3.12.0...v3.12.1) (2026-09-30)
+
+__Three security fixes.__ A provider's sign-in token can no longer be passed on to another website, one household member's record history can no longer be deleted or counted by another, and the browser protections the older version had are back.
+
+### Bug Fixes
+
+- __Your provider's access token stays with your provider__ ([#811](https://github.com/jwilleke/yourphr/issues/811)): when a provider's server redirected a sync to another website, that website received the token that reads your medical record. Now the token is sent only to the provider that issued it, and a redirect from a secure address to an insecure one is refused.
+- __Each person's record history is their own__ ([#812](https://github.com/jwilleke/yourphr/issues/812)): when two people in a household had a record with the same id, such as the same doctor, deleting one person's record, source or account also deleted the other person's history, and each saw the other's change count. History is now kept per person. The first start after upgrading rebuilds the history table once; older history that two people shared, and that cannot be told apart, is kept but no longer shown to either of them.
+- __Browser protections are back__ ([#813](https://github.com/jwilleke/yourphr/issues/813)): the app again tells the browser to refuse outside scripts, refuse being framed by another site, never guess file types, send no referrer, and never cache your records. HSTS stays off until an operator turns on `yourphr.web.hsts.enabled`.
+
 ## [3.12.0](https://github.com/jwilleke/yourphr/compare/v3.11.0...v3.12.0) (2026-09-30)
 
 __Clicking a record opens it again, and what you write is kept safe.__ Since an earlier upgrade, clicking a row in a record table on Explore highlighted it and opened nothing. That is fixed, along with a date the page made up, and several protections for what people write and who reads what.
