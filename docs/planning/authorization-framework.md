@@ -59,7 +59,7 @@ The rule is __ngdpbase first__: a new auth capability is designed and built in n
 | RFC 8628 device authorization ([ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526)) | none (fernfiles plans one) | none; required by [#314](https://github.com/jwilleke/yourphr/issues/314) | __ngdpbase__ | — |
 | Agent tokens | built ([ngdpbase#946](https://github.com/jwilleke/ngdpbase/issues/946), #1108) | ported | ngdpbase (done) | category-scopes idea; write scopes inside a consent grant |
 | Roles and permissions as config | two lists kept in sync by a comment ([ngdpbase#713](https://github.com/jwilleke/ngdpbase/issues/713)) | one list, boot refuses unknown names | YourPHR (done) | yes: the one-list fix |
-| Client permission projection | server-rendered, not needed | needed (SPA) | YourPHR | no — SPA-specific |
+| Current-user endpoint: OIDC UserInfo ([ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529)) | none (server-rendered) | `/api/secure/account/me`, home-grown | __ngdpbase__ | — |
 
 __Consequence for sequencing:__ ngdpbase#448 and #421 stop being `deferred` once YourPHR commits to second factors. Filing the matching YourPHR issues without moving those two would create work with no place to happen.
 
@@ -157,7 +157,7 @@ __Recommendation:__ take ideas and at most its passkey provider. Do not take its
 
 ### Open
 
-- __Client projection.__ The SPA still guesses what the server will allow. Recommend folding the caller's permission list into `/account/me`, so there is one request and no chance of disagreement.
+- ~~__Client projection.__~~ Decided (Jim, 2026-09-30): use the OpenID Connect UserInfo endpoint (OIDC Core 1.0 §5.3), not a home-grown `/account/me`. The caller's permissions go in as a private claim; the list is advisory. Built in [ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529), adopted in [#804](https://github.com/jwilleke/yourphr/issues/804).
 - __Route coverage test.__ A test that walks the registered routes and asserts each one declares a permission or is explicitly public. This makes an unmapped route a build failure rather than a runtime refusal. It is the highest-value single test in the design.
 - __Denials audited?__ Same retention question as the sign-in record. Decide both together.
 - __Subjects other than the caller__ (caregiver or parent acting on another person's records). This changes `can(p)` to `can(p, subject)` and is a redesign, not an addition. Not needed now.
@@ -171,6 +171,7 @@ __Recommendation:__ take ideas and at most its passkey provider. Do not take its
 - 2026-09-30 (Jim): email magic links and codes, and SMS codes, are viable additional sign-in factors.
 - 2026-09-30 (Jim): YourPHR needs RFC 8628 device authorization, from [#314](https://github.com/jwilleke/yourphr/issues/314).
 - 2026-09-30 (Jim): the ngdpbase phases are filed there, under the epic [ngdpbase#1522](https://github.com/jwilleke/ngdpbase/issues/1522). Factor counts are per-provider configuration, and every factor is an `AuthProvider` ([ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)).
+- 2026-09-30 (Jim): "who is this caller" uses the OIDC UserInfo standard ([ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529), [#804](https://github.com/jwilleke/yourphr/issues/804)).
 
 ## Awaiting decision
 
@@ -198,9 +199,10 @@ Each phase is its own issue, linked by blocked-by and never a checklist inside o
 | Y3 | YourPHR | Port passkeys and step-up; re-auth on DB download and secret reveal | Y1, A2, A3 |
 | Y4 | YourPHR | Port RFC 8628; [#314](https://github.com/jwilleke/yourphr/issues/314) PR 4 and agent-token onboarding use it | Y3, A4 |
 | Y5 | YourPHR | Port email code, TOTP, SMS | Y1, A5 |
-| Z1 | YourPHR | Permission projection in `/account/me`; route coverage test | — |
+| Z1 | YourPHR | [#804](https://github.com/jwilleke/yourphr/issues/804) OIDC UserInfo in place of `/api/secure/account/me`, with the permission claim; `IsAdmin()` deleted | [ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529) |
+| Z2 | YourPHR | Route coverage test: every route declares a permission or is explicitly public | — |
 
-Y2 and Z1 depend on nothing in ngdpbase and can start at once.
+Y2 and Z2 depend on nothing in ngdpbase and can start at once.
 
 ## Related
 
