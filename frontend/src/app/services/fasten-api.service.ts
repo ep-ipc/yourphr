@@ -555,6 +555,27 @@ export class FastenApiService {
       .pipe(map((response: ResponseWrapper) => response.data))
   }
 
+  // Connected devices (yourphr#808): the patient's grants. 404 when the instance has them off.
+  getDeviceGrants(): Observable<DeviceGrantPage> {
+    return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/devices`)
+      .pipe(map((response: ResponseWrapper) => response.data as DeviceGrantPage))
+  }
+
+  grantDevice(label: string, days: number, password: string): Observable<{grant: DeviceGrant, setup_code: string}> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/devices`, {label, days, password})
+      .pipe(map((response: ResponseWrapper) => response.data))
+  }
+
+  extendDeviceGrant(id: string, days: number, password: string): Observable<DeviceGrant> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/devices/${encodeURIComponent(id)}/extend`, {days, password})
+      .pipe(map((response: ResponseWrapper) => response.data as DeviceGrant))
+  }
+
+  revokeDeviceGrant(id: string): Observable<{revoked: boolean}> {
+    return this._httpClient.post<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/account/devices/${encodeURIComponent(id)}/revoke`, {})
+      .pipe(map((response: ResponseWrapper) => response.data))
+  }
+
   getInstanceSettings(): Observable<InstanceSettings> {
     return this._httpClient.get<any>(`${GetEndpointAbsolutePath(globalThis.location, environment.fasten_api_endpoint_base)}/secure/admin/instance`)
       .pipe(map((response: ResponseWrapper) => response.data as InstanceSettings));
@@ -1284,6 +1305,26 @@ export interface AgentToken {
 // The list plus the policy the screen must obey: which categories exist, how long a token may
 // live, how many a person may hold. Served together so the UI never hardcodes a number the server
 // enforces.
+export interface DeviceGrant {
+  id: string;
+  label: string;
+  scopes: string[];
+  sourceId: string;
+  createdAt: string;
+  endsAt: string;
+  lastUploadAt: string;
+  status: 'active' | 'suspended' | 'revoked' | 'ended';
+  statusAt: string;
+  claimed: boolean;
+  live: boolean;
+}
+
+export interface DeviceGrantPage {
+  grants: DeviceGrant[];
+  max_days: number;
+  max_per_user: number;
+}
+
 export interface AgentTokenPage {
   tokens: AgentToken[];
   available_scopes: string[];

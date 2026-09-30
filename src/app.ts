@@ -231,6 +231,39 @@ const APP_MIGRATIONS: Migration[] = [
       if (!columns.includes('email')) addColumnWithDefault(db, 'auth_users', 'email', 'TEXT', '');
     },
   },
+  {
+    id: '20260930180000',
+    description: 'connected-device grants (yourphr#808) — device_grants, device_refresh_spent, and agent_tokens.grant_id tying a key to its grant',
+    up: (db) => {
+      // Frozen shapes, as the convention requires; the provider's constructor creates the current ones.
+      db.exec(`CREATE TABLE IF NOT EXISTS device_grants (
+        id TEXT PRIMARY KEY,
+        owner TEXT NOT NULL,
+        label TEXT NOT NULL,
+        scopes TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        ends_at TEXT NOT NULL,
+        owner_generation INTEGER NOT NULL,
+        last_upload_at TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL,
+        status_at TEXT NOT NULL DEFAULT '',
+        status_by TEXT NOT NULL DEFAULT '',
+        setup_hash TEXT NOT NULL DEFAULT '',
+        setup_expires_at TEXT NOT NULL DEFAULT '',
+        refresh_hash TEXT NOT NULL DEFAULT '',
+        noticed_days TEXT NOT NULL DEFAULT ''
+      )`);
+      db.exec(`CREATE TABLE IF NOT EXISTS device_refresh_spent (
+        hash TEXT PRIMARY KEY,
+        grant_id TEXT NOT NULL,
+        spent_at TEXT NOT NULL
+      )`);
+      // agent_tokens exists from 20260828140000. '' = an ordinary agent token, which every existing row is.
+      const columns = (db.pragma('table_info(agent_tokens)') as { name: string }[]).map((c) => c.name);
+      if (!columns.includes('grant_id')) addColumnWithDefault(db, 'agent_tokens', 'grant_id', 'TEXT', '');
+    },
+  },
 ];
 
 /**
@@ -531,9 +564,14 @@ export async function assembleApp(dataDir: string, options: { seeds?: CatalogWri
     (a) => { if (a?.notificationId) appLog.warn(`backup alert raised (${a.kind}): ${a.title}`); },
     (err: Error) => appLog.error(`backup alert check failed: ${err.message}`)
   );
-  const alertTimer = options.workerIntervalMs === undefined ? undefined : setInterval(() => { void checkBackupAlerts(); }, 3_600_000);
+  // Connected devices (yourphr#808): end-of-term reminders, on the same hourly beat.
+  const remindDevices = () => engine.managers.agentTokens.remindEndingDevices().then(
+    (sent) => { if (sent) appLog.info(`devices: sent ${sent} end-of-term reminder(s)`); },
+    (err: Error) => appLog.error(`device reminder check failed: ${err.message}`)
+  );
+  const alertTimer = options.workerIntervalMs === undefined ? undefined : setInterval(() => { void checkBackupAlerts(); void remindDevices(); }, 3_600_000);
   alertTimer?.unref?.();
-  if (alertTimer) void checkBackupAlerts();
+  if (alertTimer) { void checkBackupAlerts(); void remindDevices(); }
 
   const server = createYourPhrServer({
     engine,
