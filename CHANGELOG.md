@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.12.0](https://github.com/jwilleke/yourphr/compare/v3.11.0...v3.12.0) (2026-09-30)
+
+__Clicking a record opens it again, and what you write is kept safe.__ Since an earlier upgrade, clicking a row in a record table on Explore highlighted it and opened nothing. That is fixed, along with a date the page made up, and several protections for what people write and who reads what.
+
+### Bug Fixes
+
+- __Clicking a record in a table opens it__ ([#690](https://github.com/jwilleke/yourphr/issues/690)): a library upgrade had quietly disconnected the click, so no record's detail page could be reached from its list.
+- __"Last Updated" no longer says January 1, 1970__ ([#690](https://github.com/jwilleke/yourphr/issues/690)): with nothing synced yet, the page now says "Not synced yet" instead of inventing a date.
+- __Two more reads are written to your access log__ ([#798](https://github.com/jwilleke/yourphr/issues/798)): opening a practitioner's visit history, and seeing where a record came from, now appear in your access log like every other look at your records.
+
+### Features
+
+- __Written notes are checked before they are saved__ ([#775](https://github.com/jwilleke/yourphr/issues/775)): text people write in markdown is refused, with every problem line named, if it contains web code or links that could run a script. Examples shown in code blocks are still allowed. Markdown is shown the standard way (CommonMark), with any stray web code displayed as plain text rather than run. The Privacy Policy and Terms pages use the same path, so an operator's replacement page can no longer carry live code.
+- __The server refuses to start on a network drive__ ([#628](https://github.com/jwilleke/yourphr/issues/628)): if its databases would sit on an NFS or SMB share, where they can be corrupted, the instance stops with a message saying where and what to change. Backups may still go to a network drive.
+- __AI clients' requests are checked__ ([#657](https://github.com/jwilleke/yourphr/issues/657)): the connector for your own AI client refuses malformed requests before they reach your records, and says what to fix.
+
+### Internal
+
+- A CI check fails when a new way of reading records has no access-log category ([#657](https://github.com/jwilleke/yourphr/issues/657)).
+- New browser journeys: practitioners, the allergies, immunizations and history pages, a record's detail page, and DICOM and PDF documents ([#690](https://github.com/jwilleke/yourphr/issues/690)).
+
 ## [3.11.0](https://github.com/jwilleke/yourphr/compare/v3.10.2...v3.11.0) (2026-09-29)
 
 __A backup now brings your instance back, not just your records.__ Restoring used to return every record and account onto an instance that had forgotten its own settings: no mail, no backup schedule, not even its name. Now the settings come back with the data.
