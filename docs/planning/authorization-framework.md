@@ -1,183 +1,212 @@
-# Authorization framework — planning
+# Auth framework — plan and source of truth
 
-> __Status: planning, not decided.__ Nothing here is built. This records the shape we are converging on, the prior art it draws from, and the questions still open. Started 2026-08-13.
+> __Status: the source of truth for YourPHR's auth plan__ (Jim, 2026-09-30). It covers both halves: __authentication__ (proving who someone is: sign-in, second factors, device and agent credentials) and __authorization__ (what an identified caller may do). [`authentication-framework.md`](authentication-framework.md) was folded in here and now only points here. Started 2026-08-13; rewritten 2026-09-30 for the TypeScript stack. The Go-era text is in git history.
+>
+> __Coordinated with ngdpbase.__ ngdpbase is the framework, and YourPHR runs on its model: managers are the only door, providers are bound by configuration, and ported pieces keep ngdpbase's names and config meanings under the `yourphr.` prefix. Every capability below says where it lives today, which repository builds it first, and what flows back. See [Coordination with ngdpbase](#coordination-with-ngdpbase).
 
 ## Scope
 
-__Authorization only__ — what an already-identified caller is *allowed to do*. Proving *who* someone is belongs to [`authentication-framework.md`](authentication-framework.md), which explicitly deferred this half. This is that thread returning.
+- __In scope:__ sign-in, sessions and revocation, factors (password, passkey, TOTP, email code/link, SMS code), step-up re-authentication, sign-in audit, delegated credentials (agent tokens, connected devices), the RFC 8628 device flow, roles and permissions, and the UI projection of permissions.
+- __Kept apart, deliberately:__ the two halves stay in separate managers. Authentication *reports* who the caller is; authorization *decides*. One "auth manager" that does both decides everything and explains nothing.
+- __Out of scope: per-user data isolation.__ Records are scoped to their owner by the repository (`user_id`), not by a permission. Modelling row ownership as permissions is how RBAC systems turn into query planners.
+- __Out of scope: SMART on FHIR source-connect.__ There YourPHR is an OAuth *client* fetching from Epic or Cerner. Sign-in identity (OIDC) and device authorization (RFC 8628) are the opposite direction. They are named apart from the first commit so nobody wires one into the other.
 
-The trigger was concrete: on the public demo, every write button on the admin screens looks live, and the read-only demo admin learns they are refused by pressing them ([#527](https://github.com/jwilleke/yourphr/issues/527) reported two bugs found exactly that way). The button and the rule that governs it are decided in two different places, in two different languages, with no shared vocabulary between them. That is the problem worth solving; the demo is only where it first became visible.
+## Where we are today (TypeScript stack, v3.12.0)
 
-__Explicitly out of scope: per-user data isolation.__ Repository queries scope records to their owner, and that is a different mechanism from a permission check — it is a `WHERE user_id = ?`, not a yes/no on an action. Modelling row ownership as permissions is how RBAC systems turn into query planners. It stays where it is.
-
-## Where we are today
-
-| Mechanism | Where | Covers |
+| Piece | Where | What it does |
 |---|---|---|
-| `RequireAuth` | `middleware/require_auth.go` | Is there a valid session at all; token generation check ([#508](https://github.com/jwilleke/yourphr/issues/508)) |
-| `handler.IsAdmin(c)` | `handler/auth.go:29`, called from 6 handler files | Admin-only actions — config, database, users, instance, metrics |
-| `requireAdmin(c)` | `handler/provider_catalog.go:55`, called 6 times | The same check, written twice |
-| `RestrictDemoAdmin` | `middleware/demo_admin_guard.go` | Read-only demo admin, default-deny by HTTP method ([#516](https://github.com/jwilleke/yourphr/issues/516)) |
-| `RestrictDemoAccount` | `middleware/demo_guard.go` | Shared demo user ([#496](https://github.com/jwilleke/yourphr/issues/496), [#514](https://github.com/jwilleke/yourphr/issues/514)) |
-| `AuthService.IsAdmin()` | `frontend/src/app/services/auth.service.ts` | The browser's independent guess at what the backend will allow |
-| Repository scoping | `database/gorm_common.go` | Per-user record isolation — out of scope here, listed for completeness |
+| `SessionsManager` | [src/framework/managers/SessionsManager.ts](../../src/framework/managers/SessionsManager.ts) | The one door to sessions. Throttles per account and per IP before verifying ([#509](https://github.com/jwilleke/yourphr/issues/509), [#529](https://github.com/jwilleke/yourphr/issues/529)). Runs every factor in `yourphr.auth.factors` (ALL-OF). One generic refusal ([#104](https://github.com/jwilleke/yourphr/issues/104)). HMAC-signed claims carrying the token generation, so a password change or sign-out-everywhere ends live sessions ([#528](https://github.com/jwilleke/yourphr/issues/528)). Sliding TTL with an absolute cap ([#445](https://github.com/jwilleke/yourphr/issues/445)). |
+| `BaseAuthProvider`, `PasswordAuthProvider` | [src/framework/providers/](../../src/framework/providers/) | A provider returns a *result* (subject, provider, factors, issuedAt, token generation), never a boolean, and never mints a session. Unknown accounts still cost a real verification. Upgrade-on-login rehash. |
+| `UsersManager` | [src/framework/managers/UsersManager.ts](../../src/framework/managers/UsersManager.ts) | Accounts, role, password policy ([#506](https://github.com/jwilleke/yourphr/issues/506)), bootstrap admin ([#504](https://github.com/jwilleke/yourphr/issues/504)), recovery ([#510](https://github.com/jwilleke/yourphr/issues/510)), admin reset ([#511](https://github.com/jwilleke/yourphr/issues/511)), account email ([#792](https://github.com/jwilleke/yourphr/issues/792)). The password hash is a column on `auth_users`. |
+| `PolicyManager` | [src/framework/managers/PolicyManager.ts](../../src/framework/managers/PolicyManager.ts) | Roles and permissions as configuration (`yourphr.auth.roles.definitions`, `yourphr.auth.permissions.definitions`, [#623](https://github.com/jwilleke/yourphr/issues/623)). What a permission *means* is code; a role naming an unknown permission refuses the boot. One list serves both the admin screen and the check. |
+| `ApiContext` | [src/framework/ApiContext.ts](../../src/framework/ApiContext.ts) | Request-scoped caller: `can(permission)`, `require(permission)` (401/403), `canRead(category)` for agent scopes, and `actor` naming who really asked. |
+| Demo-admin guard | server | The `demo-admin` role holds `admin-read` only, and the server refuses every write for that role by default ([#644](https://github.com/jwilleke/yourphr/issues/644), [#514](https://github.com/jwilleke/yourphr/issues/514)). |
+| `AgentTokensManager` | [src/framework/managers/AgentTokensManager.ts](../../src/framework/managers/AgentTokensManager.ts) | Patient-minted credentials for AI clients and scripts ([#695](https://github.com/jwilleke/yourphr/issues/695)), ported from ngdpbase after its #1108 review. Scopes are *access categories*, so a surface that cannot be logged cannot be scoped. Read-only by construction. Minting, renewing and revoking need the owner's session. Renewal re-mints. |
+| `AuditManager` | [src/framework/managers/AuditManager.ts](../../src/framework/managers/AuditManager.ts) | The patient-visible access log ([#614](https://github.com/jwilleke/yourphr/issues/614)). Required capability: a read that cannot be logged fails. It records *reads of records*, not sign-ins. |
+| Mail and notices | `EmailManager`, `NotificationManager` | Outbound mail is live ([#536](https://github.com/jwilleke/yourphr/issues/536)), so email-delivered factors are no longer blocked on infrastructure. |
 
-__25 in-handler admin gate call sites across 7 files, reached through two duplicate helpers.__ Two roles exist: `user` and `admin` (`pkg/constants.go:82`).
+__Not built:__ any second factor; step-up re-authentication; a sign-in record; credentials other than one password per account; the RFC 8628 device flow; write scopes for delegated credentials; the client-side permission projection.
 
-### What today's shape costs
+## ngdpbase today
 
-- __The rule is expressed as "is this person an admin", never as "is this action permitted".__ So there is no way to answer "may this session delete a provider?" without running the request. That is precisely the question the UI needs answered *before* drawing the button, which is why the frontend ended up guessing.
-- __Two helpers already drifted into existence__ for one concept. A third role would need 25 sites revisited, each an independent chance to be wrong.
-- __The demo rules are expressed in a different dimension entirely__ — HTTP method and path prefix, not action. That was the right call under the circumstances (see the [#514](https://github.com/jwilleke/yourphr/issues/514) note below) but it means two separate systems answer overlapping questions, and neither can see the other.
-- __The frontend holds an independent copy of the policy.__ `IsAdmin()` is a guess. When it disagrees with the server, the user meets a refusal they were invited to trigger.
-- __Access tokens carry no scopes at all.__ `models.AccessToken` is `UserID`, `TokenID`, `Name`, `IssuedAt`, `ExpiresAt` — nothing narrows what a token may do, so every token is exactly as powerful as the person who made it. (Not to be confused with the `Scopes` on `ProviderCatalogEntry`: those are SMART scopes we *request from* Epic and Cerner, outbound, and have nothing to do with authorizing callers of our own API.)
+Read 2026-09-30 from [ngdpbase `src/managers/AuthManager.ts`](https://github.com/jwilleke/ngdpbase/blob/master/src/managers/AuthManager.ts) and [`src/providers/BaseAuthProvider.ts`](https://github.com/jwilleke/ngdpbase/blob/master/src/providers/BaseAuthProvider.ts):
 
-## Prior art
+- __AuthManager is a provider chain.__ `registerProvider()` is the one path for built-ins and addons ([ngdpbase#1050](https://github.com/jwilleke/ngdpbase/issues/1050)). First registration wins, so an addon cannot replace `password` with its own `verify()`. There is deliberately no `unregisterProvider()`, because withdrawing a provider does not revoke the sessions it established.
+- __Providers shipped:__ password, magic link, Google OIDC, Cloudflare Access, Authentik bearer, agent token. Each is gated on its own `ngdpbase.auth.<id>.enabled` key and refuses to register when its required config is missing.
+- __Flow plumbing YourPHR lacks:__ `initiate()`, `startFlow()` for redirects, `getFlowRedirect()`, `consumeToken()` as the single-use gate ([ngdpbase#1021](https://github.com/jwilleke/ngdpbase/issues/1021)), `getDeviceState()` binding a link to the browser that asked for it ([ngdpbase#1022](https://github.com/jwilleke/ngdpbase/issues/1022)), `provisionIfNew()` ([ngdpbase#1026](https://github.com/jwilleke/ngdpbase/issues/1026)), and per-user `allowedAuthMethods`.
+- __Magic link__ refuses to register unless `base-url` is set explicitly ([ngdpbase#642](https://github.com/jwilleke/ngdpbase/issues/642)), because a link to localhost leaks the credential.
+- __Factors:__ `ngdpbase.auth.required-factors` is declared, but only one factor is used. MFA state is "deferred to a future issue".
+- __Planned, not built:__ TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)) and passkeys ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)), both open and labelled `deferred`. No RFC 8628 device flow; [ngdpbase `docs/fernfiles.md`](https://github.com/jwilleke/ngdpbase/blob/master/docs/fernfiles.md) notes that fernfiles plans one for agents.
+- __Authorization:__ `UserManager.hasPermission()` → `PolicyEvaluator`, `ACLManager` for per-page ACLs, and the agent-token scope ceiling applied at a second enforcement point (`UserManager.ts:678`).
 
-### `jwilleke/ngdpbase` — `src/context/WikiContext.ts`, `ACLManager`, `UserManager`, `PolicyEvaluator`
+## Coordination with ngdpbase
 
-Ours, and the model this proposal is derived from. The relevant surface:
+The rule is __ngdpbase first__: a new auth capability is designed and built in ngdpbase, then ported. It is built in YourPHR first only when YourPHR has the concrete need and ngdpbase does not. Even then it is written to ngdpbase's contract and offered back (the "what flows the other way" list in [`ngdp-move.md`](ngdp-move.md)). No new Manager or provider is created in either repository without asking first.
 
-- `WikiContext` is __request-scoped__ and carries `userContext` (username, roles, authenticated).
-- `hasRole(...names)` — a cheap roles-array check, no policy consulted.
-- `hasPermission(action)` — the canonical path, delegating to `UserManager.hasPermission` and from there to `PolicyEvaluator`.
-- `canAccess()` — per-page ACLs via `ACLManager`.
-- `_permissionCache: Map<string, Promise<boolean>>` — the same question asked twice in one request is free.
+| Capability | ngdpbase | YourPHR | Builds first | Flows back |
+|---|---|---|---|---|
+| Provider registry (`registerProvider`, first-wins) | built | own `BaseAuthProvider` + `yourphr.auth.providers` | ngdpbase (done) | — YourPHR converges on it |
+| Provider result contract (subject, factors, issuedAt, token generation) | `AuthResult {username, viaToken}` | richer result | YourPHR (done) | yes: `factors` and `issuedAt` are what step-up and "how was this session established" need |
+| Factor policy ("password + any one second factor", "passkey alone") | single factor | ALL-OF list | __ngdpbase__ (new) | — |
+| Credentials table (more than one credential per account) | `allowedAuthMethods` on user | password column | __ngdpbase__ (new; passkeys need it) | — |
+| Passkeys / WebAuthn | [ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448) deferred | none | __ngdpbase__ | — |
+| TOTP | [ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421) deferred | none | __ngdpbase__ | — |
+| Email magic link | built, with device binding and single-use gate | none | ngdpbase (done) | port, as sign-in and as a second-factor code |
+| SMS code | none | none | __ngdpbase__, transport off by default | — |
+| Step-up re-authentication | none | none | __ngdpbase__ | — |
+| Sign-in record | logger lines | none | either; YourPHR's needs patient visibility | the patient-visible shape |
+| RFC 8628 device authorization | none (fernfiles plans one) | none; required by [#314](https://github.com/jwilleke/yourphr/issues/314) | __ngdpbase__ | — |
+| Agent tokens | built ([ngdpbase#946](https://github.com/jwilleke/ngdpbase/issues/946), #1108) | ported | ngdpbase (done) | category-scopes idea; write scopes inside a consent grant |
+| Roles and permissions as config | two lists kept in sync by a comment ([ngdpbase#713](https://github.com/jwilleke/ngdpbase/issues/713)) | one list, boot refuses unknown names | YourPHR (done) | yes: the one-list fix |
+| Client permission projection | server-rendered, not needed | needed (SPA) | YourPHR | no — SPA-specific |
 
-Two details worth carrying over verbatim:
+__Consequence for sequencing:__ ngdpbase#448 and #421 stop being `deferred` once YourPHR commits to second factors. Filing the matching YourPHR issues without moving those two would create work with no place to happen.
 
-- __The agent-token scope ceiling__ (`UserManager.ts:678`). A token scoped `page-read` cannot create pages *even if its owner could*, and the comment there is explicit that this is a __second enforcement point, not a duplicate__ — capability checks reach `UserManager` without ever touching `ACLManager`, so a ceiling in one does not cover the other. Our access tokens need the same, and the lesson is that "where does this check actually run" has to be answered per path, not per intention.
-- __`AuthenticateResult.viaToken` deliberately omits roles__ — authority is resolved live from the user record so no credential holds a snapshot of it. Already noted in the authentication doc; it matters more here.
+## Authentication plan
 
-__One thing not to inherit:__ the permission vocabulary there is inconsistent — `page-create` and `user-read` in some places, `page:read` and `admin:system` in others. Pick one convention and hold it.
+### Invariants (carried forward, still true)
 
-### The structural difference that matters
+- __A provider proves identity and never mints a session.__ Only `SessionsManager` issues session tokens. That is where the throttle, the audit line and `last_login` live.
+- __A failed factor is a failed sign-in.__ A provider never falls through to another. "Any one of" is a policy the manager evaluates over *enrolled* factors, not a loop that tries providers until one says yes.
+- __Delegated credentials carry scopes, never roles.__ Authority is resolved live from the account, so no credential holds a snapshot of it (ngdpbase's `ViaToken`).
+- __Links never grant anything on their own.__ A link opens a page; the grant needs the signed-in patient to act on that page (the [#314](https://github.com/jwilleke/yourphr/issues/314) rule).
 
-__ngdpbase renders on the server.__ `WikiContext` is request-scoped, and the template asks `hasPermission('page:edit')` *while drawing the button*. Rendering and enforcement are the same process reading the same object, so they cannot disagree.
+### Factors
 
-__YourPHR is an Angular SPA against a JSON API.__ The button is drawn in the browser; enforcement is in Go; a network sits between. The single context therefore splits into two:
+| Factor | Assurance | Position | Notes |
+|---|---|---|---|
+| Password | memorised secret | exists | Policy is [#506](https://github.com/jwilleke/yourphr/issues/506). Never validated at sign-in. |
+| __Passkey (WebAuthn)__ | phishing-resistant; with `userVerification: required` it is multi-factor by itself (device + PIN/biometric) | __viable alone__, or as the strongest second factor | Needs HTTPS and a stable RP ID (the instance's `base-url` host). Changing the host orphans every passkey, so the RP ID is set once and shown to the operator. Always keep a recovery path (a second passkey, or password + another factor). |
+| TOTP | possession | second factor | Offline, no transport, no cost to a self-hoster. |
+| Email code or magic link | weak possession (NIST SP 800-63B does not accept email for out-of-band) | second factor, or sign-in on instances that choose it | Viable (Jim, 2026-09-30). Mail is live. Needs ngdpbase's device binding and single-use gate, plus activescott/auth's POST confirm step so mail scanners that prefetch links cannot burn them. |
+| SMS code | restricted (NIST SP 800-63B: SIM swap, interception) | second factor only, off by default | Viable (Jim, 2026-09-30). Operator-configured transport; never the only factor for an admin; excluded from the demo. SMS is __not__ used for notices ([#314](https://github.com/jwilleke/yourphr/issues/314) decision). |
+| OIDC identity (Google etc.) | depends on the IdP | later | ngdpbase has it. Named `oidc-*`, never confused with SMART source-connect. |
 
-| | Server | Client |
-|---|---|---|
-| Scope | Request | Session |
-| Authority | __The decision__ | A projection of it |
-| Governs | Whether the handler runs | What gets drawn |
-| If they disagree | Server wins, always | User meets a refusal — a cosmetic bug |
+__The policy shape this needs.__ Today's `yourphr.auth.factors` is ALL-OF (`password AND totp`). The target is:
 
-They stay honest by speaking the __same permission strings__, named once in Go and shipped to the UI. That is the whole contract, and it is what today's `IsAdmin()` guess lacks.
+- `password` + __any one__ enrolled second factor, from an instance-allowed list; or
+- `passkey` alone.
 
-## Proposed shape
+An admin account requires a second factor once any are enabled. An account with no second factor enrolled signs in with a password alone until the instance requires enrolment. This is the "factor policy" row above. It is built in ngdpbase's `AuthManager` (whose `required-factors` is the same key with the same gap) and replaces the ALL-OF list on both sides.
 
-```go
-// Permission is an action, not a role. Named once, here.
-type Permission string
+### Credentials table
 
-const (
-    PermissionConfigRead        Permission = "config:read"
-    PermissionConfigWrite       Permission = "config:write"
-    PermissionConfigRevealSecret Permission = "config:reveal-secret"
-    PermissionUserList          Permission = "user:list"
-    PermissionUserResetPassword Permission = "user:reset-password"
-    PermissionProviderCatalogDelete Permission = "provider-catalog:delete"
-    PermissionDatabaseBackup    Permission = "database:backup"
-    PermissionDatabaseBrowse    Permission = "database:browse"
-)
+Passkeys need more than one credential per account (a phone and a laptop), and so does "password plus TOTP". The password column on `auth_users` cannot hold that. The shape carried from the earlier authentication doc, which activescott/auth's `IdentityStore` validates:
 
-// AuthContext is request-scoped, computed once by middleware, and carried on the gin.Context —
-// the WikiContext analogue. Never serialised into a token.
-type AuthContext struct {
-    Username    string
-    Role        pkg.UserRole
-    Permissions map[Permission]bool // resolved, not re-derived per question
-    ViaToken    *TokenGrant         // when the caller is an access token; scopes CEIL the set above
-}
-
-func (a *AuthContext) Can(p Permission) bool
+```text
+credentials
+  id            text      -- uuid
+  username      text      -> auth_users.username
+  kind          text      -- password | passkey | totp | email | sms
+  subject       text      -- credential id, phone number, address
+  secret        text      -- hash, public key, TOTP seed (encrypted), or empty
+  label         text      -- "Jim's iPhone"
+  created_at    text      -- RFC 3339 with offset
+  last_used_at  text
+  UNIQUE (kind, subject)
 ```
 
-Routes declare what they require, rather than each handler asking:
+Migration: one `password` row per account from `auth_users.password_hash`. The column is dropped a release later. Built in ngdpbase first, where `allowedAuthMethods` is its present equivalent.
 
-```go
-secure.DELETE("/admin/provider-catalog/:id", middleware.Require(PermissionProviderCatalogDelete), handler.DeleteProviderCatalogEntry)
-```
+### Step-up re-authentication
 
-### The invariant that matters
+Downloading the database, revealing a secret, changing the password or email, adding or removing a credential, and approving a device all require a __fresh__ factor: one satisfied within `yourphr.auth.reauth.max-age-seconds`. That needs the session to carry which factors were satisfied and when. The provider result already reports both, and they go into the session claims. A passkey prompt is the natural step-up.
 
-__The client's permission set is advisory. It decides what to draw and nothing else.__
+### Sign-in record
 
-Anyone can edit it from the browser console, so a UI that "checks permission before calling the API" has performed a suggestion, not a control. Every request is evaluated independently, server-side, from the user record — the same rule the demo guard follows today, where a disabled button is decoration and the middleware is the control. Getting this backwards converts a UI improvement into an authentication bypass on a product holding medical records.
+Part of [#507](https://github.com/jwilleke/yourphr/issues/507). Every sign-in, failed sign-in, credential change and device approval is recorded and __visible to the patient__, beside the access log. It is not a new manager: `AuditManager` gains an account-event kind. There is an optional "new sign-in" email through `NotificationManager`. Retention is decided before it ships (IPs were kept out of [#512](https://github.com/jwilleke/yourphr/issues/512) for the same reason).
 
-### Default-deny survives the migration
+### RFC 8628 device authorization
 
-[#514](https://github.com/jwilleke/yourphr/issues/514) is the reason this is non-negotiable. The demo guard was originally written by naming the dangerous routes; it missed two — change password and delete account — and any visitor could lock every user out of the public demo permanently. The replacement inverted the direction, and that inversion must survive: __a route with no declared permission is refused, not allowed.__ Not logged, not warned — refused. A framework that fails open is worse than the 25 scattered checks, because it looks organised while being wrong.
+Required by [#314](https://github.com/jwilleke/yourphr/issues/314) (Jim, 2026-09-30): scales and devices with a screen but no keyboard. Build it once, as a shared capability serving three callers:
 
-### Where the demo rules land
+1. __Connected devices__ ([#314](https://github.com/jwilleke/yourphr/issues/314)): the device shows a short user code and a URL/QR. The patient signs in on their phone, sees what the device is asking for, and approves.
+2. __AI and MCP clients__ ([#657](https://github.com/jwilleke/yourphr/issues/657)): obtain an agent token without the patient copying a secret between windows.
+3. __Command-line tools.__
 
-`RestrictDemoAdmin` becomes a permission set — the demo admin resolves to reads only — rather than a method-and-prefix filter. Two constraints on doing that:
+Rules:
 
-- It does not move until parity is proven route by route, and the existing guard stays in place until then. The method filter is coarse but it is *currently correct*, which is worth more than elegance.
-- Even afterwards, the group-level default-deny stays. Belt and braces is the appropriate posture for a public host running an admin API.
+- The approval page runs step-up; a passkey prompt makes the approval phishing-resistant.
+- The grant is an agent-token-style credential with scopes that are a ceiling, never roles.
+- User codes are short-lived and single-use, and polling is rate-limited per RFC 8628 §3.5 (`slow_down`).
+- A write scope, needed only for [#314](https://github.com/jwilleke/yourphr/issues/314), sits inside a patient consent grant: term of 30 days or less, short-lived keys, and only the patient extends it.
+- A device with no upload for `yourphr.devices.inactive-after-days` (default 14) is suspended.
 
-## Traps specific to this codebase
+Built in ngdpbase first, beside `AgentTokenManager`, then ported. [#314](https://github.com/jwilleke/yourphr/issues/314)'s PR 4 is blocked by it.
 
-- __Do not put permissions in the JWT.__ They would go stale the moment a role changed, and a demoted admin would keep their buttons — and their access — until the token expired. Resolve live per request; `token_generation` ([#508](https://github.com/jwilleke/yourphr/issues/508)) already forces a client to re-fetch when authority changes.
-- __The migration must not silently widen.__ Every mapping starts from what the route does *today*. A route that is admin-only now maps to an admin permission now, even where a narrower one looks obviously right — narrowing is a second, separate change with its own test.
-- __Row-level isolation is not RBAC.__ `WHERE user_id = ?` stays in the repository. `user:read-records` as a permission would be a permission that is always true and explains nothing.
-- __Two enforcement points already exist and will multiply.__ ngdpbase learned this the hard way (`UserManager.ts:678`): a ceiling applied on the resource path did not cover the capability path. Enumerate the paths a request can take to reach a handler *before* deciding where the check goes.
-- __The frontend's `IsAdmin()` must be deleted, not left alongside.__ Two sources of truth for the same question is the bug we are fixing; leaving the old one in place ships the bug with extra steps.
+### activescott/auth
 
-## Settled so far
+[activescott/auth](https://github.com/activescott/auth) (MIT, v5.7.0) is passwordless-only and in production at fernfiles.com. It has passkeys, email and SMS codes, magic links, identity linking, and separate identity, user and challenge stores.
 
-- Permissions are actions, named `resource:action`, one convention, defined once in Go.
-- The server-side context is request-scoped and authoritative; the client's copy is session-scoped and advisory.
-- Unmapped route means refused.
-- __If__ access tokens gain scopes, those scopes are a __ceiling__ on the owner's permissions, never a grant. (They have none today — see the open question, since introducing them has a migration problem of its own.)
-- Per-user data isolation stays in the repository layer and is not modelled as permissions.
-- The existing demo guards stay until per-route parity is demonstrated.
+__Recommendation:__ take ideas and at most its passkey provider. Do not take its JWT session layer. `SessionsManager` already owns sessions with revocation that works, and two session systems is the bug the managers exist to prevent. For WebAuthn itself, the choice is between `@activescott/auth-provider-passkey` and `@simplewebauthn/server`. That choice is made in [ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448), not here.
 
-## Open questions
+## Authorization plan
 
-- __Where does the client fetch its projection?__ Fold it into `GET /api/secure/account/me`, or a dedicated endpoint? `/me` means one fewer request and no chance of the two disagreeing; a dedicated endpoint is easier to cache and to reason about.
-- __Do permissions attach to roles, or directly to users?__ Two roles today, and a family instance may eventually want "my daughter can see her own records but not manage sources". Role-only is simpler and probably right until a third role actually exists.
-- __Does a permission carry a reason string for the UI?__ `provider-catalog:delete` denied → "disabled in the public demo" is much better copy than a generic refusal, but it puts presentation text in the policy layer.
-- __How is this tested so the table cannot drift from the routes?__ A test that walks the registered routes and asserts each declares a permission would make an unmapped route a build failure rather than a runtime refusal. Probably the highest-value single test in the whole design.
+### Settled
 
-- __Is the role-to-permission mapping configuration, or is it compiled in?__ This one collides with a standing rule of this project — variables belong in the configuration system, never hardcoded ([#472](https://github.com/jwilleke/yourphr/issues/472)) — and it is not obvious the rule should win here. Configurable means an operator can build a caregiver role without a release, which is genuinely valuable for a product meant to be self-hosted by families. It also means a typo in a config store silently widens access to medical records, that support questions become unanswerable without seeing the instance's own table, and that the mapping is no longer covered by our tests. A middle position exists: permissions and their meanings are compiled, while the *assignment* of permissions to roles is configuration with a shipped default and a startup validation pass that refuses to boot on an unknown permission name. Worth deciding explicitly rather than by habit.
+- Permissions are actions, named `resource-action` (ngdpbase's convention; `admin-read`, `user-edit`). What a permission means is code; which role holds it is configuration. An unknown name refuses the boot.
+- The server context (`ApiContext`) is request-scoped and authoritative. Any client copy is session-scoped and advisory: it decides what to draw and nothing else.
+- Default deny: a route with no declared permission is refused ([#514](https://github.com/jwilleke/yourphr/issues/514)).
+- Delegated scopes are a __ceiling__ on the owner, never a grant. Agent-token scopes are access categories.
+- Per-user isolation stays in the repository layer.
+- No permissions in session tokens; they are resolved live per request, and the token generation forces a refresh when authority changes.
+- No wildcards. A role that needs everything lists everything, so a diff shows what changed.
 
-- __What happens to an open browser session when its authority changes?__ The projection is fetched once. Demote an admin and their UI keeps the admin buttons until something refetches — every click then fails against a server that is correctly refusing. The server side is safe either way; the question is purely how bad the UI is allowed to look. Options: accept the staleness and let the refusals explain themselves, refetch on navigation, or reuse `token_generation` ([#508](https://github.com/jwilleke/yourphr/issues/508)) so an authority change invalidates the session outright and forces a clean re-entry.
+### Open
 
-- __Do access tokens get scopes, and what happens to the ones that already exist?__ The ceiling described above assumes a field that does not exist yet, so this is a feature, not an intersection. The migration has two options and both are bad in different directions: default existing tokens to *all* the owner's permissions, which is a silent grant that quietly matches today's behaviour, or default them to nothing, which is correct and breaks every token in the field with no warning. A third path — treat scope-less tokens as legacy, log every use, and refuse to mint new ones without scopes — costs more code and is probably the honest answer.
+- __Client projection.__ The SPA still guesses what the server will allow. Recommend folding the caller's permission list into `/account/me`, so there is one request and no chance of disagreement.
+- __Route coverage test.__ A test that walks the registered routes and asserts each one declares a permission or is explicitly public. This makes an unmapped route a build failure rather than a runtime refusal. It is the highest-value single test in the design.
+- __Denials audited?__ Same retention question as the sign-in record. Decide both together.
+- __Subjects other than the caller__ (caregiver or parent acting on another person's records). This changes `can(p)` to `can(p, subject)` and is a redesign, not an addition. Not needed now.
+- __Write scopes__ for delegated credentials: [#314](https://github.com/jwilleke/yourphr/issues/314) only, inside a consent grant (see RFC 8628 above). The rule "only listed GETs have a category" needs a matching write vocabulary.
+- __CLI.__ `reset-password` and friends bypass HTTP ([#510](https://github.com/jwilleke/yourphr/issues/510)). Shell access is already total authority. Record that as the stated position.
 
-- __Are denials audited?__ On a product holding medical records, "someone tried to do something they were not allowed to do" is exactly the event worth keeping. Sign-in audit was already deferred once in [#507](https://github.com/jwilleke/yourphr/issues/507). But an audit log is itself PHI-adjacent and needs a retention decision, which is the same reasoning that kept IP addresses out of [#512](https://github.com/jwilleke/yourphr/issues/512). Do not add a log without deciding how long it lives and who can read it.
+## Decisions log
 
-- __Does a refusal name the permission it wanted?__ `{"code":"forbidden","permission":"provider-catalog:delete"}` is enormously better for debugging and for writing precise UI copy. It also tells an attacker the shape of the permission model — mild disclosure, and arguably irrelevant given the vocabulary will be in a public repository. Leaning toward including it, but state the reasoning rather than defaulting.
+- 2026-08-12: "webconnect" meant WebAuthn / passkeys. Password policy is configuration, enforced server-side, never at sign-in.
+- 2026-09-30 (Jim): this document is the single source of truth for the auth plan, and the work is coordinated with ngdpbase.
+- 2026-09-30 (Jim): email magic links and codes, and SMS codes, are viable additional sign-in factors.
+- 2026-09-30 (Jim): YourPHR needs RFC 8628 device authorization, from [#314](https://github.com/jwilleke/yourphr/issues/314).
 
-- __Are wildcards allowed?__ `admin:*` is convenient and is how these systems usually acquire their first accidental over-grant, because the wildcard silently absorbs every permission added afterwards — which is precisely the failure mode of [#514](https://github.com/jwilleke/yourphr/issues/514) in a new costume. Recommend no wildcards, and if a role really does need everything, generate the full explicit list so a diff shows what changed.
+## Awaiting decision
 
-- __Does `admin` survive as a role, or become a bundle of permissions?__ Keeping it means two concepts (roles and permissions) where one might do. Dropping it means touching `models.User.Role`, the bootstrap admin provisioning, the reserved-name rules, and the demo admin — a much larger blast radius than phases 1–3, and probably a later phase of its own if it happens at all.
+Asked one at a time, in this order:
 
-- __Can a permission ever have a subject other than the caller?__ Today every question is "may *I* do X". A caregiver or parent acting on another person's records asks "may I do X *to Y's data*", which changes the signature from `Can(p)` to `Can(p, subject)` and pulls row ownership back into a design that deliberately excludes it. Not needed now. Worth knowing that answering "yes" later is a redesign, not an addition.
-
-- __Does the CLI need any of this?__ `fasten reset-password` and friends bypass HTTP entirely, so no middleware sees them and no permission is consulted. That is arguably correct — shell access to the host is already total authority, and the command exists precisely for when nobody can sign in ([#510](https://github.com/jwilleke/yourphr/issues/510)). But it should be a stated position rather than an accident of where the code lives, because the next CLI command might not be so obviously fine.
+1. __Where RFC 8628 is built first.__ Recommend ngdpbase, which moves it out of "fernfiles plans one".
+2. __Second-factor order.__ Recommend passkey first ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)), then email code (ngdpbase's magic link, ported), then TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)), then SMS.
+3. __Passkey-alone sign-in__ allowed at launch of passkeys, or second-factor only at first.
+4. __Sign-in record retention__ and whether denials are recorded with it.
+5. __Un-defer ngdpbase#448 and #421__ once 2 is decided.
 
 ## Sequencing
 
-Each phase is its own issue, linked with blocked-by — not a checklist inside one issue.
+Each phase is its own issue, linked by blocked-by and never a checklist inside one issue. The ngdpbase phases come first, and each YourPHR phase is blocked by its ngdpbase counterpart.
 
-1. __Permission vocabulary and table in Go.__ No behaviour change; nothing consumes it yet. Deliverable is the named set plus the role-to-permission mapping that reproduces today's rules exactly.
-2. __Request-scoped `AuthContext` and `Require(...)` middleware__, with the route-coverage test from the open questions above. Still no behaviour change: mappings reproduce current gates.
-3. __Retire the 25 call sites__ and both duplicate helpers, route by route, one PR per handler file so a regression is bisectable.
-4. __Publish the projection__ to the client and consume it in the frontend; delete `AuthService.IsAdmin()`.
-5. __Fold the demo rules into permissions__, keeping the group-level default-deny.
-6. __Access-token scopes__ — introducing the field, deciding what existing tokens inherit, and applying the ceiling. Last because it is the only phase that is a new feature rather than a consolidation, and the only one that can break a credential someone is already using.
+| Phase | Repository | Work | Blocked by |
+|---|---|---|---|
+| A1 | ngdpbase | Credentials table; factor policy ("any one second factor" / "passkey alone"); factors and issuedAt in the provider result | — |
+| A2 | ngdpbase | Passkey provider ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)) | A1 |
+| A3 | ngdpbase | Step-up re-authentication | A1 |
+| A4 | ngdpbase | RFC 8628 device authorization | A3 |
+| A5 | ngdpbase | TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)); email code as a factor; SMS transport, off by default | A1 |
+| Y1 | YourPHR | Port A1: credentials table and migration; `yourphr.auth.factors` becomes the policy | A1 |
+| Y2 | YourPHR | Sign-in record in the access log, with optional new-sign-in email ([#507](https://github.com/jwilleke/yourphr/issues/507)) | — |
+| Y3 | YourPHR | Port passkeys and step-up; re-auth on DB download and secret reveal | Y1, A2, A3 |
+| Y4 | YourPHR | Port RFC 8628; [#314](https://github.com/jwilleke/yourphr/issues/314) PR 4 and agent-token onboarding use it | Y3, A4 |
+| Y5 | YourPHR | Port email code, TOTP, SMS | Y1, A5 |
+| Z1 | YourPHR | Permission projection in `/account/me`; route coverage test | — |
 
-__Not blocked by any of this:__ disabling the demo's dead admin buttons using the `demo.admin.session` flag that already exists. It is about an hour of work, and phase 4 deletes it. Shipping the interim fix is not wasted effort — it is the thing that stops the demo teaching visitors that the app is broken while the framework gets built.
+Y2 and Z1 depend on nothing in ngdpbase and can start at once.
 
 ## Related
 
-- [`authentication-framework.md`](authentication-framework.md) — the other half; explicitly deferred authorization to here
-- [#527](https://github.com/jwilleke/yourphr/issues/527) — the reporting bugs that surfaced this
-- [#516](https://github.com/jwilleke/yourphr/issues/516) — read-only demo admin, the current default-deny guard
-- [#514](https://github.com/jwilleke/yourphr/issues/514) — why default-deny is not negotiable
-- [#508](https://github.com/jwilleke/yourphr/issues/508) — `token_generation`, the mechanism for forcing a permission re-fetch
-- `jwilleke/ngdpbase`: `src/context/WikiContext.ts`, `src/managers/UserManager.ts`, `src/managers/ACLManager.ts`
+- [#507](https://github.com/jwilleke/yourphr/issues/507) — authentication policy survey (MFA, re-auth, sign-in audit)
+- [#314](https://github.com/jwilleke/yourphr/issues/314) — connected devices; needs RFC 8628 and write scopes. [Review](2026-09-30-yourphr-314-device-review.md)
+- [#657](https://github.com/jwilleke/yourphr/issues/657) — MCP server; agent-token onboarding
+- [#695](https://github.com/jwilleke/yourphr/issues/695) — agent tokens
+- [#508](https://github.com/jwilleke/yourphr/issues/508), [#528](https://github.com/jwilleke/yourphr/issues/528) — token generation and revocation
+- [#514](https://github.com/jwilleke/yourphr/issues/514), [#644](https://github.com/jwilleke/yourphr/issues/644) — default deny; the read-only demo admin
+- [#623](https://github.com/jwilleke/yourphr/issues/623) — roles and permissions as configuration
+- ngdpbase: [AuthManager](https://github.com/jwilleke/ngdpbase/blob/master/src/managers/AuthManager.ts), [#448 passkeys](https://github.com/jwilleke/ngdpbase/issues/448), [#421 TOTP](https://github.com/jwilleke/ngdpbase/issues/421), [#946 agent tokens](https://github.com/jwilleke/ngdpbase/issues/946)
+- [activescott/auth](https://github.com/activescott/auth)
+- NIST SP 800-63B; RFC 8628; WebAuthn Level 3
