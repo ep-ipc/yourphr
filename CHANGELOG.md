@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.15.0](https://github.com/jwilleke/yourphr/compare/v3.14.0...v3.15.0) (2026-10-01)
+
+__The admin home says what needs attention.__ Problems an administrator has to act on now appear first on the admin home, each with a button to the screen where it is fixed. The database's health is checked every day without slowing anyone down.
+
+### Features
+
+- __Notifications on the admin home__ ([#854](https://github.com/jwilleke/yourphr/issues/854)): the admin home opens with every notification, newest first, each with a button such as "Go to Admin → Database". It covers an out-of-date search index, backup problems, maintenance mode, and the results of background work. A notice goes away when its problem is fixed. "Dismiss all" hides notices only for you. The banner on every page carries the same links, and a member is never offered an admin screen.
+- __A real database health check__ ([#856](https://github.com/jwilleke/yourphr/issues/856)): the integrity check of your records now runs shortly after the server starts and then once a day, in the background, so nobody waits for it. Admin → Database shows Passed or FAILED and when it ran, instead of a permanent "Not checked". A failure notifies the administrators.
+
+### Bug Fixes
+
+- __The search index row says where things stand__ ([#855](https://github.com/jwilleke/yourphr/issues/855)): "Search index out of date — rebuild needed", "Rebuilding (account 1 of 2)", then "Up to date", with when it was last rebuilt and by whom. All of it is in readable text, not small grey print.
+
+### Internal
+
+- Long-running work (the search index rebuild and the integrity check) runs on a background job manager ported from ngdpbase ([#856](https://github.com/jwilleke/yourphr/issues/856)).
+
 ## [3.14.0](https://github.com/jwilleke/yourphr/compare/v3.13.0...v3.14.0) (2026-10-01)
 
 __Maintenance mode, a search that finds older records again, and more say over your access log.__ An administrator can now pause the instance briefly with a message for everyone, and rebuild the search index so records stored before an upgrade are found by name. Your access log now shows when you signed in, and you can remove older entries.
