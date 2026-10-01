@@ -4,43 +4,33 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔴 P0 — Security & Critical
 
-- [#826](https://github.com/jwilleke/yourphr/issues/826) — [security] js/regex-injection + js/incomplete-sanitization — extractChangelogNotes builds a regex from the version string (CodeQL high)
-- [#825](https://github.com/jwilleke/yourphr/issues/825) — [security] js/redos — isCdaDocument's prolog regex can backtrack exponentially on an uploaded file (CodeQL high)
 - [#822](https://github.com/jwilleke/yourphr/issues/822) — [security] engine.io — 1 open advisory in the frontend lockfile (high)
 - [#821](https://github.com/jwilleke/yourphr/issues/821) — [security] undici — 3 open advisories in the frontend lockfile (high)
 - [#820](https://github.com/jwilleke/yourphr/issues/820) — [security] brace-expansion — 3 open advisories in the frontend lockfile (high)
 - [#819](https://github.com/jwilleke/yourphr/issues/819) — [security] webpack-dev-middleware — 1 open advisory in the frontend lockfile (high)
-- [#818](https://github.com/jwilleke/yourphr/issues/818) — [security] fast-uri — 3 open advisories in the frontend lockfile (high)
-- [#813](https://github.com/jwilleke/yourphr/issues/813) — [BUG] No security response headers since the TypeScript cut-over: CSP, frame-ancestors, nosniff, no-store, HSTS
-- [#812](https://github.com/jwilleke/yourphr/issues/812) — [BUG] Record history is keyed without user: deleting one member's data deletes another's history, and history reads cross users
-- [#811](https://github.com/jwilleke/yourphr/issues/811) — [BUG] Sync forwards the provider Bearer token on cross-origin redirects, and follows https to http
 - [#507](https://github.com/jwilleke/yourphr/issues/507) — [FEATURE] Authentication policy survey: password reset, MFA, re-auth, audit — decide what to build
 - [#657](https://github.com/jwilleke/yourphr/issues/657) — [FEATURE] Chat over records as an MCP server — the patient's own AI client connects, YourPHR transmits nothing
 
 ## 🟣 Epics
 
+- [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#810](https://github.com/jwilleke/yourphr/issues/810) — [EPIC] Ready for #314: platform prerequisites for connected devices
 - [#676](https://github.com/jwilleke/yourphr/issues/676) — [EPIC] The word "fasten" stops appearing in anything we ship
-- [#591](https://github.com/jwilleke/yourphr/issues/591) — [EPIC] Parity: what the TypeScript stack must do before it replaces yourPHR
 - [#385](https://github.com/jwilleke/yourphr/issues/385) — [EPIC] Realistic test-data corpus + golden-test harness
 - [#333](https://github.com/jwilleke/yourphr/issues/333) — [EPIC] Explore — record export options (Save Report, PDF, Email)
 - [#253](https://github.com/jwilleke/yourphr/issues/253) — [FEATURE] Epic: Support manual data entry and user-created records
 
 ## 🟠 P1
 
+- [#840](https://github.com/jwilleke/yourphr/issues/840) — [FEATURE] System-wide audit log for the operator, ported from ngdpbase's AuditManager
 - [#824](https://github.com/jwilleke/yourphr/issues/824) — [security] moment — 1 open advisory in the frontend lockfile (medium)
 - [#823](https://github.com/jwilleke/yourphr/issues/823) — [security] ip-address — 4 open advisories in the frontend lockfile (medium)
 - [#817](https://github.com/jwilleke/yourphr/issues/817) — [BUG] SSRF guard misses NAT64, 6to4 and two IPv4 special ranges; LAN access switches the guard off entirely
 - [#816](https://github.com/jwilleke/yourphr/issues/816) — [BUG] 500s return the raw error message and log nothing
 - [#815](https://github.com/jwilleke/yourphr/issues/815) — [BUG] Session signing key is regenerated at every start: restarts sign everyone out, no second replica
 - [#814](https://github.com/jwilleke/yourphr/issues/814) — [BUG] Sign-out does not end the session: the token stays valid until it expires
-- [#809](https://github.com/jwilleke/yourphr/issues/809) — [FEATURE] Suspend a connected device's grant after yourphr.devices.inactive-after-days with no upload
-- [#808](https://github.com/jwilleke/yourphr/issues/808) — [FEATURE] Agent-token write scope and patient consent grant, off by default
-- [#807](https://github.com/jwilleke/yourphr/issues/807) — [FEATURE] Design note: agent-token write scope inside a patient consent grant
 - [#804](https://github.com/jwilleke/yourphr/issues/804) — [FEATURE] Adopt OIDC UserInfo in place of /api/secure/account/me; the UI draws from permission claims
-- [#774](https://github.com/jwilleke/yourphr/issues/774) — [BUG] Forms send what the patient types to NLM and Wikipedia, straight from their browser
-- [#806](https://github.com/jwilleke/yourphr/issues/806) — [FEATURE] Device sources: records a connected device writes are credited to it, never to 'manual'
-- [#805](https://github.com/jwilleke/yourphr/issues/805) — [FEATURE] phd-samples.db: a third encrypted database, in backups and restores
+- [#800](https://github.com/jwilleke/yourphr/issues/800) — [BUG] lforms still loads on every page and pins moment@2.29.4 — keep it for #770, or remove it
 - [#784](https://github.com/jwilleke/yourphr/issues/784) — [BUG] Records are keyed without their source — a second provider's record with the same id is refused, and history is shared across people
 - [#782](https://github.com/jwilleke/yourphr/issues/782) — [BUG] A click that cannot complete says nothing — guards wait forever, failures are silent
 - [#778](https://github.com/jwilleke/yourphr/issues/778) — [BUG] Bare-metal setup serves no interface — the example sets YOURPHR_WEB_SRC_FRONTEND_PATH, the server reads YOURPHR_WEB_STATIC_DIR
@@ -50,7 +40,6 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 - [#737](https://github.com/jwilleke/yourphr/issues/737) — [BUG] PDF, DICOM and image uploads (v2's #255) are gone in v3
 - [#713](https://github.com/jwilleke/yourphr/issues/713) — [BUG] A fix to the search index reaches no record already stored — reindexAll() has no caller outside a test
 - [#708](https://github.com/jwilleke/yourphr/issues/708) — [ARCH] relay/main.go is the last Go module — port it to TypeScript or record that it stays Go
-- [#690](https://github.com/jwilleke/yourphr/issues/690) — [BUG] No E2E coverage of any interaction path — only sign-in-and-look
 - [#641](https://github.com/jwilleke/yourphr/issues/641) — [SPIKE] Ship a minimal working deployment for each of the three targets — bare metal, Docker, k8s
 - [#633](https://github.com/jwilleke/yourphr/issues/633) — [FEATURE] Help content — the pages a patient actually needs
 - [#632](https://github.com/jwilleke/yourphr/issues/632) — [FEATURE] In-app help pages — markdown shipped with the code, rendered as HTML
@@ -64,6 +53,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🟡 P2
 
+- [#833](https://github.com/jwilleke/yourphr/issues/833) — [FEATURE] Per-person notification channels: each person chooses where notices reach them
 - [#791](https://github.com/jwilleke/yourphr/issues/791) — [BUG] The backup and recovery docs describe the Go stack — plaintext, gzip, settings file, labels
 - [#770](https://github.com/jwilleke/yourphr/issues/770) — [FEATURE] Patient self-report forms as QuestionnaireResponse — the questionnaire has to exist first
 - [#714](https://github.com/jwilleke/yourphr/issues/714) — [FEATURE] Maintenance mode — no way to say the instance is briefly not itself
@@ -109,12 +99,7 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## 🔵 In review
 
-- [#798](https://github.com/jwilleke/yourphr/issues/798) — [BUG] Practitioner history and record provenance are read without an access-log line
-- [#775](https://github.com/jwilleke/yourphr/issues/775) — [CHORE] One markdown module: CommonMark, sanitised before it is stored
-- [#796](https://github.com/jwilleke/yourphr/issues/796) — [FEATURE] Keys in the instance's .env, not a SOPS Secret — with the backup key also kept off-cluster
-- [#788](https://github.com/jwilleke/yourphr/issues/788) — [BUG] Scheduled backups are off on the live instance — enable them once the export no longer blocks
-- [#783](https://github.com/jwilleke/yourphr/issues/783) — [BUG] No backup since the cut-over — the schedule was never enabled, and enabling it as-is would freeze the instance nightly
-- [#631](https://github.com/jwilleke/yourphr/issues/631) — [SPIKE] Backups must restore the instance, not just the data
+*None.*
 
 ## ⏸ Deferred
 
@@ -124,7 +109,11 @@ Open work in [jwilleke/yourphr](https://github.com/jwilleke/yourphr), ranked. Ge
 
 ## ❓ Needs triage
 
-- [#800](https://github.com/jwilleke/yourphr/issues/800) — [BUG] lforms still loads on every page and pins moment@2.29.4 — keep it for #770, or remove it
+- [#847](https://github.com/jwilleke/yourphr/pull/847) — chore(deps): bump @angular/language-service from 22.1.7 to 22.2.0 in /frontend *(PR · ready)* — no linked issue
+- [#846](https://github.com/jwilleke/yourphr/pull/846) — chore(deps): bump @angular/compiler from 22.1.7 to 22.2.0 in /frontend *(PR · ready)* — no linked issue
+- [#845](https://github.com/jwilleke/yourphr/pull/845) — chore(deps): bump @angular/core from 22.1.7 to 22.2.0 in /frontend *(PR · ready)* — no linked issue
+- [#844](https://github.com/jwilleke/yourphr/pull/844) — chore(deps): bump @angular/cdk from 22.1.7 to 22.2.0 in /frontend *(PR · ready)* — no linked issue
+- [#838](https://github.com/jwilleke/yourphr/pull/838) — chore(deps): bump @angular/router from 22.1.7 to 22.2.0 in /frontend in the npm_and_yarn group across 1 directory *(PR · ready)* — no linked issue
 - [#803](https://github.com/jwilleke/yourphr/issues/803) — [FEATURE] "spike" in test/CI variable names, temp prefixes, comments and docs — rename to yourPHR
 - [#802](https://github.com/jwilleke/yourphr/issues/802) — [FEATURE] The live deployment still sets SPIKE_* variables — rename them, then retire the fallback
 - [#801](https://github.com/jwilleke/yourphr/issues/801) — [FEATURE] The app database file is still called spike.db — rename it, migrating existing instances
