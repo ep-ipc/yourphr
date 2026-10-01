@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.13.0](https://github.com/jwilleke/yourphr/compare/v3.12.1...v3.13.0) (2026-10-01)
+
+__Ready for connected devices, and two privacy and safety fixes.__ yourPHR can now let a phone app or a scale add health readings to your record, for as long as you allow, without being able to read it. This is off until an administrator turns it on. Separately, the practitioner form no longer sends what you type to outside services, and a crafted upload can no longer stall the server.
+
+### Bug Fixes
+
+- __Typing a practitioner's details stays private__ ([#774](https://github.com/jwilleke/yourphr/issues/774)): adding or editing a practitioner used to send the name you typed, and your internet address, from your browser to a government lookup service. Now your browser never contacts it. An administrator can let the server do the lookup instead; it is off unless they do, and the form says so. The Countries list is built into the app, which also fixes that field, broken since the last release's browser protections.
+- __An uploaded file cannot stall the server__ ([#825](https://github.com/jwilleke/yourphr/issues/825)): a specially crafted file could make the check that recognises clinical documents take hours, stopping the instance for everyone. The check now takes the same short time for any file.
+- __A dependency with known flaws is updated__ ([#818](https://github.com/jwilleke/yourphr/issues/818)).
+- __A mistyped password does not sign you out__ ([#836](https://github.com/jwilleke/yourphr/pull/836)): when confirming it is you before connecting a device, a wrong password now asks again instead of ending your session.
+
+### Features
+
+- __Connected devices__ ([#808](https://github.com/jwilleke/yourphr/issues/808), [#809](https://github.com/jwilleke/yourphr/issues/809), [#806](https://github.com/jwilleke/yourphr/issues/806), [#805](https://github.com/jwilleke/yourphr/issues/805)), off by default:
+  - In Settings → Connected devices you name a device, choose how long it may add readings (up to 30 days), and confirm with your password. A one-time code, shown as a QR code, connects the app.
+  - A device can only add readings. It cannot read your record, and everything it adds is marked as coming from it, by name, as patient-generated health data, so it is never mixed up with what a clinician recorded.
+  - You are reminded before the permission ends and can extend it. A device that sends nothing for 14 days is paused, and you can resume it. A key copied from the device stops working the moment it is reused.
+  - Every upload appears in your access log under the device's name. Readings are kept in their own encrypted file, included in backups.
+- __Records you or your devices create are marked as patient-generated__ ([#806](https://github.com/jwilleke/yourphr/issues/806)) with a published code, so any system you share them with can tell them from clinical records. Records you entered before are updated on the first start.
+
+### Internal
+
+- The contract for mobile device app developers: [docs/connected-devices.md](docs/connected-devices.md).
+- Required checks now report on pull requests that change only documentation ([#837](https://github.com/jwilleke/yourphr/pull/837)).
+- The release script reads its notes without building a pattern from the version number ([#826](https://github.com/jwilleke/yourphr/issues/826)).
+
 ## [3.12.1](https://github.com/jwilleke/yourphr/compare/v3.12.0...v3.12.1) (2026-09-30)
 
 __Three security fixes.__ A provider's sign-in token can no longer be passed on to another website, one household member's record history can no longer be deleted or counted by another, and the browser protections the older version had are back.
