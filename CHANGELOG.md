@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.14.0](https://github.com/jwilleke/yourphr/compare/v3.13.0...v3.14.0) (2026-10-01)
+
+__Maintenance mode, a search that finds older records again, and more say over your access log.__ An administrator can now pause the instance briefly with a message for everyone, and rebuild the search index so records stored before an upgrade are found by name. Your access log now shows when you signed in, and you can remove older entries.
+
+### Bug Fixes
+
+- __Older records are findable by name again__ ([#713](https://github.com/jwilleke/yourphr/issues/713)): an earlier fix let search find a condition, procedure, allergy or test result by its name, but only for records added after it. yourPHR now notices when its search index was built by an older version and says so on Admin → Database, where one button rebuilds it. While it runs, everyone else sees the maintenance page for about a minute per 20,000 records. Operators can also run `yourphr reindex` with the server stopped.
+- __Known flaws in the app's own building blocks are fixed__ ([#820](https://github.com/jwilleke/yourphr/issues/820), [#821](https://github.com/jwilleke/yourphr/issues/821), [#822](https://github.com/jwilleke/yourphr/issues/822), [#823](https://github.com/jwilleke/yourphr/issues/823)).
+
+### Features
+
+- __Maintenance mode__ ([#714](https://github.com/jwilleke/yourphr/issues/714)): an administrator turns it on in Admin → Configuration. Until it is turned off, everyone else sees a page with the administrator's message instead of their records, and no scheduled sync runs. Administrators keep working, and everyone is told who turned it on and off. It stays on through a restart.
+- __Your sign-ins in your access log__ ([#507](https://github.com/jwilleke/yourphr/issues/507)): Profile → Access log shows each time you signed in, and when sign-ins were paused after repeated failed attempts. When that happens, the sign-in page now says so and how long to wait, instead of a generic error.
+- __Remove older access-log entries__ ([#507](https://github.com/jwilleke/yourphr/issues/507)): you can remove entries older than 90 days (an administrator can change this). Recent activity always stays, and the removal itself is recorded.
+
+### Internal
+
+- Angular 22.2 throughout ([#848](https://github.com/jwilleke/yourphr/pull/848)); the unused LHC-Forms library is gone, so every page loads less ([#800](https://github.com/jwilleke/yourphr/issues/800)).
+- Frontend dependency overrides are minimum versions, not frozen ones, so security fixes arrive with ordinary updates ([#850](https://github.com/jwilleke/yourphr/pull/850)).
+
 ## [3.13.0](https://github.com/jwilleke/yourphr/compare/v3.12.1...v3.13.0) (2026-10-01)
 
 __Ready for connected devices, and two privacy and safety fixes.__ yourPHR can now let a phone app or a scale add health readings to your record, for as long as you allow, without being able to read it. This is off until an administrator turns it on. Separately, the practitioner form no longer sends what you type to outside services, and a crafted upload can no longer stall the server.
