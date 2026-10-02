@@ -2,11 +2,13 @@
 
 > __Status: the source of truth for YourPHR's auth plan__ (Jim, 2026-09-30). It covers both halves: __authentication__ (proving who someone is: sign-in, second factors, device and agent credentials) and __authorization__ (what an identified caller may do). The separate `authentication-framework.md` was folded in here and deleted (2026-09-30). Started 2026-08-13; rewritten 2026-09-30 for the TypeScript stack. The Go-era text is in git history.
 >
+> __Authentication decisions live in ngdpbase.__ Since 2026-10-02 the decided authentication design — factors and their `amr` / `aal` / `acr`, per-role `required-aal`, step-up, the approval page, device grants, the authorization server — is recorded once, in ngdpbase's [authentication plan](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/authentication.md). This document does not restate it: it says what YourPHR ports, under which `yourphr.` keys, and what is YourPHR's own.
+>
 > __Coordinated with ngdpbase.__ ngdpbase is the framework, and YourPHR runs on its model: managers are the only door, providers are bound by configuration, and ported pieces keep ngdpbase's names and config meanings under the `yourphr.` prefix. Every capability below says where it lives today, which repository builds it first, and what flows back. See [Coordination with ngdpbase](#coordination-with-ngdpbase).
 
 ## Scope
 
-- __In scope:__ sign-in, sessions and revocation, factors (password, passkey, TOTP, email code/link, SMS code), step-up re-authentication, sign-in audit, delegated credentials (agent tokens, connected devices), the RFC 8628 device flow, roles and permissions, and the UI projection of permissions.
+- __In scope:__ sign-in, sessions and revocation, factors (password, passkey, TOTP, email link, Twilio Verify, Web Push), step-up re-authentication, sign-in audit, delegated credentials (agent tokens, connected devices), the RFC 8628 device flow, roles and permissions, and the UI projection of permissions.
 - __Kept apart, deliberately:__ the two halves stay in separate managers. Authentication *reports* who the caller is; authorization *decides*. One "auth manager" that does both decides everything and explains nothing.
 - __Out of scope: per-user data isolation.__ Records are scoped to their owner by the repository (`user_id`), not by a permission. Modelling row ownership as permissions is how RBAC systems turn into query planners.
 - __Out of scope: SMART on FHIR source-connect.__ There YourPHR is an OAuth *client* fetching from Epic or Cerner. Sign-in identity (OIDC) and device authorization (RFC 8628) are the opposite direction. They are named apart from the first commit so nobody wires one into the other.
@@ -35,8 +37,8 @@ Read 2026-09-30 from [ngdpbase `src/managers/AuthManager.ts`](https://github.com
 - __Providers shipped:__ password, magic link, Google OIDC, Cloudflare Access, Authentik bearer, agent token. Each is gated on its own `ngdpbase.auth.<id>.enabled` key and refuses to register when its required config is missing.
 - __Flow plumbing YourPHR lacks:__ `initiate()`, `startFlow()` for redirects, `getFlowRedirect()`, `consumeToken()` as the single-use gate ([ngdpbase#1021](https://github.com/jwilleke/ngdpbase/issues/1021)), `getDeviceState()` binding a link to the browser that asked for it ([ngdpbase#1022](https://github.com/jwilleke/ngdpbase/issues/1022)), `provisionIfNew()` ([ngdpbase#1026](https://github.com/jwilleke/ngdpbase/issues/1026)), and per-user `allowedAuthMethods`.
 - __Magic link__ refuses to register unless `base-url` is set explicitly ([ngdpbase#642](https://github.com/jwilleke/ngdpbase/issues/642)), because a link to localhost leaks the credential.
-- __Factors:__ `ngdpbase.auth.required-factors` is declared, but only one factor is used. MFA state is "deferred to a future issue".
-- __Planned, not built:__ TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)) and passkeys ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)), both open and labelled `deferred`. No RFC 8628 device flow; [ngdpbase `docs/fernfiles.md`](https://github.com/jwilleke/ngdpbase/blob/master/docs/fernfiles.md) notes that fernfiles plans one for agents.
+- __Factors:__ `ngdpbase.auth.required-factors` is declared, but only one factor is used. The replacement is decided, not built: see [Factors](#factors).
+- __Planned, not built:__ passkeys ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448), P1) and TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421), P2), no longer `deferred` (2026-10-01). RFC 8628 ([ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526)) and UserInfo ([ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529)) come from the [oidc-auth-server](https://github.com/jwilleke/oidc-auth-server) package (see [RFC 8628 device authorization](#rfc-8628-device-authorization)).
 - __Authorization:__ `UserManager.hasPermission()` → `PolicyEvaluator`, `ACLManager` for per-page ACLs, and the agent-token scope ceiling applied at a second enforcement point (`UserManager.ts:678`).
 
 ## Coordination with ngdpbase
@@ -47,21 +49,22 @@ The rule is __ngdpbase first__: a new auth capability is designed and built in n
 |---|---|---|---|---|
 | Provider registry (`registerProvider`, first-wins) | built | own `BaseAuthProvider` + `yourphr.auth.providers` | ngdpbase (done) | — YourPHR converges on it |
 | Provider result contract (subject, factors, issuedAt, token generation) | `AuthResult {username, viaToken}` | richer result | YourPHR (done) | yes: `factors` and `issuedAt` are what step-up and "how was this session established" need |
-| Factor policy: per-provider `auth-factors` ([ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)) | single factor | ALL-OF list | __ngdpbase__ | — |
+| Factor configuration: `amr` / `aal` / `acr` per provider, `required-aal` per role ([ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)) | single factor | ALL-OF list | __ngdpbase__ | — |
 | Credentials store ([ngdpbase#1524](https://github.com/jwilleke/ngdpbase/issues/1524)) | `allowedAuthMethods` on user | password column | __ngdpbase__ (passkeys need it) | — |
-| Passkeys / WebAuthn | [ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448) deferred | none | __ngdpbase__ | — |
-| TOTP | [ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421) deferred | none | __ngdpbase__ | — |
-| Email magic link | built, with device binding and single-use gate | none | ngdpbase (done) | port, as sign-in and as a second-factor code |
-| Email code as a second factor ([ngdpbase#1527](https://github.com/jwilleke/ngdpbase/issues/1527)) | magic link only | none | __ngdpbase__ | — |
-| SMS code ([ngdpbase#1528](https://github.com/jwilleke/ngdpbase/issues/1528)) | none | none | __ngdpbase__, transport off by default | — |
+| Passkeys / WebAuthn | [ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448) P1 | none | __ngdpbase__ | — |
+| TOTP | [ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421) P2 | none | __ngdpbase__ | — |
+| Email link (`email-link`: the magic link, as sign-in or second factor) | built as sign-in, with device binding and single-use gate | none | ngdpbase (done) | port |
+| Email link as a second factor, into the approval page ([ngdpbase#1527](https://github.com/jwilleke/ngdpbase/issues/1527), [ngdpbase#1532](https://github.com/jwilleke/ngdpbase/issues/1532)) | magic link only | none | __ngdpbase__ | — |
+| Twilio Verify auth provider ([ngdpbase#1528](https://github.com/jwilleke/ngdpbase/issues/1528)) | none | none | __ngdpbase__, off by default | — |
+| Web Push auth provider ([ngdpbase#1550](https://github.com/jwilleke/ngdpbase/issues/1550)) | none | none | __ngdpbase__ | — |
+| Sign-in channels as a person's preference ([ngdpbase#1533](https://github.com/jwilleke/ngdpbase/issues/1533)); SMS/RCS transports ([ngdpbase#1549](https://github.com/jwilleke/ngdpbase/issues/1549)) | none | none | __ngdpbase__ | — |
 | Step-up re-authentication ([ngdpbase#1525](https://github.com/jwilleke/ngdpbase/issues/1525)) | none | none | __ngdpbase__ | — |
 | Sign-in record | logger lines | none | either; YourPHR's needs patient visibility | the patient-visible shape |
-| RFC 8628 device authorization ([ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526)) | none (fernfiles plans one) | none; required by [#314](https://github.com/jwilleke/yourphr/issues/314) | __ngdpbase__ | — |
-| Agent tokens | built ([ngdpbase#946](https://github.com/jwilleke/ngdpbase/issues/946), #1108) | ported | ngdpbase (done) | category-scopes idea; write scopes inside a consent grant |
+| RFC 8628 device authorization ([ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526)) | none | device grants without RFC 8628 ([#808](https://github.com/jwilleke/yourphr/issues/808)); required by [#314](https://github.com/jwilleke/yourphr/issues/314) | __[oidc-auth-server](https://github.com/jwilleke/oidc-auth-server)__ package | — |
+| Agent tokens | built ([ngdpbase#946](https://github.com/jwilleke/ngdpbase/issues/946), #1108) | ported | ngdpbase (done) | category-scopes idea |
 | Roles and permissions as config | two lists kept in sync by a comment ([ngdpbase#713](https://github.com/jwilleke/ngdpbase/issues/713)) | one list, boot refuses unknown names | YourPHR (done) | yes: the one-list fix |
-| Current-user endpoint: OIDC UserInfo ([ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529)) | none (server-rendered) | `/api/secure/account/me`, home-grown | __ngdpbase__ | — |
-
-__Consequence for sequencing:__ ngdpbase#448 and #421 stop being `deferred` once YourPHR commits to second factors. Filing the matching YourPHR issues without moving those two would create work with no place to happen.
+| Current-user endpoint: OIDC UserInfo ([ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529)) | none (server-rendered) | `/api/secure/account/me`, home-grown | __[oidc-auth-server](https://github.com/jwilleke/oidc-auth-server)__ package | — |
+| Step-up as a list of permissions, session idle timeout ([ngdpbase#1525](https://github.com/jwilleke/ngdpbase/issues/1525), [ngdpbase#1546](https://github.com/jwilleke/ngdpbase/issues/1546)) | none | sliding TTL ([#445](https://github.com/jwilleke/yourphr/issues/445)) | __ngdpbase__ | — |
 
 ## Authentication plan
 
@@ -74,23 +77,15 @@ __Consequence for sequencing:__ ngdpbase#448 and #421 stop being `deferred` once
 
 ### Factors
 
-| Factor | Assurance | Position | Notes |
-|---|---|---|---|
-| Password | memorised secret | exists | Policy is [#506](https://github.com/jwilleke/yourphr/issues/506). Never validated at sign-in. |
-| __Passkey (WebAuthn)__ | phishing-resistant; with `userVerification: required` it is multi-factor by itself (device + PIN/biometric) | __viable alone__, or as the strongest second factor | Needs HTTPS and a stable RP ID (the instance's `base-url` host). Changing the host orphans every passkey, so the RP ID is set once and shown to the operator. Always keep a recovery path (a second passkey, or password + another factor). |
-| TOTP | possession | second factor | Offline, no transport, no cost to a self-hoster. |
-| Email code or magic link | weak possession (NIST SP 800-63B does not accept email for out-of-band) | second factor, or sign-in on instances that choose it | Viable (Jim, 2026-09-30). Mail is live. Needs ngdpbase's device binding and single-use gate, plus activescott/auth's POST confirm step so mail scanners that prefetch links cannot burn them. |
-| SMS code | restricted (NIST SP 800-63B: SIM swap, interception) | second factor only, off by default | Viable (Jim, 2026-09-30). Operator-configured transport; never the only factor for an admin; excluded from the demo. SMS is __not__ used for notices ([#314](https://github.com/jwilleke/yourphr/issues/314) decision). |
-| OIDC identity (Google etc.) | depends on the IdP | later | ngdpbase has it. Named `oidc-*`, never confused with SMART source-connect. |
+Decided in ngdpbase: [the configuration shape](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/authentication.md#the-configuration-shape-decided) and [build order](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/authentication.md#build-order). YourPHR ports them as they are, under `yourphr.auth.factors` and per-role `required-aal`. In short, pointing there for the detail:
 
-__The policy shape this needs.__ Today's `yourphr.auth.factors` is ALL-OF (`password AND totp`). The target is:
-
-- `password` + __any one__ enrolled second factor, from an instance-allowed list; or
-- `passkey` alone.
-
-An admin account requires a second factor once any are enabled. An account with no second factor enrolled signs in with a password alone until the instance requires enrolment.
-
-__How configuration expresses it__ (Jim, 2026-09-30; [ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)): every factor is a registered `AuthProvider`, and each provider carries an `auth-factors` count. `0` means signing in through that provider needs no further factor (passkey, agent token, an IdP that already did MFA). `2` means the provider is one factor and the sign-in needs a second, different one (password). Unknown or unsatisfiable settings refuse the boot. Roles can raise the count, never lower it. This replaces ngdpbase's `required-factors` and YourPHR's ALL-OF `yourphr.auth.factors`, which ports it as `yourphr.auth.<provider>.auth-factors`.
+- Every factor is a registered `AuthProvider` with `amr`, `aal` and, where phishing-resistant, `acr` (`phr`, `phrh`), declared in code; config may lower them, never raise them. There is __no factor count and no priority__; this replaces both YourPHR's ALL-OF `yourphr.auth.factors` and the per-provider `auth-factors` count proposed on 2026-09-30.
+- What a sign-in must reach is set __per role__ as `required-aal` (admin AAL2; patient roles AAL1). MFA means two or more distinct factor types (know / have / are).
+- A passkey alone signs a person in. Its RP ID is the host of `yourphr.application.base-url`, and passkeys stay off until that is set.
+- Email never lifts a sign-in above AAL1. A message second factor carries __one link, no code__, opening the approval page with Approve and Deny buttons ([ngdpbase#1532](https://github.com/jwilleke/ngdpbase/issues/1532)).
+- SMS codes are Twilio Verify, an auth provider ([ngdpbase#1528](https://github.com/jwilleke/ngdpbase/issues/1528)); which channel carries a link or notice is the __patient's preference__ ([ngdpbase#1533](https://github.com/jwilleke/ngdpbase/issues/1533)), replacing the [#314](https://github.com/jwilleke/yourphr/issues/314) rule that SMS never carries notices.
+- A known device skips the prompt for a while; it is a policy, not a factor. Recovery words are for account recovery only, never a factor.
+- A factor is off until it is truly available; the server refuses to boot only when a role's `required-aal` cannot be reached by any available factor.
 
 ### Credentials table
 
@@ -113,11 +108,11 @@ Migration: one `password` row per account from `auth_users.password_hash`. The c
 
 ### Step-up re-authentication
 
-Downloading the database, revealing a secret, changing the password or email, adding or removing a credential, and approving a device all require a __fresh__ factor: one satisfied within `yourphr.auth.reauth.max-age-seconds`. That needs the session to carry which factors were satisfied and when. The provider result already reports both, and they go into the session claims. A passkey prompt is the natural step-up.
+Decided in ngdpbase ([ngdpbase#1525](https://github.com/jwilleke/ngdpbase/issues/1525)): step-up is __one gate inside the permission check__, configured as a list of permissions (`yourphr.auth.step-up`: `max-age-minutes`, default 5, and `permissions`). A permission on the list needs a factor satisfied within that window, at least the role's `required-aal`, never a known device or delegated credential. YourPHR lists its equivalents of ngdpbase's `profile-manage` (password, email, credentials, approving a device, downloading the database), `config-manage`, `secret-reveal` and `token-mint`. Agent-token secrets are stored as one-way hashes and are shown once, never revealed. The provider result already reports which factors were satisfied and when, and they go into the session claims.
 
 ### Sign-in record
 
-Part of [#507](https://github.com/jwilleke/yourphr/issues/507). Every sign-in, failed sign-in, credential change and device approval is recorded and __visible to the patient__, beside the access log. It is not a new manager: `AuditManager` gains an account-event kind. There is an optional "new sign-in" email through `NotificationManager`. Retention is decided before it ships (IPs were kept out of [#512](https://github.com/jwilleke/yourphr/issues/512) for the same reason).
+Part of [#507](https://github.com/jwilleke/yourphr/issues/507). Every sign-in, failed sign-in, credential change and device approval is recorded and __visible to the patient__, beside the access log. It is not a new manager: `AuditManager` gains an account-event kind. There is an optional "new sign-in" email through `NotificationManager`. Retention is decided before it ships (ngdpbase keeps audit by `ngdpbase.audit.retentiondays`; YourPHR still decides its own) (IPs were kept out of [#512](https://github.com/jwilleke/yourphr/issues/512) for the same reason).
 
 ### RFC 8628 device authorization
 
@@ -127,15 +122,16 @@ Required by [#314](https://github.com/jwilleke/yourphr/issues/314) (Jim, 2026-09
 2. __AI and MCP clients__ ([#657](https://github.com/jwilleke/yourphr/issues/657)): obtain an agent token without the patient copying a secret between windows.
 3. __Command-line tools.__
 
-Rules:
+Rules (decided in ngdpbase, 2026-10-02; [ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526)):
 
+- The authorization server is the [oidc-auth-server](https://github.com/jwilleke/oidc-auth-server) package, a thin wrapper around node-oidc-provider. `SessionsManager` keeps sign-in; the package issues and checks tokens. It also serves OIDC UserInfo for [#804](https://github.com/jwilleke/yourphr/issues/804).
 - The approval page runs step-up; a passkey prompt makes the approval phishing-resistant.
-- The grant is an agent-token-style credential with scopes that are a ceiling, never roles.
+- The grant's scopes are a ceiling, never roles. __Scope names come from the host__: YourPHR uses SMART on FHIR v2 scopes as they are, so a wearable bridge gets `patient/Observation.c` (create only: it cannot read, change or delete).
 - User codes are short-lived and single-use, and polling is rate-limited per RFC 8628 §3.5 (`slow_down`).
-- A write scope, needed only for [#314](https://github.com/jwilleke/yourphr/issues/314), sits inside a patient consent grant: term of 30 days or less, short-lived keys, and only the patient extends it.
-- A device with no upload for `yourphr.devices.inactive-after-days` (default 14) is suspended.
+- The client is the phone's health app or a home bridge, not the sensor. A device grant __lasts until revoked__, not for a 30-day term: data from scales and watches flows for years. Refresh tokens rotate where the client supports them; a long-lived token is accepted where it cannot.
+- Scope is add-only, the grant pauses after 90 days without an upload, and it is revocable from the profile and audited.
 
-Built in ngdpbase first, beside `AgentTokenManager`, then ported. [#314](https://github.com/jwilleke/yourphr/issues/314)'s PR 4 is blocked by it.
+Built in the package first, used by ngdpbase, then by YourPHR. [#314](https://github.com/jwilleke/yourphr/issues/314)'s PR 4 is blocked by it. The device grant already built ([#808](https://github.com/jwilleke/yourphr/issues/808), [#809](https://github.com/jwilleke/yourphr/issues/809)) still has the 30-day term and the 14-day suspension; changing those is [#860](https://github.com/jwilleke/yourphr/issues/860) (until revoked), [#861](https://github.com/jwilleke/yourphr/issues/861) (90 days) and [#862](https://github.com/jwilleke/yourphr/issues/862) (SMART v2 scope names).
 
 ### activescott/auth
 
@@ -161,7 +157,7 @@ __Recommendation:__ take ideas and at most its passkey provider. Do not take its
 - __Route coverage test.__ A test that walks the registered routes and asserts each one declares a permission or is explicitly public. This makes an unmapped route a build failure rather than a runtime refusal. It is the highest-value single test in the design.
 - __Denials audited?__ Same retention question as the sign-in record. Decide both together.
 - __Subjects other than the caller__ (caregiver or parent acting on another person's records). This changes `can(p)` to `can(p, subject)` and is a redesign, not an addition. Not needed now.
-- __Write scopes__ for delegated credentials: [#314](https://github.com/jwilleke/yourphr/issues/314) only, inside a consent grant (see RFC 8628 above). The rule "only listed GETs have a category" needs a matching write vocabulary.
+- ~~__Write scopes__ for delegated credentials.~~ Decided (2026-10-02): device grants use SMART on FHIR v2 scope names (see RFC 8628 above).
 - __CLI.__ `reset-password` and friends bypass HTTP ([#510](https://github.com/jwilleke/yourphr/issues/510)). Shell access is already total authority. Record that as the stated position.
 
 ## Decisions log
@@ -172,16 +168,17 @@ __Recommendation:__ take ideas and at most its passkey provider. Do not take its
 - 2026-09-30 (Jim): YourPHR needs RFC 8628 device authorization, from [#314](https://github.com/jwilleke/yourphr/issues/314).
 - 2026-09-30 (Jim): the ngdpbase phases are filed there, under the epic [ngdpbase#1522](https://github.com/jwilleke/ngdpbase/issues/1522). Factor counts are per-provider configuration, and every factor is an `AuthProvider` ([ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523)).
 - 2026-09-30 (Jim): "who is this caller" uses the OIDC UserInfo standard ([ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529), [#804](https://github.com/jwilleke/yourphr/issues/804)).
+- 2026-10-02 (Jim): the authentication design is decided in ngdpbase's [authentication plan](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/authentication.md), and YourPHR follows it. That replaces the per-provider `auth-factors` count, email and SMS codes, the 30-day device term and the 14-day suspension recorded above. The authorization server is the [oidc-auth-server](https://github.com/jwilleke/oidc-auth-server) package; device scopes are SMART on FHIR v2.
 
 ## Awaiting decision
 
 Asked one at a time, in this order:
 
-1. ~~Where RFC 8628 is built first.~~ ngdpbase: [ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526) was filed there (Jim, 2026-09-30).
-2. __Second-factor order.__ Recommend passkey first ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)), then email code (ngdpbase's magic link, ported), then TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)), then SMS.
-3. __Passkey-alone sign-in__ allowed at launch of passkeys, or second-factor only at first.
-4. __Sign-in record retention__ and whether denials are recorded with it.
-5. __Un-defer ngdpbase#448 and #421__ once 2 is decided.
+- ~~Where RFC 8628 is built first.~~ ngdpbase: [ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526) (Jim, 2026-09-30), now through the oidc-auth-server package.
+- ~~Second-factor order.~~ ngdpbase's [build order](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/authentication.md#build-order) (2026-10-02).
+- ~~Passkey-alone sign-in.~~ Yes, from day one, as NIST specifies (2026-10-02).
+- __Sign-in record retention__ and whether denials are recorded with it.
+- ~~Un-defer ngdpbase#448 and #421.~~ Done (2026-10-01).
 
 ## Sequencing
 
@@ -189,16 +186,16 @@ Each phase is its own issue, linked by blocked-by and never a checklist inside o
 
 | Phase | Repository | Work | Blocked by |
 |---|---|---|---|
-| A1 | ngdpbase | [ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523) per-provider `auth-factors`; [ngdpbase#1524](https://github.com/jwilleke/ngdpbase/issues/1524) credentials store | — |
+| A1 | ngdpbase | [ngdpbase#1523](https://github.com/jwilleke/ngdpbase/issues/1523) factor configuration and per-role `required-aal`; [ngdpbase#1524](https://github.com/jwilleke/ngdpbase/issues/1524) credentials store | — |
 | A2 | ngdpbase | Passkey provider ([ngdpbase#448](https://github.com/jwilleke/ngdpbase/issues/448)) | A1 |
 | A3 | ngdpbase | [ngdpbase#1525](https://github.com/jwilleke/ngdpbase/issues/1525) step-up re-authentication; factors and issuedAt in the provider result | A1 |
-| A4 | ngdpbase | [ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526) RFC 8628 device authorization | A3 |
-| A5 | ngdpbase | TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)); [ngdpbase#1527](https://github.com/jwilleke/ngdpbase/issues/1527) email code; [ngdpbase#1528](https://github.com/jwilleke/ngdpbase/issues/1528) SMS, off by default | A1 |
+| A4 | ngdpbase | [ngdpbase#1526](https://github.com/jwilleke/ngdpbase/issues/1526) RFC 8628 device authorization, through the oidc-auth-server package | A3 |
+| A5 | ngdpbase | TOTP ([ngdpbase#421](https://github.com/jwilleke/ngdpbase/issues/421)); [ngdpbase#1527](https://github.com/jwilleke/ngdpbase/issues/1527) email link; [ngdpbase#1528](https://github.com/jwilleke/ngdpbase/issues/1528) Twilio Verify, off by default; [ngdpbase#1550](https://github.com/jwilleke/ngdpbase/issues/1550) Web Push | A1 |
 | Y1 | YourPHR | Port A1: credentials table and migration; `yourphr.auth.factors` becomes the policy | A1 |
 | Y2 | YourPHR | Sign-in record in the access log, with optional new-sign-in email ([#507](https://github.com/jwilleke/yourphr/issues/507)) | — |
 | Y3 | YourPHR | Port passkeys and step-up; re-auth on DB download and secret reveal | Y1, A2, A3 |
 | Y4 | YourPHR | Port RFC 8628; [#314](https://github.com/jwilleke/yourphr/issues/314) PR 4 and agent-token onboarding use it | Y3, A4 |
-| Y5 | YourPHR | Port email code, TOTP, SMS | Y1, A5 |
+| Y5 | YourPHR | Port email link, TOTP, Twilio Verify, Web Push | Y1, A5 |
 | Z1 | YourPHR | [#804](https://github.com/jwilleke/yourphr/issues/804) OIDC UserInfo in place of `/api/secure/account/me`, with the permission claim; `IsAdmin()` deleted | [ngdpbase#1529](https://github.com/jwilleke/ngdpbase/issues/1529) |
 | Z2 | YourPHR | Route coverage test: every route declares a permission or is explicitly public | — |
 
@@ -214,6 +211,6 @@ Y2 and Z2 depend on nothing in ngdpbase and can start at once.
 - [#508](https://github.com/jwilleke/yourphr/issues/508), [#528](https://github.com/jwilleke/yourphr/issues/528) — token generation and revocation
 - [#514](https://github.com/jwilleke/yourphr/issues/514), [#644](https://github.com/jwilleke/yourphr/issues/644) — default deny; the read-only demo admin
 - [#623](https://github.com/jwilleke/yourphr/issues/623) — roles and permissions as configuration
-- ngdpbase: [AuthManager](https://github.com/jwilleke/ngdpbase/blob/master/src/managers/AuthManager.ts), [#448 passkeys](https://github.com/jwilleke/ngdpbase/issues/448), [#421 TOTP](https://github.com/jwilleke/ngdpbase/issues/421), [#946 agent tokens](https://github.com/jwilleke/ngdpbase/issues/946)
+- ngdpbase: [authentication plan](https://github.com/jwilleke/ngdpbase/blob/master/docs/planning/authentication.md), [AuthManager](https://github.com/jwilleke/ngdpbase/blob/master/src/managers/AuthManager.ts), [#448 passkeys](https://github.com/jwilleke/ngdpbase/issues/448), [#421 TOTP](https://github.com/jwilleke/ngdpbase/issues/421), [#946 agent tokens](https://github.com/jwilleke/ngdpbase/issues/946)
 - [activescott/auth](https://github.com/activescott/auth)
 - NIST SP 800-63B; RFC 8628; WebAuthn Level 3

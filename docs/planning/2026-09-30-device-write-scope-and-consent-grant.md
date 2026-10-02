@@ -1,6 +1,8 @@
 # Design note: a connected device's write scope inside a patient consent grant
 
 > __Status: decided__ (Jim, 2026-09-30). The six decisions are at the end and on the issue. Issue [#807](https://github.com/jwilleke/yourphr/issues/807), child of the #314 readiness epic [#810](https://github.com/jwilleke/yourphr/issues/810). It unblocks the implementation [#808](https://github.com/jwilleke/yourphr/issues/808) and, through it, [#809](https://github.com/jwilleke/yourphr/issues/809) and [#314](https://github.com/jwilleke/yourphr/issues/314) PR 4. Part of the auth plan in [authorization-framework.md](authorization-framework.md).
+>
+> __Superseded in part__ (Jim, 2026-10-02): a device grant now lasts until revoked (no 30-day term), pauses after 90 days without an upload (not 14), and uses SMART on FHIR v2 scope names (`patient/Observation.c`). See [RFC 8628 device authorization](authorization-framework.md#rfc-8628-device-authorization). The rest of this note stands.
 
 ## What is already decided
 
