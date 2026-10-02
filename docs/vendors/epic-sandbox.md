@@ -15,6 +15,14 @@ __Register at:__ <https://fhir.epic.com> — self-register a patient-facing app 
 
 > __Confidential client since 2026-08-19.__ Epic never issues refresh tokens to public standalone clients — their offline-access path for public apps is dynamic client registration, which YourPHR does not implement. The YourPHR app registration therefore has __"Is Confidential Client"__ and __"Requires Persistent Access"__ checked, with a website-generated __Sandbox Client Secret__ (plaintext in `private/secrets.md`, hash stored at Epic). The instance supplies it via `YOURPHR_SANDBOX_EPIC_CLIENT_SECRET`; the Go client then authenticates `client_secret_basic` and Epic returns a `refresh_token`. This ended the 2026-07-31 "access token expired and no refresh token is available" cycle.
 
+> __Production: automatic client distribution needs USCDI v3 APIs only ([#863](https://github.com/jwilleke/yourphr/issues/863), 2026-10-02).__ Epic paused production syncing of app 56252 at all 519 requesting organizations because the app selects APIs outside the USCDI v3 list. Epic's conditions for auto-distribution, from *Patient-Facing Apps Using FHIR* → Automatic Client ID Distribution: USCDI Apps (<https://fhir.epic.com/Documentation?docId=patientfacingfhirapps>), are:
+>
+> - __Only APIs in that document's appendix__ (USCDI v3 for Epic August 2024+); read-only, patient-facing.
+> - __"Enable Auto-download" and "USCDI v3" selected__ on the app page.
+> - __A refresh-token app (ours: confidential, Requires Persistent Access) needs a client credential uploaded per organization__; without one it does not auto-distribute there.
+>
+> Everything yourPHR syncs from Epic qualifies in R4 except `MedicationStatement` (DSTU2/STU3 only; Epic's medications come through MedicationRequest). Write APIs never qualify. Before ticking an API on the Epic app page, check it is in the appendix. The research and the proposed steps are on [#863](https://github.com/jwilleke/yourphr/issues/863).
+
 ## Status at a glance
 
 - __Is anything blocking Epic? No.__ Epic's sandbox is self-service — register a
