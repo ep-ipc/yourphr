@@ -444,7 +444,9 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // database, passwords by the scrypt provider, the factor list from configuration.
   const users = new UsersManager(engineRef(), new SqliteUsersProvider(db), new PasswordAuthProvider(), { log: (line) => appLog.info(line) });
   const sessions = new SessionsManager(engineRef(), [new PasswordAuthProvider()], {
-    sessionKey: randomBytes(32),
+    // yourphr#815: the persisted key bootstrap-env guarantees, so a restart keeps everyone signed in.
+    // Empty only where nothing ran the bootstrap (the harnesses, which pass their own env).
+    sessionKey: config.getString('yourphr.auth.session.secret') !== '' ? Buffer.from(config.getString('yourphr.auth.session.secret'), 'utf8') : randomBytes(32),
     session: { slidingSeconds: config.getInt('yourphr.auth.session.sliding-seconds'), absoluteSeconds: config.getInt('yourphr.auth.session.absolute-seconds') },
     throttle: { maxFailures: config.getInt('yourphr.auth.throttle.max-failures'), windowSeconds: config.getInt('yourphr.auth.throttle.window-seconds') },
     trustedProxies: config.getStringList('yourphr.auth.trusted-proxies'),

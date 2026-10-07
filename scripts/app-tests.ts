@@ -39,6 +39,8 @@ async function main(): Promise<void> {
     env: {
       YOURPHR_DATABASE_ENCRYPTION_KEY: 'at-rest-key',
       YOURPHR_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key',
+      // yourphr#815: a persisted session key — what start guarantees in production.
+      YOURPHR_SESSION_SECRET: 'harness-session-key',
       SPIKE_TEST_ALLOW_INTERNAL: '1',
     },
     seeds: [
@@ -1128,13 +1130,17 @@ async function main(): Promise<void> {
 
     // Survives a restart: the switch is persisted configuration, not process memory.
     await app.close();
-    const again = await assembleApp(dir, { version: '9.9.9-harness', env: { YOURPHR_DATABASE_ENCRYPTION_KEY: 'at-rest-key', YOURPHR_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key', SPIKE_TEST_ALLOW_INTERNAL: '1' } });
+    const again = await assembleApp(dir, { version: '9.9.9-harness', env: { YOURPHR_DATABASE_ENCRYPTION_KEY: 'at-rest-key', YOURPHR_BACKUP_ENCRYPTION_KEY: 'travelling-copy-key', YOURPHR_SESSION_SECRET: 'harness-session-key', SPIKE_TEST_ALLOW_INTERNAL: '1' } });
     const againBase = await new Promise<string>((resolve) => {
       again.server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(again.server.address() as { port: number }).port}`));
     });
     const signInAgain = async (u: string, p: string) => ((await (await fetch(`${againBase}/api/auth/signin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: u, password: p }) })).json()) as { data: string }).data;
     const maudAgain = await signInAgain('maud', 'a-long-enough-password');
     const adminAgain = await signInAgain('admin', adminPassword);
+    // yourphr#815: the token maud was given BEFORE the restart is still good after it — a restart
+    // no longer signs everyone out. (It answers 503 here only because maintenance is on.)
+    const preRestart = await fetch(`${againBase}/api/secure/account/me`, authed(maudToken));
+    check('a session token issued before a restart is still valid after it (yourphr#815)', preRestart.status === 503, `${preRestart.status}`);
     const stillHeld = await fetch(`${againBase}/api/secure/account/me`, authed(maudAgain));
     const off = await fetch(`${againBase}/api/secure/admin/config`, { method: 'PUT', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminAgain}` }, body: JSON.stringify({ key: 'yourphr.features.maintenance.enabled', value: false }) });
     const released = await fetch(`${againBase}/api/secure/account/me`, authed(maudAgain));

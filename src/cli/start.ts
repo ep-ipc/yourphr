@@ -23,6 +23,7 @@ import { ConfigurationManager } from '../framework/ConfigurationManager.js';
 import { FileConfigProvider } from '../framework/providers/FileConfigProvider.js';
 import { appLog } from '../log/index.js';
 import { readVersion } from './version.js';
+import { SESSION_SECRET_ENV, ensureInstanceEnvSecret, nodeInstanceEnvFs } from '../config/instance-env-secret.js';
 
 const EX_CONFIG = 78;
 
@@ -46,6 +47,22 @@ export async function start(): Promise<void> {
     accessSync(dataDir, constants.W_OK);
   } catch (err) {
     refuse(`${dataDir} is not a writable directory (${(err as Error).message})`);
+  }
+
+  // The session signing key (yourphr#815), guaranteed as ngdpbase guarantees NGDPBASE_SESSION_SECRET:
+  // from the environment when set, else the instance .env, else generated once into that .env and
+  // kept. A key made fresh at every start signed everyone out on every restart. Only the server
+  // does this — `help`, `version` and the other commands never write a .env.
+  try {
+    const { secret, origin } = ensureInstanceEnvSecret({
+      name: SESSION_SECRET_ENV,
+      comment: 'Signs yourPHR session tokens (yourphr#815). Generated on first start; rotating it signs everyone out.',
+      refusal: (envPath, cause) => new Error(`${SESSION_SECRET_ENV} is unset and could not be written to ${envPath}: ${cause.message}`),
+    }, env, dataDir, nodeInstanceEnvFs);
+    env[SESSION_SECRET_ENV] = secret;
+    if (origin.kind === 'generated') appLog.warn(`${SESSION_SECRET_ENV} was not set — generated one into ${origin.path}; sessions now survive restarts`);
+  } catch (err) {
+    refuse((err as Error).message);
   }
 
   const webDir = env[envNameFor('yourphr.web.static-dir')] ?? '';

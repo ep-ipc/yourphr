@@ -219,6 +219,7 @@ Where a value belongs, by what it is:
 - __A setting__ (anything that changes how the running app behaves): __Admin → Configuration__, stored in `<data>/config/app-custom-config.json`. Never an environment variable, never a manifest entry ([#472](https://github.com/jwilleke/yourphr/issues/472)). Example: `yourphr.relay.public-url`, `yourphr.relay.url`.
 - __A secret__ (environment-owned, read-only on the Admin screen): `.env` on bare metal or Docker; on Kubernetes, a Secret injected with `envFrom:`. Example: `YOURPHR_RELAY_SECRET`. The reference deployment injects the relay's own Secret (`yourphr-relay`) into `yourphr-ts`, so app and relay hold one value and can never disagree ([#870](https://github.com/jwilleke/yourphr/issues/870)).
 - __Bootstrap__ (where the data lives, the port): the launcher's environment.
+- __Generated once, then kept:__ `YOURPHR_SESSION_SECRET` signs session tokens. When nothing supplies it, the server generates it on first start into `<data>/.env` (`0600`) and reuses it, as ngdpbase does for `NGDPBASE_SESSION_SECRET` ([#815](https://github.com/jwilleke/yourphr/issues/815)). Set it yourself only to manage it; rotating it signs everyone out.
 
 Rules that follow, for every implementation:
 
