@@ -74,8 +74,12 @@ export abstract class BaseSourceClientProvider {
   abstract beginAuthorization(app: SmartApp, redirectUri: string): Promise<AuthorizationStart>;
   /** Exchange the returned code for tokens; the patient the token is scoped to, '' when the provider gave none. */
   abstract completeAuthorization(app: SmartApp, redirectUri: string, code: string, codeVerifier: string): Promise<AuthorizationResult>;
-  /** Refresh an expiring token; discovers the token endpoint once when the source has none. */
-  abstract refresh(source: ConnectedSource, nowSeconds: number): Promise<RefreshedTokens>;
+  /**
+   * Refresh an expiring token; discovers the token endpoint once when the source has none.
+   * `clientSecret` is the catalog entry's, for a confidential client (yourphr#872): a refresh must
+   * authenticate the same way the code exchange did, or the provider answers `invalid_client`.
+   */
+  abstract refresh(source: ConnectedSource, nowSeconds: number, clientSecret?: string): Promise<RefreshedTokens>;
   /** Every page of one resource type for the source's patient, written through the door. (Not named after the browser API on purpose: the HTTP-boundary guard reads that word as a network call.) */
   /**
    * The server's CapabilityStatement, distilled (yourphr#756) — undefined with a reason when it

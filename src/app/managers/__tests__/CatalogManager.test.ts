@@ -14,6 +14,7 @@ import { RecordsManager } from '../RecordsManager.js';
 import { FakeRecordsProvider } from '../../providers/__tests__/FakeRecordsProvider.js';
 import { SourcesManager } from '../SourcesManager.js';
 import { FakeSourcesProvider } from '../../providers/__tests__/FakeSourcesProvider.js';
+import type { ConnectedSource } from '../../providers/BaseSourcesProvider.js';
 import { CatalogManager, type CatalogWrite } from '../CatalogManager.js';
 import { FakeCatalogProvider } from '../../providers/__tests__/FakeCatalogProvider.js';
 import { BaseSourceClientProvider, NullSourceClientProvider, SourceClientError, type AuthorizationResult, type AuthorizationStart, type FetchReport, type RefreshedTokens, type SmartApp } from '../../providers/BaseSourceClientProvider.js';
@@ -44,7 +45,12 @@ class ScriptedClient extends BaseSourceClientProvider {
     if (this.failExchange) throw new SourceClientError('exchange', 'token exchange failed: HTTP 400');
     return { tokenUrl: 'https://idp.example.org/token', accessToken: 'at', refreshToken: 'rt', expiresAt: 2_000, patient: this.patient, scope: this.grantedScope };
   }
-  async refresh(): Promise<RefreshedTokens> { throw new Error('not in this spec'); }
+  /** The secret each refresh was handed (yourphr#872). */
+  refreshSecrets: (string | undefined)[] = [];
+  async refresh(source: ConnectedSource, now: number, clientSecret?: string): Promise<RefreshedTokens> {
+    this.refreshSecrets.push(clientSecret);
+    return { accessToken: 'fresh', refreshToken: 'rotated', expiresAt: now + 3600, tokenUrl: source.tokenUrl || 'https://idp.example.org/token', scope: '' };
+  }
   capability?: SourceCapability;
   /** What the token response states as GRANTED (yourphr#757); '' is a server that omits the field. */
   grantedScope = '';
@@ -287,5 +293,23 @@ describe('CatalogManager — a member connects', () => {
     expect(await catalog.backup()).toMatchObject({ manager: 'catalog' });
     await expect(catalog.restore()).resolves.toBeUndefined();
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('a confidential source refreshes with its catalog entry\'s secret (yourphr#872)', () => {
+  it('the catalog finds the secret by client id and FHIR base — a trailing slash or case is no difference; no match or a public entry is empty', async () => {
+    await catalog.create(admin, { display: 'Big Hospital', environment: 'production', api_endpoint_base_url: 'https://fhir.example.org/r4', scopes: 's', client_id: 'cid', client_secret: 'the-secret', enabled: true });
+    await catalog.create(admin, { display: 'Open', environment: 'sandbox', api_endpoint_base_url: 'https://open.example.org/r4', scopes: 's', client_id: 'pub', enabled: true });
+    expect(await catalog.refreshSecretFor(alice, { fhirBaseUrl: 'https://FHIR.example.org/r4/', clientId: 'cid' })).toBe('the-secret');
+    expect(await catalog.refreshSecretFor(alice, { fhirBaseUrl: 'https://fhir.example.org/r4', clientId: 'other' })).toBe('');
+    expect(await catalog.refreshSecretFor(alice, { fhirBaseUrl: 'https://open.example.org/r4', clientId: 'pub' })).toBe('');
+    await expect(catalog.refreshSecretFor(ApiContext.anonymous(engine), { fhirBaseUrl: 'https://fhir.example.org/r4', clientId: 'cid' })).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('the worker\'s pass hands that secret to the refresh, so the provider sees the same client authentication as the exchange', async () => {
+    await catalog.create(admin, { display: 'Big Hospital', environment: 'production', api_endpoint_base_url: 'https://fhir.example.org/r4', scopes: 'patient/Condition.read', client_id: 'cid', client_secret: 'the-secret', enabled: true });
+    await engine.managers.sources.add(alice, { userId: 'alice', display: 'Big Hospital', fhirBaseUrl: 'https://fhir.example.org/r4', tokenUrl: 'https://idp.example.org/token', clientId: 'cid', patient: 'p1', resourceTypes: ['Condition'], accessToken: 'old', refreshToken: 'r1', expiresAt: 0 });
+    await engine.managers.sources.pass(1_000_000);
+    expect(client.refreshSecrets).toEqual(['the-secret']);
   });
 });

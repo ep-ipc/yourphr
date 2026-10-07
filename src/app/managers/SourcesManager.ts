@@ -670,7 +670,9 @@ export class SourcesManager extends BaseManager {
           this.log(`token-refresh: source ${source.id} (${source.display}): access token expired and no refresh token is available; reconnect the source`);
         } else {
           try {
-            const fresh = await this.client.refresh(source, now);
+            // A confidential client authenticates its refresh exactly as its code exchange (yourphr#872).
+            const secret = this.engine.has('catalog') ? await this.engine.managers.catalog.refreshSecretFor(ctx, source) : '';
+            const fresh = await this.client.refresh(source, now, secret);
             if (fresh.tokenUrl !== source.tokenUrl) await this.provider.updateTokenUrl(source.id, fresh.tokenUrl); // discovered once, persisted (yourphr#584)
             await this.provider.updateTokens(source.id, fresh.accessToken, fresh.refreshToken, fresh.expiresAt);
             // A re-consent can widen or narrow the grant, and the refresh restates it (yourphr#757).

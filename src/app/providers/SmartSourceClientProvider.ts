@@ -52,8 +52,8 @@ export class SmartSourceClientProvider extends BaseSourceClientProvider {
     }
   }
 
-  async refresh(source: ConnectedSource, nowSeconds: number): Promise<RefreshedTokens> {
-    const client = new SmartClient({ fhirBaseUrl: source.fhirBaseUrl, clientId: source.clientId, redirectUri: 'unused-for-refresh', scopes: [], allowInternal: this.options.allowInternal });
+  async refresh(source: ConnectedSource, nowSeconds: number, clientSecret?: string): Promise<RefreshedTokens> {
+    const client = new SmartClient({ fhirBaseUrl: source.fhirBaseUrl, clientId: source.clientId, clientSecret: clientSecret || undefined, redirectUri: 'unused-for-refresh', scopes: [], allowInternal: this.options.allowInternal });
     // A migrated source arrives without a token endpoint (Go re-discovered every time, yourphr#584): discover once.
     const tokenUrl = source.tokenUrl === '' ? (await client.discover()).token : source.tokenUrl;
     const endpoints: Endpoints = { authorization: 'unused-for-refresh', token: tokenUrl };

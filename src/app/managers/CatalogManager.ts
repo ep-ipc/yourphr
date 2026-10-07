@@ -213,6 +213,20 @@ export class CatalogManager extends BaseManager {
     return this.provider.clientSecretFor(id);
   }
 
+  /**
+   * The client secret a source must present when it refreshes (yourphr#872): the secret of the
+   * catalog entry it was connected through, matched by client id and FHIR base URL, which the source
+   * keeps. Read below the door like the exchange's, never copied onto the source; '' for a public
+   * client or when no entry matches. The worker asks as a system actor for the source's owner.
+   */
+  async refreshSecretFor(ctx: ApiContext, source: { fhirBaseUrl: string; clientId: string }): Promise<string> {
+    ctx.requireAuthenticated();
+    if (source.clientId === '') return '';
+    const base = (u: string): string => u.trim().replace(/\/+$/, '').toLowerCase();
+    const entry = (await this.provider.list()).find((e) => e.clientId === source.clientId && base(e.fhirBaseUrl) === base(source.fhirBaseUrl));
+    return entry ? this.provider.clientSecretFor(entry.id) : '';
+  }
+
   // --- a member's side -------------------------------------------------------------------------
 
   /** The relay card's payload (yourphr#602): effective settings with provenance, or an honest "none". */
