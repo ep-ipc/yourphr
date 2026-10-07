@@ -34,6 +34,7 @@ Why it matters: getting a production client ID is the project's biggest blocker 
 | 2026-09-27 | Asked <open@epic.com> what modification Epic is waiting on, and whether per-organization activation with a client secret is the next step. |
 | 2026-10-02 | Epic (Hunter): the app "has many APIs outside the scope of USCDI v3 automatic client distribution"; it may use only the appendix APIs. Filed [#863](https://github.com/jwilleke/yourphr/issues/863) (P0). |
 | 2026-10-07 | Compared the app's 245 selected APIs with the appendix: __10 do not qualify__, none of which yourPHR uses — ExplanationOfBenefit (Claim), and the Outside Record variants of QuestionnaireResponse, Organization, Practitioner, RelatedPerson and ServiceRequest (Read and Search each, R4). The list is locked on a released app, so asked Epic to remove them or unlock it, and repeated the per-organization credential question. |
+| 2026-10-07 | Sandbox re-verified end to end on v3 (prod host, test account): 310 records imported. Found and fixed on the way: no relay configured on v3 ([#870](https://github.com/jwilleke/yourphr/issues/870)), and no client secret in the Epic catalog entry ([#871](https://github.com/jwilleke/yourphr/issues/871)). __Both would also have blocked production__, even after Epic lifts the hold. |
 
 ### Next
 
