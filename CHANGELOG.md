@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.15.1](https://github.com/jwilleke/yourphr/compare/v3.15.0...v3.15.1) (2026-10-07)
+
+__Connections stay connected, restarts keep you signed in, and the false maintenance notice is gone.__
+
+### Bug Fixes
+
+- __Epic and other confidential providers keep syncing__ ([#872](https://github.com/jwilleke/yourphr/issues/872)): after the first hour, refreshing a connection was refused and syncing stopped until you reconnected. The refresh now proves who yourPHR is the same way connecting does.
+- __Restarting the server no longer signs everyone out__ ([#815](https://github.com/jwilleke/yourphr/issues/815)): the key that signs sessions is created once and kept in the instance's settings file instead of being made new at every start. The first start after this update creates it, so that one restart still signs everyone out; later ones do not.
+- __The "maintenance mode" notice only shows while maintenance is on__ ([#869](https://github.com/jwilleke/yourphr/issues/869)): a notice from an earlier rebuild told everyone the system was down when it was not. Maintenance is now shown from the live setting, and leftover notices are removed.
+- __Server errors no longer reveal internal details__ ([#816](https://github.com/jwilleke/yourphr/issues/816)): an unexpected error now shows a plain message with a short reference code, and the details go to the server log for the operator.
+- __Tighter protection on outside requests__ ([#817](https://github.com/jwilleke/yourphr/issues/817)): addresses that could reach the server's own network through IPv6 translation, and two reserved ranges, are now refused.
+
+### Internal
+
+- Deployment docs: how settings and secrets reach each kind of installation, and the three values a SMART relay needs ([#870](https://github.com/jwilleke/yourphr/issues/870)).
+- Vendor docs: Epic's automatic distribution requirements and a production onboarding log ([#863](https://github.com/jwilleke/yourphr/issues/863)).
+
 ## [3.15.0](https://github.com/jwilleke/yourphr/compare/v3.14.0...v3.15.0) (2026-10-01)
 
 __The admin home says what needs attention.__ Problems an administrator has to act on now appear first on the admin home, each with a button to the screen where it is fixed. The database's health is checked every day without slowing anyone down.
