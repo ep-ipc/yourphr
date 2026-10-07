@@ -17,6 +17,7 @@ import { stageRestore } from '../src/app/providers/sqlite-backup.js';
 import { SqliteGlossaryCache } from '../src/app/providers/SqliteGlossaryCache.js';
 import { assembleApp, sourceShape } from '../src/app.js';
 import { ApiContext } from '../src/framework/ApiContext.js';
+import { appLog } from '../src/log/index.js';
 
 // The shared reporter scrubs credential-shaped text out of `detail` before it is printed or kept
 // (yourphr#682). `detail` is free text and this harness holds live session tokens; CodeQL flagged
@@ -1106,6 +1107,20 @@ async function main(): Promise<void> {
     check('the Database card shows a real integrity result and when it was taken, once the background check has run — not a permanent "Not checked"',
       before.integrity_ok === null && after.integrity_ok === true && after.integrity_checked_at !== null && after.integrity_running === false,
       `${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+  }
+
+  // --- a 500 answers generically and logs with an id (yourphr#816) ---
+  {
+    const records = app.engine.managers.records as unknown as { searchIndex: (...a: unknown[]) => unknown };
+    const real = records.searchIndex;
+    records.searchIndex = () => { throw new Error('SQLITE_ERROR at /opt/yourphr/data/records.db: no such table'); };
+    const r = await fetch(`${base}/api/secure/admin/database/search-index`, authed(adminToken));
+    records.searchIndex = real;
+    const body = (await r.json()) as { error: string; error_id?: string };
+    const logged = appLog.recent().some((l) => body.error_id !== undefined && l.includes(`[${body.error_id}]`) && l.includes('no such table'));
+    check('an unexpected failure answers 500 with a generic message and an id — never the raw error — and the log line carries that id with the detail',
+      r.status === 500 && typeof body.error_id === 'string' && body.error.includes(body.error_id) && !body.error.includes('records.db') && logged,
+      `${r.status} ${JSON.stringify(body)} logged=${logged}`);
   }
 
   // --- maintenance mode (yourphr#714) ---

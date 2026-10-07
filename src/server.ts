@@ -19,6 +19,7 @@
  */
 import { accessCategoryFor, consentNow, consentStatus, writeCategoryFor } from './account/index.js';
 import { appLog, VALID_LEVELS } from './log/index.js';
+import { randomUUID } from 'node:crypto';
 import {createServer, IncomingMessage, ServerResponse} from 'node:http';
 import { applySecurityHeaders, reportOnlyForWebDir } from './security-headers.js';
 import {createReadStream, existsSync, statSync} from 'node:fs';
@@ -1113,7 +1114,7 @@ export function createYourPhrServer(options: ServerOptions) {
             try {
               result = await src.syncNow(ctx, id);
             } catch (err) {
-              send(res, 500, {success: false, error: `record sync failed: ${(err as Error).message}`});
+              send(res, 500, serverFailure(err, req.method ?? '', url.pathname));
               return;
             }
             result === undefined ? notFound() : send(res, 200, {success: true, source: result.source, data: result.data});
@@ -1733,7 +1734,19 @@ export function createYourPhrServer(options: ServerOptions) {
         send(res, err.status, {success: false, error: err.message, ...err.extra});
         return;
       }
-      send(res, 500, {success: false, error: (err as Error).message});
+      send(res, 500, serverFailure(err, req.method ?? '', (req.url ?? '/').split('?')[0] ?? '/'));
     }
   });
+}
+
+/**
+ * A 500's answer and its log line (yourphr#816). The caller gets a generic message and a short id;
+ * the operator's log gets the error with the same id. The raw message never reaches the browser: it
+ * can carry file paths, SQL, provider URLs and fragments of a provider's response body.
+ */
+export function serverFailure(err: unknown, method: string, path: string): { success: false; error: string; error_id: string } {
+  const id = randomUUID().slice(0, 8);
+  const e = err as Error;
+  appLog.error(`request failed [${id}] ${method} ${path}: ${(e?.name ?? 'Error')}: ${String(e?.message ?? err).slice(0, 500)}`);
+  return { success: false, error: `Something went wrong on the server. If it keeps happening, give the operator this id: ${id}.`, error_id: id };
 }
