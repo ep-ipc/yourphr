@@ -1401,6 +1401,8 @@ export interface InstanceInfo {
   agent_token_enabled: boolean;
   // The operator's maintenance message (#714); empty when the instance does not publish one.
   maintenance_message: string;
+  // Whether maintenance mode is on RIGHT NOW (#869): the live setting, never a stored notice.
+  maintenance_enabled: boolean;
 }
 
 // mapInstanceInfo translates backend config keys to short names. Both instance endpoints return
@@ -1439,5 +1441,7 @@ function mapInstanceInfo(response: ResponseWrapper): InstanceInfo {
     // Maintenance mode (#714): what the maintenance page says after a reload, when the 503 that
     // carried the message is gone.
     maintenance_message: str('maintenance.message'),
+    // Strictly true only: an absent key is an instance not in maintenance (#869).
+    maintenance_enabled: data['maintenance.enabled'] === true,
   };
 }

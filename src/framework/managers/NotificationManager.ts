@@ -220,6 +220,23 @@ export class NotificationManager extends BaseManager {
     return removed;
   }
 
+  /**
+   * Removes every stored maintenance notice (yourphr#869). Called at start when maintenance is off:
+   * a notice is a message written once, and an "on" notice outliving the mode told every member the
+   * system was down when it was not. Whether maintenance is on is the live setting's to say.
+   */
+  async clearMaintenanceNotices(): Promise<number> {
+    let removed = 0;
+    for (const [id, n] of this.notifications.entries()) {
+      if (n.type === 'maintenance') { this.notifications.delete(id); removed++; }
+    }
+    if (removed > 0) {
+      this.log(`notifications: ${removed} stale maintenance notice(s) removed — maintenance is off`);
+      await this.saveNotifications();
+    }
+    return removed;
+  }
+
   /** ngdpbase's maintenance notice, for everyone; the "disabled" one expires after a day. */
   async createMaintenanceNotification(enabled: boolean, adminUsername: string, _config: MaintenanceConfig = {}): Promise<string> {
     return this.createNotification({

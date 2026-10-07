@@ -165,6 +165,17 @@ describe('NotificationManager — links and standing conditions (yourphr#854)', 
   });
 });
 
+describe('NotificationManager — stale maintenance notices (yourphr#869)', () => {
+  it('clears every stored maintenance notice, keyed or left over from before keys, and nothing else', async () => {
+    await notes.createNotification({ type: 'maintenance', title: 'Maintenance Mode Enabled' }); // a pre-#854 leftover, no key
+    await notes.createMaintenanceNotification(true, 'root');
+    await notes.createNotification({ title: 'Backups are stale' });
+    expect(await notes.clearMaintenanceNotices()).toBe(2);
+    expect(notes.getAllNotifications().map((n) => n.title)).toEqual(['Backups are stale']);
+    expect(await notes.clearMaintenanceNotices()).toBe(0);
+  });
+});
+
 describe('NotificationManager — email escalation', () => {
   it('off by default: an error notification emails nobody', async () => {
     await people();

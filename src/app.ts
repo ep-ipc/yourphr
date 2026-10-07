@@ -519,6 +519,9 @@ export async function openStores(dataDir: string, env: Record<string, string | u
   // would hold the health probe hostage. The admin's Database card offers the rebuild.
   const index = records.searchIndexStatus();
   await records.noticeIfSearchIndexStale();
+  // yourphr#869: with maintenance off, no stored maintenance notice may stand — they say what was
+  // true when written, and an "on" one left behind told every member the system was down.
+  if (!config.getBool(MAINTENANCE_ENABLED_KEY) && engine.has('notifications')) await engine.managers.notifications.clearMaintenanceNotices();
   if (index.stale) appLog.warn(`search index: built by derivation ${index.builtWith}, this build uses ${index.current} — records stored before the upgrade are not findable by everything they say. Rebuild it from Admin -> Database, or run \`yourphr reindex\` with the server stopped`);
 
   return {

@@ -18,8 +18,9 @@ describe('NotificationBannerComponent', () => {
   });
 
   beforeEach(waitForAsync(() => {
-    api = jasmine.createSpyObj('FastenApiService', ['getNotifications', 'dismissNotification']);
+    api = jasmine.createSpyObj('FastenApiService', ['getNotifications', 'dismissNotification', 'getPublicInstanceInfo']);
     api.getNotifications.and.returnValue(of([note(), note({id: 'notification_2', title: 'Heads up', message: '', level: 'info'})]));
+    api.getPublicInstanceInfo.and.returnValue(of({maintenance_enabled: false, maintenance_message: ''} as never));
     api.dismissNotification.and.returnValue(of(true));
     events = new Subject();
     TestBed.configureTestingModule({
@@ -67,5 +68,22 @@ describe('NotificationBannerComponent', () => {
     (component as unknown as {lastFetch: number}).lastFetch = Date.now() - 61_000;
     events.next(new NavigationEnd(2, '/b', '/b'));
     expect(api.getNotifications).toHaveBeenCalledTimes(2);
+  });
+
+  // #869: maintenance is the live setting's to say, never a stored notice.
+  it('shows no maintenance banner, and hides a leftover "maintenance on" notice, while maintenance is off', () => {
+    api.getNotifications.and.returnValue(of([note({id: 'notification_9', type: 'maintenance', title: 'Maintenance Mode Enabled', level: 'warning'})]));
+    fixture = TestBed.createComponent(NotificationBannerComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="maintenance-banner"]')).toBeNull();
+    expect(el.textContent).not.toContain('Maintenance Mode Enabled');
+  });
+
+  it('shows the operator\'s message while maintenance is on', () => {
+    api.getPublicInstanceInfo.and.returnValue(of({maintenance_enabled: true, maintenance_message: 'Back at 3pm.'} as never));
+    fixture = TestBed.createComponent(NotificationBannerComponent);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[data-testid="maintenance-banner"]')?.textContent).toContain('Back at 3pm.');
   });
 });

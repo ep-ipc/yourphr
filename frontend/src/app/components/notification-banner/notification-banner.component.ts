@@ -22,6 +22,8 @@ const REFRESH_MS = 60_000;
 })
 export class NotificationBannerComponent implements OnInit, OnDestroy {
   notifications: AppNotification[] = [];
+  /** The operator's maintenance message while maintenance is on; '' when it is off (#869). */
+  maintenance = '';
   private lastFetch = 0;
   private sub?: Subscription;
   /** Whether an /admin link would open for this person; everyone else sees the notice without it (#854). */
@@ -43,8 +45,15 @@ export class NotificationBannerComponent implements OnInit, OnDestroy {
     const now = Date.now();
     if (!force && now - this.lastFetch < REFRESH_MS) return;
     this.lastFetch = now;
+    // Maintenance comes from the live setting (#869), as ngdpbase's admin dashboard does: shown while
+    // it is on, gone the moment it is off. A stored "maintenance on" notice says what was true when
+    // it was written, and one left behind told every member the system was down when it was not.
+    this.fastenApi.getPublicInstanceInfo().subscribe({
+      next: (info) => this.maintenance = info.maintenance_enabled ? (info.maintenance_message || 'This instance is in maintenance mode.') : '',
+      error: () => this.maintenance = '',
+    });
     this.fastenApi.getNotifications().subscribe({
-      next: (list) => this.notifications = list,
+      next: (list) => this.notifications = list.filter((n) => n.type !== 'maintenance'),
       // Signed out, or the server is away: show nothing rather than an error about a banner.
       error: () => this.notifications = [],
     });
