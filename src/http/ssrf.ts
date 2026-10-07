@@ -91,6 +91,8 @@ export function isBlockedIp(address: string): boolean {
     if (a === 169 && b === 254) return true; // link-local, includes 169.254.169.254 metadata
     if (a === 172 && b >= 16 && b <= 31) return true; // RFC1918
     if (a === 192 && b === 168) return true; // RFC1918
+    if (a === 192 && b === 0 && v4[2] === 0) return true; // 192.0.0.0/24 IETF protocol assignments (yourphr#817)
+    if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmarking (yourphr#817)
     if (a >= 224) return true; // multicast and reserved
     return false;
   }
@@ -101,11 +103,46 @@ export function isBlockedIp(address: string): boolean {
     return true;
   }
 
+  // Translation prefixes carry an IPv4 address inside (yourphr#817): judge that address, or a
+  // NAT64 gateway or 6to4 relay becomes a way to reach 10.x / 169.254.169.254 behind an IPv6 name.
+  const h = expandIpv6(ip);
+  if (!h) return true;
+  if (h[0] === 0x64 && h[1] === 0xff9b && h[2] === 0 && h[3] === 0 && h[4] === 0 && h[5] === 0) {
+    return isBlockedIp(hextetsToIpv4(h[6] as number, h[7] as number)); // 64:ff9b::/96 well-known NAT64
+  }
+  if (h[0] === 0x64 && h[1] === 0xff9b && h[2] === 1) return true; // 64:ff9b:1::/48 local-use NAT64 — internal by definition
+  if (h[0] === 0x2002) return isBlockedIp(hextetsToIpv4(h[1] as number, h[2] as number)); // 2002::/16 6to4
+
   if (ip === '::' || ip === '::1') return true; // unspecified, loopback
   if (/^f[cd]/.test(ip)) return true; // fc00::/7 unique-local, includes fd00:ec2::254 metadata
   if (/^fe[89ab]/.test(ip)) return true; // fe80::/10 link-local
   if (ip.startsWith('ff')) return true; // multicast
   return false;
+}
+
+/** Eight 16-bit groups of an IPv6 address, an embedded dotted quad included; null when unparseable. */
+function expandIpv6(ip: string): number[] | null {
+  let text = ip;
+  const quad = /(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  if (quad?.[1]) {
+    const p = ipv4ToParts(quad[1]);
+    if (!p) return null;
+    const [w, x, y, z] = p as [number, number, number, number];
+    text = text.slice(0, -quad[1].length) + `${((w << 8) | x).toString(16)}:${((y << 8) | z).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part: string): number[] => (part === '' ? [] : part.split(':').map((g) => parseInt(g, 16)));
+  const head = parse(halves[0] ?? '');
+  const tail = halves.length === 2 ? parse(halves[1] ?? '') : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 1 ? head.length !== 8 : fill < 0) return null;
+  const groups = [...head, ...Array(halves.length === 2 ? fill : 0).fill(0), ...tail];
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
+function hextetsToIpv4(hi: number, lo: number): string {
+  return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
 }
 
 /**
