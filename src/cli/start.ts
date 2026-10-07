@@ -23,7 +23,7 @@ import { ConfigurationManager } from '../framework/ConfigurationManager.js';
 import { FileConfigProvider } from '../framework/providers/FileConfigProvider.js';
 import { appLog } from '../log/index.js';
 import { readVersion } from './version.js';
-import { SESSION_SECRET_ENV, ensureInstanceEnvSecret, nodeInstanceEnvFs } from '../config/instance-env-secret.js';
+import { SESSION_SECRET_ENV, ensureInstanceEnvSecret, nodeInstanceEnvFs } from '../config/instance-env-backfill.js';
 
 const EX_CONFIG = 78;
 
