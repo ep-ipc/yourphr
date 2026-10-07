@@ -163,6 +163,8 @@ Bare metal in particular __must__ set `YOURPHR_WEB_SRC_FRONTEND_PATH` to whereve
 
 Mount a `PersistentVolume` at `/opt/yourphr/data`; the manifests carry infrastructure only (image, volume, service, ingress). Settings live on the volume and are changed from Admin → Configuration; the encryption keys live in `/opt/yourphr/data/.env` on the same volume ([Encryption keys](#encryption-keys)). Any GitOps tool works; nothing in the app is Kubernetes- or Flux-specific.
 
+A secret the app needs from the environment (for example the relay's shared secret) comes in through the manifest, as ngdpbase does it: a flat Secret injected with `envFrom:`, changed by editing the Secret in Git and letting the deployment roll. See [How values reach each implementation](#how-values-reach-each-implementation). __A configuration change never needs a command run inside the cluster.__
+
 ## Encryption keys
 
 Two keys, both required, both supplied by you ([#796](https://github.com/jwilleke/yourphr/issues/796)):
@@ -201,6 +203,28 @@ shipped defaults  <  .env  <  .env_custom  <  instance overrides  <  YOURPHR_* e
 - __`.env`__ — an *optional* dotenv file, loaded before anything else evaluates ([#630](https://github.com/jwilleke/yourphr/issues/630)). Precedence, highest first: the ambient environment, then `<YOURPHR_FAST_STORAGE>/.env` (the data volume — `/opt/yourphr/data/.env` in a container), then `<cwd>/.env` (the repo root, for a direct install). The ambient environment wins so a variable set in a manifest is never silently overridden by a file. Optional throughout — configuration works on defaults plus `YOURPHR_*` alone. The `.env.*.example` templates still describe the Go stack's keys and are being rewritten ([#676](https://github.com/jwilleke/yourphr/issues/676)).
 - __Instance overrides__ — `<data>/config/app-custom-config.json`, written by __Admin → Configuration__. This is where ordinary settings are changed on a running instance; no restart, no file editing, no redeploy.
 - __`YOURPHR_*` environment__ — the universal override, highest precedence (ideal for secrets and k8s). A value set here __cannot be changed from the Admin screen__: that screen shows it as governed by the environment and refuses the edit, rather than accepting a change that would silently revert on the next restart.
+
+### How values reach each implementation
+
+yourPHR has one environment mechanism, `src/bootstrap-env.ts`, ported from ngdpbase (its [bootstrap developer guide](https://github.com/jwilleke/ngdpbase/blob/master/docs/guides/bootstrap-developer-guide.md#how-values-reach-each-implementation) is the reference). It does not know how it was launched: every implementation hands it values the same two ways, the ambient environment and `.env` files, and the ambient environment always wins.
+
+| Implementation | Ambient environment comes from | `.env` read at start | To change a value |
+|---|---|---|---|
+| Bare metal | your shell or service unit | `<YOURPHR_FAST_STORAGE>/.env`, then `<checkout>/.env` | edit the file, restart |
+| Docker (compose or `docker run`) | compose `environment:`, `docker run -e`, the image's `ENV` | `/opt/yourphr/data/.env` on the mounted volume | edit the volume's `.env` or the compose file, restart the container |
+| Kubernetes | the Deployment: `envFrom:` a Secret (secrets) or a ConfigMap (non-secrets); inline `env:` only to override one pod | `/opt/yourphr/data/.env` on the persistent volume | change the Secret or ConfigMap in Git and roll the deployment |
+
+Where a value belongs, by what it is:
+
+- __A setting__ (anything that changes how the running app behaves): __Admin → Configuration__, stored in `<data>/config/app-custom-config.json`. Never an environment variable, never a manifest entry ([#472](https://github.com/jwilleke/yourphr/issues/472)). Example: `yourphr.relay.public-url`, `yourphr.relay.url`.
+- __A secret__ (environment-owned, read-only on the Admin screen): `.env` on bare metal or Docker; on Kubernetes, a Secret injected with `envFrom:`. Example: `YOURPHR_RELAY_SECRET`. The reference deployment injects the relay's own Secret (`yourphr-relay`) into `yourphr-ts`, so app and relay hold one value and can never disagree ([#870](https://github.com/jwilleke/yourphr/issues/870)).
+- __Bootstrap__ (where the data lives, the port): the launcher's environment.
+
+Rules that follow, for every implementation:
+
+- __Read once, at start.__ A changed `.env` or Secret takes effect on the next restart, never live.
+- __The ambient environment beats the file.__ Set a variable in one place only; a value in the Deployment cannot be changed by editing `.env`.
+- __Names are exact.__ A misnamed variable is silently unused; check it against the shipped configuration and `config/app-default-config.json`'s environment-owned key list.
 
 `config.yaml` was removed in [#470](https://github.com/jwilleke/yourphr/issues/470) — it was a committed file baked into the image, shadowed by a ConfigMap in the reference deployment, and the binary read it implicitly from its working directory. See [`docs/configuration-system.md`](../configuration-system.md).
 
@@ -359,7 +383,15 @@ For the sandboxes themselves and how to exercise them, see [`../testing-sandboxe
 
 Live SMART-on-FHIR sync ([EPIC #20](https://github.com/jwilleke/yourphr/issues/20)) needs a small public __OAuth relay__ to catch the provider's redirect. After you authorize at the provider, it redirects the __browser__ to `…/callback?code&state`; the relay stores `{state → code}` in memory (short TTL) and the YourPHR instance polls `…/pending?state=` (shared-secret gated) to retrieve the code and finish the token exchange itself. __The relay never sees tokens, and manual record upload needs no relay at all__ — this is only for live provider sync.
 
-By default the app points at the project's demo relay (`https://relay.nerdsbythehour.com`). Self-hosting it is optional but recommended for a real deployment, and — like everything else here — is __deployment-agnostic__: the relay is a single Go binary (`ghcr.io/jwilleke/yourphr-relay`) configured entirely by env.
+__The app ships with no relay configured__ (the Go stack defaulted to the project's relay; v3 does not), and until one is set every provider connect fails with "no SMART relay is configured". Configure all three, each in its proper home ([How values reach each implementation](#how-values-reach-each-implementation)):
+
+| What | Where | Example (the project relay) |
+|---|---|---|
+| `yourphr.relay.public-url`, where providers send the patient's browser back | Admin → Configuration | `https://relay.nerdsbythehour.com` |
+| `yourphr.relay.url`, where the app collects the code (may be an internal address) | Admin → Configuration | `http://yourphr-relay.yourphr.svc:8080` in-cluster |
+| `YOURPHR_RELAY_SECRET`, the shared secret gating `/pending`; must equal the relay's | the environment: `.env`, or a Kubernetes Secret via `envFrom:` | — |
+
+Self-hosting the relay is optional but recommended for a real deployment, and is __deployment-agnostic__: a single Go binary (`ghcr.io/jwilleke/yourphr-relay`) configured entirely by env.
 
 ### Relay configuration
 
